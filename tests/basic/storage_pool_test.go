@@ -376,7 +376,7 @@ var _ = Describe("{PoolResizeDiskReboot}", func() {
 	})
 })
 
-var _ = Describe("{PoolAddDiskReboot}",Label("p0","negative","error_injection","pool_ops","PoolExpand","node_reboot","AddDrive"), func() {
+var _ = Describe("{PoolAddDiskReboot}", Label("p0", "negative", "error_injection", "pool_ops", "PoolExpand", "node_reboot", "AddDrive"), func() {
 	/*
 		1. Initiate pool expansion using add-disk
 		2. Trigger node reboot while expansion is in-progress
@@ -491,7 +491,7 @@ var _ = Describe("{PoolAddDiskReboot}",Label("p0","negative","error_injection","
 	})
 })
 
-var _ = Describe("{NodePoolsResizeDisk}",Label("p0","positive","pool_ops","PoolExpand","ResizeDisk"), func() {
+var _ = Describe("{NodePoolsResizeDisk}", Label("p0", "positive", "pool_ops", "PoolExpand", "ResizeDisk"), func() {
 
 	/*
 		1. Initiate pool expansion on multiple pools in the same node using resize-disk
@@ -501,7 +501,7 @@ var _ = Describe("{NodePoolsResizeDisk}",Label("p0","positive","pool_ops","PoolE
 
 })
 
-var _ = Describe("{NodePoolsAddDisk}",Label("p0","positive","pool_ops","Rebalance","PoolExpand"), func() {
+var _ = Describe("{NodePoolsAddDisk}", Label("p0", "positive", "pool_ops", "Rebalance", "PoolExpand"), func() {
 
 	/*
 		1. Initiate pool expansion on multiple pools in the same node using add-disk
@@ -675,7 +675,7 @@ func nodePoolsExpansion(testName string) {
 	})
 }
 
-var _ = Describe("{AddNewPoolWhileRebalance}",Label("p0","positive","pool_ops","Rebalance","PoolExpand"), func() {
+var _ = Describe("{AddNewPoolWhileRebalance}", Label("p0", "positive", "pool_ops", "Rebalance", "PoolExpand"), func() {
 	//AddNewPoolWhileRebalance:
 	//
 	//step1: create volume repl=2, and get its pool P1 on n1 and p2 on n2
@@ -1044,7 +1044,7 @@ func getPoolLastOperation(poolID string) (*api.StoragePoolOperation, error) {
 	return poolLastOperation, err
 }
 
-var _ = Describe("{PoolAddDrive}",Label("p0","positive","pool_ops","PoolExpand","AddDrive"), func() {
+var _ = Describe("{PoolAddDrive}", Label("p0", "positive", "pool_ops", "PoolExpand", "AddDrive"), func() {
 
 	/*
 		Add Drive using legacy add drive feature
@@ -1080,7 +1080,7 @@ var _ = Describe("{PoolAddDrive}",Label("p0","positive","pool_ops","PoolExpand",
 	})
 })
 
-var _ = Describe("{AddDriveAndPXRestart}",Label("p0","negative","eror_injection","px_ops","pool_ops","PoolExpand","px_restart","AddDrive"), func() {
+var _ = Describe("{AddDriveAndPXRestart}", Label("p0", "negative", "eror_injection", "px_ops", "pool_ops", "PoolExpand", "px_restart", "AddDrive"), func() {
 	//1) Deploy px with cloud drive.
 	//2) Create a volume on that pool and write some data on the volume.
 	//3) Expand pool by adding cloud drives.
@@ -1126,7 +1126,7 @@ var _ = Describe("{AddDriveAndPXRestart}",Label("p0","negative","eror_injection"
 
 })
 
-var _ = Describe("{AddDriveWithPXRestart}",Label("p0","negative","error_injection","px_ops","ppol_ops","PoolExpand","px_restart","AddDrive"), func() {
+var _ = Describe("{AddDriveWithPXRestart}", Label("p0", "negative", "error_injection", "px_ops", "ppol_ops", "PoolExpand", "px_restart", "AddDrive"), func() {
 	//1) Deploy px with cloud drive.
 	//2) Create a volume on that pool and write some data on the volume.
 	//3) Expand pool by adding cloud drives.
@@ -1219,7 +1219,7 @@ var _ = Describe("{AddDriveWithPXRestart}",Label("p0","negative","error_injectio
 
 })
 
-var _ = Describe("{PoolAddDriveVolResize}",Label("p0","positive","pool_ops","PoolExpand","AddDrive","PvcResize"), func() {
+var _ = Describe("{PoolAddDriveVolResize}", Label("p0", "positive", "pool_ops", "PoolExpand", "AddDrive", "PvcResize"), func() {
 	//1) Deploy px with cloud drive.
 	//2) Create a volume on that pool and write some data on the volume.
 	//3) Expand pool by adding cloud drives.
@@ -1328,7 +1328,7 @@ var _ = Describe("{PoolAddDriveVolResize}",Label("p0","positive","pool_ops","Poo
 	})
 })
 
-var _ = Describe("{AddDriveMaintenanceMode}",Label("p1","negative","pool_ops","error_injection","NodeMaintenance","PoolExpand","AddDrive"), func() {
+var _ = Describe("{AddDriveMaintenanceMode}", Label("p1", "negative", "pool_ops", "error_injection", "NodeMaintenance", "PoolExpand", "AddDrive"), func() {
 	/*
 		1.Put node in maintenance mode
 		2. Perform add drive operatiom
@@ -1396,7 +1396,7 @@ var _ = Describe("{AddDriveMaintenanceMode}",Label("p1","negative","pool_ops","e
 	})
 })
 
-var _ = Describe("{AddDriveStoragelessAndResize}",Label("p0","positive","pool_ops","ClusterScale","PoolExpand","AddDrive","ResizeDisk"), func() {
+var _ = Describe("{AddDriveStoragelessAndResize}", Label("p0", "positive", "pool_ops", "ClusterScale", "PoolExpand", "AddDrive", "ResizeDisk"), func() {
 	var testrailID = 50617
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/2017
 	var runID int
@@ -1647,7 +1647,7 @@ func waitForVolMinimumSize(volID string, size uint64) (bool, error) {
 	return true, nil
 }
 
-var _ = Describe("{AddNewDrivesMultipleTimes}",Label("p1","positive","pool_ops","Rebalance","AddDrive","MiniScale"), func() {
+var _ = Describe("{AddNewDrivesMultipleTimes}", Label("p1", "positive", "pool_ops", "Rebalance", "AddDrive", "MiniScale"), func() {
 	//1) Deploy px with cloud drive.
 	//2) Select a pool with iops happening.
 	//3) Expand pool by adding cloud drives.
@@ -1732,7 +1732,7 @@ var _ = Describe("{AddNewDrivesMultipleTimes}",Label("p1","positive","pool_ops",
 	})
 })
 
-var _ = Describe("{PoolResizeDiskDiff}",Label("p1","positive","pool_ops","poolExpand","ResizeDisk"), func() {
+var _ = Describe("{PoolResizeDiskDiff}", Label("p1", "positive", "pool_ops", "poolExpand", "ResizeDisk"), func() {
 	//1) Deploy px with cloud drive.
 	//2) Select a pool with iops happening.
 	//3) Expand pool by resize-disk
@@ -1829,7 +1829,7 @@ var _ = Describe("{PoolResizeDiskDiff}",Label("p1","positive","pool_ops","poolEx
 	})
 })
 
-var _ = Describe("{PoolAddDiskDiff}",Label("p1","positive","pool_ops","PoolExpand","AddDrive"), func() {
+var _ = Describe("{PoolAddDiskDiff}", Label("p1", "positive", "pool_ops", "PoolExpand", "AddDrive"), func() {
 	//1) Deploy px with cloud drive.
 	//2) Select a pool with iops happening.
 	//3) Expand pool by add-disk
@@ -1932,7 +1932,7 @@ var _ = Describe("{PoolAddDiskDiff}",Label("p1","positive","pool_ops","PoolExpan
 	})
 })
 
-var _ = Describe("{MultiDriveResizeDisk}",Label("p0","positive","pool_ops","PoolExpand","ResizeDisk","MiniScale"), func() {
+var _ = Describe("{MultiDriveResizeDisk}", Label("p0", "positive", "pool_ops", "PoolExpand", "ResizeDisk", "MiniScale"), func() {
 	//Select Pool with multiple drives
 	//While IO is going onto repl=3 vols on all the pools on that system, expand the pool using ""pxctl sv pool expand-u <uuid> -s <size> -o resize-disk"
 	var testrailID = 51266
@@ -2012,7 +2012,7 @@ var _ = Describe("{MultiDriveResizeDisk}",Label("p0","positive","pool_ops","Pool
 	})
 })
 
-var _ = Describe("{ResizeWithPXRestart}",Label("p1","negative","error_injection","pool_ops","PoolExpand","px_restart","ResizeDisk"), func() {
+var _ = Describe("{ResizeWithPXRestart}", Label("p1", "negative", "error_injection", "pool_ops", "PoolExpand", "px_restart", "ResizeDisk"), func() {
 	//1) Deploy px with cloud drive.
 	//2) Create a volume on that pool and write some data on the volume.
 	//3) Expand pool by resize-disk
@@ -2077,7 +2077,7 @@ var _ = Describe("{ResizeWithPXRestart}",Label("p1","negative","error_injection"
 
 })
 
-var _ = Describe("{AddWithPXRestart}",Label("p1","negative","error_injection","pool_ops","PoolExpand","px_restart","AddDrive"), func() {
+var _ = Describe("{AddWithPXRestart}", Label("p1", "negative", "error_injection", "pool_ops", "PoolExpand", "px_restart", "AddDrive"), func() {
 	//1) Deploy px with cloud drive.
 	//2) Create a volume on that pool and write some data on the volume.
 	//3) Expand pool by add-disk
@@ -2147,7 +2147,7 @@ var _ = Describe("{AddWithPXRestart}",Label("p1","negative","error_injection","p
 
 })
 
-var _ = Describe("{ResizeDiskVolUpdate}",Label("p0","positive","pool_ops","PoolExpand","ResizeDisk"), func() {
+var _ = Describe("{ResizeDiskVolUpdate}", Label("p0", "positive", "pool_ops", "PoolExpand", "ResizeDisk"), func() {
 	//1) Deploy px with cloud drive.
 	//2) Create a volume on that pool and write some data on the volume.
 	//3) Expand pool by resize-disk.
@@ -2250,7 +2250,7 @@ var _ = Describe("{ResizeDiskVolUpdate}",Label("p0","positive","pool_ops","PoolE
 	})
 })
 
-var _ = Describe("{VolUpdateResizeDisk}",Label("p0","positive","pool_ops","PoolExpand","ResizeDisk"), func() {
+var _ = Describe("{VolUpdateResizeDisk}", Label("p0", "positive", "pool_ops", "PoolExpand", "ResizeDisk"), func() {
 	//1) Deploy px with cloud drive.
 	//2) Create a volume on that pool and write some data on the volume.
 	//3) expand the volume to the pool
@@ -2383,7 +2383,7 @@ var _ = Describe("{VolUpdateResizeDisk}",Label("p0","positive","pool_ops","PoolE
 	})
 })
 
-var _ = Describe("{VolUpdateAddDisk}",Label("p0","positive","pool_ops","PoolExpand","AddDrive"), func() {
+var _ = Describe("{VolUpdateAddDisk}", Label("p0", "positive", "pool_ops", "PoolExpand", "AddDrive"), func() {
 	//1) Deploy px with cloud drive.
 	//2) Create a volume on that pool and write some data on the volume.
 	//3) expand the volume to the pool using add-disk
@@ -2504,7 +2504,7 @@ var _ = Describe("{VolUpdateAddDisk}",Label("p0","positive","pool_ops","PoolExpa
 	})
 })
 
-var _ = Describe("{VolUpdateAddDrive}",Label("p0","positive","pool_ops","AddDrive","PoolExpand"), func() {
+var _ = Describe("{VolUpdateAddDrive}", Label("p0", "positive", "pool_ops", "AddDrive", "PoolExpand"), func() {
 	//1) Deploy px with cloud drive.
 	//2) Create a volume on that pool and write some data on the volume.
 	//3) expand the volume to the pool
@@ -2602,7 +2602,7 @@ var _ = Describe("{VolUpdateAddDrive}",Label("p0","positive","pool_ops","AddDriv
 	})
 })
 
-var _ = Describe("{AddDriveWithNodeReboot}",Label("p1","negative","error_injection","pool_ops","PoolExpand","node_reboot","AddDrive"), func() {
+var _ = Describe("{AddDriveWithNodeReboot}", Label("p1", "negative", "error_injection", "pool_ops", "PoolExpand", "node_reboot", "AddDrive"), func() {
 	//1) Deploy px with cloud drive.
 	//2) Create a volume on o that pool and write some data on the volume.
 	//3) Expand pool by adding cloud drives.
@@ -2687,7 +2687,7 @@ var _ = Describe("{AddDriveWithNodeReboot}",Label("p1","negative","error_injecti
 
 })
 
-var _ = Describe("{MulPoolsResize}",Label("p0","positive","pool_ops","PoolExpand","ResizeDisk","MiniScale"), func() {
+var _ = Describe("{MulPoolsResize}", Label("p0", "positive", "pool_ops", "PoolExpand", "ResizeDisk", "MiniScale"), func() {
 	//1) Deploy px with cloud drive.
 	//2) Select multiple pools
 	//3) Expand multiple pools by resize-disk same time.
@@ -2762,7 +2762,7 @@ var _ = Describe("{MulPoolsResize}",Label("p0","positive","pool_ops","PoolExpand
 	})
 })
 
-var _ = Describe("{MulPoolsAddDisk}",Label("p0","positive","pool_ops","AddDrive","PoolExpand"), func() {
+var _ = Describe("{MulPoolsAddDisk}", Label("p0", "positive", "pool_ops", "AddDrive", "PoolExpand"), func() {
 	//1) Deploy px with cloud drive.
 	//2) Select multiple pools
 	//3) Expand multiple pools by add-disk same time.
@@ -2854,7 +2854,7 @@ var _ = Describe("{MulPoolsAddDisk}",Label("p0","positive","pool_ops","AddDrive"
 	})
 })
 
-var _ = Describe("{ResizeWithJrnlAndMeta}",Label("p0","positive","pool_ops","AddDrive","poolExpand"), func() {
+var _ = Describe("{ResizeWithJrnlAndMeta}", Label("p0", "positive", "pool_ops", "AddDrive", "poolExpand"), func() {
 	//1) Deploy px with cloud drive and journal enabled.
 	//2) Create a volume on that pool and write some data on the volume.
 	//3) Get the metadata node
@@ -2946,7 +2946,7 @@ var _ = Describe("{ResizeWithJrnlAndMeta}",Label("p0","positive","pool_ops","Add
 
 })
 
-var _ = Describe("{PoolExpandWhileIOAndPXRestart}",Label("p0","negative","pool_ops","error_injection","px_restart","PoolExpand"), func() {
+var _ = Describe("{PoolExpandWhileIOAndPXRestart}", Label("p0", "negative", "pool_ops", "error_injection", "px_restart", "PoolExpand"), func() {
 	//step1: create volume repl node n1 and n2 and start IO
 	//step2: during I/O restart px on n1 and at the same time expand the pool on n2
 	//step3: after n1 is back operational validate that n2 pool size is the new size
@@ -3021,7 +3021,7 @@ var _ = Describe("{PoolExpandWhileIOAndPXRestart}",Label("p0","negative","pool_o
 
 })
 
-var _ = Describe("{ResizeNodeMaintenanceCycle}",Label("p1","negative","error_injection","pool_ops","PoolExpand","NodeMaintenance"), func() {
+var _ = Describe("{ResizeNodeMaintenanceCycle}", Label("p1", "negative", "error_injection", "pool_ops", "PoolExpand", "NodeMaintenance"), func() {
 	//1) Deploy px with cloud drive.
 	//2) Create a volume on that pool and write some data on the volume.
 	//3) Expand pool by resize-disk
@@ -3103,7 +3103,7 @@ var _ = Describe("{ResizeNodeMaintenanceCycle}",Label("p1","negative","error_inj
 
 })
 
-var _ = Describe("{AddDiskNodeMaintenanceCycle}",Label("p1","negative","error_injection","pool_ops","PoolExpand","AddDrive","NodeMaintenance"), func() {
+var _ = Describe("{AddDiskNodeMaintenanceCycle}", Label("p1", "negative", "error_injection", "pool_ops", "PoolExpand", "AddDrive", "NodeMaintenance"), func() {
 	//1) Deploy px with cloud drive.
 	//2) Create a volume on that pool and write some data on the volume.
 	//3) Expand pool by resize-disk
@@ -3189,7 +3189,7 @@ var _ = Describe("{AddDiskNodeMaintenanceCycle}",Label("p1","negative","error_in
 
 })
 
-var _ = Describe("{ResizePoolMaintenanceCycle}",Label("p1","negative","error_injection","pool_ops","PoolExpand","ResizeDisk","PoolMaintenance"), func() {
+var _ = Describe("{ResizePoolMaintenanceCycle}", Label("p1", "negative", "error_injection", "pool_ops", "PoolExpand", "ResizeDisk", "PoolMaintenance"), func() {
 	//1) Deploy px with cloud drive.
 	//2) Create a volume on that pool and write some data on the volume.
 	//3) Expand pool by resize-disk
@@ -3268,7 +3268,7 @@ var _ = Describe("{ResizePoolMaintenanceCycle}",Label("p1","negative","error_inj
 
 })
 
-var _ = Describe("{AddDiskPoolMaintenanceCycle}",Label("p1","negative","error_injection","ppol_ops","PoolExpand","AddDrive","PoolMaintenance"), func() {
+var _ = Describe("{AddDiskPoolMaintenanceCycle}", Label("p1", "negative", "error_injection", "ppol_ops", "PoolExpand", "AddDrive", "PoolMaintenance"), func() {
 	//1) Deploy px with cloud drive.
 	//2) Create a volume on that pool and write some data on the volume.
 	//3) Expand pool by resize-disk
@@ -3352,7 +3352,7 @@ var _ = Describe("{AddDiskPoolMaintenanceCycle}",Label("p1","negative","error_in
 
 })
 
-var _ = Describe("{NodeMaintenanceResize}",Label("p1","negative","error_injection","pool_ops","PoolExpand","NodeMaintenance","ResizeDisk"), func() {
+var _ = Describe("{NodeMaintenanceResize}", Label("p1", "negative", "error_injection", "pool_ops", "PoolExpand", "NodeMaintenance", "ResizeDisk"), func() {
 	/*
 		1. Put node in maintenance mode
 		2. Trigger pool expansion using resize-disk
@@ -3470,7 +3470,7 @@ var _ = Describe("{NodeMaintenanceResize}",Label("p1","negative","error_injectio
 	})
 })
 
-var _ = Describe("{NodeMaintenanceModeAddDisk}",Label("p1","negative","error_injection","pool_ops","PoolExpand","AddDrive","NodeMaintenance"), func() {
+var _ = Describe("{NodeMaintenanceModeAddDisk}", Label("p1", "negative", "error_injection", "pool_ops", "PoolExpand", "AddDrive", "NodeMaintenance"), func() {
 	/*
 		1. Put node in maintenance mode
 		2. Trigger pool expansion using add-disk
@@ -3591,7 +3591,7 @@ var _ = Describe("{NodeMaintenanceModeAddDisk}",Label("p1","negative","error_inj
 	})
 })
 
-var _ = Describe("{PoolMaintenanceModeResize}",Label("p1","negative","error_injection","pool_ops","PoolExpand","ResizeDisk","PoolMaintenance"), func() {
+var _ = Describe("{PoolMaintenanceModeResize}", Label("p1", "negative", "error_injection", "pool_ops", "PoolExpand", "ResizeDisk", "PoolMaintenance"), func() {
 
 	/*
 		1. Put pool in maintenance mode
@@ -3701,7 +3701,7 @@ var _ = Describe("{PoolMaintenanceModeResize}",Label("p1","negative","error_inje
 	})
 })
 
-var _ = Describe("{PoolMaintenanceModeAddDisk}",Label("p1","negative","error_injection","pool_ops","PoolExpand","AddDrive","PoolMaintenance"), func() {
+var _ = Describe("{PoolMaintenanceModeAddDisk}", Label("p1", "negative", "error_injection", "pool_ops", "PoolExpand", "AddDrive", "PoolMaintenance"), func() {
 	/*
 		1. Put pool in maintenance mode
 		2. Trigger pool expansion using add-disk
@@ -3820,7 +3820,7 @@ var _ = Describe("{PoolMaintenanceModeAddDisk}",Label("p1","negative","error_inj
 	})
 })
 
-var _ = Describe("{AddDiskNodeMaintenanceMode}",Label("p1","negative","error_injection","pool_ops","PoolExpand","AddDrive","NodeMaintenance"), func() {
+var _ = Describe("{AddDiskNodeMaintenanceMode}", Label("p1", "negative", "error_injection", "pool_ops", "PoolExpand", "AddDrive", "NodeMaintenance"), func() {
 	/*
 		1. Trigger pool expansion using add-disk
 		2. Place node in maintenance mode once expansion starts
@@ -3945,7 +3945,7 @@ var _ = Describe("{AddDiskNodeMaintenanceMode}",Label("p1","negative","error_inj
 	})
 })
 
-var _ = Describe("{ResizeNodeMaintenanceMode}",Label("p1","negative","error_injection","pool_ops","PoolExpand","ResizeDisk","NodeMaintenance"), func() {
+var _ = Describe("{ResizeNodeMaintenanceMode}", Label("p1", "negative", "error_injection", "pool_ops", "PoolExpand", "ResizeDisk", "NodeMaintenance"), func() {
 	/*
 		1. Trigger pool expansion using resize-disk
 		2. Place node in maintenance mode once expansion starts
@@ -4062,7 +4062,7 @@ var _ = Describe("{ResizeNodeMaintenanceMode}",Label("p1","negative","error_inje
 	})
 })
 
-var _ = Describe("{ResizePoolMaintenanceMode}",Label("p1","negative","erro_injection","pool_ops","PoolExpand","ResizeDisk","PoolMaintenance"), func() {
+var _ = Describe("{ResizePoolMaintenanceMode}", Label("p1", "negative", "erro_injection", "pool_ops", "PoolExpand", "ResizeDisk", "PoolMaintenance"), func() {
 	/*
 		1. Trigger pool expansion using resize-disk
 		2. Put pool in maintenance mode
@@ -4174,7 +4174,7 @@ var _ = Describe("{ResizePoolMaintenanceMode}",Label("p1","negative","erro_injec
 	})
 })
 
-var _ = Describe("{AddDiskPoolMaintenanceMode}",Label("p1","negative","error_injection","pool_ops","PoolExpand","AddDrive","PoolMaintenance"), func() {
+var _ = Describe("{AddDiskPoolMaintenanceMode}", Label("p1", "negative", "error_injection", "pool_ops", "PoolExpand", "AddDrive", "PoolMaintenance"), func() {
 
 	/*
 		1. Trigger pool expansion using add-disk
@@ -4291,7 +4291,7 @@ var _ = Describe("{AddDiskPoolMaintenanceMode}",Label("p1","negative","error_inj
 	})
 })
 
-var _ = Describe("{PXRestartResize}",Label("p1","negative","error_injection","px_ops","pool_ops","PoolExpand","px_restart","ResizeDisk"), func() {
+var _ = Describe("{PXRestartResize}", Label("p1", "negative", "error_injection", "px_ops", "pool_ops", "PoolExpand", "px_restart", "ResizeDisk"), func() {
 	//1) Deploy px with cloud drive.
 	//2) Create a volume on that pool and write some data on the volume.
 	//3) Restart px service
@@ -4352,7 +4352,7 @@ var _ = Describe("{PXRestartResize}",Label("p1","negative","error_injection","px
 
 })
 
-var _ = Describe("{PXRestartAddDisk}",Label("p1","negative","error_injection","px_ops","pool_ops","PoolExpand","px_restart","AddDrive"), func() {
+var _ = Describe("{PXRestartAddDisk}", Label("p1", "negative", "error_injection", "px_ops", "pool_ops", "PoolExpand", "px_restart", "AddDrive"), func() {
 	//1) Deploy px with cloud drive.
 	//2) Create a volume on that pool and write some data on the volume.
 	//3) Restart px service
@@ -4417,7 +4417,7 @@ var _ = Describe("{PXRestartAddDisk}",Label("p1","negative","error_injection","p
 
 })
 
-var _ = Describe("{PoolExpandPendingUntilVolClean}",Label("p1","positive","pool_ops","PoolExpand"), func() {
+var _ = Describe("{PoolExpandPendingUntilVolClean}", Label("p1", "positive", "pool_ops", "PoolExpand"), func() {
 	/*
 		step1: create volume repl=2 n1 and n2, bring down n1
 		step2: feed data to volume then bring back n1 and when volume is resync bring down n2, so n1 is pending for resync
@@ -4528,7 +4528,7 @@ var _ = Describe("{PoolExpandPendingUntilVolClean}",Label("p1","positive","pool_
 
 })
 
-var _ = Describe("{AddNewPoolWhileFullPoolExpanding}",Label("p0","positive","px_ops","pool_ops","PoolExpand"), func() {
+var _ = Describe("{AddNewPoolWhileFullPoolExpanding}", Label("p0", "positive", "px_ops", "pool_ops", "PoolExpand"), func() {
 	/*
 		step1: create volume repl=2, and get its pool P1 on n1 and p2 on n2, expand p2 by increasing P1's size
 		step2: feed p1 size GB I/O on the volume
@@ -4780,7 +4780,7 @@ func adjustReplPools(firstNode, replNode node.Node, isjournal bool) error {
 	return nil
 }
 
-var _ = Describe("{StorageFullPoolResize}",Label("p0","positive","px_ops","pool_ops","PoolExpand","ResizeDisk","Throttling"), func() {
+var _ = Describe("{StorageFullPoolResize}", Label("p0", "positive", "px_ops", "pool_ops", "PoolExpand", "ResizeDisk", "Throttling"), func() {
 
 	//step1: feed p1 size GB I/O on the volume
 	//step2: After I/O done p1 should be offline and full, expand the pool p1 using resize-disk
@@ -11665,7 +11665,7 @@ var _ = Describe("{NetworkDelayWhilePoolExpand}", Label("p1", "negative", "pool_
 	})
 })
 
-var _ = Describe("{PoolResizeWhenReplOneVolinPool}",Label("p0","positive","pool_ops","PoolExpand","ResizeDisk"), func() {
+var _ = Describe("{PoolResizeWhenReplOneVolinPool}", Label("p0", "positive", "pool_ops", "PoolExpand", "ResizeDisk"), func() {
 
 	/*
 			PTX:https://portworx.atlassian.net/browse/PTX-15464
@@ -11757,7 +11757,7 @@ var _ = Describe("{PoolResizeWhenReplOneVolinPool}",Label("p0","positive","pool_
 	})
 })
 
-var _ = Describe("{PoolDeleteMultiplePools}",Label("p0","positive","pool_ops","MiniScale"), func() {
+var _ = Describe("{PoolDeleteMultiplePools}", Label("p0", "positive", "pool_ops", "MiniScale"), func() {
 
 	/*
 		1. Have multiple pools
@@ -11840,7 +11840,7 @@ var _ = Describe("{PoolDeleteMultiplePools}",Label("p0","positive","pool_ops","M
 
 })
 
-var _ = Describe("{AddingDrivesBeyondSupportedLimit}", Label("p1", "pool_ops", "px_ops","add_disk","PoolExpand","AddDrive","MiniScale"), func() {
+var _ = Describe("{AddingDrivesBeyondSupportedLimit}", Label("p1", "pool_ops", "px_ops", "add_disk", "PoolExpand", "AddDrive", "MiniScale"), func() {
 
 	/*
 	   Each Pool should have max of 6 drives
@@ -12209,7 +12209,7 @@ var _ = Describe("{PoolDeleteWithNodeRebootWithTimeInterval}", func() {
 	})
 })
 
-var _ = Describe("{PXInstallWithNodeReboot}",Label("p1","negative","pool_ops","px_ops","error_injection","node_reboot"), func() {
+var _ = Describe("{PXInstallWithNodeReboot}", Label("p1", "negative", "pool_ops", "px_ops", "error_injection", "node_reboot"), func() {
 
 	/*
 			1. Prepare node for decommission
@@ -12381,7 +12381,7 @@ var _ = Describe("{PXInstallWithNodeReboot}",Label("p1","negative","pool_ops","p
 	})
 })
 
-var _ = Describe("{PoolResizeWithNodeRebootWithTimeInterval}",Label("p0","negative","pool_ops","node_ops","PoolExpand","node_reboot"), func() {
+var _ = Describe("{PoolResizeWithNodeRebootWithTimeInterval}", Label("p0", "negative", "pool_ops", "node_ops", "PoolExpand", "node_reboot"), func() {
 
 	/*
 	   1.  Create volume and do IOs / deploy apps to do IOs
@@ -13505,5 +13505,146 @@ var _ = Describe("{PoolDeleteWithNodeMaintenanceCycleWithTimeInterval}", Label("
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
 
+	})
+})
+
+var _ = Describe("{PXInstallWithPXRestart}", Label("p1", "px_install", "hal_init", "hal_ops_disruption", "px_restart", "functional"), func() {
+
+	/*
+	   1.  Prepare node for decommission
+	   2.  Decommission node
+	   3.  Wipe node
+	   4.  Reboot Node
+	   5.  Rejoin node
+	   6.  Restart Portworx with some random delay
+	   7.  Verify node rejoin
+	*/
+
+	var contexts []*scheduler.Context
+	BeforeEach(func() {
+		StartTorpedoTest("PXInstallWithPXRestart", "px install with px restart", nil, 0)
+	})
+
+	ItLog := "PXInstallWithPXRestart"
+	It(ItLog, func() {
+
+		workerNodes := node.GetStorageDriverNodes()
+		index := rand.Intn(len(workerNodes))
+		selectedNode := workerNodes[index]
+
+		stepLog = "Prepare node for decommission"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := Inst().S.PrepareNodeToDecommission(selectedNode, Inst().Provisioner)
+			log.FailOnError(err, fmt.Sprintf("Failed prepare node [%v] for decommission", selectedNode.Name))
+			log.Infof("prepare node [%s] for decommission succeed", selectedNode.Hostname)
+		})
+
+		// decommission node
+		stepLog = "Decommission node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().V.DecommissionNode(&selectedNode)
+			log.FailOnError(err, fmt.Sprintf("Failed to decommission node [%v]", selectedNode.Name))
+			log.Info("decommission node succeed")
+		})
+		time.Sleep(1 * time.Minute)
+
+		stepLog = "Wipe node"
+		Step(stepLog, func() {
+			output, err := Inst().N.RunCommand(selectedNode, "echo Yes | pxctl sv node-wipe -s --all ", node.ConnectionOpts{
+				Timeout:         2 * time.Minute,
+				TimeBeforeRetry: 10 * time.Second,
+			})
+			log.FailOnError(err, "Failed to wipe node")
+			dash.VerifyFatal(strings.Contains(output, "Wiped node successfully"), true, fmt.Sprintf("node [%s] is Wiped", selectedNode.Name))
+			log.Info("Node wipe is succeed")
+		})
+
+		stepLog = fmt.Sprintf("Verify reboot")
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().N.RebootNodeAndWait(selectedNode)
+			log.FailOnError(err, "Failed to reboot node and wait till it is up")
+			log.Info("Verify reboot succeed")
+		})
+
+		stepLog = fmt.Sprintf("Rejoin node %s", selectedNode.Name)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().V.RejoinNode(&selectedNode)
+			log.FailOnError(err, "Failed to rejoin node [%v]", selectedNode)
+			log.Info("rejoin node successfull")
+
+		})
+
+		sleepTime := rand.Intn(100) + 1
+		time.Sleep(time.Second * (time.Duration(sleepTime)))
+
+		stepLog = fmt.Sprintf("Restart Portworx after [%d] seconds", sleepTime)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := Inst().N.Systemctl(selectedNode, "portworx.service", node.SystemctlOpts{
+				Action: "restart",
+				ConnectionOpts: node.ConnectionOpts{
+					Timeout:         5 * time.Minute,
+					TimeBeforeRetry: 10 * time.Second,
+				}})
+			log.FailOnError(err, fmt.Sprintf("restart portworx failed on node [%v]", selectedNode.Name))
+			log.Info("portworx restart succeed")
+			time.Sleep(2 * time.Minute)
+		})
+
+		stepLog = "Verify node rejoin"
+		Step(stepLog, func() {
+			var rejoinedNode *api.StorageNode
+			t := func() (interface{}, bool, error) {
+				drvNodes, err := Inst().V.GetDriverNodes()
+				if err != nil {
+					return false, true, err
+				}
+
+				for _, n := range drvNodes {
+					if n.Hostname == selectedNode.Hostname {
+						rejoinedNode = n
+						return true, false, nil
+					}
+				}
+
+				return false, true, fmt.Errorf("node %s not joined yet", selectedNode.Name)
+			}
+			_, err = task.DoRetryWithTimeout(t, 20*time.Minute, defaultRetryInterval)
+			log.FailOnError(err, fmt.Sprintf("error joining the node [%s]", selectedNode.Name))
+
+			err = Inst().S.RefreshNodeRegistry()
+			log.FailOnError(err, "error refreshing node registry")
+			log.Info("refreshing node registry succeed")
+
+			err = Inst().V.RefreshDriverEndpoints()
+			log.FailOnError(err, "error refreshing storage drive endpoints")
+			log.Info("refreshing storage drive endpoints succeed")
+
+			selectedNode = node.Node{}
+			for _, n := range node.GetStorageDriverNodes() {
+				if n.Name == rejoinedNode.Hostname {
+					selectedNode = n
+					break
+				}
+			}
+			if selectedNode.Name == "" {
+				log.FailOnError(fmt.Errorf("rejoined node not found"), fmt.Sprintf("node [%s] not found in the node registry", rejoinedNode.Hostname))
+			}
+			log.Info("rejoined node found succesfully")
+
+			err = Inst().V.WaitDriverUpOnNode(selectedNode, Inst().DriverStartTimeout)
+			log.FailOnError(err, "error refreshing storage drive endpoints")
+
+			log.Info("Validate driver up on rejoined node after rejoining succeed")
+
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
 	})
 })
