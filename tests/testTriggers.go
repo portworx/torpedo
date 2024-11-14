@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/libopenstorage/openstorage/pkg/dbg"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 
 	torpedotask "github.com/pure-px/torpedo/pkg/task"
 	"gopkg.in/inf.v0"
@@ -36,7 +37,6 @@ import (
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	opsapi "github.com/libopenstorage/openstorage/api"
-	operatorcorev1 "github.com/pure-px/px-operator/pkg/apis/core/v1"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/onsi/ginkgo/v2"
@@ -44,17 +44,12 @@ import (
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/kubevirt"
 	"github.com/portworx/sched-ops/k8s/operator"
 	storage "github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
-	"gopkg.in/natefinch/lumberjack.v2"
-	appsapi "k8s.io/api/apps/v1"
-	v1 "k8s.io/api/core/v1"
-	storageapi "k8s.io/api/storage/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
+	operatorcorev1 "github.com/pure-px/px-operator/pkg/apis/core/v1"
 	"github.com/pure-px/torpedo/drivers/backup"
 	"github.com/pure-px/torpedo/drivers/monitor/prometheus"
 	"github.com/pure-px/torpedo/drivers/node"
@@ -75,6 +70,12 @@ import (
 	"github.com/pure-px/torpedo/pkg/pureutils"
 	"github.com/pure-px/torpedo/pkg/stats"
 	"github.com/pure-px/torpedo/pkg/units"
+	"gopkg.in/natefinch/lumberjack.v2"
+	appsapi "k8s.io/api/apps/v1"
+	v1 "k8s.io/api/core/v1"
+	storageapi "k8s.io/api/storage/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -678,6 +679,9 @@ const (
 
 	// Live migration of Kubevirt VMs
 	KubevirtVMLiveMigration = "kubevirtVMLiveMigration"
+
+	// Triggers VM start and stop
+	KubevirtVMStartAndStop = "kubevirtVMStartAndStop"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -13963,5 +13967,125 @@ func TriggerKubevirtVMLiveMigration(contexts *[]*scheduler.Context, recordChan *
 			}
 		}
 	})
+	updateMetrics(*event)
+}
+
+func TriggerKubevirtVMStartAndStop(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(KubevirtVMStartAndStop)
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: KubevirtVMStartAndStop,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+	stepLog := "Start and Stop Kubevirt VM"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		// Get all VMs
+		log.Info("getting all vms")
+		vms, err := GetAllVMsFromScheduledContexts(*contexts)
+		log.Infof("vms from scheduled contexts : [%v]", vms)
+		if err != nil {
+			log.Errorf("failed to get VMs from scheduled context error : [%v]", err)
+			UpdateOutcome(event, err)
+			return
+		}
+
+		var wg sync.WaitGroup
+		batchSize := 10
+
+		// Process VMs in batches
+		for len(vms) > 0 {
+			if len(vms) < batchSize {
+				batchSize = len(vms)
+			}
+
+			// Select a random batch of VMs
+			selected := rand.Perm(len(vms))[:batchSize]
+			var batch []kubevirtv1.VirtualMachine
+			for _, idx := range selected {
+				batch = append(batch, vms[idx])
+			}
+
+			// Remove selected VMs from the original slice
+			for i := len(selected) - 1; i >= 0; i-- {
+				vms = append(vms[:selected[i]], vms[selected[i]+1:]...)
+			}
+
+			wg.Add(1)
+
+			go func(batch []kubevirtv1.VirtualMachine) {
+				defer wg.Done()
+				for _, vm := range batch {
+					k8sKubevirt := kubevirt.Instance()
+					vm1, err := k8sKubevirt.GetVirtualMachine(vm.Name, vm.Namespace)
+					if err != nil {
+						log.Infof("failed to get vm, error: [%v]", err)
+						return
+					}
+					log.InfoD("current vm status : [%v]", vm1.Status.PrintableStatus)
+					switch vm1.Status.PrintableStatus {
+					case kubevirtv1.VirtualMachineStatusStopped:
+						// Starting kubevirt VM
+						log.InfoD("starting kubevirtvm")
+						err := StartKubevirtVM(vm.Name, vm.Namespace, true)
+						if err != nil {
+							log.Errorf("failed to start VM [%v] on namespace [%v] Error : [%v]", vm.Name, vm.Namespace, err)
+							UpdateOutcome(event, err)
+							return
+						}
+						log.InfoD("successfully started KubevirtVM")
+						// Stopping kubevirt VM
+						time.Sleep(1 * time.Minute)
+						log.InfoD("stopping kubevirtvm")
+						err = StopKubevirtVM(vm.Name, vm.Namespace, true)
+						if err != nil {
+							log.Errorf("failed to stop VM [%v] on namespace [%v] Error : [%v]", vm.Name, vm.Namespace, err)
+							UpdateOutcome(event, err)
+							return
+						}
+						log.InfoD("successfully stopped KubevirtVM")
+					case kubevirtv1.VirtualMachineStatusRunning:
+						// Stopping kubevirt VM
+						log.InfoD("stopping kubevirtvm")
+						err = StopKubevirtVM(vm.Name, vm.Namespace, true)
+						if err != nil {
+							log.Errorf("failed to stop VM [%v] on namespace [%v] Error : [%v]", vm.Name, vm.Namespace, err)
+							UpdateOutcome(event, err)
+							return
+						}
+						log.InfoD("successfully stopped KubevirtVM")
+						// Starting kubevirt VM
+						time.Sleep(1 * time.Minute)
+						log.InfoD("starting kubevirtvm")
+						err = StartKubevirtVM(vm.Name, vm.Namespace, true)
+						if err != nil {
+							log.Errorf("failed to start VM [%v] on namespace [%v] Error : [%v]", vm.Name, vm.Namespace, err)
+							UpdateOutcome(event, err)
+							return
+						}
+						log.InfoD("successfully started KubevirtVM")
+					}
+				}
+			}(batch) // Pass the current batch to the goroutine
+		}
+		wg.Wait() // Wait for all goroutines to finish
+	})
+
+	if isSSIERun() {
+		validateContexts(event, contexts)
+	}
 	updateMetrics(*event)
 }

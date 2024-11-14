@@ -345,6 +345,7 @@ func populateTriggerFuncs() {
 		PowerOffStoragelessNodes:          TriggerPowerOffStoragelessNodes,
 		PowerOffStorageNodes:              TriggerPowerOffStorageNodes,
 		KubevirtVMLiveMigration:           TriggerKubevirtVMLiveMigration,
+		KubevirtVMStartAndStop:            TriggerKubevirtVMStartAndStop,
 	}
 
 	//Creating a distinct trigger to make sure email triggers at regular intervals
@@ -807,6 +808,7 @@ func populateIntervals() {
 	triggerInterval[PowerOffStoragelessNodes] = make(map[int]time.Duration)
 	triggerInterval[PowerOffStorageNodes] = make(map[int]time.Duration)
 	triggerInterval[KubevirtVMLiveMigration] = make(map[int]time.Duration)
+	triggerInterval[KubevirtVMStartAndStop] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -1982,6 +1984,16 @@ func populateIntervals() {
 	triggerInterval[KubevirtVMLiveMigration][2] = 24 * baseInterval
 	triggerInterval[KubevirtVMLiveMigration][1] = 27 * baseInterval
 
+	triggerInterval[KubevirtVMStartAndStop][10] = 1 * baseInterval
+	triggerInterval[KubevirtVMStartAndStop][9] = 3 * baseInterval
+	triggerInterval[KubevirtVMStartAndStop][8] = 6 * baseInterval
+	triggerInterval[KubevirtVMStartAndStop][7] = 9 * baseInterval
+	triggerInterval[KubevirtVMStartAndStop][6] = 12 * baseInterval
+	triggerInterval[KubevirtVMStartAndStop][5] = 15 * baseInterval
+	triggerInterval[KubevirtVMStartAndStop][4] = 18 * baseInterval
+	triggerInterval[KubevirtVMStartAndStop][3] = 21 * baseInterval
+	triggerInterval[KubevirtVMStartAndStop][2] = 24 * baseInterval
+	triggerInterval[KubevirtVMStartAndStop][1] = 27 * baseInterval
 	// Chaos Level of 0 means disable test trigger
 	triggerInterval[DeployApps][0] = 0
 	triggerInterval[RebootNode][0] = 0
@@ -2085,6 +2097,7 @@ func populateIntervals() {
 	triggerInterval[PowerOffStorageNodes][0] = 0
 	triggerInterval[PowerOffStoragelessNodes][0] = 0
 	triggerInterval[KubevirtVMLiveMigration][0] = 0
+	triggerInterval[KubevirtVMStartAndStop][0] = 0
 
 }
 
