@@ -9,18 +9,17 @@ import (
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
-	
 
 	"github.com/portworx/torpedo/pkg/log"
 )
 
 const (
-	configMapName                          = "secret-configmap"
-	backupLocationType                     = storkv1.BackupLocationS3
-	backupLocationPath                     = "testpath"
-	s3SecretName                           = "s3secret"
-	applicationBackupScheduleRetryInterval = 10 * time.Second
-	applicationBackupScheduleRetryTimeout  = 5 * time.Minute
+	configMapName                           = "secret-configmap"
+	backupLocationType                      = storkv1.BackupLocationS3
+	backupLocationPath                      = "testpath"
+	s3SecretName                            = "s3secret"
+	applicationBackupScheduleRetryInterval  = 10 * time.Second
+	applicationBackupScheduleRetryTimeout   = 5 * time.Minute
 	applicationRestoreScheduleRetryInterval = 10 * time.Second
 	applicationRestoreScheduleRetryTimeout  = 5 * time.Minute
 )
@@ -128,8 +127,8 @@ func CreateApplicationRestore(
 			Namespace: namespace,
 		},
 		Spec: storkv1.ApplicationRestoreSpec{
-			BackupName:     backupName,
-			BackupLocation: backupLocation.Name,
+			BackupName:       backupName,
+			BackupLocation:   backupLocation.Name,
 			NamespaceMapping: namespaceMapping,
 		},
 	}

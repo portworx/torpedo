@@ -58,9 +58,9 @@ const (
 	tempDir                = "/tmp"
 	portworxProvisioner    = "kubernetes.io/portworx-volume"
 	DefaultScName          = "async-sc"
-	FirstCluster = 0
-	SecondCluster = 1
-	ThirdCluster = 2
+	FirstCluster           = 0
+	SecondCluster          = 1
+	ThirdCluster           = 2
 )
 
 var (
@@ -287,7 +287,7 @@ func CreateSnapshotSchedule(
 	pvcName string,
 	scheduleName string,
 	policyName string,
-	snapshotType string,) (*storkapi.VolumeSnapshotSchedule, error) {
+	snapshotType string) (*storkapi.VolumeSnapshotSchedule, error) {
 
 	snapSched := &storkapi.VolumeSnapshotSchedule{
 		ObjectMeta: meta_v1.ObjectMeta{
@@ -320,7 +320,7 @@ func CreateSchedulePolicyWithRetain(policyName string, interval int, retain stor
 			Policy: storkapi.SchedulePolicyItem{
 				Interval: &storkapi.IntervalPolicy{
 					IntervalMinutes: interval,
-					Retain: retain,
+					Retain:          retain,
 				},
 			}}
 		schedPolicy, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
@@ -338,12 +338,12 @@ func ValidateSnapshotScheduleCount(pvcs []string, schedNs, schedPol, snapshotTyp
 			return fmt.Errorf("Error creating snapshot schedule: %v", err)
 		}
 		log.InfoD("SnapSchedule is %v", snapSchedule)
-		time.Sleep(30*time.Second)
+		time.Sleep(30 * time.Second)
 		err = WaitForRetainSnapshotsSuccessful(scheduleName, schedNs, int(retain), snapInterval)
 		if err != nil {
 			return fmt.Errorf("Error waiting for retain snapshots: %v", err)
 		}
-		time.Sleep(30*time.Second)
+		time.Sleep(30 * time.Second)
 		schedule, err := storkops.Instance().GetSnapshotSchedule(scheduleName, schedNs)
 		if err != nil {
 			return fmt.Errorf("Failed to get snapshot schedule")
@@ -358,39 +358,39 @@ func ValidateSnapshotScheduleCount(pvcs []string, schedNs, schedPol, snapshotTyp
 
 // WaitForRetainSnapshotsSuccessful waits for a certain number of snapshots to complete.
 func WaitForRetainSnapshotsSuccessful(snapSchedName string, schedNs string, retain int, snapInterval int) error {
-    for i := 0; i < retain + 1; i++ {
-        checkSuccessfulSnapshots := func() (interface{}, bool, error) {
-            snapSchedule, err := storkops.Instance().GetSnapshotSchedule(snapSchedName, schedNs)
-            if err != nil {
-                return nil, true, fmt.Errorf("failed to get snapshot schedule: %v", snapSchedName)
-            }
+	for i := 0; i < retain+1; i++ {
+		checkSuccessfulSnapshots := func() (interface{}, bool, error) {
+			snapSchedule, err := storkops.Instance().GetSnapshotSchedule(snapSchedName, schedNs)
+			if err != nil {
+				return nil, true, fmt.Errorf("failed to get snapshot schedule: %v", snapSchedName)
+			}
 			currentIndex := i
-            if currentIndex >= len(snapSchedule.Status.Items["Interval"]) {
-                currentIndex = len(snapSchedule.Status.Items["Interval"]) - 1
-            }
-            if snapSchedule.Status.Items["Interval"][currentIndex].Status != crdv1.VolumeSnapshotConditionReady {
-                return nil, true, fmt.Errorf("snapshot %v failed with status: %v", snapSchedule.Status.Items["Interval"][currentIndex].Name, snapSchedule.Status.Items["Interval"][currentIndex].Status)
-            }
-            return nil, false, nil
-        }
+			if currentIndex >= len(snapSchedule.Status.Items["Interval"]) {
+				currentIndex = len(snapSchedule.Status.Items["Interval"]) - 1
+			}
+			if snapSchedule.Status.Items["Interval"][currentIndex].Status != crdv1.VolumeSnapshotConditionReady {
+				return nil, true, fmt.Errorf("snapshot %v failed with status: %v", snapSchedule.Status.Items["Interval"][currentIndex].Name, snapSchedule.Status.Items["Interval"][currentIndex].Status)
+			}
+			return nil, false, nil
+		}
 
-        snapStartTime := time.Now()
-        _, err := task.DoRetryWithTimeout(checkSuccessfulSnapshots, time.Minute*time.Duration(snapInterval*2), time.Second*10)
-        if err != nil {
-            return err
-        }
-        snapEndTime := time.Now()
-        snapTimeTaken := snapEndTime.Sub(snapStartTime)
-        snapIntervalMins := time.Minute * time.Duration(snapInterval)
+		snapStartTime := time.Now()
+		_, err := task.DoRetryWithTimeout(checkSuccessfulSnapshots, time.Minute*time.Duration(snapInterval*2), time.Second*10)
+		if err != nil {
+			return err
+		}
+		snapEndTime := time.Now()
+		snapTimeTaken := snapEndTime.Sub(snapStartTime)
+		snapIntervalMins := time.Minute * time.Duration(snapInterval)
 
 		if i == retain {
 			break
 		}
 
-        log.Infof("Waiting for next snapshot interval to start. Time pending to start next snap trigger: %v", snapIntervalMins-snapTimeTaken)
-        time.Sleep(snapIntervalMins - snapTimeTaken + 10*time.Second)
-    }
-    return nil
+		log.Infof("Waiting for next snapshot interval to start. Time pending to start next snap trigger: %v", snapIntervalMins-snapTimeTaken)
+		time.Sleep(snapIntervalMins - snapTimeTaken + 10*time.Second)
+	}
+	return nil
 }
 
 func CreateSchedulePolicy(policyName string, interval int) (pol *storkapi.SchedulePolicy, err error) {

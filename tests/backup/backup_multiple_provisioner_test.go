@@ -59,7 +59,7 @@ var _ = Describe("{MultipleProvisionerCsiSnapshotDeleteBackupAndRestore}", Label
 
 		// Deploy multiple application in a single namespace using different provisioner
 		taskName := fmt.Sprintf("%s-%s", TaskNamePrefix, RandomString(randomStringLength))
-		for provisioner, _ := range provisionerDefaultSnapshotClassMap {
+		for provisioner := range provisionerDefaultSnapshotClassMap {
 			appSpecList, err := GetApplicationSpecForProvisioner(clusterProviderName, provisioner)
 			log.FailOnError(err, fmt.Sprintf("Fetching application spec for provisioner %s", provisioner))
 			for _, appSpec := range appSpecList {
@@ -286,7 +286,7 @@ var _ = Describe("{MultipleProvisionerCsiKdmpBackupAndRestore}", Label(TestCaseL
 		providers = GetBackupProviders()
 		// Deploy multiple application in a single namespace using different provisioner
 		taskName := fmt.Sprintf("%s-%s", TaskNamePrefix, RandomString(randomStringLength))
-		for provisioner, _ := range provisionerDefaultSnapshotClassMap {
+		for provisioner := range provisionerDefaultSnapshotClassMap {
 			var err error
 			appSpecListMultiProvisioner, err = GetApplicationSpecForProvisioner(clusterProviderName, provisioner)
 			log.FailOnError(err, fmt.Sprintf("Fetching application spec for provisioner %s", provisioner))
@@ -298,7 +298,7 @@ var _ = Describe("{MultipleProvisionerCsiKdmpBackupAndRestore}", Label(TestCaseL
 			}
 		}
 		// Deploy multiple application in multiple namespace for default backup
-		for provisioner, _ := range provisionerDefaultSnapshotClassMap {
+		for provisioner := range provisionerDefaultSnapshotClassMap {
 			var err error
 			appSpecListDefaultVsc, err = GetApplicationSpecForProvisioner(clusterProviderName, provisioner)
 			log.FailOnError(err, fmt.Sprintf("Fetching application spec for provisioner %s", provisioner))
@@ -311,7 +311,7 @@ var _ = Describe("{MultipleProvisionerCsiKdmpBackupAndRestore}", Label(TestCaseL
 			}
 		}
 		// Deploy multiple application in multiple namespace for custom backup
-		for provisioner, _ := range provisionerSnapshotClassMap {
+		for provisioner := range provisionerSnapshotClassMap {
 			var err error
 			appSpecListCustomVsc, err = GetApplicationSpecForProvisioner(clusterProviderName, provisioner)
 			log.FailOnError(err, fmt.Sprintf("Fetching application spec for provisioner %s", provisioner))

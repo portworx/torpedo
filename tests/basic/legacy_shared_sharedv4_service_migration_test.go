@@ -92,14 +92,14 @@ func getLegacySharedVolumeCount(contexts []*scheduler.Context) int {
 	for _, ctx := range contexts {
 		var vols []*volume.Volume
 		var err error
-		t := func() (interface{}, bool , error) {
+		t := func() (interface{}, bool, error) {
 			vols, err = Inst().S.GetVolumes(ctx)
 			if err != nil {
 				return "", true, err
 			}
 			return "", false, nil
 		}
-		_, err = task.DoRetryWithTimeout(t, 5 * time.Minute, 10 * time.Second)
+		_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
 		log.FailOnError(err, "Failed to get volumes for app %s", ctx.App.Key)
 		for _, v := range vols {
 			vol, err := Inst().V.InspectVolume(v.ID)
@@ -932,7 +932,7 @@ var _ = Describe("{LegacySharedVolumeAppMigrateHAupdating}", func() {
 			}
 			return "", true, fmt.Errorf("Volume is still shared {%v}", volumeName)
 		}
-		_, err = task.DoRetryWithTimeout(t, 6 * time.Minute, time.Minute)
+		_, err = task.DoRetryWithTimeout(t, 6*time.Minute, time.Minute)
 		dash.VerifyFatal(err == nil, true, fmt.Sprintf("migration failed on volume [%v]", volumeName))
 		pxctlCmdFull = fmt.Sprintf("v d %s --force", volumeName)
 		Inst().V.GetPxctlCmdOutput(pxNode, pxctlCmdFull)
