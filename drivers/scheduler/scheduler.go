@@ -93,6 +93,9 @@ type AppConfig struct {
 	CreateOptions               string   `yaml:"createoptions"`
 	MountOptions                []string `yaml:"mountOptions"`
 	Parallelism                 int      `yaml:"parallelism"`
+	PvcStart                    int      `yaml:"start"`
+	PvcEnd                      int      `yaml:"end"`
+	DeploymentCount             int      `yaml:"deploymentCount"`
 }
 
 // InitOptions initialization options

@@ -543,6 +543,14 @@ func (k *K8s) ParseSpecs(specDir, storageProvisioner string) ([]interface{}, err
 					}
 					return string + "\"]"
 				},
+				"Loop": func(start int, end int) []int {
+					var i int
+					var Items []int
+					for i = start; i < end; i++ {
+						Items = append(Items, i)
+					}
+					return Items
+				},
 			}
 
 			tmpl, err := template.New("customConfig").Funcs(funcs).Parse(string(file))

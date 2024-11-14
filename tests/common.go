@@ -15206,7 +15206,7 @@ func GetVolumeFromContexts(contexts []*scheduler.Context) ([]*volume.Volume, err
 }
 
 // WaitForVolToHaveMinimumSize wait until the given volume reaches the specified size during the given time interval
-func WaitForVolToHaveMinimumSize(vol *volume.Volume, size int64, timeout time.Duration, retryTime time.Duration) (bool, error) {
+func WaitForVolToHaveMinimumSize(vol *volume.Volume, size float64, timeout time.Duration, retryTime time.Duration) (bool, error) {
 	log.InfoD("Waiting until the given volume reaches the specified size during the given time interval")
 	f := func() (interface{}, bool, error) {
 		byteUsedAfter, err := GetVolumeBytesUsed(vol)
@@ -15214,11 +15214,11 @@ func WaitForVolToHaveMinimumSize(vol *volume.Volume, size int64, timeout time.Du
 			return nil, false, fmt.Errorf("unable to get bytes used by the volume %v", vol.Name)
 		}
 		log.Infof("Bytes used by the volume is %s", byteUsedAfter)
-		bytesUsed, _ := strconv.ParseInt(strings.Fields(byteUsedAfter)[0], 10, 64)
+		bytesUsed, _ := strconv.ParseFloat(strings.Fields(byteUsedAfter)[0], 64)
 		if bytesUsed >= size {
 			return nil, false, nil
 		}
-		return nil, true, fmt.Errorf("vol %s is not having required used bytes size yet", vol.Name)
+		return nil, true, fmt.Errorf("vol %s is not having required used bytes size yet: %v required: %v", vol.Name, bytesUsed, size)
 	}
 	_, err := task.DoRetryWithTimeout(f, timeout, retryTime)
 	if err != nil {
@@ -15493,4 +15493,85 @@ func UpgradePXWithLatestVersion(upgradeHop string, storageNodes []node.Node) err
 
 	log.InfoD(fmt.Sprintf("updated version is [%s]", updatedPXVersion))
 	return nil
+}
+
+// GenerateRandomNumber generates random number between 0 and given integer, also it shifts the range up with the given shift value
+func GenerateRandomNumber(limitValue int, upscale int) int {
+	rand.Seed(time.Now().UnixNano())
+	return rand.Intn(limitValue-upscale+1) + upscale
+}
+
+// AddNewPvcToDeployedApplication adds few PVC to the deployed applications
+// start: count from where we want to add the deployment as we would have previously installed few deployments
+// end: count till where we want to add the deployment
+func AddNewPvcToDeployedApplication(start int, end int, appContexts []*scheduler.Context) ([]*scheduler.Context, error) {
+	var namespace string
+	var application string
+	for _, ctx := range appContexts {
+		application = ctx.App.Key
+		namespace = ctx.App.NameSpace
+	}
+	log.InfoD("Application: %v, Namespace: %v", application, namespace)
+	for i := start; i < end; i++ {
+		Inst().CustomAppConfig[application] = scheduler.AppConfig{
+			PvcStart:        i,
+			PvcEnd:          i + 1,
+			DeploymentCount: i,
+		}
+		err := Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+		if err != nil {
+			return nil, fmt.Errorf("failed to rescan specs from %s for storage provider %s with error %v", Inst().SpecDir, Inst().V.String(), err)
+		}
+		appContext := ScheduleApplicationsOnNamespace(namespace, TaskNamePrefix)
+		for _, appCtx := range appContext {
+			appCtx.ReadinessTimeout = AppReadinessTimeout
+			appContexts = append(appContexts, appCtx)
+		}
+	}
+	return appContexts, nil
+}
+
+// DeleteRandomPvcFromDeployedApplication deletes the given PVC from the provided application context
+func DeleteRandomPvcFromDeployedApplication(pvcName string, appContext []*scheduler.Context) error {
+	log.InfoD("Deleting PVC %v from the deployed application", pvcName)
+	var namespace string
+	var application string
+	for _, ctx := range appContext {
+		application = ctx.App.Key
+		namespace = ctx.App.NameSpace
+	}
+	log.InfoD("Application:%v Namespace:%v", application, namespace)
+	var wg sync.WaitGroup
+	errCh := make(chan error, len(appContext)*len(appContext[0].App.SpecList))
+	for _, ctx := range appContext {
+		for _, spec := range ctx.App.SpecList {
+			if depSpec, ok := spec.(*appsapi.Deployment); ok {
+				wg.Add(1)
+				go func(depSpec *appsapi.Deployment) {
+					defer wg.Done()
+					for _, volume := range depSpec.Spec.Template.Spec.Volumes {
+						if volume.PersistentVolumeClaim != nil && volume.PersistentVolumeClaim.ClaimName == pvcName {
+							log.InfoD("Scaling Deployment Replica to 0")
+							err := ScaleDeploymentReplicas(depSpec.Name, namespace, 0, 0, PodStatusTimeOut, PodStatusRetryTime)
+							if err != nil {
+								errCh <- err
+							}
+							log.InfoD("Deleting the PVC %v associated with deployment %v", pvcName, depSpec.Name)
+							err = k8sCore.DeletePersistentVolumeClaim(pvcName, namespace)
+							if err != nil {
+								errCh <- err
+							}
+						}
+					}
+				}(depSpec)
+			}
+		}
+	}
+	wg.Wait()
+	close(errCh)
+	var allErrors error
+	for err := range errCh {
+		allErrors = multierr.Append(allErrors, err)
+	}
+	return allErrors
 }

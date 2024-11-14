@@ -131,6 +131,7 @@ const (
 	GroupsToBeCreated                         = "GROUPS_TO_CREATE"
 	MaxUsersInGroup                           = "MAX_USERS_IN_GROUP"
 	MaxBackupsToBeCreated                     = "MAX_BACKUPS"
+	VolCountForParallelDelete                 = "VOLUME_COUNT_FOR_PARALLEL_DELETE"
 	MaxWaitPeriodForBackupCompletionInMinutes = 40
 	MaxWaitPeriodForRestoreCompletionInMinute = 40
 	MaxWaitPeriodForBackupJobCancellation     = 20
@@ -209,6 +210,9 @@ const (
 	ReduceLargeResourceSizeLimit              = "REDUCE_LARGE_RESOURCE_SIZE_LIMIT"
 	NumberOfResources                         = "NUMBER_OF_RESOURCES"
 	NumberOfEntries                           = "NUMBER_OF_ENTRIES"
+	DynamicPvcGenerationTime                  = 300
+	DynamicPvcGenerationTimeOut               = 350
+	DynamicPvcGenerationRetryTime             = 30
 )
 
 var (
@@ -4659,7 +4663,7 @@ func DeleteBackupAndWait(backupName string, ctx context1.Context) error {
 		}
 		for _, backupObject := range currentBackups.GetBackups() {
 			if backupObject.Name == backupName {
-				return "", true, fmt.Errorf("backupObject [%s] is not yet deleted . status:[%s] ", backupObject.Name, backupObject.Status)
+				return "", true, fmt.Errorf("backupObject [%s] is not yet deleted . status:[%s] ,reason: [%v] , volumes: [%v]", backupObject.Name, backupObject.Status, backupObject.GetStatus().Reason, backupObject.Volumes)
 			}
 		}
 		return "", false, nil

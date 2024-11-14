@@ -159,6 +159,7 @@ const (
 	ValidateMetrics                                                                    TestCaseName = "ValidateMetrics"
 	KDMPBackup                                                                         TestCaseName = "ValidateGenericBackupDeletionWithMissingS3Bucket"
 	StorkControllerConfigCM                                                            TestCaseName = "StorkControllerConfigCM"
+	BackupDeletionWithDynamicPVCGeneration                                             TestCaseName = "BackupDeletionWithDynamicPVCGeneration"
 )
 
 // Test case labels
@@ -316,6 +317,7 @@ const (
 	ValidateMetricsLabel                                                                    TestCaseLabel = "ValidateMetrics"
 	KDMPBackupLabel                                                                         TestCaseLabel = "ValidateGenericBackupDeletionWithMissingS3Bucket"
 	StorkControllerConfigCMLabel                                                            TestCaseLabel = "StorkControllerConfigCM"
+	BackupDeletionWithDynamicPVCGenerationLabel                                             TestCaseLabel = "BackupDeletionWithDynamicPVCGeneration"
 )
 
 // Common Labels
@@ -620,4 +622,5 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	BackupShare:                                                                        {BackupShareLabel},
 	SoftDeleteAndRecoverBackupOnContainerAndBlobLevel:                                  {SoftDeleteAndRecoverBackupOnContainerAndBlobLevelLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, AzureBackupLocationLabel, Day3LockedBucketLabel, AzureImmutableBucket},
 	DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel:                            {DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevelLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, AzureBackupLocationLabel, Day3LockedBucketLabel, AzureImmutableBucket},
+	BackupDeletionWithDynamicPVCGeneration:                                             {BackupDeletionWithDynamicPVCGenerationLabel, PerformanceTest, P1, PxLabel, S3BackupLocationLabel},
 }
