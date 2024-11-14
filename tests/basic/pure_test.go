@@ -4737,7 +4737,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 		stepLog = "Create Namespace and then create 10 PVC each with respective storage class parallely"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			for ns, _ := range namespacePVCMap {
+			for ns := range namespacePVCMap {
 				err := createNameSpace(ns)
 				log.FailOnError(err, "Failed to create namespace [%s]", ns)
 			}
@@ -4833,7 +4833,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", func() {
 				err = core.Instance().DeleteNamespace(namespace)
 				log.FailOnError(err, fmt.Sprintf("Failed to delete namespace [%s]", namespace))
 			}
-			for storageclass, _ := range scNamespaceMap {
+			for storageclass := range scNamespaceMap {
 				log.InfoD("Delete storageclass [%s]", storageclass)
 				err = storage.Instance().DeleteStorageClass(storageclass)
 				log.FailOnError(err, fmt.Sprintf("Failed to delete storageclass [%s]", storageclass))

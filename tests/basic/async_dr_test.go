@@ -676,7 +676,7 @@ var _ = Describe("{UpgradeVolumeDriverDuringAppBkpRestore}", func() {
 			backupName         = "storkbackup-" + time.Now().Format("15h03m05s")
 			taskNamePrefix     = "appbkprest-upgradepx"
 			defaultNs          = "kube-system"
-			timeout            = 10 * time.Minute	
+			timeout            = 10 * time.Minute
 		)
 		bkpNs, contexts := initialSetupApps(taskNamePrefix, true)
 		storageNodes := node.GetStorageNodes()
@@ -806,7 +806,7 @@ var _ = Describe("{UpgradeVolumeDriverDuringAsyncDrMigration}", func() {
 			kubeConfigPath[cluster], err = GetCustomClusterConfigPath(cluster)
 			log.FailOnError(err, "Getting error while fetching path for %v cluster, error is %v", cluster, err)
 		}
-		
+
 		var migrationSchedName string
 		var schdPol *storkapi.SchedulePolicy
 		cpName := defaultClusterPairName + time.Now().Format("15h03m05s")

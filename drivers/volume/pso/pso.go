@@ -133,7 +133,6 @@ func (i *pso) ValidatePureFBDAMountSource(nodes []node.Node, vols []*volume.Volu
 	}
 }
 
-
 // GetPsoNamespace returns namespace where PSO is running
 func GetPsoNamespace() (string, error) {
 	allServices, err := core.Instance().ListServices("", metav1.ListOptions{})

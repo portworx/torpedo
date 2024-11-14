@@ -1050,52 +1050,57 @@ func (p *portworx) WaitForBackupDeletion(
 	timeBeforeRetry time.Duration,
 ) error {
 	backupUID, err := p.GetBackupUID(ctx, backupName, orgID)
-	if err != nil {
-		return err
-	}
-	req := &api.BackupInspectRequest{
-		Name:  backupName,
-		OrgId: orgID,
-		Uid:   backupUID,
-	}
-	var backupError error
-	f := func() (interface{}, bool, error) {
-		inspectBackupResp, err := p.backupManager.Inspect(ctx, req)
-		if err == nil {
-			// Object still exists, just retry
-			currentStatus := inspectBackupResp.GetBackup().GetStatus().GetStatus()
-			return nil, true, fmt.Errorf("backup [%v] is in [%s] state",
-				req.GetName(), currentStatus)
+	if err != nil && strings.Contains(err.Error(), fmt.Sprintf("backup with name '%s' not found for org '%s'", backupName, orgID)) {
+		log.Infof("Backup [%s] is already deleted or not present while fetching backup uid", backupName)
+		return nil
+	} else {
+		req := &api.BackupInspectRequest{
+			Name:  backupName,
+			OrgId: orgID,
+			Uid:   backupUID,
 		}
+		var backupError error
+		f := func() (interface{}, bool, error) {
+			inspectBackupResp, err := p.backupManager.Inspect(ctx, req)
+			if err != nil && strings.Contains(err.Error(), "object not found") {
+				log.Infof("Backup [%s] is already deleted or not present while inspecting backup", backupName)
+				return nil, false, nil
+			}
+			if err == nil {
+				// Object still exists, just retry
+				currentStatus := inspectBackupResp.GetBackup().GetStatus().GetStatus()
+				return nil, true, fmt.Errorf("backup [%v] is in [%s] state",
+					req.GetName(), currentStatus)
+			}
 
-		if inspectBackupResp == nil {
+			if inspectBackupResp == nil {
+				return nil, false, nil
+			}
+			// Check if backup delete status is complete
+			currentStatus := inspectBackupResp.GetBackup().GetStatus().GetStatus()
+			if currentStatus == api.BackupInfo_StatusInfo_Deleting ||
+				currentStatus == api.BackupInfo_StatusInfo_DeletePending {
+				// Backup deletion is not complete, retry again
+				return nil,
+					true,
+					fmt.Errorf("backup [%v] is in [%s] state. Waiting to become Complete",
+						req.GetName(), currentStatus)
+			} else if currentStatus == api.BackupInfo_StatusInfo_Failed ||
+				currentStatus == api.BackupInfo_StatusInfo_Aborted ||
+				currentStatus == api.BackupInfo_StatusInfo_Invalid {
+				backupError = fmt.Errorf("backup [%v] is in [%s] state",
+					req.GetName(), currentStatus)
+				return nil, false, backupError
+			}
 			return nil, false, nil
 		}
-		// Check if backup delete status is complete
-		currentStatus := inspectBackupResp.GetBackup().GetStatus().GetStatus()
-		if currentStatus == api.BackupInfo_StatusInfo_Deleting ||
-			currentStatus == api.BackupInfo_StatusInfo_DeletePending {
-			// Backup deletion is not complete, retry again
-			return nil,
-				true,
-				fmt.Errorf("backup [%v] is in [%s] state. Waiting to become Complete",
-					req.GetName(), currentStatus)
-		} else if currentStatus == api.BackupInfo_StatusInfo_Failed ||
-			currentStatus == api.BackupInfo_StatusInfo_Aborted ||
-			currentStatus == api.BackupInfo_StatusInfo_Invalid {
-			backupError = fmt.Errorf("backup [%v] is in [%s] state",
-				req.GetName(), currentStatus)
-			return nil, false, backupError
+
+		_, err = task.DoRetryWithTimeout(f, timeout, timeBeforeRetry)
+		if err != nil {
+			return fmt.Errorf("failed to wait for backup deletion. Error:[%v] Reason:[%v]", err, backupError)
 		}
-		return nil, false, nil
+		return nil
 	}
-
-	_, err = task.DoRetryWithTimeout(f, timeout, timeBeforeRetry)
-	if err != nil {
-		return fmt.Errorf("failed to wait for backup deletion. Error:[%v] Reason:[%v]", err, backupError)
-	}
-
-	return nil
 }
 
 // SetMissingBackupUID sets the missing backup UID for backup-related requests
