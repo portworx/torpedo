@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	baseErrors "errors"
 	"fmt"
-	pxutil "github.com/pure-px/px-operator/drivers/storage/portworx/util"
 	"io"
 	"io/ioutil"
 	random "math/rand"
@@ -22,6 +21,8 @@ import (
 	"sync"
 	"text/template"
 	"time"
+
+	pxutil "github.com/pure-px/px-operator/drivers/storage/portworx/util"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 
@@ -2543,7 +2544,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 			if pvc.Annotations == nil {
 				pvc.Annotations = make(map[string]string)
 			}
-
+			k.substituteNamespaceInPVC(&pvc, ns.Name)
 			pvcList = append(pvcList, pvc)
 		}
 		obj.Spec.VolumeClaimTemplates = pvcList
