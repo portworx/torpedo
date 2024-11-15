@@ -16,7 +16,6 @@ import (
 	_ "github.com/rancher/norman/clientbase"
 	_ "github.com/rancher/rancher/pkg/client/generated/management/v3"
 	"golang.org/x/sync/errgroup"
-	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -56,24 +55,28 @@ var _ = Describe("{TimeTakenToDeleteBackupWithHeavyLoad}", Label(TestCaseLabelsM
 		err := SetDestinationKubeConfig()
 		log.FailOnError(err, "Switching context to destination cluster failed")
 		log.InfoD("Deploy applications on destination cluster")
-		numberOfVolumes, err = strconv.Atoi(GetEnv("VOLUME_COUNT_FOR_PARALLEL_DELETE", "50"))
+		numberOfVolumes, _ = strconv.Atoi(GetEnv(VolCountForParallelDelete, "20"))
 		log.InfoD("The number of PVC to be deployed are %v", numberOfVolumes)
 		appList := Inst().AppList
 		defer func() {
 			Inst().AppList = appList
 		}()
-		namespace := fmt.Sprintf("multiple-volume-ns-%s", RandomString(6))
+		namespace := fmt.Sprintf("multiple-volume-pvc-%s", RandomString(6))
 		bkpNamespaces = append(bkpNamespaces, namespace)
-		Inst().AppList = []string{"vdbench-multi-vol"}
-		Inst().CustomAppConfig["vdbench-multi-vol"] = scheduler.AppConfig{
-			ClaimsCount: numberOfVolumes,
-		}
-		err = Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
-		log.FailOnError(err, "Failed to rescan specs from %s for storage provider %s with claim count %v", Inst().SpecDir, Inst().V.String(), numberOfVolumes)
-		appContexts := ScheduleApplicationsOnNamespace(namespace, TaskNamePrefix)
-		for _, appCtx := range appContexts {
-			appCtx.ReadinessTimeout = AppReadinessTimeout
-			scheduledAppContexts = append(scheduledAppContexts, appCtx)
+		Inst().AppList = []string{"vdbench-multi-dep-multi-volume"}
+		for i := 0; i < numberOfVolumes; i++ {
+			Inst().CustomAppConfig["vdbench-multi-dep-multi-volume"] = scheduler.AppConfig{
+				PvcStart:        i,
+				PvcEnd:          i + 1,
+				DeploymentCount: i,
+			}
+			err = Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+			log.FailOnError(err, "Failed to rescan specs from %s for storage provider %s with claim count %v", Inst().SpecDir, Inst().V.String(), numberOfVolumes)
+			appContexts := ScheduleApplicationsOnNamespace(namespace, TaskNamePrefix)
+			for _, appCtx := range appContexts {
+				appCtx.ReadinessTimeout = AppReadinessTimeout
+				scheduledAppContexts = append(scheduledAppContexts, appCtx)
+			}
 		}
 	})
 	It("Calculates the time taken to delete a backup with heavy load", func() {
@@ -194,36 +197,35 @@ var _ = Describe("{TimeTakenToDeleteScheduleBackupWithHeavyLoadAfterSuspendingTh
 		bkpNamespaces = make([]string, 0)
 		totalNoOfScheduleBackups = 5
 		backupLocationMap = make(map[string]string)
-		sizePerVolume = 45
+		sizePerVolume = 1
 		ctx, err = backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		log.InfoD("Switching cluster context to destination cluster")
 		err = SetDestinationKubeConfig()
 		log.FailOnError(err, "Switching context to destination cluster failed")
 		log.InfoD("Deploy applications on destination cluster")
-		volumeCountForParallelDelete := os.Getenv("VOLUME_COUNT_FOR_PARALLEL_DELETE")
-		if volumeCountForParallelDelete == "" {
-			volumeCountForParallelDelete = "50"
-		}
-		numberOfVolumes, err = strconv.Atoi(volumeCountForParallelDelete)
+		numberOfVolumes, _ = strconv.Atoi(GetEnv(VolCountForParallelDelete, "20"))
 		log.InfoD("The number of PVC to be deployed are %v", numberOfVolumes)
 		appList := Inst().AppList
 		defer func() {
 			Inst().AppList = appList
 		}()
-		namespace := fmt.Sprintf("multiple-volume-ns-%s", RandomString(6))
+		namespace := fmt.Sprintf("multiple-volume-pvc-%s", RandomString(6))
 		bkpNamespaces = append(bkpNamespaces, namespace)
-		Inst().AppList = []string{"vdbench-multi-vol"}
-		Inst().CustomAppConfig["vdbench-multi-vol"] = scheduler.AppConfig{
-
-			ClaimsCount: numberOfVolumes,
-		}
-		err = Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
-		log.FailOnError(err, "Failed to rescan specs from %s for storage provider %s with claim count %v", Inst().SpecDir, Inst().V.String(), numberOfVolumes)
-		appContexts := ScheduleApplicationsOnNamespace(namespace, TaskNamePrefix)
-		for _, appCtx := range appContexts {
-			appCtx.ReadinessTimeout = AppReadinessTimeout
-			scheduledAppContexts = append(scheduledAppContexts, appCtx)
+		Inst().AppList = []string{"vdbench-multi-dep-multi-volume"}
+		for i := 0; i < numberOfVolumes; i++ {
+			Inst().CustomAppConfig["vdbench-multi-dep-multi-volume"] = scheduler.AppConfig{
+				PvcStart:        i,
+				PvcEnd:          i + 1,
+				DeploymentCount: i,
+			}
+			err = Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+			log.FailOnError(err, "Failed to rescan specs from %s for storage provider %s with claim count %v", Inst().SpecDir, Inst().V.String(), numberOfVolumes)
+			appContexts := ScheduleApplicationsOnNamespace(namespace, TaskNamePrefix)
+			for _, appCtx := range appContexts {
+				appCtx.ReadinessTimeout = AppReadinessTimeout
+				scheduledAppContexts = append(scheduledAppContexts, appCtx)
+			}
 		}
 	})
 
@@ -416,8 +418,7 @@ var _ = Describe("{BackupDeletionWithDynamicPVCGeneration}", Label(TestCaseLabel
 		err = SetDestinationKubeConfig()
 		log.FailOnError(err, "Switching context to destination cluster failed")
 		log.InfoD("Deploy applications on destination cluster")
-		numberOfVolumes, err = strconv.Atoi(GetEnv(VolCountForParallelDelete, "50"))
-		dash.VerifyFatal(err, nil, "fetching VOLUME_COUNT_FOR_PARALLEL_DELETE variable and converting to integer")
+		numberOfVolumes, _ = strconv.Atoi(GetEnv(VolCountForParallelDelete, "20"))
 		log.InfoD("The number of PVC to be deployed are %v", numberOfVolumes)
 		appList = Inst().AppList
 		namespace := fmt.Sprintf("multiple-volume-add-delete-pvc-%s", RandomString(6))
@@ -506,6 +507,10 @@ var _ = Describe("{BackupDeletionWithDynamicPVCGeneration}", Label(TestCaseLabel
 		})
 
 		Step("Create schedule policy", func() {
+			defer func() {
+				err := SetDestinationKubeConfig()
+				log.FailOnError(err, "Switching context to destination cluster")
+			}()
 			log.InfoD("Creating a schedule policy")
 			periodicSchedulePolicyName = fmt.Sprintf("parallel-delete-%v", RandomString(5))
 			periodicSchedulePolicyUid = uuid.New()
@@ -517,10 +522,6 @@ var _ = Describe("{BackupDeletionWithDynamicPVCGeneration}", Label(TestCaseLabel
 		})
 
 		Step("Creating schedule backups on destination cluster", func() {
-			defer func() {
-				err := SetDestinationKubeConfig()
-				log.FailOnError(err, "Switching context to destination cluster")
-			}()
 			log.InfoD("Creating schedule backup on destination cluster")
 			scheduleName = fmt.Sprintf("%s-%v", BackupNamePrefix, RandomString(5))
 			labelSelectors := make(map[string]string)
