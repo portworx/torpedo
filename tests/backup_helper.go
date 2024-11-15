@@ -111,6 +111,7 @@ const (
 	Q1FY25 TestcaseQuarter = "Q1FY25"
 	Q2FY25 TestcaseQuarter = "Q2FY25"
 	Q3FY25 TestcaseQuarter = "Q3FY25"
+	Q4FY25 TestcaseQuarter = "Q4FY25"
 )
 
 const (
@@ -328,6 +329,12 @@ const (
 )
 const (
 	PxBackupMetricsName = "pxbackup_backup_status"
+)
+
+var (
+	AppTrimCRDMap = map[string]string{
+		"elasticsearch-crd-webhook": "k8s.elastic.co",
+	}
 )
 
 var (
@@ -9179,7 +9186,7 @@ func validateBackupCRs(backupName string, clusterName string, orgID string, clus
 	clusterObj := clusterResp.GetCluster()
 
 	validateBackupCRInNamespace := func() (interface{}, bool, error) {
-		allCRsCurrently := GetAllBackupCRObjects(clusterObj)
+		allCRsCurrently := GetAllBackupCRObjects(ctx, clusterObj)
 		log.Infof("All Current CRs -\n%v\n\n", allCRsCurrently)
 		allBackupCrs, err := GetBackupCRs(currentAdminNamespace, clusterObj)
 		if err != nil {
@@ -9222,7 +9229,7 @@ func ValidateRestoreCRs(restoreName string, clusterName string, orgID string, cl
 
 	validateRestoreCRInNamespace := func() (interface{}, bool, error) {
 
-		allCRsCurrently := GetAllBackupCRObjects(clusterObj)
+		allCRsCurrently := GetAllBackupCRObjects(ctx, clusterObj)
 		log.Infof("All Current CRs -\n%v\n\n", allCRsCurrently)
 
 		allRestoreCrs, err := GetRestoreCRs(currentAdminNamespace, clusterObj)
@@ -10143,9 +10150,8 @@ func DeleteAllVMsInNamespace(namespace string) error {
 }
 
 // GetCRObject queries and returns any CRD defined
-func getCRObject(clusterObj *api.ClusterObject, namespace string, customResourceObjectDetails customResourceObjectDetails) (*unstructured.UnstructuredList, error) {
+func getCRObject(ctx context1.Context, clusterObj *api.ClusterObject, namespace string, customResourceObjectDetails customResourceObjectDetails) (*unstructured.UnstructuredList, error) {
 
-	ctx, err := backup.GetAdminCtxFromSecret()
 	config, err := portworx.GetKubernetesRestConfig(clusterObj)
 	if err != nil {
 		return nil, err
@@ -10168,11 +10174,11 @@ func getCRObject(clusterObj *api.ClusterObject, namespace string, customResource
 }
 
 // GetAllBackupCRObjects returns names of all backup CR object found in the cluster
-func GetAllBackupCRObjects(clusterObj *api.ClusterObject) []string {
+func GetAllBackupCRObjects(ctx context1.Context, clusterObj *api.ClusterObject) []string {
 
 	var allBackupCrs = make([]string, 0)
 	for crName, definition := range crListMap {
-		allCurrentCrs, err := getCRObject(clusterObj, "", definition)
+		allCurrentCrs, err := getCRObject(ctx, clusterObj, "", definition)
 		if err != nil {
 			log.Infof("Some error occurred while checking for [%s], Error - [%s]", crName, err.Error())
 		} else {

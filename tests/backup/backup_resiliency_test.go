@@ -10,6 +10,7 @@ import (
 	"time"
 
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
+	storkdriver "github.com/libopenstorage/stork/drivers"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/pborman/uuid"
@@ -3240,6 +3241,275 @@ var _ = Describe("{AutopilotEnabledBackupRestore}", func() {
 
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		log.InfoD("Deleting deployed applications")
+		DestroyApps(scheduledAppContexts, opts)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
+})
+
+// RebootNodesWhileCRRestoreIsInProgress verifies restore operation of Backup CR is successful when nodes are rebooted while restore is in progress
+var _ = Describe("{RebootNodesWhileCRRestoreIsInProgress}", func() {
+	/*
+		Steps:
+		1. Schedule CRD based applications
+		2. Create a backup location and cloud setting
+		3. Register source and destination clusters for backup and restore
+		4. Create backup of the applications
+		5. Create restore of the application on the destination cluster
+		6. Reboot nodes in cyclic fashion while the restore is in progress
+		7. Validate the restore was successful
+	*/
+
+	var (
+		err                     error
+		ctx                     context.Context
+		scheduledAppContexts    []*scheduler.Context
+		namespaces              []string
+		nodes                   []node.Node
+		appList                 []string
+		providers               []string
+		cloudCredName           string
+		cloudCredUID            string
+		backupLocationName      string
+		backupLocationUID       string
+		backupLocationMap       map[string]string
+		sourceClusterUid        string
+		destClusterUid          string
+		backupName              string
+		restoreName             string
+		testDir                 string
+		restoreNamespaceMapping map[string]string
+		wg                      sync.WaitGroup
+		trimCRDGroupNameKey     string
+		trimCRDGroupName        string
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("RebootNodesWhileCRRestoreIsInProgress", "Reboot nodes when CR restore is in progress", nil, 83724, Dchothani, Q4FY25)
+		ctx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		backupLocationMap = make(map[string]string)
+		restoreNamespaceMapping = make(map[string]string)
+		trimCRDGroupNameKey = "TRIM_CRD_GROUP_NAME"
+		testDir = "testdata"
+		providers = GetBackupProviders()
+		appList = Inst().AppList
+		defer func() {
+			log.Infof("Resetting applist and removing the custom app config")
+			Inst().AppList = appList
+			err := Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+			log.FailOnError(err, "Failed while rescanning specs")
+		}()
+		Inst().AppList = AppsWithCRDsAndWebhooks
+		err := Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+		log.FailOnError(err, "Failed to rescan specs from %s for storage provider %s", Inst().SpecDir, Inst().V.String())
+		trimCRDGroupName = AppTrimCRDMap[AppsWithCRDsAndWebhooks[0]]
+		log.InfoD("Updating %s in %s on source cluster to set %s: %s", storkdriver.KdmpConfigmapName, storkdriver.KdmpConfigmapNamespace, trimCRDGroupNameKey, trimCRDGroupName)
+		err = UpdateKDMPConfigMap(trimCRDGroupNameKey, trimCRDGroupName)
+		log.FailOnError(err, fmt.Sprintf("Failed to update %s configmap on source cluster", storkdriver.KdmpConfigmapName))
+		err = SetDestinationKubeConfig()
+		dash.VerifyFatal(err, nil, "Setting destination kubeconfig")
+		log.InfoD("Updating %s in %s on destination cluster to set %s: %s", storkdriver.KdmpConfigmapName, storkdriver.KdmpConfigmapNamespace, trimCRDGroupNameKey, trimCRDGroupName)
+		err = UpdateKDMPConfigMap(trimCRDGroupNameKey, trimCRDGroupName)
+		log.FailOnError(err, fmt.Sprintf("Failed to update %s configmap on destination cluster", storkdriver.KdmpConfigmapName))
+		err = SetSourceKubeConfig()
+		dash.VerifyFatal(err, nil, "Setting source kubeconfig")
+		log.InfoD("scheduling applications")
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
+			appContexts := ScheduleApplications(taskName)
+			for _, appCtx := range appContexts {
+				appCtx.ReadinessTimeout = AppReadinessTimeout
+				if !Contains(namespaces, appCtx.ScheduleOptions.Namespace) {
+					namespaces = append(namespaces, appCtx.ScheduleOptions.Namespace)
+				}
+				scheduledAppContexts = append(scheduledAppContexts, appCtx)
+			}
+		}
+		// TODO: check for CRs and wait using DoRetryWithTimeout
+		log.InfoD("waiting (for 5 minutes) for any CRs to finish starting up.")
+		time.Sleep(time.Minute * 5)
+	})
+
+	It("Reboot nodes pod when backup crd restore in progress", func() {
+		Step("Validating applications", func() {
+			log.InfoD("validating applications")
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		Step("Disk dump large amount of data into the Elastic Search CR Pods", func() {
+			for _, ns := range namespaces {
+				pods, err := core.Instance().GetPods(ns, map[string]string{"elasticsearch.k8s.elastic.co/statefulset-name": "px-es-es-default"})
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching elastic search pods in namespace [%s]", ns))
+				for _, pod := range pods.Items {
+					wg.Add(1)
+					func(pod corev1.Pod) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						containerPaths := schedops.GetContainerPVCMountMap(pod)
+						for containerName, mountPaths := range containerPaths {
+							mountPath := mountPaths[0]
+							dir := fmt.Sprintf("%s/%s", mountPath, testDir)
+							cmd := fmt.Sprintf("mkdir %s; dd if=/dev/urandom of=%s/data bs=1M count=4096", dir, dir)
+							cmdArgs := []string{"/bin/sh", "-c", cmd}
+							_, err := core.Instance().RunCommandInPod(cmdArgs, pod.Name, containerName, pod.Namespace)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Writing data to the pod %s on path %s", pod.Name, dir))
+						}
+					}(pod)
+				}
+			}
+			wg.Wait()
+		})
+
+		Step("Creating backup location and cloud setting", func() {
+			log.InfoD("Creating backup location and cloud setting")
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
+				backupLocationName = fmt.Sprintf("bl-%v", RandomString(6))
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = backupLocationName
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, "Creating backup location")
+			}
+		})
+
+		Step("Registering clusters for backup", func() {
+			log.InfoD("Registering clusters for backup")
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+			clusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
+		})
+
+		Step("Creating backup of application from source cluster", func() {
+			log.InfoD("Creating backup of application from source cluster")
+			backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
+			err = CreateBackupWithCRValidation(backupName, SourceClusterName, backupLocationName, backupLocationUID, namespaces, make(map[string]string), BackupOrgID, sourceClusterUid, "", "", "", "", ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s] with namespaces [%s]", backupName, namespaces))
+		})
+
+		Step("Create storage class on destination cluster for restore", func() {
+			log.InfoD("Create storage class on destination cluster for restore")
+			var storageClasses []*storagev1.StorageClass
+			err = SetSourceKubeConfig()
+			dash.VerifyFatal(err, nil, "Setting source kubeconfig")
+			for _, ns := range namespaces {
+				pvcs, err := core.Instance().GetPersistentVolumeClaims(ns, make(map[string]string))
+				log.FailOnError(err, "Getting PVCs on source cluster")
+				for _, singlePvc := range pvcs.Items {
+					storageClass, err := core.Instance().GetStorageClassForPVC(&singlePvc)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Getting storage class %v from PVC in source cluster", storageClass.Name))
+					storageClasses = append(storageClasses, storageClass)
+				}
+			}
+			err = SetDestinationKubeConfig()
+			dash.VerifyFatal(err, nil, "Setting destination kubeconfig")
+			for _, sc := range storageClasses {
+				sc.ResourceVersion = ""
+				_, err = storage.Instance().CreateStorageClass(sc)
+				if err != nil && !strings.Contains(err.Error(), "already exists") {
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creating storage class %s on dest cluster", sc.Name))
+				}
+			}
+		})
+
+		Step("Get nodes for destination clusters", func() {
+			log.InfoD("Get nodes for destination clusters")
+			err = SetDestinationKubeConfig()
+			dash.VerifyFatal(err, nil, "switching to destination kubeconfig")
+			nodes = node.GetStorageDriverNodes()
+			// Check if storage nodes exist in the cluster
+			if len(nodes) == 0 {
+				log.InfoD("No storage driver nodes found in the cluster. Assuming that it is a non-Px environment.")
+				nodes = node.GetWorkerNodes()
+				if len(nodes) == 0 {
+					log.FailOnError(fmt.Errorf("no worker nodes found in the cluster"), "Fetching worker nodes")
+				}
+			}
+		})
+
+		Step("Creating restore of the backup", func() {
+			log.InfoD("Creating restore of the backup")
+			restoreName = fmt.Sprintf("%s-%s", RestoreNamePrefix, RandomString(6))
+			for _, ns := range namespaces {
+				restoreNamespaceMapping[ns] = ns
+			}
+			_, err = CreateRestoreWithoutCheck(restoreName, backupName, restoreNamespaceMapping, DestinationClusterName, destClusterUid, BackupOrgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s] of the backup [%s]", restoreName, backupName))
+			wg.Add(1)
+			go func() {
+				defer GinkgoRecover()
+				defer wg.Done()
+				err = ValidateRestoreCRs(restoreName, DestinationClusterName, BackupOrgID, destClusterUid, restoreNamespaceMapping, ctx)
+				dash.VerifyFatal(err, nil, "Validating restored CRs")
+			}()
+		})
+
+		Step("Reboot nodes in cyclic fashion while restore is in progress", func() {
+			log.InfoD("Reboot nodes in cyclic fashion while restore is in progress")
+			err = SetDestinationKubeConfig()
+			dash.VerifyFatal(err, nil, "switching to destination kubeconfig")
+			for _, n := range nodes {
+				err = Inst().N.RebootNode(n, node.RebootNodeOpts{
+					Force: true,
+					ConnectionOpts: node.ConnectionOpts{
+						Timeout:         RebootNodeTimeout,
+						TimeBeforeRetry: RebootNodeTimeBeforeRetry,
+					},
+				})
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Rebooting worker node %v", n.Name))
+				nodeReadyStatus := func() (interface{}, bool, error) {
+					err := Inst().S.IsNodeReady(n)
+					if err != nil {
+						return "", true, err
+					}
+					return "", false, nil
+				}
+				_, err := DoRetryWithTimeoutWithGinkgoRecover(nodeReadyStatus, K8sNodeReadyTimeout*time.Minute, K8sNodeRetryInterval*time.Second)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying rebooted node [%s] is ready", n.Name))
+				err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node [%s]", n.Name))
+			}
+		})
+
+		Step("Validating the restore", func() {
+			log.InfoD("Validating the restore")
+			wg.Wait()
+			err = RestoreSuccessCheck(restoreName, BackupOrgID, MaxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restore [%s]", restoreName))
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		defer func() {
+			err = SetSourceKubeConfig()
+			dash.VerifyFatal(err, nil, "switching to source kubeconfig")
+			log.InfoD("Updating %s in %s on source cluster", storkdriver.KdmpConfigmapName, storkdriver.KdmpConfigmapNamespace)
+			err = UpdateKDMPConfigMap(trimCRDGroupNameKey, "")
+			log.FailOnError(err, fmt.Sprintf("Failed to update %s configmap on source cluster", storkdriver.KdmpConfigmapName))
+			err = SetDestinationKubeConfig()
+			dash.VerifyFatal(err, nil, "Setting destination kubeconfig")
+			log.InfoD("Updating %s in %s on destination cluster", storkdriver.KdmpConfigmapName, storkdriver.KdmpConfigmapNamespace)
+			err = UpdateKDMPConfigMap(trimCRDGroupNameKey, "")
+			log.FailOnError(err, fmt.Sprintf("Failed to update %s configmap on destination cluster", storkdriver.KdmpConfigmapName))
+		}()
+		err = SetSourceKubeConfig()
+		dash.VerifyFatal(err, nil, "Setting source kubeconfig")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed applications")

@@ -699,4 +699,3 @@ webhooks:
     - UPDATE
     resources:
     - stackconfigpolicies
-
