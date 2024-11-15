@@ -1,0 +1,12 @@
+##### Persistent volume claim
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: fio-log-fb-pvc
+spec:
+  storageClassName: fio-log-fb-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 50Gi
