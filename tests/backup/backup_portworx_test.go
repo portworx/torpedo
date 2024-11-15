@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,6 +29,10 @@ import (
 
 // This test case creates a backup location with encryption
 var _ = Describe("{BackupLocationWithEncryptionKey}", Label(TestCaseLabelsMap[BackupLocationWithEncryptionKey]...), func() {
+	const (
+		EncryptionKeyDoesNotMatch = "Encryption key does not match"
+	)
+
 	var (
 		scheduledAppContexts []*scheduler.Context
 		bkpNamespaces        []string
@@ -124,6 +129,39 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", Label(TestCaseLabelsMap[Ba
 			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
 			err = CreateRestoreWithValidation(ctx, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, appContextsToBackup)
 			log.FailOnError(err, "%s restore failed", restoreName)
+		})
+
+		Step("Updating encryption key of the backup location", func() {
+			log.InfoD("Updating encryption key of the backup location")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for bkpLocationUID, bkpLocationName := range backupLocationMap {
+				backupLocationInspectRequest := api.BackupLocationInspectRequest{
+					Name:  bkpLocationName,
+					Uid:   bkpLocationUID,
+					OrgId: BackupOrgID,
+				}
+				backupLocationObject, err := Inst().Backup.InspectBackupLocation(ctx, &backupLocationInspectRequest)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Inspecting backup location [%s]", bkpLocationName))
+				backupLocationUpdateRequest := api.BackupLocationUpdateRequest{
+					BackupLocation: backupLocationObject.BackupLocation.GetBackupLocationInfo(),
+					CreateMetadata: &api.CreateMetadata{
+						Name:      backupLocationObject.BackupLocation.GetName(),
+						Uid:       backupLocationObject.BackupLocation.GetUid(),
+						OrgId:     backupLocationObject.BackupLocation.GetOrgId(),
+						Labels:    backupLocationObject.BackupLocation.GetLabels(),
+						Ownership: backupLocationObject.BackupLocation.GetOwnership(),
+						Owner:     backupLocationObject.BackupLocation.GetOwner(),
+					},
+				}
+				backupLocationUpdateRequest.BackupLocation.EncryptionKey = GenerateEncryptionKey()
+				_, err = Inst().Backup.UpdateBackupLocation(ctx, &backupLocationUpdateRequest)
+				if err != nil {
+					log.InfoD("Update encryption key for backup location [%s] failed with err: %s", bkpLocationName, err.Error())
+					dash.VerifyFatal(strings.Contains(err.Error(), EncryptionKeyDoesNotMatch), true, "Verifying updating encryption key for backup location is not allowed")
+				}
+				dash.VerifyNotNilFatal(err, fmt.Sprintf("Verifying update encryption key for backup location [%s] is failed", bkpLocationName))
+			}
 		})
 	})
 
