@@ -4334,7 +4334,7 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotFA}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			pvcName = fmt.Sprintf("csi-snapshot-fa-test-%v", timeNow)
-			createPVC(pvcName, ns, scName)
+			create50GiReadWriteOncePVC(pvcName, ns, scName)
 		})
 
 		stepLog = "Create snapshot"

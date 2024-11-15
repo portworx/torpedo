@@ -1735,7 +1735,7 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotInvalidCredentials}", func() {
 			log.FailOnError(err, fmt.Sprintf("error creating namespace [%s] failed [%v]", ns, err))
 
 			pvcName = fmt.Sprintf("csi-creds-test-%v", time.Now().Unix())
-			pvc = createPVC(pvcName, ns, scName)
+			pvc = create50GiReadWriteOncePVC(pvcName, ns, scName)
 		})
 
 		stepLog = "Create cloud-snap with invalid credentials"
@@ -1906,7 +1906,7 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotHAUpdateState}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			pvcName = fmt.Sprintf("csi-snapshot-ha-update-test-%v", time.Now().Unix())
-			pvc = createPVC(pvcName, ns, scName)
+			pvc = create50GiReadWriteOncePVC(pvcName, ns, scName)
 		})
 
 		stepLog = "Create Pod"
@@ -1993,7 +1993,7 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotRestartPX}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			pvcName = fmt.Sprintf("csi-snapshot-restart-px-test-%v", time.Now().Unix())
-			pvc = createPVC(pvcName, ns, scName)
+			pvc = create50GiReadWriteOncePVC(pvcName, ns, scName)
 		})
 
 		stepLog = "Create Pod"
@@ -2110,7 +2110,7 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotMultipleSnapshotAndRestore}", func() 
 					defer wg.Done()
 					defer GinkgoRecover()
 					pvcName := fmt.Sprintf("csi-snapshot-multiple-test-%d-%v", num, timeNow)
-					createPVC(pvcName, ns, scName)
+					create50GiReadWriteOncePVC(pvcName, ns, scName)
 
 				}()
 			}
@@ -2210,7 +2210,7 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotRestartNode}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			pvcName = fmt.Sprintf("csi-snapshot-restart-node-test-%v", time.Now().Unix())
-			pvc = createPVC(pvcName, ns, scName)
+			pvc = create50GiReadWriteOncePVC(pvcName, ns, scName)
 		})
 
 		stepLog = "Create Pod"
@@ -2325,7 +2325,7 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotRestartCSIPods}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			pvcName = fmt.Sprintf("csi-snapshot-restart-csi-pods-%v", time.Now().Unix())
-			pvc = createPVC(pvcName, ns, scName)
+			pvc = create50GiReadWriteOncePVC(pvcName, ns, scName)
 		})
 
 		stepLog = "Create Pod"
@@ -2435,7 +2435,7 @@ var _ = Describe("{CSIOnlyTestCloudRestoreRestartCSIPods}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			pvcName = fmt.Sprintf("csi-restore-restart-csi-pods-%v", time.Now().Unix())
-			pvc = createPVC(pvcName, ns, scName)
+			pvc = create50GiReadWriteOncePVC(pvcName, ns, scName)
 		})
 
 		stepLog = "Create Pod"
@@ -2538,7 +2538,7 @@ var _ = Describe("{CSIOnlyTestCloudRestoreRestartNode}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			pvcName = fmt.Sprintf("csi-snapshot-restart-node-test-%v", time.Now().Unix())
-			pvc = createPVC(pvcName, ns, scName)
+			pvc = create50GiReadWriteOncePVC(pvcName, ns, scName)
 		})
 
 		stepLog = "Create Pod"
@@ -2641,7 +2641,7 @@ var _ = Describe("{CSIOnlyTestCloudRestoreRestartPx}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			pvcName = fmt.Sprintf("csi-snapshot-restart-px-test-%v", time.Now().Unix())
-			pvc = createPVC(pvcName, ns, scName)
+			pvc = create50GiReadWriteOncePVC(pvcName, ns, scName)
 		})
 
 		stepLog = "Create Pod"
@@ -2742,7 +2742,7 @@ var _ = Describe("{CSIOnlyTestCloudRestoreAfterBucketDelete}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			pvcName = fmt.Sprintf("csi-snapshot-bucket-delete-test-%v", time.Now().Unix())
-			pvc = createPVC(pvcName, ns, scName)
+			pvc = create50GiReadWriteOncePVC(pvcName, ns, scName)
 		})
 
 		stepLog = "Create cloud-snap"
@@ -2839,7 +2839,7 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotDegradedState}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			pvcName = fmt.Sprintf("si-snapshot-degraded-test-%v", time.Now().Unix())
-			pvc = createPVC(pvcName, ns, scName)
+			pvc = create50GiReadWriteOncePVC(pvcName, ns, scName)
 		})
 
 		stepLog = "Get PV, put volume in degraded mode, and take snapshot"
@@ -2927,7 +2927,7 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotOutOfQuorum}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			pvcName = fmt.Sprintf("csi-snapshot-out-of-quorum-test-%v", time.Now().Unix())
-			pvc = createPVC(pvcName, ns, scName)
+			pvc = create50GiReadWriteOncePVC(pvcName, ns, scName)
 		})
 
 		stepLog = "Get PV, put volume in degraded mode, and take snapshot"
@@ -5947,7 +5947,7 @@ func createVolumeSnapshotClass(snapShotClassName string, params map[string]strin
 	}
 }
 
-func createPVC(pvcName string, ns string, scName string) *corev1.PersistentVolumeClaim {
+func create50GiReadWriteOncePVC(pvcName string, ns string, scName string) *corev1.PersistentVolumeClaim {
 	log.InfoD("creating PVC [%s] in namespace [%s]", pvcName, ns)
 	pvcObj := &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
