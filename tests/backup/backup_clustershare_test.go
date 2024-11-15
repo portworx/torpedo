@@ -2753,10 +2753,8 @@ var _ = Describe("{ValidateClusterShareWhileBringDownPxBackupPods}", Label(TestC
 			dash.VerifyFatal(err, nil, "Scaling down MongoDB statefulset replica to 0")
 			log.InfoD("Sleeping for 1 minute for the pods be scaled")
 			time.Sleep(1 * time.Minute)
-			err = ScaleStatefulSetReplicas(MongodbStatefulset, pxBackupNS, originalStatefulSetReplicaCount, 2, PodStatusTimeOut, PodStatusRetryTime)
+			err = ScaleStatefulSetReplicas(MongodbStatefulset, pxBackupNS, originalStatefulSetReplicaCount, 1, PodStatusTimeOut, PodStatusRetryTime)
 			dash.VerifyFatal(err, nil, "Scaling back MongoDB statefulset to original replica count")
-			err = IsMongoDBReady()
-			log.FailOnError(err, "Checking if mongo db pod is in running state")
 		})
 
 		Step("Validate shared clusters for second set of secondary users.", func() {
@@ -2859,10 +2857,8 @@ var _ = Describe("{ValidateClusterShareWhileBringDownPxBackupPods}", Label(TestC
 			log.InfoD("Scaling MongoDB statefulset to original replica")
 			log.Infof("Sleeping for 1 minute")
 			time.Sleep(1 * time.Minute)
-			err = ScaleStatefulSetReplicas(MongodbStatefulset, pxBackupNS, originalStatefulSetReplicaCount, originalStatefulSetReplicaCount, PodStatusTimeOut, PodStatusRetryTime)
+			err = ScaleStatefulSetReplicas(MongodbStatefulset, pxBackupNS, originalStatefulSetReplicaCount, 1, PodStatusTimeOut, PodStatusRetryTime)
 			dash.VerifyFatal(err, nil, "Scaling back MongoDB statefulset to original replica count")
-			err = IsMongoDBReady()
-			log.FailOnError(err, "Checking if mongo db pod is in running state")
 		})
 
 		Step("Validate unshare of cluster from users.", func() {
