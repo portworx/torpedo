@@ -8,11 +8,11 @@ import (
 
 	"github.com/hashicorp/go-version"
 
-	oputil "github.com/pure-px/px-operator/pkg/util/test"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
+	oputil "github.com/pure-px/px-operator/pkg/util/test"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/scheduler"
 	"github.com/pure-px/torpedo/drivers/scheduler/aks"
@@ -93,12 +93,12 @@ var _ = Describe("{UpgradeCluster}", Label("p0", "positive", "node_ops", "Upgrad
 				// Opened a ticket: https://purestorage.atlassian.net/browse/PTX-26450
 				// TODO: When smart and parallel upgrades feature is enabled by default then change to "stc.Annotations!=nil || stc.Annotations["portworx.io/disable-non-disruptive-upgrade"] == "" || stc.Annotations["portworx.io/disable-non-disruptive-upgrade"] == "false""
 				isSmartAndParallelUpgradeEnabled := stc.Annotations != nil && stc.Annotations["portworx.io/disable-non-disruptive-upgrade"] == "false"
-				if Inst().S.String() != anthos.SchedName && err == nil && isSmartAndParallelUpgradeEnabled && opver.GreaterThanOrEqual(ParallelUpgradeMinOpVersion) && pxVersion.GreaterThanOrEqual(ParallelUpgradeMinPxVersion) {
+				if err == nil && isSmartAndParallelUpgradeEnabled && opver.GreaterThanOrEqual(ParallelUpgradeMinOpVersion) && pxVersion.GreaterThanOrEqual(ParallelUpgradeMinPxVersion) {
 					go DoParallelUpgradePDBValidation(stopSignal, &mError)
 					defer func() {
 						close(stopSignal)
 					}()
-				} else if Inst().S.String() != anthos.SchedName && err == nil && opver.GreaterThanOrEqual(PDBValidationMinOpVersion) {
+				} else if err == nil && opver.GreaterThanOrEqual(PDBValidationMinOpVersion) {
 					go DoPDBValidation(stopSignal, &mError)
 					defer func() {
 						close(stopSignal)
