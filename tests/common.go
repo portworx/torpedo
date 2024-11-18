@@ -7124,8 +7124,11 @@ func HaIncreaseErrorInjectSourceNode(event *EventRecord, ctx *scheduler.Context,
 							if err != nil {
 								return
 							} else {
-								log.Infof("Waiting for 60 seconds for re-sync to initialize before source nodes reboot")
-								time.Sleep(60 * time.Second)
+								err = WaitForExpectedVolumeReplicaStatus(v, "resync", 300, 30)
+								if err != nil {
+									return
+								}
+								log.InfoD("Verified volume replica status is resync state")
 								// rebooting source nodes one by one
 								for _, nID := range replicaNodes {
 									replNodeToReboot := storageNodeMap[nID]
@@ -13620,23 +13623,24 @@ func EnableTrashcanOnCluster(size string) error {
 	return err
 }
 
-// WaitForVolumeClean Returns True if Volume in clean state
-func WaitForVolumeClean(vol *volume.Volume) error {
+func WaitForExpectedVolumeReplicaStatus(vol *volume.Volume, expVolReplicaStatus string, timeOutSecs int, timeBeforeRetrySecs int) (err error) {
 	t := func() (interface{}, bool, error) {
 		volDetails, err := Inst().V.InspectVolume(vol.ID)
 		if err != nil {
-			return nil, true, fmt.Errorf("error getting volume by using id %s", vol.ID)
+			return nil, true, fmt.Errorf("error inspectting volume - %s", vol.ID)
 		}
 
+		var actualVolReplicaStatus string
 		for _, v := range volDetails.RuntimeState {
-			log.InfoD("RuntimeState is in state %s", v.GetRuntimeState()["RuntimeState"])
-			if v.GetRuntimeState()["RuntimeState"] == "clean" {
+			actualVolReplicaStatus = v.GetRuntimeState()["RuntimeState"]
+			log.InfoD("RuntimeState is in state %s", actualVolReplicaStatus)
+			if actualVolReplicaStatus == expVolReplicaStatus {
 				return nil, false, nil
 			}
 		}
-		return nil, true, fmt.Errorf("volume resync hasn't started")
+		return nil, true, fmt.Errorf("expected volume replica status to be %s but received %s", expVolReplicaStatus, actualVolReplicaStatus)
 	}
-	_, err := task.DoRetryWithTimeout(t, 30*time.Minute, 60*time.Second)
+	_, err = task.DoRetryWithTimeout(t, time.Duration(timeOutSecs)*time.Second, time.Duration(timeBeforeRetrySecs)*time.Second)
 	return err
 }
 

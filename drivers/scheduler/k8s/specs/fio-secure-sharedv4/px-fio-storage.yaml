@@ -1,0 +1,61 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: volume-secrets
+  type: Opaque
+data:
+    test-secret: WW91IHNuZWFreSBsaXR0bGUgcGlnbGV0IQ==
+---
+##### Portworx storage class
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: fio-sharedv4-sv-sc
+provisioner: kubernetes.io/portworx-volume
+parameters:
+  priority_io: "high"
+  io_profile: "db_remote"
+  {{ if .Repl }}
+  repl: "{{ .Repl }}"
+  {{ else }}
+  repl: "2"{{ end }}
+  sharedv4: "true"
+  sharedv4_svc_type: ""
+allowVolumeExpansion: true
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: fio-sharedv4-sv-pvc
+  annotations:
+    px/secret-name: volume-secrets
+    px/secret-namespace: "_NAMESPACE_"
+    px/secret-key: test-secret
+    px/secure: "true"
+spec:
+  storageClassName: fio-sharedv4-sv-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      {{ if .VolumeSize }}
+      storage: {{ .VolumeSize }}
+      {{ else }}
+      storage: 2000Gi{{ end }}
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: fio-sharedv4-sv-output-pvc
+  annotations:
+    px/secret-name: volume-secrets
+    px/secret-namespace: "_NAMESPACE_"
+    px/secret-key: test-secret
+    px/secure: "true"
+spec:
+  storageClassName: fio-sharedv4-sv-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 50Gi

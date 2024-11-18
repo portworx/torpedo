@@ -3,6 +3,17 @@ package tests
 import (
 	ctxt "context"
 	"fmt"
+	"io/ioutil"
+	"math/rand"
+	"os"
+	"path"
+	"path/filepath"
+	"slices"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/ghodss/yaml"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
@@ -22,19 +33,9 @@ import (
 	"github.com/pure-px/torpedo/pkg/osutils"
 	"github.com/pure-px/torpedo/pkg/pureutils"
 	"github.com/pure-px/torpedo/pkg/units"
-	"io/ioutil"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"math/rand"
-	"os"
-	"path"
-	"path/filepath"
-	"slices"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
 )
 
 func RunSetupTeardownTest() (error, string) {
@@ -1649,7 +1650,7 @@ func VolHAIncreaseAllVolumes() (error, string) {
 
 	// Wait for all the Volumes in Clean State
 	for _, eachVol := range volHAMap {
-		err := WaitForVolumeClean(eachVol.volObj)
+		err := WaitForExpectedVolumeReplicaStatus(eachVol.volObj, "clean", 1800, 60)
 		if err != nil {
 			return err, "is Volume in clean state ?"
 		}
@@ -1670,7 +1671,7 @@ func VolHAIncreaseAllVolumes() (error, string) {
 	log.Infof("Waiting for all volumes in clean state")
 	// Wait for all the Volumes in Clean State after starting Resync of the volume
 	for _, eachVol := range volHAMap {
-		err := WaitForVolumeClean(eachVol.volObj)
+		err := WaitForExpectedVolumeReplicaStatus(eachVol.volObj, "clean", 1800, 60)
 		if err != nil {
 			return err, "is Volume in clean state ?"
 		}

@@ -2,13 +2,14 @@ package tests
 
 import (
 	"fmt"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/pure-px/torpedo/pkg/units"
 	corev1 "k8s.io/api/core/v1"
-	"strings"
-	"sync"
-	"time"
 
 	"github.com/pure-px/torpedo/pkg/log"
 
@@ -76,7 +77,6 @@ func performHaIncreaseRebootTest(testName string) {
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", testName, i))...)
 		}
-
 		ValidateApplications(contexts)
 
 		//Reboot target node and source node while repl increase is in progress
@@ -103,6 +103,10 @@ func performHaIncreaseRebootTest(testName string) {
 				})
 
 				for _, v := range appVolumes {
+					if strings.Contains(v.Name, "log") || strings.Contains(v.Name, "output") {
+						log.InfoD("Skipping the ha-update on the Volume %s as it is less consumed", v.Name)
+						continue
+					}
 					// Check if volumes are Pure FA/FB DA volumes
 					isPureVol, err := Inst().V.IsPureVolume(v)
 					log.FailOnError(err, "Failed to check is PURE volume")
@@ -504,7 +508,7 @@ var _ = Describe("{VolHAIncreaseAllVolumes}",Label("p0","positive","px_vol_ops",
 
 		// Wait for all the Volumes in Clean State
 		for _, eachVol := range volHAMap {
-			log.FailOnError(WaitForVolumeClean(eachVol.volObj), "is Volume in clean state ?")
+			log.FailOnError(WaitForExpectedVolumeReplicaStatus(eachVol.volObj, "clean", 1800, 60), "is Volume in clean state ?")
 		}
 		log.Infof("All Volumes are in clean state, proceeding with HA Update")
 
@@ -522,7 +526,7 @@ var _ = Describe("{VolHAIncreaseAllVolumes}",Label("p0","positive","px_vol_ops",
 		log.Infof("Waiting for all volumes in clean state")
 		// Wait for all the Volumes in Clean State after starting Resync of the volume
 		for _, eachVol := range volHAMap {
-			log.FailOnError(WaitForVolumeClean(eachVol.volObj), "is Volume in clean state ?")
+			log.FailOnError(WaitForExpectedVolumeReplicaStatus(eachVol.volObj, "clean", 1800, 60), "is Volume in clean state ?")
 		}
 
 		// Verify Repl Resync Completed after all volumes are in Clean state
