@@ -1,0 +1,57 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: nginx-service
+spec:
+  selector:
+    app: nginx
+  type: NodePort
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      initContainers:
+        - name: init-dd
+          image: busybox
+          command:
+            - /bin/sh
+            - -c
+            - "dd if=/dev/zero of=/usr/share/nginx/html/dummyfile.txt bs=1M count=100 && dd if=/dev/zero of=/usr/share/nginx/html-enc/dummyfile_enc.txt bs=1M count=100"
+          volumeMounts:
+            - name: nginx-persistent-storage
+              mountPath: /usr/share/nginx/html
+            - name: nginx-persistent-storage-enc
+              mountPath: /usr/share/nginx/html-enc
+      containers:
+        - name: nginx
+          image: bitnami/nginx
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: nginx-persistent-storage
+              mountPath: /usr/share/nginx/html
+            - name: nginx-persistent-storage-enc
+              mountPath: /usr/share/nginx/html-enc
+      volumes:
+        - name: nginx-persistent-storage
+          persistentVolumeClaim:
+            claimName: nginx-pvc-legacy-shared
+        - name: nginx-persistent-storage-enc
+          persistentVolumeClaim:
+            claimName: nginx-pvc-enc-legacy-shared
