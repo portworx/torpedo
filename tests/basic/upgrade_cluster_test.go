@@ -168,9 +168,6 @@ var _ = Describe("{UpgradeCluster}", Label("p0", "positive", "node_ops", "Upgrad
 				// Sleep needed for IKS/OKE cluster upgrades
 				if Inst().S.String() == iks.SchedName || Inst().S.String() == oke.SchedName {
 					waitTime := 30
-					if Inst().S.String() == oke.SchedName {
-						waitTime = 10
-					}
 					log.Warnf("This is [%s] scheduler, during Worker Pool upgrades, %s replaces all worker nodes. "+
 						"The replacement might affect cluster capacity temporarily, requiring time for stabilization.", Inst().S.String(), strings.ToUpper(Inst().S.String()))
 					log.Infof("Sleeping for %d minutes to let the cluster stabilize after the upgrade..", waitTime)
