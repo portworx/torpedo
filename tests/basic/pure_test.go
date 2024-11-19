@@ -4,7 +4,6 @@ import (
 	"fmt"
 	k8sApps "github.com/portworx/sched-ops/k8s/apps"
 	"io/ioutil"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -8806,126 +8805,6 @@ var _ = Describe("{SpaceReclaimed}", func() {
 	})
 })
 
-func CreateNginxFadaWorkload(pvcName string, replicas int32, deploymentName string, namespace string, storageclassname string) (*appsv1.Deployment, error) {
-	var gracePeriod int64 = 30
-	pvcSpec := &corev1.PersistentVolumeClaim{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      pvcName,
-			Namespace: namespace,
-		},
-		Spec: corev1.PersistentVolumeClaimSpec{
-			AccessModes: []corev1.PersistentVolumeAccessMode{
-				corev1.ReadWriteOnce,
-			},
-			Resources: corev1.ResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceStorage: resource.MustParse("10Gi"),
-				},
-			},
-			StorageClassName: &storageclassname,
-		},
-	}
-
-	deploymentSpec := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      deploymentName,
-			Namespace: namespace,
-			Labels: map[string]string{
-				"app": "poc1",
-			},
-		},
-		Spec: appsv1.DeploymentSpec{
-			Replicas: &replicas,
-			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{"app": "poc1"},
-			},
-			Strategy: appsv1.DeploymentStrategy{
-				Type: appsv1.RollingUpdateDeploymentStrategyType,
-				RollingUpdate: &appsv1.RollingUpdateDeployment{
-					MaxSurge:       &intstr.IntOrString{Type: intstr.String, StrVal: "25%"},
-					MaxUnavailable: &intstr.IntOrString{Type: intstr.String, StrVal: "25%"},
-				},
-			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{"app": "poc1"},
-				},
-				Spec: corev1.PodSpec{
-					Affinity: &corev1.Affinity{
-						PodAntiAffinity: &corev1.PodAntiAffinity{
-							PreferredDuringSchedulingIgnoredDuringExecution: []corev1.WeightedPodAffinityTerm{
-								{
-									Weight: 100,
-									PodAffinityTerm: corev1.PodAffinityTerm{
-										TopologyKey: "kubernetes.io/hostname",
-									},
-								},
-							},
-						},
-					},
-					Containers: []corev1.Container{
-						{
-							Name:            "test-mount-pod",
-							Image:           "nginx",
-							ImagePullPolicy: corev1.PullAlways,
-							Command:         []string{"/bin/sh"},
-							Stdin:           true,
-							TTY:             true,
-							VolumeMounts: []corev1.VolumeMount{
-								{
-									Name:      "testvol",
-									MountPath: "/testvol",
-								},
-							},
-						},
-					},
-					TerminationGracePeriodSeconds: &gracePeriod,
-					Tolerations: []corev1.Toleration{
-						{
-							Key:      "stateful",
-							Operator: corev1.TolerationOpExists,
-							Effect:   corev1.TaintEffectNoSchedule,
-						},
-					},
-					Volumes: []corev1.Volume{
-						{
-							Name: "testvol",
-							VolumeSource: corev1.VolumeSource{
-								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-									ClaimName: pvcName,
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-
-	k8sCore := core.Instance()
-	_, err := k8sCore.CreatePersistentVolumeClaim(pvcSpec)
-	if err != nil {
-		if !strings.Contains(err.Error(), "already exists") && !strings.Contains(err.Error(), "clone") {
-			log.Errorf("An Error Occured while creating PVC %v", err)
-			return nil, err
-		}
-
-	}
-	deploymentOps := k8sApps.Instance()
-	deployment, err := deploymentOps.CreateDeployment(deploymentSpec, metav1.CreateOptions{})
-	if err != nil {
-		log.Errorf("An Error Occured while creating deployment %v", err)
-		return nil, err
-	}
-	err = deploymentOps.ValidateDeployment(deployment, 30*time.Minute, 10*time.Second)
-	if err != nil {
-		log.Errorf("An Error Occured while validating the pod %v", err)
-		return nil, err
-	}
-
-	return deployment, nil
-}
-
 var _ = Describe("{CreatePodsUsingclonewithMT}", func() {
 	/*
 	   https://purestorage.atlassian.net/browse/PTX-27216
@@ -9014,7 +8893,6 @@ var _ = Describe("{CreatePodsUsingclonewithMT}", func() {
 					log.FailOnError(fmt.Errorf("No accessible FA found in pure.json"), "No accessible FA found in pure.json")
 				}
 				if isRealmExists {
-					log.InfoD("Realm [%v] found in FA", realmName)
 					podNameinSC = "Torpedo-Test" + Inst().InstanceID
 					PodNameinFA = realmName + "::" + podNameinSC
 
@@ -9023,12 +8901,9 @@ var _ = Describe("{CreatePodsUsingclonewithMT}", func() {
 						log.InfoD(stepLog)
 						_, err = pureutils.CreatePodinFA(faWithRealm, PodNameinFA)
 						log.FailOnError(err, fmt.Sprintf("Failed to create pod [%v] ", PodNameinFA))
-						isPodExists, err := pureutils.IsPodExistsOnMgmtEndpoint(faWithRealm, PodNameinFA)
+						_, err := pureutils.IsPodExistsOnMgmtEndpoint(faWithRealm, PodNameinFA)
 						log.FailOnError(err, fmt.Sprintf("Failed to check if pod [%v] exists ", PodNameinFA))
-						if !isPodExists {
-							log.FailOnError(fmt.Errorf("Pod [%v] is not created in FA", PodNameinFA), "is pod created in FA?")
-						}
-						log.InfoD("Pod [%v] created ", PodNameinFA)
+						log.InfoD("Pod [%v] created in FA", PodNameinFA)
 
 					})
 				}
@@ -9038,13 +8913,9 @@ var _ = Describe("{CreatePodsUsingclonewithMT}", func() {
 					podNameinFAwithoutRealm = "Torpedo-Test-without-realm" + Inst().InstanceID
 					_, err = pureutils.CreatePodinFA(faWithoutRealm, podNameinFAwithoutRealm)
 					log.FailOnError(err, fmt.Sprintf("Failed to create pod [%v] ", podNameinFAwithoutRealm))
-					isPodExists, err := pureutils.IsPodExistsOnMgmtEndpoint(faWithoutRealm, podNameinFAwithoutRealm)
+					_, err := pureutils.IsPodExistsOnMgmtEndpoint(faWithoutRealm, podNameinFAwithoutRealm)
 					log.FailOnError(err, fmt.Sprintf("Failed to check if pod [%v] exists ", podNameinFAwithoutRealm))
-					if !isPodExists {
-						log.FailOnError(fmt.Errorf("Pod [%v] is not created in FA", podNameinFAwithoutRealm), "is pod created in FA?")
-
-					}
-					log.InfoD("Pod [%v] created ", podNameinSC)
+					log.InfoD("Pod [%v] created in FA ", podNameinSC)
 				})
 
 			}

@@ -138,7 +138,6 @@ func (c *Client) Do(req *http.Request, v interface{}) (*http.Response, error) {
 		return resp, nil
 	}
 	if resp.StatusCode != http.StatusOK {
-		log.Errorf("Response body: %s", bodyString)
 		return nil, fmt.Errorf("Error in getting the status, response status is [%d], response body: %s", resp.StatusCode, bodyString)
 
 		return nil, fmt.Errorf("error in getting the status, response status [%d], response body [%s]", resp.StatusCode, bodyString)

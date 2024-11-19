@@ -15770,7 +15770,6 @@ func CloneAndDeployPVCs(namespace string, deploymentName string, storageclassNam
 		if err != nil {
 			return fmt.Errorf("failed to build cloned PVC Spec: %s", err)
 		}
-		log.Infof("Size of restored PVC in clone test is %v", clonedPVCSpec.Spec.Resources.Requests[corev1.ResourceStorage])
 		clonedPVC, err := k8sCore.CreatePersistentVolumeClaim(clonedPVCSpec)
 		if err != nil {
 			return fmt.Errorf("failed to clone PVC from source PVC %s: %s", pvc.Name, err)
