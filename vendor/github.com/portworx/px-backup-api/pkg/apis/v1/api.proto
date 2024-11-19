@@ -1141,6 +1141,7 @@ message BackupScheduleEnumerateRequest {
 message BackupScheduleEnumerateResponse {
     repeated BackupScheduleObject backup_schedules = 1;
     uint64 total_count = 2;
+    bool complete = 3;
 }
 
 // Define BackupScheduleInspectRequest struct
