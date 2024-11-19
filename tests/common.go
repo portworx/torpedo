@@ -8453,6 +8453,17 @@ func CollectLogsFromPods(testCaseName string, podLabel map[string]string, namesp
 		if err != nil {
 			log.Errorf("Error in writing [%s] pod into a %v/%v.log file. Err: %v", pod.Name, testCaseLogDirPath, pod.Name, err.Error())
 		}
+
+		// The below code check if the pod's container got restarted and if the restart count is more than 0, it collects the previous logs of the pod as well.
+		for _, container := range pod.Status.ContainerStatuses {
+			if container.RestartCount > 0 {
+				log.Infof("Writing [%s] container's log into %v/%v-previous.log file", container.Name, testCaseLogDirPath, container.Name)
+				err = runCmd(fmt.Sprintf("kubectl logs %s -c %s -n %s --previous > %v/%v-previous.log", pod.Name, container.Name, namespace, testCaseLogDirPath, container.Name), masterNode)
+				if err != nil {
+					log.Errorf("Error in writing [%s] container's log into %v/%v-previous.log file. Err: %v", container.Name, testCaseLogDirPath, container.Name, err.Error())
+				}
+			}
+		}
 	}
 }
 
