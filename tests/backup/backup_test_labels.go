@@ -160,6 +160,7 @@ const (
 	KDMPBackup                                                                         TestCaseName = "ValidateGenericBackupDeletionWithMissingS3Bucket"
 	StorkControllerConfigCM                                                            TestCaseName = "StorkControllerConfigCM"
 	BackupDeletionWithDynamicPVCGeneration                                             TestCaseName = "BackupDeletionWithDynamicPVCGeneration"
+	BackupScheduleEnumerate                                                            TestCaseName = "BackupScheduleEnumerate"
 )
 
 // Test case labels
@@ -318,6 +319,7 @@ const (
 	KDMPBackupLabel                                                                         TestCaseLabel = "ValidateGenericBackupDeletionWithMissingS3Bucket"
 	StorkControllerConfigCMLabel                                                            TestCaseLabel = "StorkControllerConfigCM"
 	BackupDeletionWithDynamicPVCGenerationLabel                                             TestCaseLabel = "BackupDeletionWithDynamicPVCGeneration"
+	BackupScheduleEnumerateLabel                                                            TestCaseLabel = "BackupScheduleEnumerate"
 )
 
 // Common Labels
@@ -623,4 +625,5 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	SoftDeleteAndRecoverBackupOnContainerAndBlobLevel:                                  {SoftDeleteAndRecoverBackupOnContainerAndBlobLevelLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, AzureBackupLocationLabel, Day3LockedBucketLabel, AzureImmutableBucket},
 	DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel:                            {DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevelLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, AzureBackupLocationLabel, Day3LockedBucketLabel, AzureImmutableBucket},
 	BackupDeletionWithDynamicPVCGeneration:                                             {BackupDeletionWithDynamicPVCGenerationLabel, PerformanceTest, P1, PxLabel, S3BackupLocationLabel},
+	BackupScheduleEnumerate:                                                            {BackupScheduleEnumerateLabel},
 }
