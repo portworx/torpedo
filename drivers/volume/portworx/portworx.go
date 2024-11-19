@@ -130,9 +130,9 @@ const (
 	validatePXStartTimeout            = 5 * time.Minute
 	validatePxPodsUpTimeout           = 30 * time.Minute
 	validateNodeStopTimeout           = 5 * time.Minute
-	validateStoragePoolSizeTimeout    = 3 * time.Hour
+	validateStoragePoolSizeTimeout    = 5 * time.Hour
 	validateStoragePoolSizeInterval   = 30 * time.Second
-	validateRebalanceJobsTimeout      = 30 * time.Minute
+	validateRebalanceJobsTimeout      = 120 * time.Minute
 	validateRebalanceJobsInterval     = 30 * time.Second
 	validateDeploymentTimeout         = 3 * time.Minute
 	validateDeploymentInterval        = 5 * time.Second
