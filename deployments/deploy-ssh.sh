@@ -335,7 +335,7 @@ if [ "${STORAGE_DRIVER}" == "aws" ]; then
   VOLUME_MOUNTS="${VOLUME_MOUNTS},${AWS_VOLUME_MOUNT}"
 fi
 
-JUNIT_REPORT_PATH="/testresults/junit_basic.xml"
+JUNIT_REPORT_PATH="junit_basic.xml"
 if [ "${SCHEDULER}" == "openshift" ]; then
     SECURITY_CONTEXT=true
 fi
@@ -806,6 +806,8 @@ spec:
       value: "${NUM_ML_WORKLOADS}"
     - name: ML_WORKLOAD_RUNTIME
       value: "${ML_WORKLOAD_RUNTIME}"
+    - name: KUBEVIRT_VM_PWD
+      value: "${KUBEVIRT_VM_PWD}"
     - name: KUBEVIRT_UPGRADE_VERSION
       value: "${KUBEVIRT_UPGRADE_VERSION}"
     - name: PX_BACKUP_MONGODB_USERNAME

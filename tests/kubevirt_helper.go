@@ -3,20 +3,23 @@ package tests
 import (
 	context1 "context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/api/resource"
+	"math/rand"
+	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/kubevirt"
+	kubevirtdy "github.com/portworx/sched-ops/k8s/kubevirt-dynamic"
 	"github.com/portworx/sched-ops/task"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/scheduler"
 	"github.com/pure-px/torpedo/drivers/volume"
 	"github.com/pure-px/torpedo/pkg/log"
-
-	kubevirtdy "github.com/portworx/sched-ops/k8s/kubevirt-dynamic"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,6 +34,7 @@ const (
 	kubevirtTemplateNamespace             = "openshift-virtualization-os-images"
 	kubevirtCDIStorageConditionAnnotation = "cdi.kubevirt.io/storage.condition.running.reason"
 	kubevirtCDIStoragePodPhaseAnnotation  = "cdi.kubevirt.io/storage.pod.phase"
+	sshUserName                           = "root"
 )
 
 var (
@@ -372,14 +376,18 @@ func IsVMBindMounted(virtualMachineCtx *scheduler.Context, wait bool) (bool, err
 		if vmPod == nil {
 			vmPod, _ = GetVirtLauncherPodForVM(virtualMachineCtx, vol)
 		}
-		// Commenting this code till PWX-36842 is not fixed
-		err := IsVolumeBindMounted(virtualMachineCtx, vmNodeName, vol, wait, vmPod)
-		if err != nil {
-			return false, err
-		}
-		err = AreVolumeReplicasCollocated(vol, globalReplicSet)
-		if err != nil {
-			return false, err
+		if val, exists := vol.Labels["pure_direct_access"]; exists && val == "fada" {
+			log.Infof("Skipping Co-location check as it's a direct attached volume")
+			continue
+		} else {
+			err := IsVolumeBindMounted(virtualMachineCtx, vmNodeName, vol, wait, vmPod)
+			if err != nil {
+				return false, err
+			}
+			err = AreVolumeReplicasCollocated(vol, globalReplicSet)
+			if err != nil {
+				return false, err
+			}
 		}
 	}
 	log.Infof("Successfully verified bind mount for VM [%s] in namespace [%s]", virtualMachineCtx.App.Key, virtualMachineCtx.App.NameSpace)
@@ -645,6 +653,19 @@ func ValidateFileIntegrityInVM(virtualMachines []*scheduler.Context, namespace s
 	return nil
 }
 
+func CreateSSHPod() error {
+	_, err := k8sCore.GetPodByName(sshPodName, "default")
+	if err == nil {
+		log.Infof("Ssh pod already running")
+		return nil
+	}
+	err = initSSHPod("default")
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // ListEvents lists all events in a namespace in logs.
 func ListEvents(namespace string) error {
 	eventList, err := k8sCore.ListEvents(namespace, metav1.ListOptions{})
@@ -736,6 +757,7 @@ func HotAddPVCsToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisks 
 	}
 	return nil
 }
+
 func DeployVMTemplatesAndValidate() error {
 	_, err := Inst().S.Schedule("",
 		scheduler.ScheduleOptions{
@@ -903,4 +925,288 @@ func GetVMRootDiskPath(virtualMachineCtx *scheduler.Context) (string, error) {
 	}
 
 	return "", fmt.Errorf("rootdisk not found in lsblk output")
+}
+
+func GetVMIPAddress(vm kubevirtv1.VirtualMachine) (string, error) {
+	t := func() (interface{}, bool, error) {
+		vmInstance, err := k8sKubevirt.GetVirtualMachineInstance(context1.TODO(), vm.Name, vm.Namespace)
+		if err != nil {
+			return "", false, err
+		}
+		if len(vmInstance.Status.Interfaces) == 0 {
+			return "", true, fmt.Errorf("no interfaces found in the VM [%s] in namespace [%s]", vm.Name, vm.Namespace)
+		}
+		return vmInstance.Status.Interfaces[0].IP, false, nil
+	}
+	result, err := task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
+	if err != nil {
+		return "", err
+	}
+	ipAddress, ok := result.(string)
+	if !ok {
+		return "", fmt.Errorf("failed to get IP address of VM [%s] in namespace [%s]", vm.Name, vm.Namespace)
+	}
+	return ipAddress, nil
+}
+
+func TestSSHConnectivity(ipAddress string) error {
+	sshPwd, present := os.LookupEnv("KUBEVIRT_VM_PWD")
+	if !present {
+		return fmt.Errorf("Please set KUBEVIRT_VM_PWD to login inside the Kubevirt VM")
+	}
+	testCmdArgs := getSSHCommandArgs(sshUserName, sshPwd, ipAddress, "hostname")
+	t := func() (interface{}, bool, error) {
+		output, err := k8sCore.RunCommandInPod(testCmdArgs, sshPodName, "ssh-container", "default")
+		if err != nil {
+			log.Infof("Error encountered during SSH connection test")
+			if isConnectionError(err.Error()) {
+				log.Infof("Test connection output - \n%s", output)
+				return "", true, err
+			} else {
+				return "", false, err
+			}
+		}
+		log.Infof("SSH connection successful. Output - \n%s", output)
+		return "", false, nil
+	}
+	_, err := task.DoRetryWithTimeout(t, 10*time.Minute, 30*time.Second)
+	return err
+}
+
+func RunCommandInVM(ipAddress, command string) (string, error) {
+	sshPwd, present := os.LookupEnv("KUBEVIRT_VM_PWD")
+	if !present {
+		return "", fmt.Errorf("Please set KUBEVIRT_VM_PWD to login inside the Kubevirt VM")
+	}
+	cmdArgs := getSSHCommandArgs(sshUserName, sshPwd, ipAddress, command)
+	output, err := k8sCore.RunCommandInPod(cmdArgs, sshPodName, "ssh-container", "default")
+	if err != nil {
+		log.Errorf("Error executing command %s - \n%s", command, output)
+		return "", err
+	}
+	log.Infof("Output of command %s - \n%s", command, output)
+	return output, nil
+}
+
+func CheckFioIsRunningInVM(vm kubevirtv1.VirtualMachine) error {
+	ipAddress, err := GetVMIPAddress(vm)
+	if err != nil {
+		return err
+	}
+	log.Infof("VM Name - %s", vm.Name)
+	log.Infof("IP Address - %s", ipAddress)
+
+	err = TestSSHConnectivity(ipAddress)
+	if err != nil {
+		return err
+	}
+
+	cmd := "ps -ef | grep fio | grep -v grep"
+	output, err := RunCommandInVM(ipAddress, cmd)
+	if err != nil {
+		return err
+	}
+	output = strings.TrimSpace(output)
+	if output == "" {
+		return fmt.Errorf("fio is not running in VM [%s] in namespace [%s]", vm.Name, vm.Namespace)
+	} else {
+		log.Infof("fio is running in VM [%s]", vm.Name)
+	}
+	return nil
+}
+
+func GetNumberOfDrivesInVM(vm kubevirtv1.VirtualMachine) (int, error) {
+	var numDrives int
+	t := func() (interface{}, bool, error) {
+		ipAddress, err := GetVMIPAddress(vm)
+		if err != nil {
+			return nil, true, err
+		}
+		log.Infof("VM Name - %s", vm.Name)
+		log.Infof("IP Address - %s", ipAddress)
+
+		err = TestSSHConnectivity(ipAddress)
+		if err != nil {
+			log.Warnf("SSH connectivity failed to VM [%s]: %v", vm.Name, err)
+			return nil, true, err
+		}
+
+		cmd := "lsblk | grep vd | grep disk | wc -l"
+		output, err := RunCommandInVM(ipAddress, cmd)
+		if err != nil {
+			log.Warnf("Failed to execute command in VM [%s]: %v", vm.Name, err)
+			return nil, true, err
+		}
+
+		output = strings.TrimSpace(output)
+		numDrives, err = strconv.Atoi(output)
+		if err != nil {
+			log.Warnf("Failed to parse number of drives from output [%s]: %v", output, err)
+			return nil, true, err
+		}
+		return numDrives, false, nil
+	}
+	_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get number of drives in VM [%s]: %v", vm.Name, err)
+	}
+	log.Infof("Number of drives in VM [%s]: %d", vm.Name, numDrives)
+	return numDrives, nil
+}
+
+// AddFadaDriveToKubevirtVM adds additional drives to KubeVirt VMs.
+func AddFadaDriveToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisks int, size string) (bool, error) {
+
+	for _, appCtx := range virtualMachines {
+		vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+		if err != nil {
+			return false, fmt.Errorf("failed to get VMs from scheduled contexts: %v", err)
+		}
+
+		for _, v := range vms {
+			// Get the initial number of disks
+			initialDiskCount, err := GetNumberOfDrivesInVM(v)
+			if err != nil {
+				return false, fmt.Errorf("failed to get initial number of disks in VM [%s]: %v", v.Name, err)
+			}
+			log.Infof("Initial number of disks in VM [%s]: %d", v.Name, initialDiskCount)
+
+			// Get the storage class of the existing VM PVC
+			storageClass, err := GetStorageClassOfVmPVC(appCtx)
+			if err != nil {
+				return false, fmt.Errorf("failed to get storage class of VM PVC: %v", err)
+			}
+			log.Infof("Storage class of PVC attached to VM [%s]: %s", v.Name, storageClass)
+
+			// Create the new PVCs
+			pvcs, err := CreateFadaPVCsForVM(v, numberOfDisks, storageClass, size, corev1.PersistentVolumeBlock)
+			if err != nil {
+				return false, fmt.Errorf("failed to create PVCs for VM [%s]: %v", v.Name, err)
+			}
+
+			// Add the new PVCs to the app context's spec list
+			for _, pvc := range pvcs {
+				appCtx.App.SpecList = append(appCtx.App.SpecList, pvc)
+			}
+
+			// Add the PVCs to the VM
+			err = AddPVCsToVirtualMachine(v, pvcs)
+			if err != nil {
+				return false, fmt.Errorf("failed to add PVCs to VM [%s]: %v", v.Name, err)
+			}
+
+			// Restart the VM
+			err = RestartKubevirtVM(v.Name, v.Namespace, true)
+			if err != nil {
+				return false, fmt.Errorf("failed to restart VM [%s]: %v", v.Name, err)
+			}
+
+			// Wait for VM to be ready
+			err = WaitForVMToBeReady(v.Name, v.Namespace)
+			if err != nil {
+				return false, fmt.Errorf("VM [%s] did not become ready: %v", v.Name, err)
+			}
+
+			// Verify the new number of disks
+			expectedDiskCount := initialDiskCount + numberOfDisks
+			t := func() (interface{}, bool, error) {
+				newDiskCount, err := GetNumberOfDrivesInVM(v)
+				if err != nil {
+					log.Warnf("Failed to get number of disks in VM [%s]: %v", v.Name, err)
+					return nil, true, err
+				}
+				if newDiskCount != expectedDiskCount {
+					err := fmt.Errorf("number of disks in VM [%s] is %d; expected %d", v.Name, newDiskCount, expectedDiskCount)
+					log.Warnf(err.Error())
+					return nil, true, err
+				}
+				return newDiskCount, false, nil
+			}
+			_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
+			if err != nil {
+				return false, fmt.Errorf("failed to verify number of disks in VM [%s]: %v", v.Name, err)
+			}
+			log.Infof("Successfully verified number of disks in VM [%s]", v.Name)
+		}
+	}
+	return true, nil
+}
+
+func CreateFadaPVCsForVM(vm kubevirtv1.VirtualMachine, numberOfPVCs int, storageClassName, resourceStorage string, volumeMode corev1.PersistentVolumeMode) ([]*corev1.PersistentVolumeClaim, error) {
+	pvcs := make([]*corev1.PersistentVolumeClaim, 0)
+	for i := 0; i < numberOfPVCs; i++ {
+		pvcName := fmt.Sprintf("%s-%s-%d", "pvc-new", vm.Name, rand.Intn(10000))
+		pvcSpec := &corev1.PersistentVolumeClaim{
+			TypeMeta: metav1.TypeMeta{
+				Kind: "PersistentVolumeClaim",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      pvcName,
+				Namespace: vm.Namespace,
+			},
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteMany},
+				StorageClassName: &storageClassName,
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceStorage: resource.MustParse(resourceStorage),
+					},
+				},
+				VolumeMode: &volumeMode,
+			},
+		}
+		pvc, err := core.Instance().CreatePersistentVolumeClaim(pvcSpec)
+		if err != nil {
+			return nil, err
+		}
+		pvc.Kind = "PersistentVolumeClaim"
+		pvcs = append(pvcs, pvc)
+	}
+	return pvcs, nil
+}
+
+func WaitForVMToBeReady(vmName string, namespace string) error {
+	k8sKubevirt := kubevirt.Instance()
+	var ipAddress string
+
+	t := func() (interface{}, bool, error) {
+		vmInstance, err := k8sKubevirt.GetVirtualMachineInstance(context1.TODO(), vmName, namespace)
+		if err != nil {
+			log.Warnf("Failed to get VM instance [%s]: %v", vmName, err)
+			return nil, true, err // Retry
+		}
+
+		if vmInstance.Status.Phase != kubevirtv1.Running {
+			log.Warnf("VM [%s] is not running yet. Current phase: %s", vmName, vmInstance.Status.Phase)
+			return nil, true, fmt.Errorf("VM not running")
+		}
+
+		if len(vmInstance.Status.Interfaces) == 0 || vmInstance.Status.Interfaces[0].IP == "" {
+			log.Warnf("VM [%s] does not have an IP address yet", vmName)
+			return nil, true, fmt.Errorf("VM does not have an IP address yet")
+		}
+		ipAddress = vmInstance.Status.Interfaces[0].IP
+		log.Infof("VM [%s] has IP address: %s", vmName, ipAddress)
+
+		err = TestSSHConnectivity(ipAddress)
+		if err != nil {
+			log.Warnf("SSH connectivity test failed for VM [%s]: %v", vmName, err)
+			return nil, true, err
+		}
+
+		cmd := "hostname"
+		output, err := RunCommandInVM(ipAddress, cmd)
+		if err != nil {
+			log.Warnf("Failed to run command in VM [%s]: %v", vmName, err)
+			return nil, true, err
+		}
+		log.Infof("VM [%s] is ready. Hostname: %s", vmName, strings.TrimSpace(output))
+		return nil, false, nil
+	}
+
+	_, err := task.DoRetryWithTimeout(t, 20*time.Minute, 30*time.Second)
+	if err != nil {
+		return fmt.Errorf("VM [%s] did not become ready within timeout: %v", vmName, err)
+	}
+	return nil
 }

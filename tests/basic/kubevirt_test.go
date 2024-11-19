@@ -1137,19 +1137,21 @@ var _ = Describe("{MultipleKubeVirtLiveMigration}", Label("p0", "postive", "kube
 	var appCtxs []*scheduler.Context
 	var namespace string
 	var wg sync.WaitGroup
+	var canSsh bool
 
 	itLog := "Live migrate multiple kubevirtVM's parallely"
 	It(itLog, func() {
 		pxNs, err := Inst().V.GetVolumeDriverNamespace()
 		log.FailOnError(err, "Failed to get volume driver namespace")
 		defer ListEvents(pxNs)
-
+		canSsh = false
 		log.InfoD(stepLog)
 		appList := Inst().AppList
 		defer func() {
 			Inst().AppList = appList
 		}()
-		Inst().AppList = []string{"kubevirt-debian-fio-minimal"}
+		Inst().AppList = []string{"kubevirt-fada-raw-fio"}
+		Inst().CsiAppList = []string{"kubevirt-fada-raw-fio"}
 		stepLog := "schedule a kubevirt VM"
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -1163,6 +1165,39 @@ var _ = Describe("{MultipleKubeVirtLiveMigration}", Label("p0", "postive", "kube
 			log.FailOnError(err, "Failed to verify bind mount")
 			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
 		}
+
+		log.Infof("Hard Sleep for 2 minutes to let VMs come up")
+		time.Sleep(2 * time.Minute)
+
+		stepLog = "Create SSH Pod"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = CreateSSHPod()
+			if err == nil {
+				canSsh = true
+			}
+		})
+		if canSsh {
+			stepLog = "Validate fio is running in the VM or not"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, appCtx := range appCtxs {
+					wg.Add(1)
+					go func(appCtx *scheduler.Context) {
+						// Get the VMs from the appCtx
+						vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+						log.FailOnError(err, "Failed to get VMs from appCtx")
+						defer GinkgoRecover()
+						defer wg.Done()
+						for _, vm := range vms {
+							err = CheckFioIsRunningInVM(vm)
+							log.FailOnError(err, "Failed to validate fio in VM %s", vm.Name)
+						}
+					}(appCtx)
+				}
+			})
+		}
+		wg.Wait()
 		stepLog = "Live migrate the kubevirt VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -1177,7 +1212,27 @@ var _ = Describe("{MultipleKubeVirtLiveMigration}", Label("p0", "postive", "kube
 			}
 		})
 		wg.Wait()
-
+		if canSsh {
+			stepLog = "Validate fio is running in the VM or not"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, appCtx := range appCtxs {
+					wg.Add(1)
+					go func(appCtx *scheduler.Context) {
+						// Get the VMs from the appCtx
+						vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+						log.FailOnError(err, "Failed to get VMs from appCtx")
+						defer GinkgoRecover()
+						defer wg.Done()
+						for _, vm := range vms {
+							err = CheckFioIsRunningInVM(vm)
+							log.FailOnError(err, "Failed to validate fio in VM %s", vm.Name)
+						}
+					}(appCtx)
+				}
+			})
+		}
+		wg.Wait()
 		stepLog = "Destroy Applications"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -1284,6 +1339,7 @@ var _ = Describe("{LiveMigrationBeforeAddDiskMultipleVm}", Label("p1", "postive"
 		stepLog := "schedule a kubevirtVM"
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+
 				namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
 			}
@@ -2030,6 +2086,1102 @@ var _ = Describe("{FillVMRootDisk}", Label("p2", "negative", "error_injection", 
 				err := StartAndWaitForVMIMigration(appCtx, context1.TODO())
 				log.FailOnError(err, "Failed to live migrate kubevirt VM")
 			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
+	})
+})
+
+var _ = Describe("{SingleVMLiveMigrationOnFadaRaw}", Label("p0", "postive", "kubevirt", "MiniScale", "LiveMigration"), func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("SingleVMLiveMigrationOnFadaRaw", "Live migrate single kubevirt VM on fada raw app", nil, 0)
+	})
+	var appCtxs []*scheduler.Context
+	var namespace string
+	var wg sync.WaitGroup
+	var canSsh bool
+
+	itLog := "Live migrate single kubevirt VM"
+	It(itLog, func() {
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+		canSsh = false
+		log.InfoD(stepLog)
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		Inst().AppList = []string{"kubevirt-fada-raw-fio"}
+		Inst().CsiAppList = []string{"kubevirt-fada-raw-fio"}
+		stepLog := "schedule a kubevirt VM"
+		Step(stepLog, func() {
+			namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
+			appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
+		})
+		ValidateApplications(appCtxs)
+		for _, appCtx := range appCtxs {
+			bindMount, err := IsVMBindMounted(appCtx, false)
+			log.FailOnError(err, "Failed to verify bind mount")
+			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+		}
+
+		log.Infof("Hard Sleep for 2 minutes to let VMs come up")
+		time.Sleep(2 * time.Minute)
+
+		stepLog = "Create SSH Pod"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = CreateSSHPod()
+			if err == nil {
+				canSsh = true
+			}
+		})
+		if canSsh {
+			stepLog = "Validate fio is running in the VM or not"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, appCtx := range appCtxs {
+					wg.Add(1)
+					go func(appCtx *scheduler.Context) {
+						// Get the VMs from the appCtx
+						vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+						log.FailOnError(err, "Failed to get VMs from appCtx")
+						defer GinkgoRecover()
+						defer wg.Done()
+						for _, vm := range vms {
+							err = CheckFioIsRunningInVM(vm)
+							log.FailOnError(err, "Failed to validate fio in VM %s", vm.Name)
+						}
+					}(appCtx)
+				}
+			})
+		}
+		wg.Wait()
+		stepLog = "Live migrate the kubevirt VM"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, appCtx := range appCtxs {
+				wg.Add(1)
+				go func(appCtx *scheduler.Context) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					err := StartAndWaitForVMIMigration(appCtx, context1.TODO())
+					log.FailOnError(err, "Failed to live migrate kubevirt VM")
+				}(appCtx)
+			}
+		})
+		wg.Wait()
+		if canSsh {
+			stepLog = "Validate fio is running in the VM or not"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, appCtx := range appCtxs {
+					wg.Add(1)
+					go func(appCtx *scheduler.Context) {
+						vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+						log.FailOnError(err, "Failed to get VMs from appCtx")
+						defer GinkgoRecover()
+						defer wg.Done()
+						for _, vm := range vms {
+							err = CheckFioIsRunningInVM(vm)
+							log.FailOnError(err, "Failed to validate fio in VM %s", vm.Name)
+						}
+					}(appCtx)
+				}
+			})
+		}
+		wg.Wait()
+		stepLog = "Destroy Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
+	})
+})
+
+var _ = Describe("{MultipleParallelLiveMigrationOnFadaRaw}", Label("p0", "postive", "kubevirt", "MiniScale", "LiveMigration"), func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("MultipleParallelLiveMigrationOnFadaRaw", "Live migrate multiple kubevirtVM's parallely on fada raw app", nil, 0)
+	})
+	var appCtxs []*scheduler.Context
+	var namespace string
+	var wg sync.WaitGroup
+	var canSsh bool
+
+	itLog := "Live migrate multiple kubevirtVM's parallely"
+	It(itLog, func() {
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+		canSsh = false
+		log.InfoD(stepLog)
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		Inst().AppList = []string{"kubevirt-fada-raw-fio"}
+		Inst().CsiAppList = []string{"kubevirt-fada-raw-fio"}
+		stepLog := "schedule a kubevirt VM"
+		Step(stepLog, func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
+				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
+			}
+		})
+		ValidateApplications(appCtxs)
+		for _, appCtx := range appCtxs {
+			bindMount, err := IsVMBindMounted(appCtx, false)
+			log.FailOnError(err, "Failed to verify bind mount")
+			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+		}
+
+		log.Infof("Hard Sleep for 2 minutes to let VMs come up")
+		time.Sleep(2 * time.Minute)
+
+		stepLog = "Create SSH Pod"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = CreateSSHPod()
+			if err == nil {
+				canSsh = true
+			}
+		})
+		if canSsh {
+			stepLog = "Validate fio is running in the VM or not"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, appCtx := range appCtxs {
+					wg.Add(1)
+					go func(appCtx *scheduler.Context) {
+						// Get the VMs from the appCtx
+						vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+						log.FailOnError(err, "Failed to get VMs from appCtx")
+						defer GinkgoRecover()
+						defer wg.Done()
+						for _, vm := range vms {
+							err = CheckFioIsRunningInVM(vm)
+							log.FailOnError(err, "Failed to validate fio in VM %s", vm.Name)
+						}
+					}(appCtx)
+				}
+			})
+		}
+		wg.Wait()
+		stepLog = "Live migrate the kubevirt VM"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, appCtx := range appCtxs {
+				wg.Add(1)
+				go func(appCtx *scheduler.Context) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					err := StartAndWaitForVMIMigration(appCtx, context1.TODO())
+					log.FailOnError(err, "Failed to live migrate kubevirt VM")
+				}(appCtx)
+			}
+		})
+		wg.Wait()
+		if canSsh {
+			stepLog = "Validate fio is running in the VM or not"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, appCtx := range appCtxs {
+					wg.Add(1)
+					go func(appCtx *scheduler.Context) {
+						// Get the VMs from the appCtx
+						vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+						log.FailOnError(err, "Failed to get VMs from appCtx")
+						defer GinkgoRecover()
+						defer wg.Done()
+						for _, vm := range vms {
+							err = CheckFioIsRunningInVM(vm)
+							log.FailOnError(err, "Failed to validate fio in VM %s", vm.Name)
+						}
+					}(appCtx)
+				}
+			})
+		}
+		wg.Wait()
+		stepLog = "Destroy Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
+	})
+})
+
+var _ = Describe("{LiveMigrationsOfVMsInALoopOnFadaRaw}", Label("p0", "positive", "kubevirt", "MiniScale", "LiveMigration"), func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("LiveMigrationsOfVMsInALoopOnFadaRaw", "Live migrate kubevirt VMs multiple times", nil, 0)
+	})
+	var appCtxs []*scheduler.Context
+	var namespace string
+	var wg sync.WaitGroup
+	var canSsh bool
+	var numMigrations int = 5
+
+	itLog := "Live migrate kubevirt VMs multiple times"
+	It(itLog, func() {
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+		canSsh = false
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		Inst().AppList = []string{"kubevirt-fada-raw-fio"}
+		Inst().CsiAppList = []string{"kubevirt-fada-raw-fio"}
+		stepLog := "Schedule kubevirt VMs"
+		Step(stepLog, func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
+				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
+			}
+		})
+		ValidateApplications(appCtxs)
+		for _, appCtx := range appCtxs {
+			bindMount, err := IsVMBindMounted(appCtx, false)
+			log.FailOnError(err, "Failed to verify bind mount")
+			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+		}
+
+		log.Infof("Sleeping for 2 minutes to let VMs come up")
+		time.Sleep(2 * time.Minute)
+
+		stepLog = "Create SSH Pod"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = CreateSSHPod()
+			if err == nil {
+				canSsh = true
+			}
+		})
+		if canSsh {
+			stepLog = "Validate fio is running in the VMs"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, appCtx := range appCtxs {
+					wg.Add(1)
+					go func(appCtx *scheduler.Context) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+						log.FailOnError(err, "Failed to get VMs from appCtx")
+						for _, vm := range vms {
+							err = CheckFioIsRunningInVM(vm)
+							log.FailOnError(err, "Failed to validate fio in VM %s", vm.Name)
+						}
+					}(appCtx)
+				}
+				wg.Wait()
+			})
+		}
+
+		for migrationCount := 1; migrationCount <= numMigrations; migrationCount++ {
+			stepLog = fmt.Sprintf("Live migrate the kubevirt VMs - iteration %d", migrationCount)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, appCtx := range appCtxs {
+					wg.Add(1)
+					go func(appCtx *scheduler.Context) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						err := StartAndWaitForVMIMigration(appCtx, context1.TODO())
+						log.FailOnError(err, "Failed to live migrate kubevirt VM")
+					}(appCtx)
+				}
+				wg.Wait()
+			})
+
+			if canSsh {
+				stepLog = "Validate fio is running in the VMs after migration"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					for _, appCtx := range appCtxs {
+						wg.Add(1)
+						go func(appCtx *scheduler.Context) {
+							defer GinkgoRecover()
+							defer wg.Done()
+							vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+							log.FailOnError(err, "Failed to get VMs from appCtx")
+							for _, vm := range vms {
+								err = CheckFioIsRunningInVM(vm)
+								log.FailOnError(err, "Failed to validate fio in VM %s", vm.Name)
+							}
+						}(appCtx)
+					}
+					wg.Wait()
+				})
+			}
+		}
+
+		stepLog = "Destroy Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
+	})
+})
+
+var _ = Describe("{AddNewFadaRawDiskToKubevirtVM}", Label("p0", "positive", "kubevirt"), func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("AddNewFadaRawDiskToKubevirtVM", "Add a new fada disk to a kubevirtVM", nil, 0)
+	})
+	var appCtxs []*scheduler.Context
+	var namespace string
+	itLog := "Add a new fada disk to a kubevirtVM"
+	It(itLog, func() {
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		numberOfVolumes := 1
+
+		Inst().AppList = []string{"kubevirt-fada-raw-fio"}
+		Inst().CsiAppList = []string{"kubevirt-fada-raw-fio"}
+		stepLog = "schedule a kubevirtVM"
+		Step(stepLog, func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
+				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
+			}
+		})
+		ValidateApplications(appCtxs)
+
+		for _, appCtx := range appCtxs {
+			bindMount, err := IsVMBindMounted(appCtx, false)
+			log.FailOnError(err, "Failed to verify bind mount")
+			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+		}
+
+		log.Infof("Sleeping for 2 minutes to let VMs come up")
+		time.Sleep(2 * time.Minute)
+
+		stepLog = "Add one disk to the kubevirt VM"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			_, err := AddFadaDriveToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
+			log.FailOnError(err, "Failed to add disks to kubevirt VM")
+			dash.VerifyFatal(true, true, "Failed to add disks to kubevirt VM?")
+		})
+
+		stepLog = "Destroy Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
+	})
+})
+
+var _ = Describe("{LMAfterFadaRawDiskAddToVM}", Label("p0", "positive", "kubevirt", "LiveMigration"), func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("LMAfterFadaRawDiskAddToVM", "Add a disk to KubeVirt VM and then live migrate it", nil, 0)
+	})
+	var appCtxs []*scheduler.Context
+	var namespace string
+	var wg sync.WaitGroup
+	var canSsh bool
+
+	itLog := "Add a disk to KubeVirt VM and then live migrate it"
+	It(itLog, func() {
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+		canSsh = false
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		numberOfVolumes := 1
+
+		Inst().AppList = []string{"kubevirt-fada-raw-fio"}
+		Inst().CsiAppList = []string{"kubevirt-fada-raw-fio"}
+		stepLog := "Schedule a KubeVirt VM"
+		Step(stepLog, func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
+				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
+			}
+		})
+		ValidateApplications(appCtxs)
+		for _, appCtx := range appCtxs {
+			bindMount, err := IsVMBindMounted(appCtx, false)
+			log.FailOnError(err, "Failed to verify bind mount")
+			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+		}
+
+		log.Infof("Sleeping for 2 minutes to let VMs come up")
+		time.Sleep(2 * time.Minute)
+
+		stepLog = "Create SSH Pod"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = CreateSSHPod()
+			if err == nil {
+				canSsh = true
+			}
+		})
+		if canSsh {
+			stepLog = "Validate fio is running in the VMs"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, appCtx := range appCtxs {
+					wg.Add(1)
+					go func(appCtx *scheduler.Context) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+						log.FailOnError(err, "Failed to get VMs from appCtx")
+						for _, vm := range vms {
+							err = CheckFioIsRunningInVM(vm)
+							log.FailOnError(err, "Failed to validate fio in VM %s", vm.Name)
+						}
+					}(appCtx)
+				}
+				wg.Wait()
+			})
+		}
+
+		stepLog = "Add one disk to the KubeVirt VM"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			_, err := AddFadaDriveToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
+			log.FailOnError(err, "Failed to add disks to KubeVirt VM")
+			dash.VerifyFatal(true, true, "Disk added to KubeVirt VM")
+		})
+
+		stepLog = "Live migrate the KubeVirt VM"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, appCtx := range appCtxs {
+				wg.Add(1)
+				go func(appCtx *scheduler.Context) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					err := StartAndWaitForVMIMigration(appCtx, context1.TODO())
+					log.FailOnError(err, "Failed to live migrate KubeVirt VM")
+				}(appCtx)
+			}
+			wg.Wait()
+		})
+
+		if canSsh {
+			stepLog = "Validate fio is running in the VMs after migration"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, appCtx := range appCtxs {
+					wg.Add(1)
+					go func(appCtx *scheduler.Context) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+						log.FailOnError(err, "Failed to get VMs from appCtx")
+						for _, vm := range vms {
+							err = CheckFioIsRunningInVM(vm)
+							log.FailOnError(err, "Failed to validate fio in VM %s after migration", vm.Name)
+						}
+					}(appCtx)
+				}
+				wg.Wait()
+			})
+		}
+
+		stepLog = "Destroy Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
+	})
+})
+
+var _ = Describe("{LMBeforeFadaRawDiskAddToVM}", Label("p0", "positive", "kubevirt", "LiveMigration"), func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("LMBeforeFadaRawDiskAddToVM", "Live migrate KubeVirt VM and then add a disk", nil, 0)
+	})
+	var appCtxs []*scheduler.Context
+	var namespace string
+	var wg sync.WaitGroup
+	var canSsh bool
+
+	itLog := "Live migrate KubeVirt VM and then add a disk"
+	It(itLog, func() {
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+		canSsh = false
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		numberOfVolumes := 1
+
+		Inst().AppList = []string{"kubevirt-fada-raw-fio"}
+		Inst().CsiAppList = []string{"kubevirt-fada-raw-fio"}
+		stepLog := "Schedule a KubeVirt VM"
+		Step(stepLog, func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
+				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
+			}
+		})
+		ValidateApplications(appCtxs)
+		for _, appCtx := range appCtxs {
+			bindMount, err := IsVMBindMounted(appCtx, false)
+			log.FailOnError(err, "Failed to verify bind mount")
+			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+		}
+
+		log.Infof("Sleeping for 2 minutes to let VMs come up")
+		time.Sleep(2 * time.Minute)
+
+		stepLog = "Create SSH Pod"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = CreateSSHPod()
+			if err == nil {
+				canSsh = true
+			}
+		})
+		if canSsh {
+			stepLog = "Validate fio is running in the VMs"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, appCtx := range appCtxs {
+					wg.Add(1)
+					go func(appCtx *scheduler.Context) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+						log.FailOnError(err, "Failed to get VMs from appCtx")
+						for _, vm := range vms {
+							err = CheckFioIsRunningInVM(vm)
+							log.FailOnError(err, "Failed to validate fio in VM %s", vm.Name)
+						}
+					}(appCtx)
+				}
+				wg.Wait()
+			})
+		}
+
+		stepLog = "Live migrate the KubeVirt VM"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, appCtx := range appCtxs {
+				wg.Add(1)
+				go func(appCtx *scheduler.Context) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					err := StartAndWaitForVMIMigration(appCtx, context1.TODO())
+					log.FailOnError(err, "Failed to live migrate KubeVirt VM")
+				}(appCtx)
+			}
+			wg.Wait()
+		})
+
+		stepLog = "Add one disk to the KubeVirt VM"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			_, err := AddFadaDriveToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
+			log.FailOnError(err, "Failed to add disks to KubeVirt VM")
+			dash.VerifyFatal(true, true, "Disk added to KubeVirt VM")
+		})
+
+		if canSsh {
+			stepLog = "Validate fio is running in the VMs after adding disk"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, appCtx := range appCtxs {
+					wg.Add(1)
+					go func(appCtx *scheduler.Context) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+						log.FailOnError(err, "Failed to get VMs from appCtx")
+						for _, vm := range vms {
+							err = CheckFioIsRunningInVM(vm)
+							log.FailOnError(err, "Failed to validate fio in VM %s after adding disk", vm.Name)
+						}
+					}(appCtx)
+				}
+				wg.Wait()
+			})
+		}
+
+		stepLog = "Destroy Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
+	})
+})
+
+var _ = Describe("{LMAndAddFadaRawDiskToVMInALoop}", Label("p0", "positive", "kubevirt", "LiveMigration"), func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("LMAndAddFadaRawDiskToVMInALoop", "Live migrate and add disk to KubeVirt VM multiple times", nil, 0)
+	})
+	var appCtxs []*scheduler.Context
+	var namespace string
+	var wg sync.WaitGroup
+	var canSsh bool
+	var iterations int = 5
+
+	itLog := "Live migrate and add disk to KubeVirt VM multiple times"
+	It(itLog, func() {
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+		canSsh = false
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		numberOfVolumes := 1
+
+		Inst().AppList = []string{"kubevirt-fada-raw-fio"}
+		Inst().CsiAppList = []string{"kubevirt-fada-raw-fio"}
+		stepLog := "Schedule a KubeVirt VM"
+		Step(stepLog, func() {
+			namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
+			appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
+		})
+		ValidateApplications(appCtxs)
+		for _, appCtx := range appCtxs {
+			bindMount, err := IsVMBindMounted(appCtx, false)
+			log.FailOnError(err, "Failed to verify bind mount")
+			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+		}
+
+		log.Infof("Sleeping for 2 minutes to let VMs come up")
+		time.Sleep(2 * time.Minute)
+
+		stepLog = "Create SSH Pod"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = CreateSSHPod()
+			if err == nil {
+				canSsh = true
+			}
+		})
+		if canSsh {
+			stepLog = "Validate fio is running in the VMs"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, appCtx := range appCtxs {
+					wg.Add(1)
+					go func(appCtx *scheduler.Context) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+						log.FailOnError(err, "Failed to get VMs from appCtx")
+						for _, vm := range vms {
+							err = CheckFioIsRunningInVM(vm)
+							log.FailOnError(err, "Failed to validate fio in VM %s", vm.Name)
+						}
+					}(appCtx)
+				}
+				wg.Wait()
+			})
+		}
+
+		for i := 1; i <= iterations; i++ {
+			stepLog = fmt.Sprintf("Iteration %d: Live migrate the KubeVirt VM", i)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, appCtx := range appCtxs {
+					wg.Add(1)
+					go func(appCtx *scheduler.Context) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						err := StartAndWaitForVMIMigration(appCtx, context1.TODO())
+						log.FailOnError(err, "Failed to live migrate KubeVirt VM")
+					}(appCtx)
+				}
+				wg.Wait()
+			})
+
+			if canSsh {
+				stepLog = fmt.Sprintf("Iteration %d: Validate fio is running in the VMs after migration", i)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					for _, appCtx := range appCtxs {
+						wg.Add(1)
+						go func(appCtx *scheduler.Context) {
+							defer GinkgoRecover()
+							defer wg.Done()
+							vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+							log.FailOnError(err, "Failed to get VMs from appCtx")
+							for _, vm := range vms {
+								err = CheckFioIsRunningInVM(vm)
+								log.FailOnError(err, "Failed to validate fio in VM %s after migration", vm.Name)
+							}
+						}(appCtx)
+					}
+					wg.Wait()
+				})
+			}
+
+			stepLog = fmt.Sprintf("Iteration %d: Add a disk to the KubeVirt VM", i)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				_, err := AddFadaDriveToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
+				log.FailOnError(err, "Failed to add disks to KubeVirt VM")
+				dash.VerifyFatal(true, true, "Disk added to KubeVirt VM")
+			})
+
+			if canSsh {
+				stepLog = fmt.Sprintf("Iteration %d: Validate fio is running in the VMs after adding disk", i)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					for _, appCtx := range appCtxs {
+						wg.Add(1)
+						go func(appCtx *scheduler.Context) {
+							defer GinkgoRecover()
+							defer wg.Done()
+							vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+							log.FailOnError(err, "Failed to get VMs from appCtx")
+							for _, vm := range vms {
+								err = CheckFioIsRunningInVM(vm)
+								log.FailOnError(err, "Failed to validate fio in VM %s after adding disk", vm.Name)
+							}
+						}(appCtx)
+					}
+					wg.Wait()
+				})
+			}
+		}
+
+		stepLog = "Destroy Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
+	})
+})
+
+var _ = Describe("{PxKillAfterAddFadaRawDiskToVM}", Label("p1", "negative", "kubevirt", "error_injection", "px_crash"), func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("PxKillAfterAddFadaRawDiskToVM", "Add a disk to Kubevirt VM, kill Px, Add another disk and validate the VM", nil, 0)
+	})
+
+	var appCtxs []*scheduler.Context
+	var nodes []string
+	var namespace string
+	var canSsh bool = false
+	var wg sync.WaitGroup
+
+	itLog := "Add Fada Raw disk to Kubevirt VM, Kill Px and then add another disk"
+	It(itLog, func() {
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+
+		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		numberOfVolumes := 1
+		Inst().AppList = []string{"kubevirt-fada-raw-fio"}
+		Inst().CsiAppList = []string{"kubevirt-fada-raw-fio"}
+		stepLog := "schedule a kubevirtVM"
+		Step(stepLog, func() {
+			appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
+		})
+		ValidateApplications(appCtxs)
+		for _, appCtx := range appCtxs {
+			bindMount, err := IsVMBindMounted(appCtx, false)
+			log.FailOnError(err, "Failed to verify bind mount")
+			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+		}
+		log.Infof("Sleeping for 2 minutes to let VMs come up")
+		time.Sleep(2 * time.Minute)
+		stepLog = "Add one disk to the kubevirt VM"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			_, err := AddFadaDriveToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
+			log.FailOnError(err, "Failed to add disks to kubevirt VM")
+			dash.VerifyFatal(true, true, "Failed to add disks to kubevirt VM?")
+		})
+		stepLog = "Kill Px on node hosting VM"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			// Collect all nodes to restart Px on
+			for _, appCtx := range appCtxs {
+				vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+				log.FailOnError(err, "Failed to get VMs from context")
+				for _, vm := range vms {
+					nodeName, err := GetNodeOfVM(vm)
+					log.FailOnError(err, "Failed to get node of vm %v", vm.Name)
+					nodes = append(nodes, nodeName)
+				}
+			}
+			// Restart Px on all relevant nodes one by one
+			for _, appNode := range node.GetStorageDriverNodes() {
+				for _, vmNode := range nodes {
+					if vmNode == appNode.Name {
+						stepLog = fmt.Sprintf("stop volume driver %s on node: %s",
+							Inst().V.String(), appNode.Name)
+						Step(stepLog,
+							func() {
+								log.InfoD(stepLog)
+								StopVolDriverAndWait([]node.Node{appNode})
+							})
+
+						stepLog = fmt.Sprintf("starting volume %s driver on node %s",
+							Inst().V.String(), appNode.Name)
+						Step(stepLog,
+							func() {
+								log.InfoD(stepLog)
+								StartVolDriverAndWait([]node.Node{appNode})
+							})
+
+						stepLog = "Giving few seconds for volume driver to stabilize"
+						Step(stepLog, func() {
+							log.InfoD(stepLog)
+							time.Sleep(20 * time.Second)
+						})
+					}
+				}
+			}
+		})
+		stepLog = "Create SSH Pod"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = CreateSSHPod()
+			if err == nil {
+				canSsh = true
+			}
+		})
+		if canSsh {
+			stepLog = "Validate fio is running in the VMs"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, appCtx := range appCtxs {
+					wg.Add(1)
+					go func(appCtx *scheduler.Context) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+						log.FailOnError(err, "Failed to get VMs from appCtx")
+						for _, vm := range vms {
+							err = CheckFioIsRunningInVM(vm)
+							log.FailOnError(err, "Failed to validate fio in VM %s", vm.Name)
+						}
+					}(appCtx)
+				}
+				wg.Wait()
+			})
+		}
+		stepLog = "Destroy Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
+	})
+})
+
+var _ = Describe("{AddDiskKillPxLMAgainAddDisk}", Label("p1", "negative", "kubevirt", "error_injection", "px_crash"), func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("AddDiskKillPxLMAgainAddDisk", "Add a Fada raw disk to Kubevirt VM, LM , kill Px and validate the VM", nil, 0)
+	})
+
+	var appCtxs []*scheduler.Context
+	var nodes []string
+	var namespace string
+	var canSsh bool = false
+	var wg sync.WaitGroup
+
+	itLog := "Add Fada Raw disk to Kubevirt VM, LM & then Kill Px"
+	It(itLog, func() {
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+
+		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		numberOfVolumes := 1
+		Inst().AppList = []string{"kubevirt-fada-raw-fio"}
+		Inst().CsiAppList = []string{"kubevirt-fada-raw-fio"}
+		stepLog := "schedule a kubevirtVM"
+		Step(stepLog, func() {
+			appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
+		})
+		ValidateApplications(appCtxs)
+		for _, appCtx := range appCtxs {
+			bindMount, err := IsVMBindMounted(appCtx, false)
+			log.FailOnError(err, "Failed to verify bind mount")
+			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+		}
+		log.Infof("Sleeping for 2 minutes to let VMs come up")
+		time.Sleep(2 * time.Minute)
+		stepLog = "Add one disk to the kubevirt VM"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			_, err := AddFadaDriveToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
+			log.FailOnError(err, "Failed to add disks to kubevirt VM")
+			dash.VerifyFatal(true, true, "Failed to add disks to kubevirt VM?")
+		})
+		stepLog = "Kill Px on node hosting VM"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			// Collect all nodes to restart Px on
+			for _, appCtx := range appCtxs {
+				vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+				log.FailOnError(err, "Failed to get VMs from context")
+				for _, vm := range vms {
+					nodeName, err := GetNodeOfVM(vm)
+					log.FailOnError(err, "Failed to get node of vm %v", vm.Name)
+					nodes = append(nodes, nodeName)
+				}
+			}
+			// Restart Px on all relevant nodes one by one
+			for _, appNode := range node.GetStorageDriverNodes() {
+				for _, vmNode := range nodes {
+					if vmNode == appNode.Name {
+						stepLog = fmt.Sprintf("stop volume driver %s on node: %s",
+							Inst().V.String(), appNode.Name)
+						Step(stepLog,
+							func() {
+								log.InfoD(stepLog)
+								StopVolDriverAndWait([]node.Node{appNode})
+							})
+
+						stepLog = fmt.Sprintf("starting volume %s driver on node %s",
+							Inst().V.String(), appNode.Name)
+						Step(stepLog,
+							func() {
+								log.InfoD(stepLog)
+								StartVolDriverAndWait([]node.Node{appNode})
+							})
+
+						stepLog = "Giving few seconds for volume driver to stabilize"
+						Step(stepLog, func() {
+							log.InfoD(stepLog)
+							time.Sleep(20 * time.Second)
+						})
+					}
+				}
+			}
+		})
+		stepLog = "Create SSH Pod"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = CreateSSHPod()
+			if err == nil {
+				canSsh = true
+			}
+		})
+		if canSsh {
+			stepLog = "Validate fio is running in the VMs"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, appCtx := range appCtxs {
+					wg.Add(1)
+					go func(appCtx *scheduler.Context) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+						log.FailOnError(err, "Failed to get VMs from appCtx")
+						for _, vm := range vms {
+							err = CheckFioIsRunningInVM(vm)
+							log.FailOnError(err, "Failed to validate fio in VM %s", vm.Name)
+						}
+					}(appCtx)
+				}
+				wg.Wait()
+			})
+		}
+		stepLog = "Live migrate the KubeVirt VM"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, appCtx := range appCtxs {
+				wg.Add(1)
+				go func(appCtx *scheduler.Context) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					err := StartAndWaitForVMIMigration(appCtx, context1.TODO())
+					log.FailOnError(err, "Failed to live migrate KubeVirt VM")
+				}(appCtx)
+			}
+			wg.Wait()
+		})
+
+		stepLog = "Add one disk to the KubeVirt VM"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			_, err := AddFadaDriveToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
+			log.FailOnError(err, "Failed to add disks to KubeVirt VM")
+			dash.VerifyFatal(true, true, "Disk added to KubeVirt VM")
+		})
+
+		if canSsh {
+			stepLog = "Validate fio is running in the VMs after adding disk"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, appCtx := range appCtxs {
+					wg.Add(1)
+					go func(appCtx *scheduler.Context) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+						log.FailOnError(err, "Failed to get VMs from appCtx")
+						for _, vm := range vms {
+							err = CheckFioIsRunningInVM(vm)
+							log.FailOnError(err, "Failed to validate fio in VM %s after adding disk", vm.Name)
+						}
+					}(appCtx)
+				}
+				wg.Wait()
+			})
+		}
+
+		stepLog = "Destroy Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
 		})
 	})
 	JustAfterEach(func() {

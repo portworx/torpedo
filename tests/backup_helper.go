@@ -8895,7 +8895,7 @@ func isConnectionError(errorMessage string) bool {
 }
 
 func getSSHCommandArgs(username, password, ipAddress, cmd string) []string {
-	return []string{"sshpass", "-p", password, "ssh", "-o", "StrictHostKeyChecking=no", fmt.Sprintf("%s@%s", username, ipAddress), cmd}
+	return []string{"sshpass", "-p", password, "ssh", "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null", "-o", "LogLevel=ERROR", fmt.Sprintf("%s@%s", username, ipAddress), cmd}
 }
 
 // UpgradeKubevirt upgrades the kubevirt control plane to the given version
@@ -10019,9 +10019,10 @@ func AddPVCsToVirtualMachine(vm kubevirtv1.VirtualMachine, pvcs []*corev1.Persis
 	var volumes []kubevirtv1.Volume
 	var disks []kubevirtv1.Disk
 	for i, pvc := range pvcs {
+		uniqNum := rand.Intn(50000)
 		log.Infof("Adding PVC [%s] to VM [%s]", pvc.Name, vm.Name)
 		volumes = append(volumes, kubevirtv1.Volume{
-			Name: fmt.Sprintf("%s-%d", "datavolume-additional", i),
+			Name: fmt.Sprintf("%s-%d-%d", "datavolume-additional", uniqNum, i),
 			VolumeSource: kubevirtv1.VolumeSource{
 				PersistentVolumeClaim: &kubevirtv1.PersistentVolumeClaimVolumeSource{
 					PersistentVolumeClaimVolumeSource: corev1.PersistentVolumeClaimVolumeSource{
@@ -10032,7 +10033,7 @@ func AddPVCsToVirtualMachine(vm kubevirtv1.VirtualMachine, pvcs []*corev1.Persis
 			},
 		})
 		disks = append(disks, kubevirtv1.Disk{
-			Name:       fmt.Sprintf("%s-%d", "datavolume-additional", i),
+			Name:       fmt.Sprintf("%s-%d-%d", "datavolume-additional", uniqNum, i),
 			DiskDevice: kubevirtv1.DiskDevice{Disk: &kubevirtv1.DiskTarget{Bus: kubevirtv1.DiskBusVirtio}},
 		})
 
