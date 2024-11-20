@@ -9029,7 +9029,7 @@ var _ = Describe("{DeployedApplicationsInMultipleTenants}", func() {
 				wg.Add(1)
 				go func(i int) {
 					defer wg.Done()
-
+					defer GinkgoRecover()
 					podNameinSC := fmt.Sprintf("Torpedo-Test-%d-%s", i, Inst().InstanceID)
 					PodNameinFA := fmt.Sprintf("%s::%s", realmName, podNameinSC)
 					scName := fmt.Sprintf("fada-sc-multitenant-%d", i)
