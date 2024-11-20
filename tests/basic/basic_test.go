@@ -1,12 +1,13 @@
 package tests
 
 import (
-	"github.com/pure-px/torpedo/pkg/aetosutil"
-	"github.com/pure-px/torpedo/pkg/log"
-	"github.com/pure-px/torpedo/pkg/pureutils"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/pure-px/torpedo/pkg/aetosutil"
+	"github.com/pure-px/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/pureutils"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -50,7 +51,9 @@ var _ = BeforeSuite(func() {
 	if !exists {
 		InitInstance()
 		dash.TestSetBegin(dash.TestSet)
-		EnableAutoFSTrim()
+		if !Inst().V.IsPxLiteCluster() {
+			EnableAutoFSTrim()
+		}
 	} else {
 		log.Infof("Value set for Nomad cluster is: %v", value)
 		dash.TestSetBegin(dash.TestSet)
