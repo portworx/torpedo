@@ -15510,7 +15510,7 @@ func UpgradePXWithLatestVersion(upgradeHop string, storageNodes []node.Node) err
 	return nil
 }
 
-// CloneAndDeployPVCs clones PersistentVolumeClaims (PVCs) from a given namespace and deploys them with Nginx workloads.
+// CreateNginxFadaWorkload creates an Nginx deployment with a specified PVC in a particular namespace and  with storage class provided.
 func CreateNginxFadaWorkload(pvcName string, replicas int32, deploymentName string, namespace string, storageclassname string) (*appsv1.Deployment, error) {
 	var gracePeriod int64 = 30
 	pvcSpec := &corev1.PersistentVolumeClaim{
