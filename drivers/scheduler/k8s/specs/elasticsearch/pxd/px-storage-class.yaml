@@ -15,4 +15,7 @@ parameters:
   fs: {{ .Fs }}{{ end }}
   {{ if .Journal }}
   journal: "true"{{ end }}
+  {{ if .PureFaPodName }}
+  pure_fa_pod_name: "{{ .PureFaPodName }}"
+  {{ end }}
 allowVolumeExpansion: true
