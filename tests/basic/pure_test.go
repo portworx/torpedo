@@ -8804,7 +8804,7 @@ var _ = Describe("{SpaceReclaimed}", func() {
 	})
 })
 
-var _ = Describe("{CreatePodsUsingclonewithMT}", func() {
+var _ = Describe("{CreatePodsUsingClonewithMT}", func() {
 	/*
 	   https://purestorage.atlassian.net/browse/PTX-27216
 	   1. Check the FA in pure.json, it must contain one FA with realm(optional) and one without realm
@@ -8825,6 +8825,9 @@ var _ = Describe("{CreatePodsUsingclonewithMT}", func() {
 		deploymentNameInsideRealm := "fada-deployment-inside-realm" + Inst().InstanceID
 		deploymentNameOutsideRealm := "fada-deployment-outside-realm" + Inst().InstanceID
 		deploymentNameNormal := "fada-deployment-normal" + Inst().InstanceID
+		nsWithRealm := "fada-app-with-realm-ns" + Inst().InstanceID
+		nsWithoutRealm := "fada-app-without-realm-ns" + Inst().InstanceID
+		nsNormal := "fada-app-normal-ns" + Inst().InstanceID
 		storageClassNameInsideRealm := "fada-sc-inside-realm"
 		storageClassNameOutsideRealm := "fada-sc-outside-realm"
 		storageClassNameNormal := "fada-sc-normal"
@@ -8843,9 +8846,9 @@ var _ = Describe("{CreatePodsUsingclonewithMT}", func() {
 			max_bandwidth           = uint64(rand.Intn(511) + 1)
 		)
 		namespaces := []string{
-			"fada-app-with-realm-ns" + Inst().InstanceID,
-			"fada-app-without-realm-ns" + Inst().InstanceID,
-			"fada-app-normal-ns" + Inst().InstanceID,
+			nsWithRealm,
+			nsWithoutRealm,
+			nsNormal,
 		}
 		storageClasses := []string{
 			storageClassNameInsideRealm,
@@ -8853,9 +8856,9 @@ var _ = Describe("{CreatePodsUsingclonewithMT}", func() {
 			storageClassNameNormal,
 		}
 		deployments := map[string]string{
-			deploymentNameInsideRealm:  "fada-app-with-realm-ns",
-			deploymentNameOutsideRealm: "fada-app-without-realm-ns",
-			deploymentNameNormal:       "fada-app-normal-ns",
+			deploymentNameInsideRealm:  namespaces[0],
+			deploymentNameOutsideRealm: namespaces[1],
+			deploymentNameNormal:       namespaces[2],
 		}
 		stepLog = "Check the FA in pure.json, it must contain one FA with realm and one with out realm"
 		Step(stepLog, func() {
@@ -8968,24 +8971,24 @@ var _ = Describe("{CreatePodsUsingclonewithMT}", func() {
 				log.FailOnError(err, fmt.Sprintf("Failed to create namespace [%v] ", ns))
 			}
 			if isRealmExists {
-				_, err = CreateNginxFadaWorkload("fada-pvc-inside-realm", 1, deploymentNameInsideRealm, "fada-app-with-realm-ns", storageClassNameInsideRealm)
+				_, err = CreateNginxFadaWorkload("fada-pvc-inside-realm", 1, deploymentNameInsideRealm, nsWithRealm, storageClassNameInsideRealm)
 				log.FailOnError(err, fmt.Sprintf("Failed to create deployment [%v] ", deploymentNameInsideRealm))
 			}
-			_, err = CreateNginxFadaWorkload("fada-pvc-outside-realm", 1, deploymentNameOutsideRealm, "fada-app-without-realm-ns", storageClassNameOutsideRealm)
+			_, err = CreateNginxFadaWorkload("fada-pvc-outside-realm", 1, deploymentNameOutsideRealm, nsWithoutRealm, storageClassNameOutsideRealm)
 			log.FailOnError(err, fmt.Sprintf("Failed to create deployment [%v] ", deploymentNameOutsideRealm))
-			_, err = CreateNginxFadaWorkload("fada-pvc-normal", 1, deploymentNameNormal, "fada-app-normal-ns", storageClassNameNormal)
+			_, err = CreateNginxFadaWorkload("fada-pvc-normal", 1, deploymentNameNormal, nsNormal, storageClassNameNormal)
 			log.FailOnError(err, fmt.Sprintf("Failed to create deployment [%v] ", deploymentNameNormal))
 		})
 		stepLog = "Clone the pvc of the deployment"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			if isRealmExists {
-				err = CloneAndDeployPVCs("fada-app-with-realm-ns", deploymentNameInsideRealm, storageClassNameInsideRealm)
+				err = CloneAndDeployPVCs(nsWithRealm, deploymentNameInsideRealm, storageClassNameInsideRealm)
 				log.FailOnError(err, fmt.Sprintf("Failed to clone pvc of the deployment [%v] ", deploymentNameInsideRealm))
 			}
-			err = CloneAndDeployPVCs("fada-app-without-realm-ns", deploymentNameOutsideRealm, storageClassNameOutsideRealm)
+			err = CloneAndDeployPVCs(nsWithoutRealm, deploymentNameOutsideRealm, storageClassNameOutsideRealm)
 			log.FailOnError(err, fmt.Sprintf("Failed to clone pvc of the deployment [%v] ", deploymentNameOutsideRealm))
-			err = CloneAndDeployPVCs("fada-app-normal-ns", deploymentNameNormal, storageClassNameNormal)
+			err = CloneAndDeployPVCs(nsNormal, deploymentNameNormal, storageClassNameNormal)
 			log.FailOnError(err, fmt.Sprintf("Failed to clone pvc of the deployment [%v] ", deploymentNameNormal))
 		})
 		stepLog = "Destroy FA Pods,namespaces,storageclasses and deployments"
@@ -8995,8 +8998,8 @@ var _ = Describe("{CreatePodsUsingclonewithMT}", func() {
 				namespaces = namespaces[1:]
 				storageClasses = storageClasses[1:]
 				deployments = map[string]string{
-					deploymentNameOutsideRealm: "fada-app-without-realm-ns",
-					deploymentNameNormal:       "fada-app-normal-ns",
+					deploymentNameOutsideRealm: nsWithoutRealm,
+					deploymentNameNormal:       nsNormal,
 				}
 			}
 			for deployment, namespace := range deployments {
