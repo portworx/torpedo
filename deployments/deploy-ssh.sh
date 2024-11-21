@@ -335,7 +335,7 @@ if [ "${STORAGE_DRIVER}" == "aws" ]; then
   VOLUME_MOUNTS="${VOLUME_MOUNTS},${AWS_VOLUME_MOUNT}"
 fi
 
-JUNIT_REPORT_PATH="junit_basic.xml"
+JUNIT_REPORT_PATH="/testresults/junit_basic.xml"
 if [ "${SCHEDULER}" == "openshift" ]; then
     SECURITY_CONTEXT=true
 fi
