@@ -2,7 +2,6 @@ package tests
 
 import (
 	"fmt"
-	k8sApps "github.com/portworx/sched-ops/k8s/apps"
 	"io/ioutil"
 	"math/rand"
 	"os"
