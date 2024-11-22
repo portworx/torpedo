@@ -18,7 +18,7 @@ import (
 
 const (
 	eventCheckInterval                = 2 * time.Second
-	eventCheckTimeout                 = 30 * time.Minute
+	eventCheckTimeout                 = 120 * time.Minute
 	actionApprovalObjectCheckInterval = 1 * time.Second
 	actionApprovalObjectTimeout       = 30 * time.Second
 
@@ -85,6 +85,8 @@ var (
 	ActiveActionTakenToAny = fmt.Sprintf("%s => ", apapi.RuleStateActiveActionsTaken)
 	// FailedToExecuteActionEvent is an event for failed action
 	FailedToExecuteActionEvent = "failed to execute Action for rule"
+	// AddDriveNotSupportedOnDMThin contains the error msg received upon trying to add drive on dm-thin
+	AddDriveNotSupportedOnDMThin = "add-drive type expansion is not supported with px-storev2. Use resize-drive expansion type"
 )
 
 // PoolRuleByTotalSize returns an autopilot pool expand rule that uses total pool size
@@ -502,4 +504,39 @@ func WatchAutoPilotRuleObjects(ctx context.Context, namespace string) (chan *apa
 	}(errChan, outChan)
 
 	return outChan, errChan, nil
+}
+
+func WaitForAROWithGivenLabelSelectorAndStatus(namespace string, labelSelector map[string]string, statusMessage string) error {
+	checkAroStatus := func() (interface{}, bool, error) {
+		aroList, err := autopilot.Instance().ListAutopilotRuleObjects(namespace)
+		if err != nil {
+			return nil, true, err
+		}
+		for _, aro := range aroList.Items {
+			matches := true
+			for key, value := range labelSelector {
+				if aro.Labels[key] != value {
+					matches = false
+					break
+				}
+			}
+
+			if !matches {
+				continue
+			}
+
+			for _, item := range aro.Status.Items {
+				if strings.Contains(item.Message, statusMessage) {
+					return nil, false, nil
+				}
+			}
+		}
+		return nil, true, nil
+	}
+
+	if _, err := task.DoRetryWithTimeout(checkAroStatus, eventCheckTimeout, eventCheckInterval); err != nil {
+		return err
+	}
+
+	return nil
 }

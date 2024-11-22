@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/portworx/sched-ops/k8s/autopilot"
 
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
@@ -25,6 +26,7 @@ import (
 	"github.com/pure-px/torpedo/pkg/units"
 	. "github.com/pure-px/torpedo/tests"
 	appsapi "k8s.io/api/apps/v1"
+	appsv1 "k8s.io/api/apps/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -814,7 +816,7 @@ var _ = Describe(fmt.Sprintf("{%sUpgradeAutopilot}", testSuiteName), Label("p0",
 // This testsuite is used for performing basic scenarios with Autopilot rules where it
 // schedules apps and wait until workload is completed on the volumes and then validates
 // sizes of storage pools by adding new disks to the nodes where volumes reside
-var _ = Describe(fmt.Sprintf("{%sPoolExpand}", testSuiteName),Label("p0","positive","autopilot","PoolExpand"), func() {
+var _ = Describe(fmt.Sprintf("{%sPoolExpand}", testSuiteName), Label("p0", "positive", "autopilot", "PoolExpand"), func() {
 	var testrailID = 85448
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/85448
 	var runID int
@@ -931,7 +933,7 @@ var _ = Describe(fmt.Sprintf("{%sPoolExpand}", testSuiteName),Label("p0","positi
 })
 
 // Restart Volume driver during resize pool with add-disk option.
-var _ = Describe(fmt.Sprintf("{%sPoolExpandRestartVolumeDriver}", testSuiteName),Label("p0","negative","autopilot","error_injection","PoolExpand","px_restart"), func() {
+var _ = Describe(fmt.Sprintf("{%sPoolExpandRestartVolumeDriver}", testSuiteName), Label("p0", "negative", "autopilot", "error_injection", "PoolExpand", "px_restart"), func() {
 	tags["poolChange"] = "true"
 	JustBeforeEach(func() {
 		StartTorpedoTest(fmt.Sprintf("{%sPoolExpandRestartVolumeDriver}", testSuiteName), "Pool expansion and volume driver restart test on autopilot", tags, 0)
@@ -1016,7 +1018,7 @@ var _ = Describe(fmt.Sprintf("{%sPoolExpandRestartVolumeDriver}", testSuiteName)
 // This testsuite is used for performing basic scenarios with Autopilot rules where it
 // schedules apps and wait until workload is completed on the volumes and then validates
 // PVC sizes of the volumes and sizes of storage pools
-var _ = Describe(fmt.Sprintf("{%sPvcAndPoolExpand}", testSuiteName),Label("p0","positive","autopilot","PvcResize","PoolExpand"), func() {
+var _ = Describe(fmt.Sprintf("{%sPvcAndPoolExpand}", testSuiteName), Label("p0", "positive", "autopilot", "PvcResize", "PoolExpand"), func() {
 	tags["poolChange"] = "true"
 	tags["volumeChange"] = "true"
 	var testrailID = 85449
@@ -1120,7 +1122,7 @@ var _ = Describe(fmt.Sprintf("{%sPvcAndPoolExpand}", testSuiteName),Label("p0","
 })
 
 // This test suite is used to run pool expand on Non cloud drive setups, and the error is expected to happen
-var _ = Describe(fmt.Sprintf("{%sPoolExpandInNonCD}", testSuiteName),Label("p0","positive","autopilot","PoolExpand"), func() {
+var _ = Describe(fmt.Sprintf("{%sPoolExpandInNonCD}", testSuiteName), Label("p0", "positive", "autopilot", "PoolExpand"), func() {
 	var testrailID = 93319
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/93319
 	var runID int
@@ -1171,7 +1173,7 @@ var _ = Describe(fmt.Sprintf("{%sPoolExpandInNonCD}", testSuiteName),Label("p0",
 	})
 })
 
-var _ = Describe(fmt.Sprintf("{%sEvents}", testSuiteName),Label("p1","positive","autopilot","PvcResize","PoolExpand"), func() {
+var _ = Describe(fmt.Sprintf("{%sEvents}", testSuiteName), Label("p1", "positive", "autopilot", "PvcResize", "PoolExpand"), func() {
 	tags["volumeChange"] = "true"
 	JustBeforeEach(func() {
 		StartTorpedoTest(fmt.Sprintf("{%sEvents}", testSuiteName), "Events test on autopilot", tags, 0)
@@ -1233,7 +1235,7 @@ var _ = Describe(fmt.Sprintf("{%sEvents}", testSuiteName),Label("p1","positive",
 	})
 })
 
-var _ = Describe(fmt.Sprintf("{%sPoolResizeFailure}", testSuiteName),Label("p1","negative","autopilot","error_injection","PoolExpand","px_crash"), func() {
+var _ = Describe(fmt.Sprintf("{%sPoolResizeFailure}", testSuiteName), Label("p1", "negative", "autopilot", "error_injection", "PoolExpand", "px_crash"), func() {
 	tags["poolChange"] = "true"
 	tags["negative"] = "true"
 	JustBeforeEach(func() {
@@ -1308,7 +1310,146 @@ var _ = Describe(fmt.Sprintf("{%sPoolResizeFailure}", testSuiteName),Label("p1",
 	})
 })
 
-var _ = Describe(fmt.Sprintf("{%sRebalanceProvMean}", testSuiteName),Label("p0","positive","autopilot","Rebalance"), func() {
+var _ = Describe(fmt.Sprintf("{%sDMThinPoolExpandFailure}", testSuiteName), Label("p1", "negative", "autopilot", "error_injection", "PoolExpand", "px_crash"), func() {
+	BeforeEach(func() {
+		isDMthin, err := IsDMthin()
+		if err != nil {
+			log.Errorf("Error checking if DMThin is enabled: %v", err)
+			dash.VerifyFatal(err, nil, "Validate: Check if DMThin is enabled")
+		}
+
+		if !isDMthin {
+			log.InfoD("Skipping test as DMThin is not enabled")
+			Skip("DMThin is not enabled on the cluster")
+		}
+	})
+
+	tags["poolChange"] = "true"
+	tags["negative"] = "true"
+	JustBeforeEach(func() {
+		StartTorpedoTest(fmt.Sprintf("{%sDMThinPoolExpandFailure}", testSuiteName), "Pool Resize Failure test on cluster with DMThin on autopilot", tags, 0)
+	})
+	It("create rules with scale type add-disk and wait for failure", func() {
+		var contexts []*scheduler.Context
+
+		testName := strings.ToLower(fmt.Sprintf("%sDMThinPoolExpandFailure", testSuiteName))
+		poolLabel := map[string]string{"autopilot": "add-disk"}
+		storageNodes := node.GetStorageDriverNodes()
+		// below rule will lead to the failure as dmthin does not support add-disk
+		apRules := []apapi.AutopilotRule{
+			aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNodes[0])/units.GiB)+1, 50, aututils.RuleScaleTypeAddDisk, poolLabel),
+		}
+
+		Step("schedule apps with autopilot rules for pool expand", func() {
+			err := AddLabelsOnNode(storageNodes[0], poolLabel)
+			dash.VerifyFatal(err, nil, "Validate: Add labels on node")
+			contexts = scheduleAppsWithAutopilot(testName, 1, apRules, scheduler.ScheduleOptions{PvcSize: 20 * units.GiB})
+		})
+
+		Step("wait for failure in autopilotruleonject status", func() {
+			err = aututils.WaitForAROWithGivenLabelSelectorAndStatus("portworx", map[string]string{"rule": apRules[0].Name}, aututils.AddDriveNotSupportedOnDMThin)
+			dash.VerifyFatal(err, nil, "Validate: Wait for aro status with message add-disk not supported on dmthin")
+		})
+
+		Step("destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+			for _, apRule := range apRules {
+				Inst().S.DeleteAutopilotRule(apRule.Name)
+			}
+			for k := range poolLabel {
+				Inst().S.RemoveLabelOnNode(storageNodes[0], k)
+			}
+		})
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+	})
+
+	It("create rules with scale type add-drive, wait for failed event, update scale-type to resize-drive value and validate pools", func() {
+		var contexts []*scheduler.Context
+		var isAutVersionGreaterThanOrEqualTo bool
+		var autObject *appsv1.Deployment
+		var err error
+
+		autObject, err = apps.Instance().GetDeployment(autDeploymentName, "portworx")
+		dash.VerifyFatal(err, nil, "Validate: Get autopilot deployment")
+		isAutVersionGreaterThanOrEqualTo, err = IsVersionGreaterThanOrEqualTo(autObject.Spec.Template.Spec.Containers[0].Image, "1.3.16")
+		dash.VerifyFatal(err, nil, "Validate: Get version")
+		if !isAutVersionGreaterThanOrEqualTo {
+			Skip("Skipping test as autopilot version is less than 1.3.16")
+		}
+
+		testName := strings.ToLower(fmt.Sprintf("%sDMThinPoolExpandFailure", testSuiteName))
+		poolLabel := map[string]string{"autopilot": "add-drive"}
+		storageNodes := node.GetStorageDriverNodes()
+		// below rule will lead to the failure as dmthin does not support add-drive
+		apRules := []apapi.AutopilotRule{
+			aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNodes[0])/units.GiB)+1, 50, aututils.RuleScaleTypeAddDisk, poolLabel),
+		}
+
+		Step("schedule apps with autopilot rules for pool expand", func() {
+			err := AddLabelsOnNode(storageNodes[0], poolLabel)
+			dash.VerifyFatal(err, nil, "Validate: Add labels on node")
+			contexts = scheduleAppsWithAutopilot(testName, 1, apRules, scheduler.ScheduleOptions{PvcSize: 20 * units.GiB})
+		})
+
+		Step("wait for failed autopilot event", func() {
+			err := aututils.WaitForAutopilotEvent(apRules[0], "", []string{aututils.ActiveActionsPendingToActiveActionsInProgress})
+			dash.VerifyFatal(err, nil, "Validate: Wait for ActiveActionsPendingToActiveActionsInProgress event")
+
+			err = aututils.WaitForAutopilotEvent(apRules[0], "FailedAction", []string{aututils.FailedToExecuteActionEvent, aututils.AddDriveNotSupportedOnDMThin})
+			dash.VerifyFatal(err, nil, "Validate: Wait for event with message add-drive not supported on dmthin")
+		})
+
+		Step("updating autopilot rules with scale-type: resize-drive", func() {
+			aRule, err := Inst().S.GetAutopilotRule(apRules[0].Name)
+			dash.VerifyFatal(err, nil, "Validate: Get autopilot rule")
+			for i := range aRule.Spec.Actions {
+				aRule.Spec.Actions[i].Params[aututils.RuleScaleType] = "resize-drive"
+				_, err := Inst().S.UpdateAutopilotRule(aRule)
+				dash.VerifyFatal(err, nil, "Validate: Update autopilot rule")
+			}
+		})
+
+		Step("wait for autopilot to trigger an action after update an autopilot rule", func() {
+			err := aututils.WaitForAutopilotEvent(apRules[0], "", []string{aututils.ActiveActionsInProgressToActiveActionsPending})
+			dash.VerifyFatal(err, nil, "Validate: Wait for ActiveActionsInProgressToActiveActionsPending event")
+
+			err = aututils.WaitForAutopilotEvent(apRules[0], "", []string{aututils.ActiveActionsPendingToActiveActionsInProgress})
+			dash.VerifyFatal(err, nil, "Validate: Wait for ActiveActionsPendingToActiveActionsInProgress event")
+
+			err = aututils.WaitForAutopilotEvent(apRules[0], "", []string{aututils.ActiveActionsInProgressToActiveActionsTaken})
+			dash.VerifyFatal(err, nil, "Validate: Wait for ActiveActionsInProgressToActiveActionsTaken event")
+		})
+
+		Step("validating and verifying size of storage pools", func() {
+			ValidateStoragePools(contexts)
+		})
+
+		Step("destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+			for _, apRule := range apRules {
+				Inst().S.DeleteAutopilotRule(apRule.Name)
+			}
+			for k := range poolLabel {
+				Inst().S.RemoveLabelOnNode(storageNodes[0], k)
+			}
+		})
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+	})
+})
+
+var _ = Describe(fmt.Sprintf("{%sRebalanceProvMean}", testSuiteName), Label("p0", "positive", "autopilot", "Rebalance"), func() {
 	tags["rebalance"] = "true"
 	JustBeforeEach(func() {
 		StartTorpedoTest(fmt.Sprintf("{%sRebalanceProvMean}", testSuiteName), "Create volume and rebalance test on autopilot", tags, 0)
@@ -1380,7 +1521,7 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceProvMean}", testSuiteName),Label("p0",
 	})
 })
 
-var _ = Describe(fmt.Sprintf("{%sRebalanceUsageMean}", testSuiteName),Label("p0","positive","autopilot","Rebalance"), func() {
+var _ = Describe(fmt.Sprintf("{%sRebalanceUsageMean}", testSuiteName), Label("p0", "positive", "autopilot", "Rebalance"), func() {
 	tags["rebalance"] = "true"
 	JustBeforeEach(func() {
 		StartTorpedoTest(fmt.Sprintf("{%sRebalanceUsageMean}", testSuiteName), "validate rebalance on autopilot", tags, 0)
@@ -1445,7 +1586,7 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceUsageMean}", testSuiteName),Label("p0"
 	})
 })
 
-var _ = Describe(fmt.Sprintf("{%sRestartAutopilotRebalance}", testSuiteName),Label("p1","negative","autopilot","error_injection","Rebalace","px_crash"), func() {
+var _ = Describe(fmt.Sprintf("{%sRestartAutopilotRebalance}", testSuiteName), Label("p1", "negative", "autopilot", "error_injection", "Rebalace", "px_crash"), func() {
 	tags["rebalance"] = "true"
 	JustBeforeEach(func() {
 		StartTorpedoTest(fmt.Sprintf("{%sRestartAutoPilotRebalance}", testSuiteName), "restart autopilot and rebalance test", tags, 0)
@@ -1555,7 +1696,7 @@ var _ = Describe(fmt.Sprintf("{%sRestartAutopilotRebalance}", testSuiteName),Lab
 	})
 })
 
-var _ = Describe(fmt.Sprintf("{%sRebalanceProvMeanAndPvc}", testSuiteName),Label("p1","positive","autopilot","Rebalance"), func() {
+var _ = Describe(fmt.Sprintf("{%sRebalanceProvMeanAndPvc}", testSuiteName), Label("p1", "positive", "autopilot", "Rebalance"), func() {
 	tags["rebalance"] = "true"
 	tags["volumeChange"] = "true"
 	JustBeforeEach(func() {
@@ -1664,7 +1805,7 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceProvMeanAndPvc}", testSuiteName),Label
 // schedules apps on one of the node, waits until workload is completed on the volumes and then validates
 // rebalalnce and sizes of storage pools
 // NOTE: this test is using volumes with replicaset is 3 and make sure that you have at least 4 nodes to do rebalance
-var _ = Describe(fmt.Sprintf("{%sRebalanceProvMeanAndPoolResize}", testSuiteName),Label("p1","positive","autopilot","Rebalance"), func() {
+var _ = Describe(fmt.Sprintf("{%sRebalanceProvMeanAndPoolResize}", testSuiteName), Label("p1", "positive", "autopilot", "Rebalance"), func() {
 	tags["rebalance"] = "true"
 	tags["poolChange"] = "true"
 	JustBeforeEach(func() {
@@ -1743,7 +1884,7 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceProvMeanAndPoolResize}", testSuiteName
 	})
 })
 
-var _ = Describe(fmt.Sprintf("{%sRebalanceUpdateDelete}", testSuiteName),Label("p0","positive","autopilot","Rebalance"), func() {
+var _ = Describe(fmt.Sprintf("{%sRebalanceUpdateDelete}", testSuiteName), Label("p0", "positive", "autopilot", "Rebalance"), func() {
 	tags["rebalance"] = "true"
 	JustBeforeEach(func() {
 		StartTorpedoTest(fmt.Sprintf("{%sRebalanceUpdateDelete}", testSuiteName), "Rebalance Update and delete volume test on autopilot", tags, 0)
@@ -1819,7 +1960,7 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceUpdateDelete}", testSuiteName),Label("
 	})
 })
 
-var _ = Describe(fmt.Sprintf("{%sRebalanceWithApproval}", testSuiteName),Label("p0","positive","autopilot","Rebalance"), func() {
+var _ = Describe(fmt.Sprintf("{%sRebalanceWithApproval}", testSuiteName), Label("p0", "positive", "autopilot", "Rebalance"), func() {
 	tags["rebalance"] = "true"
 	JustBeforeEach(func() {
 		StartTorpedoTest(fmt.Sprintf("{%sRebalanceWithApproval}", testSuiteName), "Rebalance with approval test on autopilot", tags, 0)
@@ -1943,7 +2084,7 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceWithApproval}", testSuiteName),Label("
 
 // This testsuite for cases including: pvc resize in large scale, pvc resize for sharedv4 volume
 // executing pool reblance and expansion at the same time
-var _ = Describe(fmt.Sprintf("{%sFunctionalTests}", testSuiteName),Label("p0","positive","autopilot"), func() {
+var _ = Describe(fmt.Sprintf("{%sFunctionalTests}", testSuiteName), Label("p0", "positive", "autopilot"), func() {
 	var testrailID = 12345
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/12345
 	var runID int
@@ -2203,7 +2344,7 @@ func scheduleAppsWithAutopilot(testName string, testScaleFactor int, apRules []a
 //After this event, two storage nodes, one with KVDB, are intentionally crashed,
 //and the test checks whether these nodes successfully recover.
 
-var _ = Describe("{AutoPoolExpandCrashTest}",Label("p1","negative","autopilot","error_injection"), func() {
+var _ = Describe("{AutoPoolExpandCrashTest}", Label("p1", "negative", "autopilot", "error_injection"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest(fmt.Sprintf("{%sAutoPoolExpandCrashTest}", testSuiteName), "Crash one kvdb node and one storage node when multiple pools are expanded using autopilot", nil, 0)
 	})
@@ -2573,4 +2714,26 @@ func upgradeAutopilot(image string, opts *scheduler.UpgradeAutopilotOptions) err
 func getVolumeSizeByProvisionedPercentage(n node.Node, numOfVolumes int, provPercentage float64) int64 {
 	workerNodePoolTotalSize := getTotalPoolSize(n)
 	return int64(float64(int(workerNodePoolTotalSize)/Inst().GlobalScaleFactor) * provPercentage / float64(numOfVolumes))
+}
+
+func IsVersionGreaterThanOrEqualTo(image, minVersion string) (bool, error) {
+	imageParts := strings.Split(image, ":")
+	if len(imageParts) < 2 {
+		return false, fmt.Errorf("invalid image format. Expected format: <image>:<tag>")
+	}
+
+	tag := imageParts[1]
+
+	// Parse tag as a semantic version
+	autopilotVersion, err := semver.NewVersion(tag)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse autopilot version %s. Err: %v", tag, err)
+	}
+
+	requiredVersion := semver.MustParse(minVersion)
+	if autopilotVersion.LessThan(requiredVersion) {
+		return false, nil
+	}
+
+	return true, nil
 }
