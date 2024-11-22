@@ -60,6 +60,8 @@ RUN apk add --no-cache ca-certificates bash curl jq libc6-compat coreutils
 RUN apk add --no-cache --update python3 py3-pip
 RUN apk add --no-cache --update --virtual=build gcc musl-dev python3-dev libffi-dev openssl-dev cargo make && pip3 install "pyyaml<=5.3.1" && pip3 install --no-cache-dir --prefer-binary azure-cli && apk del build
 
+# Install kubelogin
+RUN az aks install-cli
 
 # Install Oracle CLI
 RUN bash -c "$(curl -L https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh)" -- --python-install-location /usr/bin/python3 --accept-all-defaults && \
