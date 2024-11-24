@@ -96,6 +96,8 @@ type AppConfig struct {
 	PvcStart                    int      `yaml:"start"`
 	PvcEnd                      int      `yaml:"end"`
 	DeploymentCount             int      `yaml:"deploymentCount"`
+	MaxIOPS						string	 `yaml:"max_iops"`
+	MaxBandwidth				string   `yaml:"max_bandwidth"`
 }
 
 // InitOptions initialization options

@@ -6,8 +6,16 @@ metadata:
 provisioner: pxd.portworx.com
 parameters:
   backend: "pure_block"
+  {{ if .MaxIOPS }}
+  max_iops: "{{ .MaxIOPS }}"
+  {{ else }}
   max_iops: "1000"
+  {{ end }}
+  {{ if .MaxBandwidth }}
+  max_bandwidth: "{{ .MaxBandwidth }}"
+  {{ else }}
   max_bandwidth: "1G"
+  {{ end }}
   fs: "ext4"
   {{ if .PureFaPodName }}
   pure_fa_pod_name: "{{ .PureFaPodName }}"

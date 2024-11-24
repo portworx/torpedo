@@ -9341,3 +9341,165 @@ var _ = Describe("{DeployedApplicationsInMultipleTenants}", func() {
 		defer EndTorpedoTest()
 	})
 })
+
+var _ = Describe("{ValidateMaxIOPSAndBandwidthPostNodeReboot}", func() {
+	/*
+		Steps:
+ 
+ 
+		1. Apply I/O throttling to a volume
+		2. Reboot the node associated with the volume
+		3. Verify that I/O throttling remains applied after the reboot
+		4. Run I/O operations and validate the IOPS performance
+ 
+ 
+		PTX: https://purestorage.atlassian.net/issues/HAZEL-166
+	*/
+ 
+ 
+	JustBeforeEach(func() {
+		StartTorpedoTest("ValidateMaxIOPSAndBandwidthPostNodeReboot", "", nil, 0)
+	})
+ 
+ 
+	var (
+		contexts []*scheduler.Context
+	)
+ 
+ 
+	itLog := "Validates the max IOPS and Bandwidth post node reboot"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
+		pxPureSecret, err := pureutils.GetPXPureSecret(volDriverNamespace)
+		log.FailOnError(err, "failed to get secret [%s]  in namespace [%s]", PureSecretName, volDriverNamespace)
+		isFABackend := len(pxPureSecret.Arrays) > 0
+		if !isFABackend {
+			log.Warnf("No Arrays in pure.json")
+			Skip("Skipping [ValidateIopsAndMaxBandWidthAfterNodeReboot] as no Flash Arrays found in pure.json")
+		}
+		flashArrays, err := GetFADetailsUsed()
+		log.FailOnError(err, "failed to get FA details used")
+	   
+		stepLog := "Schedule applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				taskName := fmt.Sprintf("iops-bandwidth-%d", i)
+				ctxs, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+					AppKeys: []string{"fio-fa-davol"},
+				})
+ 
+ 
+				log.FailOnError(err, "failed to schedule applications [%v]", Inst().AppList)
+				for _, ctx := range ctxs {
+					ctx.ReadinessTimeout = appReadinessTimeout
+					contexts = append(contexts, ctx)
+				}
+			}
+		})
+ 
+ 
+	// validateMaxIOPSAndBandwidthUsingContexts validates the max IOPS and Bandwidth for the PVCs created using the contexts
+		validateMaxIOPSAndBandwidthUsingContexts := func(flashArrays []pureutils.FlashArrayEntry, contexts []*scheduler.Context) error {
+		for _, ctx := range contexts {
+			vols, err := Inst().S.GetVolumes(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to get volumes for [%s]. Err: [%v]", ctx.App.Key, err)
+			}
+			log.Infof("volume deatils form contexts [%+v\n]", vols)
+			scPVCListMap := make(map[string][]string)
+			scSpecMap := make(map[string]storageApi.StorageClass)
+			for _, vol := range vols {
+				log.Infof("volume details from context:\n ID:[%v]\n, Name:[%v]\n,Namespace:[%v]\n,storageClassName:[%v]\n", vol.ID, vol.Name, vol.Namespace, vol.StorageClassName)
+				apiVol, err := Inst().V.InspectVolume(vol.ID)
+				if err != nil {
+					return fmt.Errorf("failed to inspect volume [%v]. Err: [%v]", vol.ID, err)
+				}
+				scName := vol.StorageClassName
+				pvcName := vol.ID
+				scPVCListMap[scName] = append(scPVCListMap[scName], pvcName)
+				if _, exists := scSpecMap[scName]; !exists {
+					scSpecMap[scName] = storageApi.StorageClass{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: scName,
+						},
+						Parameters: map[string]string{
+							"max_iops":      apiVol.Locator.VolumeLabels["max_iops"],
+							"max_bandwidth": apiVol.Locator.VolumeLabels["max_bandwidth"],
+						},
+					}
+				}
+			}
+ 
+ 
+			for scName, pvcList := range scPVCListMap {
+				log.Infof("scName:[%v], pvcList:[%v]\n", scName, pvcList)
+				scSpec := scSpecMap[scName]
+				bandwidthQty, err := resource.ParseQuantity(scSpec.Parameters["max_bandwidth"])
+				if err != nil {
+					return fmt.Errorf("failed to parse MaxBandWidth for Storage Class [%s]. Err: [%v]", scName, err)
+				}
+				bandwidth := uint64(bandwidthQty.Value()) / 1000000000
+				log.InfoD("bandwidth value is [%d]", bandwidth)
+				maxIOPS, err := strconv.Atoi(scSpec.Parameters["max_iops"])
+				log.InfoD("maxIOPS value is [%d]", maxIOPS)
+				if err != nil {
+					return fmt.Errorf("failed to parse MaxIOPS for Storage Class [%s]. Err: [%v]", scName, err)
+				}
+				log.Infof("Storage Class [%s] MaxBandwidth [%v] MaxIOPS [%v]", scName, bandwidth, maxIOPS)
+				err = CheckIopsandBandwidthinFA(flashArrays, pvcList, bandwidth, uint64(maxIOPS))
+				if err != nil {
+					return fmt.Errorf("failed to validate IOPS and Bandwidth for Storage Class [%s]. Err: [%v]", scName, err)
+				}
+			}
+		}
+		return nil
+	}
+ 
+ 
+		stepLog = "Validate applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			ValidateApplications(contexts)
+		})
+		stepLog = "Validate IOPS and Bandwidth before node reboot"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Infof("The length of flashArrays is [%v]", len(flashArrays))
+			err = validateMaxIOPSAndBandwidthUsingContexts(flashArrays, contexts)
+			dash.VerifyFatal(err, nil, "validating IOPS and Bandwidth before node reboot")
+		})
+		stepLog = "Reboot node and wait for PX to be up"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				nodes, err := Inst().S.GetNodesForApp(ctx)
+				log.FailOnError(err, "failed to get nodes for app [%s]", ctx.App.Key)
+				randomNode := nodes[rand.Intn(len(nodes))]
+				err = RebootNodeAndWaitForPxUp(randomNode)
+				log.FailOnError(err, "failed to reboot node [%s]", randomNode.Name)
+			}
+		})
+		stepLog = "Validate IOPS and Bandwidth post node reboot"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Infof("The length of flashArrays is [%v]", len(flashArrays))
+			err = validateMaxIOPSAndBandwidthUsingContexts(flashArrays, contexts)
+			dash.VerifyFatal(err, nil, "validating IOPS and Bandwidth post node reboot")
+		})
+		stepLog = "Destroy applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(contexts, make(map[string]bool))
+		})
+	})
+ 
+ 
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+ })
+ 
