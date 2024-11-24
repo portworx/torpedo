@@ -1055,7 +1055,7 @@ func GetNumberOfDrivesInVM(vm kubevirtv1.VirtualMachine) (int, error) {
 }
 
 // AddFadaDriveToKubevirtVM adds additional drives to KubeVirt VMs.
-func AddFadaDriveToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisks int, size string) (bool, error) {
+func AddRawBlockDriveToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisks int, size string) (bool, error) {
 
 	for _, appCtx := range virtualMachines {
 		vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
@@ -1079,7 +1079,7 @@ func AddFadaDriveToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisk
 			log.Infof("Storage class of PVC attached to VM [%s]: %s", v.Name, storageClass)
 
 			// Create the new PVCs
-			pvcs, err := CreateFadaPVCsForVM(v, numberOfDisks, storageClass, size, corev1.PersistentVolumeBlock)
+			pvcs, err := CreateBlockModePVCsForVM(v, numberOfDisks, storageClass, size, corev1.PersistentVolumeBlock)
 			if err != nil {
 				return false, fmt.Errorf("failed to create PVCs for VM [%s]: %v", v.Name, err)
 			}
@@ -1132,7 +1132,7 @@ func AddFadaDriveToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisk
 	return true, nil
 }
 
-func CreateFadaPVCsForVM(vm kubevirtv1.VirtualMachine, numberOfPVCs int, storageClassName, resourceStorage string, volumeMode corev1.PersistentVolumeMode) ([]*corev1.PersistentVolumeClaim, error) {
+func CreateBlockModePVCsForVM(vm kubevirtv1.VirtualMachine, numberOfPVCs int, storageClassName, resourceStorage string, volumeMode corev1.PersistentVolumeMode) ([]*corev1.PersistentVolumeClaim, error) {
 	pvcs := make([]*corev1.PersistentVolumeClaim, 0)
 	for i := 0; i < numberOfPVCs; i++ {
 		pvcName := fmt.Sprintf("%s-%s-%d", "pvc-new", vm.Name, rand.Intn(10000))
@@ -1209,4 +1209,73 @@ func WaitForVMToBeReady(vmName string, namespace string) error {
 		return fmt.Errorf("VM [%s] did not become ready within timeout: %v", vmName, err)
 	}
 	return nil
+}
+
+// CheckVMState checks the state of the VM after migration
+func CheckVMState(vm kubevirtv1.VirtualMachine) error {
+	vmi, err := kubevirt.Instance().GetVirtualMachineInstance(context1.TODO(), vm.Name, vm.Namespace)
+	if err != nil {
+		return fmt.Errorf("failed to get VM instance: %v", err)
+	}
+	if vmi.Status.Phase != kubevirtv1.VirtualMachineInstancePhase(kubevirtv1.Running) {
+		return fmt.Errorf("VM %s is not running, current phase: %s", vm.Name, vmi.Status.Phase)
+	}
+	log.Infof("VM %s is in phase %s", vm.Name, vmi.Status.Phase)
+	return nil
+}
+
+func CheckVMUptime(vm kubevirtv1.VirtualMachine, initialUptime map[string]time.Duration) error {
+	currentUptime, err := GetVMUptime(vm)
+	if err != nil {
+		return err
+	}
+	vmKey := fmt.Sprintf("%s/%s", vm.Namespace, vm.Name)
+	initialUptimeVM, ok := initialUptime[vmKey]
+	if !ok {
+		return fmt.Errorf("Initial uptime not found for VM %s", vmKey)
+	}
+	acceptableDelta := 1 * time.Second
+	if currentUptime >= initialUptimeVM-acceptableDelta {
+		log.Infof("VM %s has not restarted. Initial uptime: %v, Current uptime: %v", vmKey, initialUptimeVM, currentUptime)
+	} else {
+		return fmt.Errorf("VM %s has restarted. Initial uptime: %v, Current uptime: %v", vmKey, initialUptimeVM, currentUptime)
+	}
+	return nil
+}
+
+func GetVMUptime(vm kubevirtv1.VirtualMachine) (time.Duration, error) {
+	ipAddress, err := GetVMIPAddress(vm)
+	if err != nil {
+		return 0, err
+	}
+	log.Infof("VM Name - %s", vm.Name)
+	log.Infof("IP Address - %s", ipAddress)
+
+	err = TestSSHConnectivity(ipAddress)
+	if err != nil {
+		return 0, err
+	}
+
+	cmd := "cat /proc/uptime"
+	output, err := RunCommandInVM(ipAddress, cmd)
+	if err != nil {
+		return 0, err
+	}
+	output = strings.TrimSpace(output)
+	parts := strings.Fields(output)
+	if len(parts) < 1 {
+		return 0, fmt.Errorf("Unexpected output from uptime command: %s", output)
+	}
+	uptimeSecondsStr := parts[0]
+	uptimeSeconds, err := strconv.ParseFloat(uptimeSecondsStr, 64)
+	if err != nil {
+		return 0, fmt.Errorf("Failed to parse uptime seconds: %v", err)
+	}
+	uptimeDuration := time.Duration(uptimeSeconds * float64(time.Second))
+	return uptimeDuration, nil
+}
+
+func GetPVCsAttachedToVM(vm kubevirtv1.VirtualMachine) []string {
+	pvcNames := k8sKubevirt.GetVMPersistentVolumeClaims(&vm)
+	return pvcNames
 }

@@ -808,6 +808,8 @@ spec:
       value: "${ML_WORKLOAD_RUNTIME}"
     - name: KUBEVIRT_VM_PWD
       value: "${KUBEVIRT_VM_PWD}"
+    - name: KUBEVIRT_VOL_TYPE
+      value: "${KUBEVIRT_VOL_TYPE}"
     - name: KUBEVIRT_UPGRADE_VERSION
       value: "${KUBEVIRT_UPGRADE_VERSION}"
     - name: PX_BACKUP_MONGODB_USERNAME

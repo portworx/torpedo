@@ -1,0 +1,10 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: raw-vol-sc
+parameters:
+  block_size: 512b
+  repl: "2"
+provisioner: pxd.portworx.com
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
