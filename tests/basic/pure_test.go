@@ -12,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"strings"
+
 	"github.com/devans10/pugo/flasharray"
 	"github.com/ghodss/yaml"
 	"github.com/google/uuid"
@@ -49,7 +51,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"strings"
 )
 
 const (
@@ -9502,4 +9503,81 @@ var _ = Describe("{ValidateMaxIOPSAndBandwidthPostNodeReboot}", func() {
 		AfterEachTest(contexts)
 	})
  })
- 
+
+var _ = Describe("{MeasureFADAVolumeCreationTimeTaken}", Label("staging", "p1", "pure_ops", "positive"), func() {
+	/*
+	   https://portworx.atlassian.net/browse/PTX-18941
+
+	   1. Create 100 FADA volumes at the same time
+	   3. Calculate the time taken to create FADA volumes.
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("MeasureFADAVolumeCreationTimeTaken", "Measure the time taken by FADA volume attachment", nil, 0)
+	})
+
+	stepLog := "Create 100 FADA volumes and measure the time taken by FADA volume attachment"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+
+		var (
+			scheduleCount    = 25
+			contexts         []*scheduler.Context
+			wg               sync.WaitGroup
+			podAttachTimeout = 15 * time.Minute
+			mutex            sync.Mutex
+		)
+
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+
+		Inst().AppList = []string{"fio-fa-davol"}
+		stepLog = "Deploy apps which uses FADA volume and validate"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			startTime := time.Now()
+			scheduleAppParallel := func(c int) {
+				defer wg.Done()
+				defer GinkgoRecover()
+				scheduledContexts := ScheduleApplications(fmt.Sprintf(fmt.Sprintf("fadavolscale-%d", c)))
+
+				mutex.Lock()
+				contexts = append(contexts, scheduledContexts...)
+				mutex.Unlock()
+			}
+
+			for i := 0; i < scheduleCount; i++ {
+				wg.Add(1)
+				go scheduleAppParallel(i)
+			}
+			wg.Wait()
+
+			ValidateApplications(contexts)
+			defer func() {
+				opts := make(map[string]bool)
+				opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+				for _, ctx := range contexts {
+					TearDownContext(ctx, opts)
+				}
+			}()
+
+			elapsedTime := time.Since(startTime)
+			volumesCount := 0
+			for _, ctx := range contexts {
+				vols, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "Failed to get volumes for the app: %v", ctx.App.Key)
+				volumesCount += len(vols)
+			}
+			log.Infof("Attaching [%d] FADA volumes took: [%v]", volumesCount, elapsedTime)
+
+			dash.VerifyFatal(elapsedTime <= podAttachTimeout, true, fmt.Sprintf("Verify volume creation completed within %v", podAttachTimeout))
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
