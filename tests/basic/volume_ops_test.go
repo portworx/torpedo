@@ -32,6 +32,7 @@ import (
 	"github.com/pure-px/torpedo/drivers/volume"
 	"github.com/pure-px/torpedo/drivers/volume/portworx"
 	"github.com/pure-px/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/osutils"
 	"github.com/pure-px/torpedo/pkg/restutil"
 	"github.com/pure-px/torpedo/pkg/testrailuttils"
 	"github.com/pure-px/torpedo/pkg/units"
@@ -42,6 +43,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -6175,6 +6177,7 @@ func createNamespace(ns string) {
 	log.FailOnError(err, "failed to create namespace")
 }
 
+
 var _ = Describe("{SnapValidateWithCredRecreate}", Label("staging", "p0", "negative", "px_ops"), func() {
 	/*
 		https://purestorage.atlassian.net/browse/HAZEL-290
@@ -6369,3 +6372,183 @@ var _ = Describe("{SnapValidateWithCredRecreate}", Label("staging", "p0", "negat
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{GroupCloudSnapshot}", Label("staging", "p0", "positive", "px_ops"), func() {
+	/*
+	   Step1: Deploy app
+	   step2: Label pvc reading the yaml file
+	   Step3: create cloud credentials
+	   step4: Create groupcloudsnapshot
+	   step5: verify snapshot is done
+	*/
+	var testrailID = 0
+	JustBeforeEach(func() {
+		StartTorpedoTest("GroupCloudSnapshot", "Initiating Group CloudSnaphot for the volume. Verifying that snapshots are completed successfully.", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	stepLog := "Initiating Group CloudSnaphot for the volume. Verifying that snapshots are completed successfully."
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("groupsnapshot-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer DestroyApps(contexts, nil)
+		stepLog = "Create cloud credentails"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := CreatePXCloudCredential()
+			log.FailOnError(err, "failed to create cloud credential")
+			n := node.GetStorageDriverNodes()[0]
+			uuidCmd := "pxctl cred list -j | grep uuid"
+			output, err := runCmd(uuidCmd, n)
+			log.FailOnError(err, "error getting uuid for cloudsnap credential")
+			if output == "" {
+				log.FailOnError(fmt.Errorf("cloud cred is not created"), "Check for cloud cred exists?")
+			}
+
+		})
+		for _, ctx := range contexts {
+			var appVolumes []*volume.Volume
+			log.InfoD(fmt.Sprintf("get volumes for %s app", ctx.App.Key))
+			appVolumes, err = Inst().S.GetVolumes(ctx)
+			log.FailOnError(err, "failed to get volumes for app [%s]", ctx.App.Key)
+			log.Infof("List of app [%s] volumes [%v]", ctx.App.Key, appVolumes)
+			dash.VerifyFatal(len(appVolumes) > 0, true, "App volumes exist?")
+			groupSnapshot := &storkv1.GroupVolumeSnapshot{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      ctx.App.Key + "-groupsnapshot",
+					Namespace: ctx.App.NameSpace,
+				},
+				Spec: storkv1.GroupVolumeSnapshotSpec{
+					PVCSelector: storkv1.PVCSelectorSpec{
+						LabelSelector: v1.LabelSelector{
+							MatchLabels: map[string]string{
+								"app": ctx.App.Key,
+							},
+						},
+					},
+					RestoreNamespaces: []string{ctx.App.NameSpace},
+					MaxRetries:        0,
+					Options: map[string]string{
+						"portworx/snapshot-type": "cloud",
+					},
+				},
+			}
+			stepLog := "Retrieving PVCs and adding labels based on the specified selector"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				matchLabels := groupSnapshot.Spec.PVCSelector.LabelSelector.MatchLabels
+				log.Infof("Match Labels: %v", matchLabels)
+				for labelKey, labelValue := range matchLabels {
+					log.Infof("Labelkey %s: LabelValue %s\n", labelKey, labelValue)
+					pvcList, err := core.Instance().GetPersistentVolumeClaims(ctx.App.NameSpace, nil)
+					log.FailOnError(err, "Failed to get PVCs from context")
+					for _, pvc := range pvcList.Items {
+						pvcPointer, err := core.Instance().GetPersistentVolumeClaim(pvc.Name, ctx.App.NameSpace)
+						log.FailOnError(err, "Unable to get PVC for the namespace %v", ctx.App.NameSpace)
+						err = AddLabelToResource(pvcPointer, labelKey, labelValue)
+						log.FailOnError(err, fmt.Sprintf("Failed to add label %s: %s to PVC %s", labelKey, labelValue, pvc.Name))
+						log.Infof("Label %s: %s added to PVC %s", labelKey, labelValue, pvc.Name)
+
+					}
+				}
+
+			})
+			stepLog = "Creating group volume snapshot"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				_, err := storkops.Instance().CreateGroupSnapshot(groupSnapshot)
+				log.FailOnError(err, "Unable to create group snaphot for cloud")
+				msg := fmt.Sprintf("GroupVolumeSnapshot %v created successfully", groupSnapshot.Name)
+				log.InfoD(msg)
+
+			})
+			log.Info("Waiting for 3 minutes for snapshot status to be updated...")
+			time.Sleep(3 * time.Minute)
+			stepLog = "Verify the cloud snapshot status"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				var snapshotScheduleName string
+				listgroupSnapshots, err := storkops.Instance().ListGroupSnapshots(ctx.App.NameSpace)
+				log.FailOnError(err, "error getting snapshot list")
+				log.Infof("groupsnapshot values %v", listgroupSnapshots)
+				for _, snap := range listgroupSnapshots.Items {
+					snapshotScheduleName = snap.Name
+				}
+				groupSnapshots, err := storkops.Instance().GetGroupSnapshot(snapshotScheduleName, ctx.App.NameSpace)
+				log.FailOnError(err, "Error getting group snapshot for [%s] in namespace [%s]", snapshotScheduleName, ctx.App.NameSpace)
+				log.Infof("Snapshot schedule response for [%s]: %+v", snapshotScheduleName, groupSnapshots)
+				log.Infof("Checking snapshots for volumes: %v", appVolumes)
+				for _, vol := range appVolumes {
+					foundSnapshotandcheckthecondition := false
+					apiVol, err := Inst().V.InspectVolume(vol.ID)
+					log.FailOnError(err, "unable to inspect volume ")
+					log.Infof("volume ids:%v", apiVol.Id)
+					log.Infof("Checking for snapshot related to volume %s", vol.Name)
+					log.Infof("Checking group snapshot: %s", groupSnapshots.Name)
+					for _, volumeSnapshot := range groupSnapshots.Status.VolumeSnapshots {
+						log.Infof("Checking volume snapshot: %s", volumeSnapshot.VolumeSnapshotName)
+						parentVolumeID := volumeSnapshot.ParentVolumeID
+						log.Infof("parent volume id:%v", parentVolumeID)
+						log.Infof("volume id for app volume %v", apiVol.Id)
+						if parentVolumeID == apiVol.Id {
+							log.Infof("Found snapshot for volume %s in group snapshot %s", vol.Name, groupSnapshots.Name)
+							for _, condition := range volumeSnapshot.Conditions {
+								if condition.Type == "Ready" && condition.Status == "True" {
+									foundSnapshotandcheckthecondition = true
+									log.Infof("Volume groupsnapshot %s for volume %s is ready.", volumeSnapshot.VolumeSnapshotName, vol.Name)
+								} else {
+									log.Infof("Volume groupsnapshot %s for volume %s is not ready. Status: %s", volumeSnapshot.VolumeSnapshotName, vol.Name, condition.Status)
+									err := osutils.Kubectl([]string{"-n", ctx.App.NameSpace, "describe", "volumesnapshot.volumesnapshot.external-storage.k8s.io", snapshotScheduleName})
+									log.FailOnError(err, "Unable to get describe command to get groupsnapshot details")
+									foundSnapshotandcheckthecondition = false
+									break
+								}
+							}
+							if !foundSnapshotandcheckthecondition {
+								break
+							}
+						}
+					}
+					dash.VerifyFatal(foundSnapshotandcheckthecondition, true, "Snapshot is ready for that volume?")
+				}
+
+			})
+			stepLog = "Deleting group volume snapshot"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				err := storkops.Instance().DeleteGroupSnapshot(groupSnapshot.Name, ctx.App.NameSpace)
+				log.FailOnError(err, "Unable to delete groupsnapshot: %v", groupSnapshot.Name)
+				log.InfoD("GroupVolumeSnapshot %v is deleted successfully", groupSnapshot.Name)
+
+			})
+			stepLog = "Initiating cleanup of Persistent Volume Claims (PVCs)"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				TearDownContext(ctx, nil)
+				pvcList, err := core.Instance().GetPersistentVolumeClaims(ctx.App.NameSpace, nil)
+				log.FailOnError(err, "Failed to get PVCs from context")
+				for _, pvc := range pvcList.Items {
+					log.Infof("Successfully initiated PVC deletion  '%s'", pvc.Name)
+					err := core.Instance().DeletePersistentVolumeClaim(pvc.Name, ctx.App.NameSpace)
+					if err != nil {
+						log.Infof("Unable to delete PVC %s: %v", pvc.Name, err)
+					} else {
+						log.Infof("PVC %s deleted successfully", pvc.Name)
+					}
+
+				}
+
+			})
+
+		}
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+

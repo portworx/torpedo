@@ -158,9 +158,9 @@ func Kubectl(arguments []string) error {
 		return fmt.Errorf("no arguments supplied for kubectl command")
 	}
 	cmd := exec.Command("kubectl", arguments...)
-	log.Debugf("Executing command [%s]", cmd.String())
+	log.Infof("Executing command [%s]", cmd.String())
 	output, err := cmd.Output()
-	log.Debugf("%s", string(output))
+	log.Infof("%s", string(output))
 	if err != nil {
 		return fmt.Errorf("Failed to execute command [%s], Err: %v", cmd.String(), err)
 	}
