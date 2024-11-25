@@ -586,3 +586,28 @@ func CreateNamespace(namespace string) error {
 
 	return nil
 }
+
+// PrintPodStateAndLogsFromNamepsace prints the status and logs of all pods in the given namespace
+func PrintPodStateAndLogsFromNamepsace(namespace string) error {
+	// Get all pods from the given namespace
+	podList, err := core.Instance().GetPods(namespace, nil)
+	if err != nil {
+		return err
+	}
+
+	// Iterate over all pods and print their status and logs
+	for _, pod := range podList.Items {
+		// Print the status of the pod
+		log.InfoD("Pod [%s] in namespace [%s] has status [%s]", pod.Name, namespace, pod.Status.Phase)
+		log.Infof("Fetching logs from [%s] in [%s] namespace", pod.Name, namespace)
+		// Get logs from the pod
+		logs, err := core.Instance().GetPodLog(pod.Name, namespace, &corev1.PodLogOptions{})
+		if err != nil {
+			return err
+		}
+		// Print the logs
+		log.Infof("Logs from pod [%s] in namespace [%s] - [%s]", pod.Name, namespace, logs)
+	}
+
+	return nil
+}

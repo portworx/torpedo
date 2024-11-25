@@ -784,6 +784,12 @@ func InsertDataForBackupValidation(namespaces []string, ctx context1.Context, ex
 					dataCommands[eachHandler] = eachHandler.GetRandomDataCommands(queryCountForValidation)
 					err = eachHandler.InsertBackupData(ctx, backupName, dataCommands[eachHandler]["insert"])
 					if err != nil {
+						// Printing logs for the pod and pod state in case of error
+						podLogErr := appUtils.PrintPodStateAndLogsFromNamepsace(eachHandler.GetNamespace())
+						if podLogErr != nil {
+							log.Errorf("Error while fetching logs from namespace [%s] - [%s]", eachHandler.GetNamespace(), podLogErr)
+						}
+
 						return nil, nil, err
 					}
 					allHandlers = append(allHandlers, eachHandler)
@@ -802,6 +808,12 @@ func InsertDataForBackupValidation(namespaces []string, ctx context1.Context, ex
 			eachHandler.UpdateDataCommands(queryCountForValidation, restoreIdentifier)
 			err = eachHandler.InsertBackupData(ctx, restoreIdentifier, []string{})
 			if err != nil {
+				// Printing logs for the pod and pod state in case of error
+				podLogErr := appUtils.PrintPodStateAndLogsFromNamepsace(eachHandler.GetNamespace())
+				if podLogErr != nil {
+					log.Errorf("Error while fetching logs from namespace [%s] - [%s]", eachHandler.GetNamespace(), podLogErr)
+				}
+
 				return nil, nil, err
 			}
 		}

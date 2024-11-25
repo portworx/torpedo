@@ -16,6 +16,9 @@ type PostgresConfig struct {
 	Database
 }
 
+// pg_connection_timeout - default connection timeout for postgres connection in seconds
+const pg_connection_timeout = 40
+
 // GetConnection returns a connection object for postgres database
 func (app *PostgresConfig) GetConnection(ctx context.Context) (*pgx.Conn, error) {
 
@@ -31,12 +34,12 @@ func (app *PostgresConfig) GetConnection(ctx context.Context) (*pgx.Conn, error)
 
 	if app.NodePort != 0 {
 		// Connect with NodePort Service
-		url = fmt.Sprintf("postgres://%s:%s@%s:%d/%s",
-			app.User, app.Password, app.Hostname, app.NodePort, app.DBName)
+		url = fmt.Sprintf("postgres://%s:%s@%s:%d/%s?connect_timeout=%d",
+			app.User, app.Password, app.Hostname, app.NodePort, app.DBName, pg_connection_timeout)
 	} else {
 		// Connect with Cluster Service
-		url = fmt.Sprintf("postgres://%s:%s@%s:%d/%s",
-			app.User, app.Password, app.Hostname, app.Port, app.DBName)
+		url = fmt.Sprintf("postgres://%s:%s@%s:%d/%s?connect_timeout=%d",
+			app.User, app.Password, app.Hostname, app.Port, app.DBName, pg_connection_timeout)
 	}
 
 	conn, err := pgx.Connect(ctx, url)
@@ -199,6 +202,10 @@ func (app *PostgresConfig) StartData(command <-chan string, ctx context.Context)
 			if status == DataStart {
 				commandPair, err := app.startInsertingData(tableName, ctx)
 				if err != nil {
+					podLogErr := PrintPodStateAndLogsFromNamepsace(app.Namespace)
+					if podLogErr != nil {
+						log.Errorf("Error while fetching logs from namespace [%s] - [%s]", app.Namespace, podLogErr)
+					}
 					allErrors = append(allErrors, fmt.Sprintf("Continuity Pipeline Error - [%s] at [%s]", err.Error(), time.Now().Format("2006-01-02 15:04:05")))
 				}
 				allSelectCommands = append(allSelectCommands, commandPair["select"]...)
