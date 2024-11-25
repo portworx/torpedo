@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	torpedotask "github.com/pure-px/torpedo/pkg/task"
 	"io/ioutil"
 	"net"
 	"os"
@@ -13,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	torpedotask "github.com/pure-px/torpedo/pkg/task"
 
 	docker_types "github.com/docker/docker/api/types"
 	"github.com/portworx/sched-ops/k8s/apps"
@@ -547,7 +548,7 @@ func (s *SSH) YankDrive(n node.Node, driveNameToFail string, options node.Connec
 	// TODO: Make it generic (Add support dev mapper devices)
 
 	//Get the scsi bus ID
-	busIDCmd := "lsscsi | grep " + driveNameToFail + " | awk -F\":\" '{print $1}'" + "| awk -F\"[\" '{print $2}'"
+	busIDCmd := fmt.Sprintf("lsblk -S /dev/%s | awk 'FNR == 1 {next}{print $2}' | awk -F \":\" '{print $1}'", driveNameToFail)
 	busID, err := s.doCmd(n, options, busIDCmd, false)
 	if err != nil {
 		return "", &node.ErrFailedToYankDrive{
