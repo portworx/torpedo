@@ -12,7 +12,6 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"maps"
 	"math"
 	"math/rand"
@@ -29,6 +28,8 @@ import (
 	"sync"
 	"text/template"
 	"time"
+
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
 
@@ -12850,7 +12851,6 @@ func DeletePXCloudCredential() error {
 	}
 	return nil
 }
-
 func GetPXCloudCredential() (string, error) {
 	/*
 		Delete the cloud credential
@@ -15750,4 +15750,91 @@ func DeleteRandomPvcFromDeployedApplication(pvcName string, appContext []*schedu
 		allErrors = multierr.Append(allErrors, err)
 	}
 	return allErrors
+}
+
+func ValidateSnapshot(contexts []*scheduler.Context) error {
+	for _, ctx := range contexts {
+		if !strings.Contains(ctx.App.Key, "cloudsnap") {
+			continue
+		}
+		var appVolumes []*volume.Volume
+		var err error
+		appNamespace := ctx.App.Key + "-" + ctx.UID
+		log.Infof("Namespace: %v", appNamespace)
+		appVolumes, err = Inst().S.GetVolumes(ctx)
+		if err != nil {
+			return fmt.Errorf("error getting volumes for [%s]: %v", ctx.App.Key, err)
+		}
+		if len(appVolumes) == 0 {
+			return fmt.Errorf("no volumes found for [%s]", ctx.App.Key)
+		}
+		log.Infof("Got volume count: %v", len(appVolumes))
+		scaleFactor := time.Duration(Inst().GlobalScaleFactor * len(appVolumes))
+		err = Inst().S.ValidateVolumes(ctx, scaleFactor*4*time.Minute, defaultRetryInterval, nil)
+		if err != nil {
+			return fmt.Errorf("error validating volumes for [%s]: %v", ctx.App.Key, err)
+		}
+		for _, v := range appVolumes {
+			// Skip cloud snapshot trigger for Pure DA volumes
+			isPureVol, err := Inst().V.IsPureVolume(v)
+			if err != nil {
+				return fmt.Errorf("error checking volume type for [%s]: %v", v.Name, err)
+			}
+			if isPureVol {
+				log.Warnf("Cloud snapshot is not supported for Pure DA volumes: [%s]. Skipping cloud snapshot trigger for pure volume.", v.Name)
+				continue
+			}
+			snapshotScheduleName := v.Name + "-interval-schedule"
+			log.InfoD("snapshotScheduleName: %v for volume: %s", snapshotScheduleName, v.Name)
+
+			resp, err := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
+			if err != nil {
+				return fmt.Errorf("error getting snapshot schedule for [%s]: %v", snapshotScheduleName, err)
+			}
+			dash.VerifyFatal(len(resp.Status.Items) > 0, true, fmt.Sprintf("verify snapshots exist for [%s]", snapshotScheduleName))
+			for _, snapshotStatuses := range resp.Status.Items {
+				if len(snapshotStatuses) > 0 {
+					status := snapshotStatuses[len(snapshotStatuses)-1]
+					if status == nil {
+						return fmt.Errorf("snapshot schedule has an empty migration in its most recent status for [%s]", snapshotScheduleName)
+					}
+					status, err = WaitForSnapShotToReady(snapshotScheduleName, status.Name, appNamespace)
+					if err != nil {
+						return fmt.Errorf("failed to wait for snapshot [%s] to be ready: %v", status.Name, err)
+					}
+					log.Infof("Snapshot [%s] has status [%v]", status.Name, status.Status)
+					if status.Status == snapv1.VolumeSnapshotConditionReady {
+						snapData, err := Inst().S.GetSnapShotData(ctx, status.Name, appNamespace)
+						if err != nil {
+							return fmt.Errorf("failed to get snapshot data for snapshot [%s] in namespace [%s]: %v", status.Name, appNamespace, err)
+						}
+						snapType := snapData.Spec.PortworxSnapshot.SnapshotType
+						log.Infof("Snapshot Type: %v", snapType)
+
+						if snapType != "cloud" {
+							err := &scheduler.ErrFailedToGetVolumeParameters{
+								App:   ctx.App,
+								Cause: fmt.Sprintf("Snapshot Type: [%s] does not match", snapType),
+							}
+							return fmt.Errorf("failed to validate snapshot data for [%s]: %v", status.Name, err)
+						}
+						condition := snapData.Status.Conditions[0]
+						dash.VerifyFatal(condition.Type == snapv1.VolumeSnapshotDataConditionReady, true,
+							fmt.Sprintf("validate volume snapshot condition data for [%s], expected: [%v], actual: [%v]", status.Name, snapv1.VolumeSnapshotDataConditionReady, condition.Type))
+						snapID := snapData.Spec.PortworxSnapshot.SnapshotID
+						log.Infof("Snapshot ID: %v", snapID)
+						if snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot == nil ||
+							len(snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot.SnapshotID) == 0 {
+							err := &scheduler.ErrFailedToGetVolumeParameters{
+								App:   ctx.App,
+								Cause: fmt.Sprintf("volumesnapshotdata: %s does not have Portworx volume source set", snapData.Metadata.Name),
+							}
+							return fmt.Errorf("volume snapshot data for snapshot [%s] does not have a valid Portworx snapshot ID: %v", snapData.Metadata.Name, err)
+						}
+					}
+				}
+			}
+		}
+	}
+	return nil
 }

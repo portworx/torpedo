@@ -6174,3 +6174,198 @@ func createNamespace(ns string) {
 	_, err = k8sCore.CreateNamespace(nsName)
 	log.FailOnError(err, "failed to create namespace")
 }
+
+var _ = Describe("{SnapValidateWithCredRecreate}", Label("staging", "p0", "negative", "px_ops"), func() {
+	/*
+		https://purestorage.atlassian.net/browse/HAZEL-290
+		Step1: Depoly app
+		Step2: create cloud cred and scheduled cloudsnapshot for app
+		step3: Validate snapshot is create
+		Step3: Delete creds and validate cloudsnap fails
+		Step4: Create creds again and validate cloudsnaps working
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("SnapValidateWithCredRecreate", "Validate cloudsnap status after cloud creds delete and check cloudsnap status is ready again new cred is created.", nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "Schedule a cloud snapshot using credentials, delete old credentials, recreate new credentials, and verify continued snapshot access and status with the new credentials"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+		retain := 8
+		interval := 5
+
+		err := CreatePXCloudCredential()
+		log.FailOnError(err, "failed to create cloud credential")
+		defer DeletePXCloudCredential()
+		n := node.GetStorageDriverNodes()[0]
+		uuidCmd := "pxctl cred list -j | grep uuid"
+		output, err := runCmd(uuidCmd, n)
+		log.FailOnError(err, "error getting uuid for cloudsnap credential")
+		if output == "" {
+			log.FailOnError(fmt.Errorf("cloud cred is not created"), "Check for cloud cred exists?")
+		}
+
+		credUUID := strings.Split(strings.TrimSpace(output), " ")[1]
+		credUUID = strings.ReplaceAll(credUUID, "\"", "")
+		log.Infof("Got Cred UUID: %s", credUUID)
+		contexts = make([]*scheduler.Context, 0)
+		policyName := "intervalpolicy"
+		stepLog = fmt.Sprintf("create schedule policy %s", policyName)
+
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			schedPolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
+			if err != nil {
+
+				log.InfoD("Creating a interval schedule policy %v with interval %v minutes", policyName, interval)
+				schedPolicy = &storkv1.SchedulePolicy{
+					ObjectMeta: meta_v1.ObjectMeta{
+						Name: policyName,
+					},
+					Policy: storkv1.SchedulePolicyItem{
+						Interval: &storkv1.IntervalPolicy{
+							Retain:          storkv1.Retain(retain),
+							IntervalMinutes: interval,
+						},
+					}}
+
+				_, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
+				log.FailOnError(err, fmt.Sprintf("error creating a SchedulePolicy [%s]", policyName))
+			}
+
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("snapvalidate-%d", i))...)
+			}
+
+			ValidateApplications(contexts)
+
+		})
+
+		defer func() {
+			err := storkops.Instance().DeleteSchedulePolicy(policyName)
+			log.FailOnError(err, fmt.Sprintf("error deleting a SchedulePolicy [%s]", policyName))
+		}()
+
+		stepLog = "Verify that cloud snap status"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := ValidateSnapshot(contexts)
+			log.FailOnError(err, "Error during snapshot validation")
+			log.InfoD("Snapshot validation completed successfully")
+		})
+		stepLog = "Delete cloud credentials"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			credDeleteCmd := fmt.Sprintf("cred delete %s", credUUID)
+			output, err = Inst().V.GetPxctlCmdOutputConnectionOpts(n, credDeleteCmd, node.ConnectionOpts{
+				IgnoreError:     false,
+				TimeBeforeRetry: defaultRetryInterval,
+				Timeout:         defaultTimeout,
+			}, false)
+
+			if err != nil {
+				err = fmt.Errorf("error deleting existing cred [%s], cause: %v", credUUID, err)
+				log.FailOnError(err, "failed to delete cloud credentials")
+			}
+
+			log.Infof("Deleted cloud cred [%s] successfully", output)
+
+		})
+		stepLog = "Verify that the snapshot returns an error when attempting to access it after deleting the cloud credentials."
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Info("Waiting for the next scheduled snapshot to be triggered.")
+			time.Sleep(5 * time.Minute)
+			for _, ctx := range contexts {
+				if !strings.Contains(ctx.App.Key, "cloudsnap") {
+					continue
+				}
+				var appVolumes []*volume.Volume
+				var err error
+				appNamespace := ctx.App.Key + "-" + ctx.UID
+				log.Infof("Namespace: %v", appNamespace)
+				stepLog = fmt.Sprintf("Getting app volumes for volume %s", ctx.App.Key)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					appVolumes, err = Inst().S.GetVolumes(ctx)
+					log.FailOnError(err, "error getting volumes for [%s]", ctx.App.Key)
+
+					if len(appVolumes) == 0 {
+						log.FailOnError(fmt.Errorf("no volumes found for [%s]", ctx.App.Key), "error getting volumes for [%s]", ctx.App.Key)
+					}
+				})
+				log.Infof("Got volume count : %v", len(appVolumes))
+				log.FailOnError(err, "error validating volumes for [%s]", ctx.App.Key)
+				for _, v := range appVolumes {
+					snapshotScheduleName := v.Name + "-interval-schedule"
+					log.InfoD("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
+
+					resp, err := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
+					log.FailOnError(err, fmt.Sprintf("error getting snapshot schedule for [%s], volume:[%s] in namespace [%s]", snapshotScheduleName, v.Name, v.Namespace))
+					dash.VerifyFatal(len(resp.Status.Items) > 0, true, fmt.Sprintf("verify snapshots exists for [%s]", snapshotScheduleName))
+					snapshotstatuserror := false
+					for _, snapshotStatuses := range resp.Status.Items {
+						if len(snapshotStatuses) > 0 {
+							status := snapshotStatuses[len(snapshotStatuses)-1]
+							if status == nil {
+								log.FailOnError(fmt.Errorf("SnapshotSchedule has an empty migration in it's most recent status"), fmt.Sprintf("error getting latest snapshot status for [%s]", snapshotScheduleName))
+							}
+							log.Infof("Snapshot [%s] has status [%v]", status.Name, status.Status)
+							if status.Status == snapv1.VolumeSnapshotConditionError {
+								snapshotstatuserror = true
+								resp, _ := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
+								log.Infof("SnapshotSchedule resp: %+v", resp)
+								snapData, _ := Inst().S.GetSnapShotData(ctx, status.Name, appNamespace)
+								if snapData != nil {
+									log.Infof("snapData : %v", snapData)
+								}
+								break
+
+							}
+
+						}
+
+					}
+					dash.VerifyFatal(snapshotstatuserror, true, "Volume snapshot is in error state?")
+				}
+			}
+		})
+		Step("Create cloud credentials", func() {
+			log.InfoD(stepLog)
+			err := CreatePXCloudCredential()
+			log.FailOnError(err, "failed to create cloud credential")
+			log.Info("Cloud credentials created successfully.")
+			n := node.GetStorageDriverNodes()[0]
+			uuidCmd := "pxctl cred list -j | grep uuid"
+			output, err := runCmd(uuidCmd, n)
+			log.FailOnError(err, "error getting uuid for cloudsnap credential.")
+			if output == "" {
+				log.FailOnError(fmt.Errorf("cloud cred is not created"), "Check for cloud cred exists?")
+			}
+
+			credUUID := strings.Split(strings.TrimSpace(output), " ")[1]
+			credUUID = strings.ReplaceAll(credUUID, "\"", "")
+			log.Infof("Got Cred UUID: %s", credUUID)
+
+		})
+		stepLog = "Verify that the cloud snapshot status is ready after creating the cloud credentials"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Info("Waiting for the next scheduled snapshot to be triggered.")
+			time.Sleep(5 * time.Minute)
+			err := ValidateSnapshot(contexts)
+			log.FailOnError(err, "Error during snapshot validation")
+			log.InfoD("Snapshot validation completed successfully")
+
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		opts := make(map[string]bool)
+		DestroyApps(contexts, opts)
+		AfterEachTest(contexts)
+	})
+})
