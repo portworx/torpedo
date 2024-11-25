@@ -3258,7 +3258,6 @@ var _ = Describe("{DriveScalingWithPxRestart}", Label("p1", "hal_ops_disruption"
 		9. Recreate all the pools on the node which are there in the start of the test case
 	*/
 	performDriveScalingTest("DriveScalingWithPxRestart")
-
 })
 
 var _ = Describe("{DriveScalingWithNodeMaintenanceCycle}", Label("p1", "hal_ops_disruption", "NodeMaintenance", "AddMetadata", "functional"), func() {
@@ -3275,6 +3274,22 @@ var _ = Describe("{DriveScalingWithNodeMaintenanceCycle}", Label("p1", "hal_ops_
 	*/
 	performDriveScalingTest("DriveScalingWithNodeMaintenanceCycle")
 
+})
+
+var _ = Describe("{DriveScalingWithNodeReboot}", Label("p1", "hal_ops_disruption", "node_reboot", "AddMetadata", "functional"), func() {
+	/*
+		1. Select a storage node in the cluster
+		2. Add meta drive if not already present
+		3. Add new pools till the pool limit is hit
+		4. For each pool, expand with add drive till drive limit is hit
+		5. Schedule apps and wait for 5 mins
+		6. Reboot node and check the time it took for px to come up
+		7. Validate apps are still running and then destroy them
+		8. Delete all the pools on the selected node
+		9. Recreate all the pools on the node which are there in the start of the test case
+	*/
+
+	performDriveScalingTest("DriveScalingWithNodeReboot")
 })
 
 func performDriveScalingTest(testName string) {
