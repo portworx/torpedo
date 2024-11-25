@@ -18,13 +18,16 @@ import (
 const (
 	IbmDriverName = "ibm"
 	// IbmServiceName is the name of the ibm storage driver implementation
-	IbmServiceName = "ibm-csi-controller"
-	serviceURL     = "https://us-east.iaas.cloud.ibm.com/v1"
+	IbmBlockStorage torpedovolume.StorageProvisionerType = "ibm"
+	IbmFileStorage  torpedovolume.StorageProvisionerType = "ibmfile"
+	IbmServiceName                                       = "ibm-csi-controller"
+	serviceURL                                           = "https://us-east.iaas.cloud.ibm.com/v1"
 )
 
 // Provisioners types of supported provisioners
 var provisionersForIKS = map[torpedovolume.StorageProvisionerType]torpedovolume.StorageProvisionerType{
-	IbmDriverName: "vpc.block.csi.ibm.io",
+	IbmBlockStorage: "vpc.block.csi.ibm.io",
+	IbmFileStorage:  "vpc.file.csi.ibm.io",
 }
 
 type ibm struct {
