@@ -12513,12 +12513,13 @@ func RunCurlCmd(namespace string) ([]string, error) {
 
 // GetMetricValue to get appropriate value for specific metrics parameter
 func GetMetricValue(lines []string, metricName, name string) string {
+	log.Infof("metric name is:: %s, parameter name is :: %s", metricName, name)
 	pattern := fmt.Sprintf(`%s{[^}]*name="%s"[^}]*} ([\d\.eE\+]+)`, metricName, name)
 	re := regexp.MustCompile(pattern)
 	value := ""
 
 	for _, line := range lines {
-		if strings.Contains(line, metricName) && strings.Contains(line, name) {
+		if strings.Contains(line, metricName) || strings.Contains(line, name) {
 			log.Infof("string matched with metrcis:", line)
 			match := re.FindStringSubmatch(line)
 			if len(match) > 1 {
@@ -12806,4 +12807,108 @@ func GetAllCustomRoles() ([]string, error) {
 		roles = append(roles, role.Metadata.Name)
 	}
 	return roles, nil
+}
+
+// RestoreFailCheck inspects restore task to check for status being "fail". NOTE: If the status is different, it retries every `retryInterval` for `retryDuration` before returning `err`
+func RestoreFailCheck(restoreName string, orgID string, retryDuration time.Duration, retryInterval time.Duration, ctx context1.Context) error {
+	log.InfoD("RestoreFailCheck started:")
+	rsUid, err := Inst().Backup.GetRestoreUID(ctx, restoreName, orgID)
+	if err != nil {
+		return err
+	}
+	restoreInspectRequest := &api.RestoreInspectRequest{
+		Name:  restoreName,
+		Uid:   rsUid,
+		OrgId: orgID,
+	}
+	statusesExpected := api.RestoreInfo_StatusInfo_Failed
+	restoreFailCheckFunc := func() (interface{}, bool, error) {
+		resp, err := Inst().Backup.InspectRestore(ctx, restoreInspectRequest)
+		if err != nil {
+			return "", false, err
+		}
+		actual := resp.GetRestore().GetStatus().Status
+		reason := resp.GetRestore().GetStatus().Reason
+		if actual == statusesExpected {
+			log.Infof("actual status got from restore check func is:: %s with reason::%s", actual, reason)
+			return "", false, nil
+		}
+		return "", true, fmt.Errorf("restore status for [%s] expected was [%v] but got [%s] because of [%s]", restoreName, statusesExpected, actual, reason)
+	}
+	_, err = task.DoRetryWithTimeout(restoreFailCheckFunc, retryDuration, retryInterval)
+	log.InfoD("Restore fail check for restore : %s finished at with %s", restoreName, time.Now().Format("2006-01-02 15:04:05"))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// RestoreInprogressCheck inspects restore task to check for status being "inprogress". NOTE: If the status is different, it retries every `retryInterval` for `retryDuration` before returning `err`
+func RestoreInprogressCheck(restoreName string, orgID string, retryDuration time.Duration, retryInterval time.Duration, ctx context1.Context) error {
+	rsUid, err := Inst().Backup.GetRestoreUID(ctx, restoreName, orgID)
+	if err != nil {
+		return err
+	}
+	restoreInspectRequest := &api.RestoreInspectRequest{
+		Name:  restoreName,
+		Uid:   rsUid,
+		OrgId: orgID,
+	}
+	statusesExpected := api.RestoreInfo_StatusInfo_InProgress
+	restoreInprogressCheckFunc := func() (interface{}, bool, error) {
+		log.Info("RestoreInprogressCheck started:")
+		resp, err := Inst().Backup.InspectRestore(ctx, restoreInspectRequest)
+		if err != nil {
+			return "", false, err
+		}
+		actual := resp.GetRestore().GetStatus().Status
+		reason := resp.GetRestore().GetStatus().Reason
+		if actual == statusesExpected {
+			return "", false, nil
+		}
+		return "", true, fmt.Errorf("restore status for [%s] expected was [%v] but got [%s] because of [%s]", restoreName, statusesExpected, actual, reason)
+	}
+	_, err = task.DoRetryWithTimeout(restoreInprogressCheckFunc, retryDuration, retryInterval)
+	log.InfoD("Restore inprogress check for restore : %s finished at [%s]", restoreName, time.Now().Format("2006-01-02 15:04:05"))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// DeleteRestoreCRCmd to remove ApplicationRestoreCr
+func DeleteRestoreCRCmd() error {
+	var err error
+	cmd := exec.Command("kubectl", "delete", "applicationrestore", "--all", "-A")
+
+	// Execute the command
+	_, err = cmd.CombinedOutput()
+	if err != nil {
+		log.Fatalf("Error executing command: %v", err)
+		return err
+	}
+
+	return err
+}
+
+func PrepareGenericBackupRequest(params map[string]string) (*api.BackupCreateRequest, error) {
+	err := os.Setenv("BACKUP_TYPE", "direct_kdmp")
+	log.FailOnError(err, "Setting BACKUP_TYPE env variable")
+	bkpCreateRequest := &api.BackupCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  params["backupName"],
+			OrgId: params["backupOrgID"],
+		},
+		BackupLocationRef: &api.ObjectRef{
+			Name: params["bkpLocationName"],
+			Uid:  params["backupLocationUID"],
+		},
+		Cluster: params["clusterName"],
+		ClusterRef: &api.ObjectRef{
+			Name: params["clusterName"],
+			Uid:  params["clusterUid"],
+		},
+	}
+	err = AdditionalBackupRequestParams(bkpCreateRequest)
+	return bkpCreateRequest, err
 }
