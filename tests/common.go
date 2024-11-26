@@ -10554,10 +10554,20 @@ type KvdbNode struct {
 // GetAllKvdbNodes returns list of all kvdb nodes present in the cluster
 func GetAllKvdbNodes() ([]KvdbNode, error) {
 	type kvdbNodes []map[string]KvdbNode
+	var found bool
+	var randomNode node.Node
 	storageNodes := node.GetStorageNodes()
-	randomIndex := rand.Intn(len(storageNodes))
-	randomNode := storageNodes[randomIndex]
-
+	for !found {
+		randomIndex := rand.Intn(len(storageNodes))
+		randomNode = storageNodes[randomIndex]
+		log.Infof("Random node to run storage %v", randomNode)
+		status := Inst().V.IsPxReadyOnNode(randomNode)
+		if status {
+			found = true
+		} else {
+			log.Infof("Node %s does not have 'px' running, selecting another...\n", randomNode.Id)
+		}
+	}
 	jsonConvert := func(jsonString string) ([]KvdbNode, error) {
 		var nodes kvdbNodes
 		var kvdb KvdbNode

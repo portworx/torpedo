@@ -2499,3 +2499,154 @@ var _ = Describe("{VerifyNoIOInterruptionDuringRunFlatState}", Label("staging", 
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{ValidateKVDBQuorumCheck}", Label("staging", "kvdb_ops", "p1", "negative"), func() {
+	/*
+		    Ticket id: https://purestorage.atlassian.net/browse/HAZEL-1086
+			One of the kvdb nodes is down for over 3 minutes.
+			A different node starts to become a kvdb member and adds itself to the etcd cluster as "learner".
+			As soon as the new node is seen in kvdb members, stop kvdb on another node
+			Validate kvdb is not out of qurum
+			Start node which is stopped as step and step 3
+			Validate kvdb
+	*/
+
+	var testrailID = 0
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("ValidateKVDBQuorumCheck", "Validate Kvdb quorum by adding a new learner node, stopping an existing node, and verifying Kvdb's functionality before and after restarting the stopped node.", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+	stepLog := "Stop one Kvdb node for 3 minutes, add a learner node, stop another node, validate quorum, restart the stopped node, and verify Kvdb functionality."
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("kvdb-%d", i))...)
+		}
+		var (
+			stopped_px_nodes_ids []string
+		)
+		ValidateApplications(contexts)
+		defer DestroyApps(contexts, nil)
+		storagenode := node.GetStorageNodes()
+		log.InfoD("Get all KVDB nodes")
+		kvdbNodes, err := GetAllKvdbNodes()
+		log.FailOnError(err, "Unable to retrieve KVDB nodes")
+		stepLog = "Stopping Portworx on one of the KVDB member nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			selectedKvdbNodes := kvdbNodes[0:1]
+			log.InfoD("Selected KVDB nodes for PX service stop: %v", selectedKvdbNodes)
+			for _, kvdbNode := range selectedKvdbNodes {
+				nodeDetails, err := node.GetNodeDetailsByNodeID(kvdbNode.ID)
+				log.FailOnError(err, "Unable to retrieve node details for NodeID [%v]", kvdbNode.ID)
+				StopVolDriverAndWait([]node.Node{nodeDetails})
+				log.InfoD("PX service successfully stopped on node: %v", nodeDetails)
+				stopped_px_nodes_ids = append(stopped_px_nodes_ids, kvdbNode.ID)
+
+			}
+		})
+		stepLog = "Wait for the random amount of time"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			randDuration := time.Duration(rand.Intn(60)+180) * time.Second
+			log.Infof("Waiting for a random duration of %v before stopping next KVDB member", randDuration)
+			time.Sleep(randDuration)
+
+		})
+		stepLog := "Stopping portworx on  another KVDB member node and starting portworx on previous stopped node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			selectedKvdbNodes := kvdbNodes[1:2]
+			log.InfoD("Selected KVDB nodes for PX service stop: %v", selectedKvdbNodes)
+			for _, kvdbNode := range selectedKvdbNodes {
+				nodeDetails, err := node.GetNodeDetailsByNodeID(kvdbNode.ID)
+				log.FailOnError(err, "Unable to retrieve node details for NodeID [%v]", kvdbNode.ID)
+				StopVolDriverAndWait([]node.Node{nodeDetails})
+				log.InfoD("PX service successfully stopped on node: %v", nodeDetails)
+				stopped_px_nodes_ids = append(stopped_px_nodes_ids, kvdbNode.ID)
+			}
+			log.Infof("Waiting for the cluster to stabilize and ensure quorum is not lost...")
+			time.Sleep(1 * time.Minute)
+			log.InfoD("Check KVDB is in quorum")
+			getKVDBNodes, err := GetAllKvdbNodes()
+			log.FailOnError(err, "Unable to get kvdb nodes")
+			healthyCount := 0
+			for _, each := range getKVDBNodes {
+				if each.IsHealthy == true {
+					healthyCount++
+				}
+			}
+			dash.VerifyFatal(healthyCount >= 2, true, fmt.Sprintf("verify kvdb quorum is not lost.Healthy count: %d, Expected: >=2", healthyCount))
+			log.Infof("Starting PX on stopped KVDB member: %s", stopped_px_nodes_ids[0])
+			node, err := node.GetNodeDetailsByNodeID(stopped_px_nodes_ids[0])
+			err = Inst().V.StartDriver(node)
+			log.FailOnError(err, "error starting driver on node %s", node.Name)
+			err = Inst().V.WaitDriverUpOnNode(node, 10*time.Minute)
+			log.FailOnError(err, "error while waiting for driver up on node %s", node.Name)
+
+		})
+		stepLog = "Check KVDB is in quorum"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			getKVDBNodes, err := GetAllKvdbNodes()
+			log.FailOnError(err, "Unable to get kvdb nodes")
+			healthyCount := 0
+			for _, each := range getKVDBNodes {
+				if each.IsHealthy == true {
+					healthyCount++
+				}
+			}
+			dash.VerifyFatal(healthyCount == 3, true, fmt.Sprintf("verify kvdb quorum is not lost. Healthy count: %d, Expected: 3", healthyCount))
+		})
+		stepLog = "Restart Portworx on stopped node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			node, err := node.GetNodeDetailsByNodeID(stopped_px_nodes_ids[1])
+			err = Inst().V.StartDriver(node)
+			log.FailOnError(err, "error starting driver on node %s", node.Name)
+			err = Inst().V.WaitDriverUpOnNode(node, 10*time.Minute)
+			log.FailOnError(err, "error while waiting for driver up on node %s", node.Name)
+
+		})
+		stepLog = "Verified that all KVDB nodes are running and in a healthy state."
+		Step(fmt.Sprintf("get kvdb nodes"), func() {
+			log.InfoD(stepLog)
+			kvdbNodes, err := GetAllKvdbNodes()
+			log.FailOnError(err, "Failed to get list of KVDB nodes from the cluster")
+			for _, kvdbNode := range kvdbNodes {
+				nodeInfo, err := node.GetNodeDetailsByNodeID(kvdbNode.ID)
+				log.FailOnError(err, "Unable to get details for node ID: %s", kvdbNode.ID)
+				nodeStatus, err := Inst().V.GetNodeStatus(nodeInfo)
+				dash.VerifyFatal(*nodeStatus, opsapi.Status_STATUS_OK, fmt.Sprintf("Validate PX status on node %s", kvdbNode.ID))
+				kvdbMembers, err := Inst().V.GetKvdbMembers(storagenode[0])
+				log.FailOnError(err, "Failed to get kvdb members")
+				err = kvdbutils.ValidateKVDBMembers(kvdbMembers)
+				log.FailOnError(err, "Failed to validate kvdb members")
+				output, err := runCmd("pxctl status", storagenode[0])
+				log.FailOnError(err, "Failed to run pxctl status on node: %v", storagenode[0].Name)
+				log.Infof("pxctl status output: %v\n", output)
+				dash.VerifyFatal(!strings.Contains(output, "Warning"), true, "Output contains warnings. Is the cluster healthy?")
+			}
+
+		})
+		defer func() {
+			log.InfoD("Setting cluster to running by restarting Portworx on stopped nodes")
+			for _, n := range stopped_px_nodes_ids {
+				node, err := node.GetNodeDetailsByNodeID(n)
+				log.FailOnError(err, "Unable to get node details for NodeID [%v]", n)
+				err = Inst().V.StartDriver(node)
+				log.FailOnError(err, "Error starting driver on node %s", node.Name)
+				err = Inst().V.WaitDriverUpOnNode(node, 10*time.Minute)
+				log.FailOnError(err, "Error while waiting for driver to be up on node %s", node.Name)
+			}
+		}()
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
