@@ -12931,3 +12931,86 @@ func PrepareGenericBackupRequest(params map[string]string) (*api.BackupCreateReq
 	err = AdditionalBackupRequestParams(bkpCreateRequest)
 	return bkpCreateRequest, err
 }
+
+// ValidateVolumebackup validate the  volume backup CR
+func ValidateVolumebackup(namespaces []string, actualAppBkpCrUid string) error {
+	var found bool
+	var namespace string
+	var filterOptions = metav1.ListOptions{}
+	for _, ns := range namespaces {
+		if strings.Contains(ns, "mysql-backup") {
+			namespace = ns
+			log.Infof("found mysql namespace [%s]", ns)
+		}
+	}
+	kdmpClient := kdmp.Instance()
+	t := func() (interface{}, bool, error) {
+		volumeBackupCrList, err := kdmpClient.ListVolumeBackup(namespace, filterOptions)
+		if err != nil {
+			return "", false, fmt.Errorf("failed to list volume backup CRs in namespace [%s]: %w", namespace, err)
+		}
+
+		log.Infof("dataExportCrList for volume:%v", volumeBackupCrList)
+
+		if len(volumeBackupCrList.Items) == 0 {
+			return "", true, fmt.Errorf("no volume backup CRs found in namespace [%s]", namespace)
+		}
+
+		for _, volumeBackupCr := range volumeBackupCrList.Items {
+			log.InfoD("Actual volume backup labels %v and dataVolumeCr.Uid %v", volumeBackupCr.Labels, actualAppBkpCrUid)
+			if strings.Contains(volumeBackupCr.Name, actualAppBkpCrUid) {
+				found = true
+				log.Infof("volume backup CR [%s] in namespace [%s]", volumeBackupCr.Name, namespace)
+				return "", false, nil
+			}
+		}
+
+		if !found {
+			return "", true, fmt.Errorf("no volume backup CR found in namespace [%s]", namespace)
+		}
+		return "", false, nil
+	}
+	_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
+	return err
+}
+
+// ValidateDataExportCR validate the data export CR for the provided ns
+func ValidateDataExportCR(namespaces []string, expectedCrUid string) error {
+	var found bool
+	var namespace string
+	var filterOptions = metav1.ListOptions{}
+	for _, ns := range namespaces {
+		if strings.Contains(ns, "mysql-backup") {
+			namespace = ns
+			log.Infof("found mysql namespace [%s]", ns)
+		}
+	}
+	kdmpClient := kdmp.Instance()
+	t := func() (interface{}, bool, error) {
+		dataExportExportCrList, err := kdmpClient.ListDataExport(namespace, filterOptions)
+		if err != nil {
+			return "", false, fmt.Errorf("failed to list data export CRs in namespace [%s]: %w", namespace, err)
+		}
+
+		if len(dataExportExportCrList.Items) == 0 {
+			return "", true, fmt.Errorf("no data export CRs found in namespace [%s]", namespace)
+		}
+
+		for _, dataExportExportDetails := range dataExportExportCrList.Items {
+			for _, v := range dataExportExportDetails.Labels {
+				if strings.Contains(v, expectedCrUid) {
+					found = true
+					log.Infof("Found data export CR [%s] in namespace [%s]", dataExportExportDetails.Name, namespace)
+					return "", false, nil
+				}
+			}
+		}
+
+		if !found {
+			return "", true, fmt.Errorf("no data export CR found in namespace [%s]", namespace)
+		}
+		return "", false, nil
+	}
+	_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
+	return err
+}
