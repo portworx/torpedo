@@ -161,6 +161,7 @@ const (
 	StorkControllerConfigCM                                                            TestCaseName = "StorkControllerConfigCM"
 	BackupDeletionWithDynamicPVCGeneration                                             TestCaseName = "BackupDeletionWithDynamicPVCGeneration"
 	BackupScheduleEnumerate                                                            TestCaseName = "BackupScheduleEnumerate"
+	DeleteS3BackupFilesVerifyCloudBackupMissing                                        TestCaseName = "DeleteS3BackupFilesVerifyCloudBackupMissing"
 )
 
 // Test case labels
@@ -320,6 +321,7 @@ const (
 	StorkControllerConfigCMLabel                                                            TestCaseLabel = "StorkControllerConfigCM"
 	BackupDeletionWithDynamicPVCGenerationLabel                                             TestCaseLabel = "BackupDeletionWithDynamicPVCGeneration"
 	BackupScheduleEnumerateLabel                                                            TestCaseLabel = "BackupScheduleEnumerate"
+	DeleteS3BackupFilesVerifyCloudBackupMissingLabel                                        TestCaseLabel = "DeleteS3BackupFilesVerifyCloudBackupMissing"
 )
 
 // Common Labels
