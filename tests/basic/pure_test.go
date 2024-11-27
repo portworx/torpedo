@@ -556,6 +556,9 @@ var _ = Describe("{FADAVolTokenTimout}", Label("p0", "positive", "pure_ops"), fu
 		applist := Inst().AppList
 		rand.Seed(time.Now().Unix())
 		storageNodes := node.GetStorageNodes()
+		if Inst().V.IsPxLiteCluster() {
+			storageNodes = node.GetStorageDriverNodes()
+		}
 		selectedNode := storageNodes[rand.Intn(len(storageNodes))]
 		var err error
 		defer func() {
@@ -650,7 +653,11 @@ var _ = Describe("{FADARemoteDetach}", Label("p1", "negative", "pure_ops", "erro
 
 		var appNamespace string
 		contexts = make([]*scheduler.Context, 0)
-		podNodes := node.GetStorageNodes()[:2]
+		pxNodes := node.GetStorageNodes()
+		if Inst().V.IsPxLiteCluster() {
+			pxNodes = node.GetStorageDriverNodes()
+		}
+		podNodes := pxNodes[:2]
 		defer func() {
 			Inst().AppList = applist
 			if podNode.Name != "" {
@@ -864,8 +871,11 @@ var _ = Describe("{RebootNodeWhileVolCreate}", Label("p1", "negative", "pure_ops
 		//Scheduling app with volume placement strategy
 		applist := Inst().AppList
 		rand.Seed(time.Now().Unix())
-		storageNodes := node.GetStorageNodes()
-		selectedNode := storageNodes[rand.Intn(len(storageNodes))]
+		workerNodes := node.GetStorageNodes()
+		if Inst().V.IsPxLiteCluster() {
+			workerNodes = node.GetStorageDriverNodes()
+		}
+		selectedNode := workerNodes[rand.Intn(len(workerNodes))]
 		var err error
 		defer func() {
 			Inst().AppList = applist
@@ -1020,8 +1030,11 @@ var _ = Describe("{RestartPXWhileVolCreate}", Label("p1", "negative", "px_ops", 
 		rand.Seed(time.Now().Unix())
 
 		//select the node to place volumes and PX will be restarted in this node
-		storageNodes := node.GetStorageNodes()
-		selectedNode := storageNodes[rand.Intn(len(storageNodes))]
+		workerNodes := node.GetStorageNodes()
+		if Inst().V.IsPxLiteCluster() {
+			workerNodes = node.GetStorageDriverNodes()
+		}
+		selectedNode := workerNodes[rand.Intn(len(workerNodes))]
 
 		var err error
 		defer func() {
@@ -1144,8 +1157,11 @@ var _ = Describe("{StopPXResizePVCDeleteApps}", Label("p1", "negative", "px_ops"
 		rand.Seed(time.Now().Unix())
 
 		//select the node to place volumes and PX will be stopped in this node
-		storageNodes := node.GetStorageNodes()
-		selectedNode := storageNodes[rand.Intn(len(storageNodes))]
+		workerNodes := node.GetStorageNodes()
+		if Inst().V.IsPxLiteCluster() {
+			workerNodes = node.GetStorageDriverNodes()
+		}
+		selectedNode := workerNodes[rand.Intn(len(workerNodes))]
 
 		cluster, err := Inst().V.InspectCurrentCluster()
 		log.FailOnError(err, "failed to inspect current cluster")
@@ -1342,12 +1358,15 @@ var _ = Describe("{AppCleanUpWhenPxKill}", Label("p1", "negative", "px_ops", "pu
 		rand.Seed(time.Now().Unix())
 
 		//select the one storage node,one storageless node and one KVDB member node to place volumes and kill the nodes while apps are being destroyed
-		storageNodes := node.GetStorageNodes()
+		workerNodes := node.GetStorageNodes()
+		if Inst().V.IsPxLiteCluster() {
+			workerNodes = node.GetStorageDriverNodes()
+		}
 		storageLessNodes := node.GetStorageLessNodes()
 		kvdbNodes, err := GetAllKvdbNodes()
 		log.FailOnError(err, "Failed to get kvdb nodes")
 		var selectedNodes []node.Node
-		selectedNodes = append(selectedNodes, storageNodes[rand.Intn(len(storageNodes))])
+		selectedNodes = append(selectedNodes, workerNodes[rand.Intn(len(workerNodes))])
 		if len(storageLessNodes) > 0 {
 			selectedNodes = append(selectedNodes, storageLessNodes[rand.Intn(len(storageLessNodes))])
 		}
@@ -2396,10 +2415,13 @@ var _ = Describe("{FADAVolMigrateValidation}", Label("p0", "positive", "px_vol_o
 			log.InfoD(stepLog)
 			// select a node for apps to be scheduled
 			applist := Inst().AppList
-			storageNodes := node.GetStorageNodes()
-			selectedNode := storageNodes[0]
-			secondNode := storageNodes[1]
-			log.Infof("Length of storage nodes: %v", len(storageNodes))
+			workerNodes := node.GetStorageNodes()
+			if Inst().V.IsPxLiteCluster() {
+				workerNodes = node.GetStorageDriverNodes()
+			}
+			selectedNode := workerNodes[0]
+			secondNode := workerNodes[1]
+			log.Infof("Length of storage nodes: %v", len(workerNodes))
 			log.InfoD("Selected Node: %v", selectedNode.Name)
 			defer func() {
 				Inst().AppList = applist
@@ -2502,14 +2524,14 @@ var _ = Describe("{FADAVolMigrateValidation}", Label("p0", "positive", "px_vol_o
 			stepLog = "run the multipath -ll command on the node where the pods were scheduled before deleting"
 			Step(stepLog, func() {
 				// sleep for 60 seconds for all the entries to update
-				time.Sleep(30 * time.Second)
-				log.InfoD("Sleeping for 30 seconds for all the entries to update")
+				time.Sleep(60 * time.Second)
+				log.InfoD("Sleeping for 60 seconds for all the entries to update")
 				cmd := fmt.Sprintf("multipath -ll")
 				output, err := runCmd(cmd, selectedNode)
 				log.FailOnError(err, "Failed to run multipath -ll command on node %v", selectedNode.Name)
 				log.InfoD("Output of multipath on provisioned node -ll command: %v", output)
 				//check if the device path is present in multipath
-				if !strings.Contains(output, "failed faulty running") {
+				if !strings.Contains(output, "faulty running") {
 					log.FailOnError(fmt.Errorf("Multipath device error not detected"), "Multipath device error should be detected")
 				}
 
@@ -3067,8 +3089,11 @@ var _ = Describe("{DetachVolumeFromHost}", Label("p0", "positive", "px_vol_ops",
 		stepLog := fmt.Sprintf("Select nodes")
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			storageNodes := node.GetStorageNodes()
-			selectedNode = storageNodes[rand.Intn(len(storageNodes))]
+			workerNodes := node.GetStorageNodes()
+			if Inst().V.IsPxLiteCluster() {
+				workerNodes = node.GetStorageDriverNodes()
+			}
+			selectedNode = workerNodes[rand.Intn(len(workerNodes))]
 		})
 		stepLog = "Stop portworx"
 		Step(stepLog, func() {
@@ -3507,7 +3532,8 @@ var _ = Describe("{FADAPodRecoveryDisableDataPortsOnFA}", Label("p1", "negative"
 			}
 		})
 
-		allStorageNodes := node.GetStorageNodes()
+		// Changing it to all worknodes for px-lite
+		allWorkerNodes := node.GetStorageDriverNodes()
 
 		stepLog = "Disable Data port on all FA's "
 		Step(stepLog, func() {
@@ -3518,7 +3544,7 @@ var _ = Describe("{FADAPodRecoveryDisableDataPortsOnFA}", Label("p1", "negative"
 		time.Sleep(15 * time.Minute)
 
 		// Verify Px goes down on all the nodes present in the cluster
-		for _, eachNodes := range allStorageNodes {
+		for _, eachNodes := range allWorkerNodes {
 			log.FailOnError(Inst().V.WaitDriverDownOnNode(eachNodes), fmt.Sprintf("Driver on the Node [%v] is not down yet", eachNodes.Name))
 		}
 
@@ -3552,7 +3578,7 @@ var _ = Describe("{FADAPodRecoveryDisableDataPortsOnFA}", Label("p1", "negative"
 
 		})
 		// Verify Px goes down on all the nodes present in the cluster
-		for _, eachNodes := range allStorageNodes {
+		for _, eachNodes := range allWorkerNodes {
 			log.FailOnError(Inst().V.WaitDriverUpOnNode(eachNodes, Inst().DriverStartTimeout),
 				fmt.Sprintf("Driver on the Node [%v] is not Up yet", eachNodes.Name))
 		}
@@ -5579,6 +5605,9 @@ var _ = Describe("{DeployAppsAndStopPortworx}", Label("p0", "negative", "error_i
 		var contexts []*scheduler.Context
 		var nodeToReboot []node.Node
 		stNodes := node.GetStorageNodes()
+		if Inst().V.IsPxLiteCluster() {
+			stNodes = node.GetStorageDriverNodes()
+		}
 		nodeToReboot = append(nodeToReboot, stNodes[rand.Intn(len(stNodes))])
 		stepLog := "Schedule apps on the cluster"
 		Step(stepLog, func() {
@@ -5738,6 +5767,9 @@ var _ = Describe("{RebootingNodesWhileFADAvolumeCreationInProgressUsingNodeAffin
 		log.InfoD(itLog)
 		var wg sync.WaitGroup
 		stNodes := node.GetStorageNodes()
+		if Inst().V.IsPxLiteCluster() {
+			stNodes = node.GetStorageDriverNodes()
+		}
 		selectedNodesForTopology := stNodes[:len(stNodes)/2]
 		applist := Inst().AppList
 		defer func() {
@@ -8065,10 +8097,13 @@ var _ = Describe("{ScaleUpFBDAAppWithRestartPX}", Label("p0", "negative", "error
 					for _, v := range appVolumes {
 						isPureVol, err := Inst().V.IsPureVolume(v)
 						log.FailOnError(err, "Failed to determine if volume '%s' is a pure volume: %v", v.ID, err)
-						storageNode := node.GetStorageNodes()
+						workerNodes := node.GetStorageNodes()
+						if Inst().V.IsPxLiteCluster() {
+							workerNodes = node.GetStorageDriverNodes()
+						}
 						if isPureVol {
 							cmd := fmt.Sprintf(`pxctl volume inspect %v | grep -A 10 "Volume consumers"`, v.ID)
-							output, err := Inst().N.RunCommand(storageNode[0], cmd, node.ConnectionOpts{
+							output, err := Inst().N.RunCommand(workerNodes[0], cmd, node.ConnectionOpts{
 								Timeout:         10 * time.Minute,
 								TimeBeforeRetry: 30 * time.Second,
 								Sudo:            true,
@@ -8304,10 +8339,13 @@ var _ = Describe("{ScaleUpFBDAAppWithRestartNode}", Label("p1", "negative", "nod
 					for _, v := range appVolumes {
 						isPureVol, err := Inst().V.IsPureVolume(v)
 						log.FailOnError(err, "Failed to get FB details")
-						storageNode := node.GetStorageNodes()
+						workerNodes := node.GetStorageNodes()
+						if Inst().V.IsPxLiteCluster() {
+							workerNodes = node.GetStorageDriverNodes()
+						}
 						if isPureVol {
 							cmd := fmt.Sprintf(`pxctl volume inspect %v | grep -A 10 "Volume consumers"`, v.ID)
-							output, err := Inst().N.RunCommand(storageNode[0], cmd, node.ConnectionOpts{
+							output, err := Inst().N.RunCommand(workerNodes[0], cmd, node.ConnectionOpts{
 								Timeout:         10 * time.Minute,
 								TimeBeforeRetry: 30 * time.Second,
 								Sudo:            true,
@@ -8421,7 +8459,7 @@ var _ = Describe("{FBDAAppWithShutDownNode}", func() {
 		defer DestroyApps(contexts, nil)
 		var shutdownnode node.Node
 		var attachedNodeforshutdown string
-		var storageNode []node.Node
+		var workerNodes []node.Node
 		var volumeId string
 		stepLog := "Shutting down the node and validating that the application moves to another node"
 		Step(stepLog, func() {
@@ -8431,19 +8469,22 @@ var _ = Describe("{FBDAAppWithShutDownNode}", func() {
 				Step(stepLog, func() {
 					appVolumes, err := Inst().S.GetVolumes(ctx)
 					log.FailOnError(err, fmt.Sprintf("Failed to retrieve volumes in context '%s': %v", ctx.App.Key, err))
-					storageNode = node.GetStorageNodes()
+					workerNodes = node.GetStorageNodes()
+					if Inst().V.IsPxLiteCluster() {
+						workerNodes = node.GetStorageDriverNodes()
+					}
 					for _, v := range appVolumes {
 						isPureVol, err := Inst().V.IsPureVolume(v)
 						log.FailOnError(err, fmt.Sprintf("Failed to determine if volume '%s' is a pure volume: %v", v.ID, err))
 						if isPureVol {
 							volumeId = v.ID
 							cmd := fmt.Sprintf(`pxctl volume inspect %v | grep -A 10 "Volume consumers"`, v.ID)
-							output, err := Inst().N.RunCommand(storageNode[0], cmd, node.ConnectionOpts{
+							output, err := Inst().N.RunCommand(workerNodes[0], cmd, node.ConnectionOpts{
 								Timeout:         10 * time.Minute,
 								TimeBeforeRetry: 30 * time.Second,
 								Sudo:            true,
 							})
-							log.FailOnError(err, fmt.Sprintf("Unable to run command on the node '%s'", storageNode[0]))
+							log.FailOnError(err, fmt.Sprintf("Unable to run command on the node '%s'", workerNodes[0]))
 							var runningOnIPs []string
 							lines := strings.Split(output, "\n")
 							ipRegex := regexp.MustCompile(`Running on\s+:\s+([^\s]+)`)
@@ -8482,7 +8523,7 @@ var _ = Describe("{FBDAAppWithShutDownNode}", func() {
 							Sudo:            true,
 						}
 
-						for _, node := range storageNode {
+						for _, node := range workerNodes {
 							// Skip the shutdown node
 							if node.Name == shutdownnode.Name {
 								continue
@@ -8567,6 +8608,9 @@ var _ = Describe("{ValidateFBDAPodsWithHostInterfaceDown}", Label("p1", "negativ
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			stNodes := node.GetStorageNodes()
+			if Inst().V.IsPxLiteCluster() {
+				stNodes = node.GetStorageDriverNodes()
+			}
 			for _, ctx := range contexts {
 				appVolumes, err := Inst().S.GetVolumes(ctx)
 				log.FailOnError(err, "Failed to get volumes")
@@ -9346,28 +9390,25 @@ var _ = Describe("{DeployedApplicationsInMultipleTenants}", func() {
 var _ = Describe("{ValidateMaxIOPSAndBandwidthPostNodeReboot}", func() {
 	/*
 		Steps:
- 
- 
+
+
 		1. Apply I/O throttling to a volume
 		2. Reboot the node associated with the volume
 		3. Verify that I/O throttling remains applied after the reboot
 		4. Run I/O operations and validate the IOPS performance
- 
- 
+
+
 		PTX: https://purestorage.atlassian.net/issues/HAZEL-166
 	*/
- 
- 
+
 	JustBeforeEach(func() {
 		StartTorpedoTest("ValidateMaxIOPSAndBandwidthPostNodeReboot", "", nil, 0)
 	})
- 
- 
+
 	var (
 		contexts []*scheduler.Context
 	)
- 
- 
+
 	itLog := "Validates the max IOPS and Bandwidth post node reboot"
 	It(itLog, func() {
 		log.InfoD(itLog)
@@ -9382,7 +9423,7 @@ var _ = Describe("{ValidateMaxIOPSAndBandwidthPostNodeReboot}", func() {
 		}
 		flashArrays, err := GetFADetailsUsed()
 		log.FailOnError(err, "failed to get FA details used")
-	   
+
 		stepLog := "Schedule applications"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -9391,8 +9432,7 @@ var _ = Describe("{ValidateMaxIOPSAndBandwidthPostNodeReboot}", func() {
 				ctxs, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
 					AppKeys: []string{"fio-fa-davol"},
 				})
- 
- 
+
 				log.FailOnError(err, "failed to schedule applications [%v]", Inst().AppList)
 				for _, ctx := range ctxs {
 					ctx.ReadinessTimeout = appReadinessTimeout
@@ -9400,66 +9440,63 @@ var _ = Describe("{ValidateMaxIOPSAndBandwidthPostNodeReboot}", func() {
 				}
 			}
 		})
- 
- 
-	// validateMaxIOPSAndBandwidthUsingContexts validates the max IOPS and Bandwidth for the PVCs created using the contexts
+
+		// validateMaxIOPSAndBandwidthUsingContexts validates the max IOPS and Bandwidth for the PVCs created using the contexts
 		validateMaxIOPSAndBandwidthUsingContexts := func(flashArrays []pureutils.FlashArrayEntry, contexts []*scheduler.Context) error {
-		for _, ctx := range contexts {
-			vols, err := Inst().S.GetVolumes(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to get volumes for [%s]. Err: [%v]", ctx.App.Key, err)
-			}
-			log.Infof("volume deatils form contexts [%+v\n]", vols)
-			scPVCListMap := make(map[string][]string)
-			scSpecMap := make(map[string]storageApi.StorageClass)
-			for _, vol := range vols {
-				log.Infof("volume details from context:\n ID:[%v]\n, Name:[%v]\n,Namespace:[%v]\n,storageClassName:[%v]\n", vol.ID, vol.Name, vol.Namespace, vol.StorageClassName)
-				apiVol, err := Inst().V.InspectVolume(vol.ID)
+			for _, ctx := range contexts {
+				vols, err := Inst().S.GetVolumes(ctx)
 				if err != nil {
-					return fmt.Errorf("failed to inspect volume [%v]. Err: [%v]", vol.ID, err)
+					return fmt.Errorf("failed to get volumes for [%s]. Err: [%v]", ctx.App.Key, err)
 				}
-				scName := vol.StorageClassName
-				pvcName := vol.ID
-				scPVCListMap[scName] = append(scPVCListMap[scName], pvcName)
-				if _, exists := scSpecMap[scName]; !exists {
-					scSpecMap[scName] = storageApi.StorageClass{
-						ObjectMeta: metav1.ObjectMeta{
-							Name: scName,
-						},
-						Parameters: map[string]string{
-							"max_iops":      apiVol.Locator.VolumeLabels["max_iops"],
-							"max_bandwidth": apiVol.Locator.VolumeLabels["max_bandwidth"],
-						},
+				log.Infof("volume deatils form contexts [%+v\n]", vols)
+				scPVCListMap := make(map[string][]string)
+				scSpecMap := make(map[string]storageApi.StorageClass)
+				for _, vol := range vols {
+					log.Infof("volume details from context:\n ID:[%v]\n, Name:[%v]\n,Namespace:[%v]\n,storageClassName:[%v]\n", vol.ID, vol.Name, vol.Namespace, vol.StorageClassName)
+					apiVol, err := Inst().V.InspectVolume(vol.ID)
+					if err != nil {
+						return fmt.Errorf("failed to inspect volume [%v]. Err: [%v]", vol.ID, err)
+					}
+					scName := vol.StorageClassName
+					pvcName := vol.ID
+					scPVCListMap[scName] = append(scPVCListMap[scName], pvcName)
+					if _, exists := scSpecMap[scName]; !exists {
+						scSpecMap[scName] = storageApi.StorageClass{
+							ObjectMeta: metav1.ObjectMeta{
+								Name: scName,
+							},
+							Parameters: map[string]string{
+								"max_iops":      apiVol.Locator.VolumeLabels["max_iops"],
+								"max_bandwidth": apiVol.Locator.VolumeLabels["max_bandwidth"],
+							},
+						}
+					}
+				}
+
+				for scName, pvcList := range scPVCListMap {
+					log.Infof("scName:[%v], pvcList:[%v]\n", scName, pvcList)
+					scSpec := scSpecMap[scName]
+					bandwidthQty, err := resource.ParseQuantity(scSpec.Parameters["max_bandwidth"])
+					if err != nil {
+						return fmt.Errorf("failed to parse MaxBandWidth for Storage Class [%s]. Err: [%v]", scName, err)
+					}
+					bandwidth := uint64(bandwidthQty.Value()) / 1000000000
+					log.InfoD("bandwidth value is [%d]", bandwidth)
+					maxIOPS, err := strconv.Atoi(scSpec.Parameters["max_iops"])
+					log.InfoD("maxIOPS value is [%d]", maxIOPS)
+					if err != nil {
+						return fmt.Errorf("failed to parse MaxIOPS for Storage Class [%s]. Err: [%v]", scName, err)
+					}
+					log.Infof("Storage Class [%s] MaxBandwidth [%v] MaxIOPS [%v]", scName, bandwidth, maxIOPS)
+					err = CheckIopsandBandwidthinFA(flashArrays, pvcList, bandwidth, uint64(maxIOPS))
+					if err != nil {
+						return fmt.Errorf("failed to validate IOPS and Bandwidth for Storage Class [%s]. Err: [%v]", scName, err)
 					}
 				}
 			}
- 
- 
-			for scName, pvcList := range scPVCListMap {
-				log.Infof("scName:[%v], pvcList:[%v]\n", scName, pvcList)
-				scSpec := scSpecMap[scName]
-				bandwidthQty, err := resource.ParseQuantity(scSpec.Parameters["max_bandwidth"])
-				if err != nil {
-					return fmt.Errorf("failed to parse MaxBandWidth for Storage Class [%s]. Err: [%v]", scName, err)
-				}
-				bandwidth := uint64(bandwidthQty.Value()) / 1000000000
-				log.InfoD("bandwidth value is [%d]", bandwidth)
-				maxIOPS, err := strconv.Atoi(scSpec.Parameters["max_iops"])
-				log.InfoD("maxIOPS value is [%d]", maxIOPS)
-				if err != nil {
-					return fmt.Errorf("failed to parse MaxIOPS for Storage Class [%s]. Err: [%v]", scName, err)
-				}
-				log.Infof("Storage Class [%s] MaxBandwidth [%v] MaxIOPS [%v]", scName, bandwidth, maxIOPS)
-				err = CheckIopsandBandwidthinFA(flashArrays, pvcList, bandwidth, uint64(maxIOPS))
-				if err != nil {
-					return fmt.Errorf("failed to validate IOPS and Bandwidth for Storage Class [%s]. Err: [%v]", scName, err)
-				}
-			}
+			return nil
 		}
-		return nil
-	}
- 
- 
+
 		stepLog = "Validate applications"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -9496,13 +9533,12 @@ var _ = Describe("{ValidateMaxIOPSAndBandwidthPostNodeReboot}", func() {
 			DestroyApps(contexts, make(map[string]bool))
 		})
 	})
- 
- 
+
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
 	})
- })
+})
 
 var _ = Describe("{MeasureFADAVolumeCreationTimeTaken}", Label("staging", "p1", "pure_ops", "positive"), func() {
 	/*
