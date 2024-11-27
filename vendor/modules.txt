@@ -1051,7 +1051,7 @@ github.com/leodido/go-urn/scim/schema
 github.com/lib/pq
 github.com/lib/pq/oid
 github.com/lib/pq/scram
-# github.com/libopenstorage/autopilot-api v1.3.0 => github.com/pure-px/autopilot-api v0.6.1-0.20240919161416-66682c84b491
+# github.com/libopenstorage/autopilot-api v1.3.0 => github.com/pure-px/autopilot-api v0.6.1-0.20241127032442-7ff7786f4dc2
 ## explicit; go 1.22
 github.com/libopenstorage/autopilot-api/pkg/apis/autopilot
 github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1
@@ -2887,7 +2887,7 @@ sigs.k8s.io/yaml/goyaml.v2
 # github.com/ktrysmt/go-bitbucket => github.com/portworx/go-bitbucket v0.0.0-20221210015433-3c000e3a8253
 # github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc10
 # github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc10 => github.com/kubernetes-incubator/external-storage v0.25.1-openstorage-rc1
-# github.com/libopenstorage/autopilot-api => github.com/pure-px/autopilot-api v0.6.1-0.20240919161416-66682c84b491
+# github.com/libopenstorage/autopilot-api => github.com/pure-px/autopilot-api v0.6.1-0.20241127032442-7ff7786f4dc2
 # github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20240618001010-e4b050e66115
 # github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20241027143314-f060babbd8ce
 # helm.sh/helm/v3 => helm.sh/helm/v3 v3.10.3

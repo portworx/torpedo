@@ -4515,8 +4515,8 @@ github.com/pseudomuto/protoc-gen-doc v1.5.1/go.mod h1:XpMKYg6zkcpgfpCfQ8GcWBDRtR
 github.com/pseudomuto/protokit v0.2.0/go.mod h1:2PdH30hxVHsup8KpBTOXTBeMVhJZVio3Q8ViKSAXT0Q=
 github.com/pure-px/apis v1.0.0 h1:VhZKDA8LtI5ZiTbSTI26kAxvWEpLdYw5o/1A4MnENZw=
 github.com/pure-px/apis v1.0.0/go.mod h1:po5pEH84pavd9rQuHii//xcJnd8GLSSFvmuvg17qvkw=
-github.com/pure-px/autopilot-api v0.6.1-0.20240919161416-66682c84b491 h1:b4fc/QFePHmIya+0Lp2Ls4xMCPyFgkDHzBA5LnzpO8o=
-github.com/pure-px/autopilot-api v0.6.1-0.20240919161416-66682c84b491/go.mod h1:VyWxvYmRS9MXYyfa6+/6G9549++nDlaHEXSCJV88/vQ=
+github.com/pure-px/autopilot-api v0.6.1-0.20241127032442-7ff7786f4dc2 h1:35QjECMilt+vOqvEp5CLJGHR6u03L1T/nhhrlf3PY98=
+github.com/pure-px/autopilot-api v0.6.1-0.20241127032442-7ff7786f4dc2/go.mod h1:VyWxvYmRS9MXYyfa6+/6G9549++nDlaHEXSCJV88/vQ=
 github.com/pure-px/platform-api-go-client v0.0.0-20240619072851-2362e8bfc794 h1:PT4BpT/H+7ghCXUfkbbVM3vUomUL/CM9FPJKI2rerGE=
 github.com/pure-px/platform-api-go-client v0.0.0-20240619072851-2362e8bfc794/go.mod h1:1JYlDoZQvC6Q2T9LdXVWHCzBGgR9frA9JKTEz3aSQcQ=
 github.com/pure-px/px-operator v0.0.0-20241018110932-9cbf3bbda7cc/go.mod h1:YGuTsE+pHr0hzVaLf8q7/BA1jk8rMBUfJka1ZMfzXIw=

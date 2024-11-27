@@ -74,7 +74,7 @@ type LabelSelectorRequirement struct {
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// +kubebuilder:resource:shortName=aprule
+// +kubebuilder:resource:scope=Cluster,shortName=ar
 
 // AutopilotRule represents pairing with other clusters
 type AutopilotRule struct {
@@ -102,20 +102,24 @@ type AutopilotRuleSpec struct {
 	Weight int64 `json:"weight,omitempty"`
 	// PollInterval defined the interval in seconds at which the conditions for the
 	// rule are queried from the monitoring provider
+	// (optional)
 	PollInterval int64 `json:"pollInterval,omitempty"`
 	// Enforcement specifies the enforcement type for rule
 	// (optional)
 	Enforcement EnforcementType `json:"enforcement,omitempty"`
 	// Selector allows to select the objects that are relevant with this rule using label selection
-	Selector RuleObjectSelector `json:"selector"`
+	// (optional)
+	Selector RuleObjectSelector `json:"selector,omitempty"`
 	// NamespaceSelector allows to select namespaces affecting the rule by labels:w
-	NamespaceSelector RuleObjectSelector `json:"namespaceSelector"`
+	// (optional)
+	NamespaceSelector RuleObjectSelector `json:"namespaceSelector,omitempty"`
 	// Conditions are the conditions to check on the rule objects
 	Conditions RuleConditions `json:"conditions"`
 	// Actions are the actions to run for the rule when the conditions are met
 	Actions []*RuleAction `json:"actions"`
 	// ActionsCoolDownPeriod is the duration in seconds for which autopilot will not
 	// re-trigger any actions once they have been executed.
+	// (optional)
 	ActionsCoolDownPeriod int64 `json:"actionsCoolDownPeriod,omitempty"`
 }
 
@@ -195,7 +199,7 @@ type RuleStatusObjectKey string
 // RuleObjectSelector defines an object for the rule
 type RuleObjectSelector struct {
 	// LabelSelector selects the rule objects
-	meta.LabelSelector `json:"labelSelector,omitempty"`
+	meta.LabelSelector `json:",inline"`
 }
 
 // RuleConditions defines the conditions for the rule

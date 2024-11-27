@@ -398,7 +398,7 @@ replace (
 	github.com/ktrysmt/go-bitbucket => github.com/portworx/go-bitbucket v0.0.0-20221210015433-3c000e3a8253
 	github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc10
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc10 => github.com/kubernetes-incubator/external-storage v0.25.1-openstorage-rc1
-	github.com/libopenstorage/autopilot-api => github.com/pure-px/autopilot-api v0.6.1-0.20240919161416-66682c84b491
+	github.com/libopenstorage/autopilot-api => github.com/pure-px/autopilot-api v0.6.1-0.20241127032442-7ff7786f4dc2
 
 	// PX dependencies
 	github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20240618001010-e4b050e66115
