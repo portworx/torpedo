@@ -375,6 +375,11 @@ func YankJournalTest(testName, testDesc string) {
 	})
 }
 
+var _ = Describe("{YankMetadataWithPxRestart}", func() {
+	testName = "YankMetadataWithPxRestart"
+	testDescription = "Yank metadata drive with restart PX"
+	YankMetadataTest(testName, testDescription)
+})
 var _ = Describe("{YankMetadataWithNodeReboot}", func() {
 	testName = "YankMetadataWithNodeReboot"
 	testDescription = "Yank metadata drive and reboot node"
@@ -529,17 +534,21 @@ func YankMetadataTest(testName, testDesc string) {
 				err = RebootNodeAndWaitForPxUp(nodeSelected)
 				log.FailOnError(err, "Failed to reboot node and wait till it is up")
 			})
-		}
+		} else if testName == "YankMetadataWithPxRestart" {
+			stepLog = "Restart portworx and wait for it to come up"
+			Step(stepLog, func() {
+				log.Info(stepLog)
+				Step(fmt.Sprintf("node with Px restart is: %s", nodeSelected.Name), func() {
+					err := Inst().V.RestartDriver(nodeSelected, nil)
+					log.FailOnError(err, fmt.Sprintf("Error occured while Restart PX on node:%v", nodeSelected.Name))
+				})
 
-		stepLog = "Verify Px Status"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			status, err := Inst().V.GetPxctlStatus(nodeSelected)
-			log.FailOnError(err, fmt.Sprintf("failed to get pxctl status on node [%s]", nodeSelected.Name))
-			dash.VerifyFatal(status == api.Status_STATUS_OK.String(), true, fmt.Sprintf("node [%s] status is up but PX cluster is not ok. Expected: %v Actual: %v",
-				nodeSelected.Name, api.Status_STATUS_OK, status))
-			log.InfoD("px status %v", status)
-		})
+				Step(fmt.Sprintf("wait for volume driver to restart on node: %v", nodeSelected.Name), func() {
+					err := Inst().V.WaitForPxPodsToBeUp(nodeSelected)
+					log.FailOnError(err, fmt.Sprintf("Error occured while Validating PX restart is done on node:%v", nodeSelected.Name))
+				})
+			})
+		}
 
 		stepLog = "Recover yank drive"
 		Step(stepLog, func() {
@@ -550,6 +559,16 @@ func YankMetadataTest(testName, testDesc string) {
 			})
 			log.FailOnError(err, fmt.Sprintf("failed to recover yank metadata drive on node [%s]", nodeSelected.Name))
 			log.InfoD("Verified recover yank drive")
+		})
+
+		stepLog = "Verify Px Status"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			status, err := Inst().V.GetPxctlStatus(nodeSelected)
+			log.FailOnError(err, fmt.Sprintf("failed to get pxctl status on node [%s]", nodeSelected.Name))
+			dash.VerifyFatal(status == api.Status_STATUS_OK.String(), true, fmt.Sprintf("node [%s] status is up but PX cluster is not ok. Expected: %v Actual: %v",
+				nodeSelected.Name, api.Status_STATUS_OK, status))
+			log.InfoD("px status %v", status)
 		})
 
 		stepLog = "Do pool maintenance"
