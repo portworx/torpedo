@@ -1811,6 +1811,10 @@ func ValidateCSISnapshotAndRestore(ctx *scheduler.Context, errChan ...*chan erro
 			}
 
 		}
+		if err = Inst().S.DeleteCsiSnapshotClass(snapShotClassName); err != nil {
+			log.Errorf("Delete volume snapshot class failed with error: [%v]", err)
+			expect(err).NotTo(haveOccurred(), "failed to delete snapshot class")
+		}
 	})
 }
 
@@ -1882,6 +1886,10 @@ func ValidatePureVolumeLargeNumOfClones(ctx *scheduler.Context, errChan ...*chan
 			// PWX-37645: Disabled while fixing partition edge cases
 			// err = Inst().V.ValidatePureLocalVolumePaths()
 			// processError(err, errChan...)
+		}
+		if err = Inst().S.DeleteCsiSnapshotClass(snapShotClassName); err != nil {
+			log.Errorf("Delete volume snapshot class failed with error: [%v]", err)
+			expect(err).NotTo(haveOccurred(), "failed to delete snapshot class")
 		}
 	})
 }
