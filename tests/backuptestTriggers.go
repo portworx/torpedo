@@ -47,6 +47,9 @@ const (
 	//CreatePxBackup creates backup for longevity
 	CreatePxBackup = "pxbCreatePxBackup"
 
+	//RestartPxBackupPod Restart PxBackupPod for longevity
+	RestartPxBackupPod = "pxbRestartPxBackupPod"
+
 	//CreatePxLockedBackup creates locked backup for longevity
 	CreatePxLockedBackup = "pxbCreatePxLockedBackup"
 
@@ -73,22 +76,36 @@ const (
 
 	//DeletePxBackup delete backups from the cluster
 	DeletePxBackup = "pxbDeleteBackup"
+
+	//DeployMultipleApps delete backups from the cluster
+	DeployMultipleApps = "pxbDeployMultipleApps"
+
+	//AddSchedulePolicy delete backups from the cluster
+	AddSchedulePolicy = "pxbAddSchedulePolicy"
+
+	//MultipleScheduleBackupDeletionAndCollectDeleteStats delete backups from the cluster
+	MultipleScheduleBackupDeletionAndCollectDeleteStats = "pxbMultipleScheduleBackupDeletionAndCollectDeleteStats"
 )
 
 // Global variables to be used by all flows
 var (
 	LongevityBackupLocationName          string
 	LongevityBackupLocationUID           string
+	LongevitySchedulePolicyName          string
+	LongevitySchedulePolicyUid           string
 	LongevityLockedBackupLocationMap     = make(map[string]string)
 	LongevityAllNamespaces               []string
 	LongevitySourceClusterUID            string
 	LongevityDestinationClusterUID       string
 	LongevityScheduledAppContexts        []*scheduler.Context
 	LongevityAllBackupNames              []string
+	LongevityAllBackupScheduleNames      []string
 	LongevityAllBackupUIDMap             = make(map[string]string)
 	LongevityAllLockedBackupNames        []string
 	LongevityBackupAppContextMap         = make(map[string][]*scheduler.Context)
 	LongevityAllNonAdminUserRoleMap      = make(map[string]backup.PxBackupRole)
+	LongevityAllScheduleNames            []string
+	LongevityAllScheduleUid              []string
 	LongevityAllNonAdminUserNames        []string
 	LongevityClusterSharedUserList       []string
 	LongevityAllClusterSharedBackupNames []string
@@ -97,6 +114,7 @@ var (
 type PxBackupLongevity struct {
 	CustomData         *CustomData
 	ApplicationData    *ApplicationData
+	BackupPolicyData   *BackupSchedulePolicyData
 	BackupData         *BackupData
 	RestoreData        *RestoreData
 	ClusterShareConfig *ClusterShareConfig
@@ -109,15 +127,27 @@ type CustomData struct {
 	Strings  map[string]string
 }
 
+type BackupSchedulePolicyData struct {
+	retainCount int64
+	incrCount   uint64
+	interval    int64
+}
+
 type BackupData struct {
 	Namespaces              []string
+	TestCaseName            string
 	BackupLocationName      string
+	BackupScheduleNames     []string
 	BackupLocationUID       string
 	LockedBackupLocationMap map[string]string
 	ClusterName             string
 	ClusterUid              string
 	BackupName              string
 	BackupUid               string
+	SchedulePolicyName      string
+	SchedulePolicyUid       string
+	CollectStatsDuration    time.Duration
+	CollectStatsInterval    time.Duration
 }
 
 type RestoreData struct {
@@ -132,6 +162,7 @@ type RestoreData struct {
 
 type ApplicationData struct {
 	SchedulerContext []*scheduler.Context
+	AppDeployScale   int
 }
 
 type EventData struct {
@@ -144,8 +175,11 @@ type EventData struct {
 	SourceClusterUid        string
 	DestinationClusterUid   string
 	BackupNames             []string
+	BackupScheduleNames     []string
 	LockedBackupNames       []string
 	RestoreName             string
+	SchedulePolicyName      string
+	SchedulePolicyUid       string
 }
 
 type EventBuilderResponse struct {
@@ -219,6 +253,7 @@ type UserData struct {
 
 const (
 	EventScheduleApps                               = "EventScheduleApps"
+	EventScheduleMultipleApps                       = "EventScheduleMultipleApps"
 	EventValidateScheduleApplication                = "EventValidateScheduleApplication"
 	EventAddCredentialandBackupLocation             = "EventAddCredentialandBackupLocation"
 	EventAddSourceAndDestinationCluster             = "EventAddSourceAndDestinationCluster"
@@ -230,6 +265,10 @@ const (
 	EventUnShareCluster                             = "EventUnShareCluster"
 	EventCreateUsers                                = "EventCreateUsers"
 	EventDeleteBackup                               = "EventDeleteBackup"
+	EventAddSchedulePolicy                          = "EventAddSchedulePolicy"
+	EventAddBackupSchedule                          = "EventAddBackupSchedule"
+	EventRestartPxBackupPod                         = "EventRestartPxBackupPod"
+	EventCollectBackupStateStats                    = "EventCollectBackupStateStats"
 )
 
 var AllBuilders = map[string]PxBackupEventBuilder{
@@ -245,6 +284,11 @@ var AllBuilders = map[string]PxBackupEventBuilder{
 	EventUnShareCluster:                             eventUnShareCluster,
 	EventCreateUsers:                                eventCreateUsers,
 	EventDeleteBackup:                               eventDeleteBackup,
+	EventAddSchedulePolicy:                          eventAddSchedulePolicy,
+	EventAddBackupSchedule:                          eventScheduleBackup,
+	EventRestartPxBackupPod:                         eventRestartPxBackupPod,
+	EventCollectBackupStateStats:                    eventCollectBackupStateStats,
+	EventScheduleMultipleApps:                       eventScheduleMultipleApps,
 }
 
 type PxBackupEventBuilder func(*PxBackupLongevity) (error, string, EventData)
@@ -265,6 +309,12 @@ func GetLongevityInputParams() PxBackupLongevity {
 		BackupName:              "",
 		BackupUid:               "",
 		LockedBackupLocationMap: make(map[string]string),
+	}
+
+	var backupPolicyData = BackupSchedulePolicyData{
+		5,
+		5,
+		15,
 	}
 
 	var restoreData = RestoreData{
@@ -304,6 +354,7 @@ func GetLongevityInputParams() PxBackupLongevity {
 		ClusterShareConfig: &clusterShareConfig,
 		UserData:           &userData,
 		BackupUserContext:  backupUserContext,
+		BackupPolicyData:   &backupPolicyData,
 	}
 
 	return longevityStruct
@@ -370,7 +421,8 @@ func eventScheduleApps(inputsForEventBuilder *PxBackupLongevity) (error, string,
 	var scheduledAppContexts = make([]*scheduler.Context, 0)
 	var bkpNamespaces = make([]string, 0)
 
-	for i := 0; i < Inst().GlobalScaleFactor; i++ {
+	appDeployScale := inputsForEventBuilder.ApplicationData.AppDeployScale
+	for i := 0; i < appDeployScale; i++ {
 		taskName := fmt.Sprintf("%s-%d-%s", TaskNamePrefix, i, RandomString(5))
 		appContexts := ScheduleApplications(taskName)
 		for _, ctx := range appContexts {
@@ -384,6 +436,68 @@ func eventScheduleApps(inputsForEventBuilder *PxBackupLongevity) (error, string,
 	eventData.BackupNamespaces = bkpNamespaces
 	eventData.SchedulerContext = scheduledAppContexts
 
+	return nil, "", *eventData
+}
+
+// Event to schedule apps on cluster
+func eventScheduleMultipleApps(inputsForEventBuilder *PxBackupLongevity) (error, string, EventData) {
+	defer GinkgoRecover()
+	eventData := &EventData{}
+
+	var scheduledAppContexts = make([]*scheduler.Context, 0)
+	var bkpNamespaces = make([]string, 0)
+
+	appDeployScale := inputsForEventBuilder.ApplicationData.AppDeployScale
+	for i := 0; i < appDeployScale; i++ {
+		namespace := fmt.Sprintf("multiple-volume-ns-%s", RandomString(15))
+		appContexts := ScheduleApplicationsOnNamespace(namespace, TaskNamePrefix)
+		for _, appCtx := range appContexts {
+			appCtx.ReadinessTimeout = AppReadinessTimeout
+			scheduledAppContexts = append(scheduledAppContexts, appCtx)
+		}
+		bkpNamespaces = append(bkpNamespaces, namespace)
+	}
+
+	eventData.BackupNamespaces = bkpNamespaces
+	eventData.SchedulerContext = scheduledAppContexts
+
+	return nil, "", *eventData
+}
+
+// Event restart px-backup pod
+func eventRestartPxBackupPod(inputsForEventBuilder *PxBackupLongevity) (error, string, EventData) {
+	defer GinkgoRecover()
+
+	backupPodLabel := make(map[string]string)
+	eventData := &EventData{}
+	backupPodLabel["app"] = "px-backup"
+	pxbNamespace, err := backup.GetPxBackupNamespace()
+	log.FailOnError(err, "Getting px-backup namespace")
+	err = DeletePodWithWithoutLabelInNamespace(pxbNamespace, backupPodLabel, false)
+	log.FailOnError(err, "Restart backup pod")
+	err = ValidatePodByLabel(backupPodLabel, pxbNamespace, 5*time.Minute, 30*time.Second)
+	log.FailOnError(err, "Checking if px-backup pod is in running state")
+	log.Infof("Restarted px-backup pod successfully and px-backup pods are in running state")
+	return nil, "", *eventData
+}
+
+// Event to collect backup state stats
+func eventCollectBackupStateStats(inputsForEventBuilder *PxBackupLongevity) (error, string, EventData) {
+	defer GinkgoRecover()
+
+	eventData := &EventData{}
+	backupScheduleNames := inputsForEventBuilder.BackupData.BackupScheduleNames
+	collectStatsDuration := inputsForEventBuilder.BackupData.CollectStatsDuration
+	collectStatsInterval := inputsForEventBuilder.BackupData.CollectStatsInterval
+	log.Infof("Backup schedule names are: %v", backupScheduleNames)
+	if collectStatsDuration == 0 {
+		collectStatsDuration = 2880 * time.Minute // Default to 2880 minutes (48 hours)
+	}
+	if collectStatsInterval == 0 {
+		collectStatsInterval = 5 * time.Second // Default to 5 seconds
+	}
+	err := CollectBackupDeleteStateStats(GetTestcaseName(), backupScheduleNames, collectStatsDuration, collectStatsInterval)
+	log.FailOnError(err, "Failed to collect backup delete stats")
 	return nil, "", *eventData
 }
 
@@ -490,6 +604,32 @@ func eventAddLockedBucketCredentialandBackupLocation(inputsForEventBuilder *PxBa
 	return nil, "", *eventData
 }
 
+// Event for Schedule Policy
+func eventAddSchedulePolicy(inputsForEventBuilder *PxBackupLongevity) (error, string, EventData) {
+	defer GinkgoRecover()
+	eventData := &EventData{}
+	eventData.LockedBackupLocationMap = make(map[string]string)
+	var schedulePolicyName string
+	var schedulePolicyUid string
+	schedulePolicyUid = uuid.New()
+	schedulePolicyName = fmt.Sprintf("autogenerated-schedule-policy-%v", time.Now().Unix())
+	backupPolicyIncrementCount := inputsForEventBuilder.BackupPolicyData.incrCount
+	backupPolicyRetainCount := inputsForEventBuilder.BackupPolicyData.retainCount
+	schedulePolicyInterval := inputsForEventBuilder.BackupPolicyData.interval
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return err, "", *eventData
+	}
+	log.InfoD("Creating schedule policy")
+	err = CreateBackupScheduleIntervalPolicy(backupPolicyRetainCount, schedulePolicyInterval, backupPolicyIncrementCount, schedulePolicyName, schedulePolicyUid, BackupOrgID, ctx, false, false)
+	if err != nil {
+		return err, "", *eventData
+	}
+	eventData.SchedulePolicyName = schedulePolicyName
+	eventData.SchedulePolicyUid = schedulePolicyUid
+	return nil, "", *eventData
+}
+
 // Event for Source and Dest Cluster add
 func eventAddSourceAndDestinationCluster(inputsForEventBuilder *PxBackupLongevity) (error, string, EventData) {
 	defer GinkgoRecover()
@@ -568,6 +708,59 @@ func eventCreateBackup(inputsForEventBuilder *PxBackupLongevity) (error, string,
 	eventData.BackupNames = backupNames
 	LongevityAllBackupNames = append(LongevityAllBackupNames, backupNames...)
 	log.InfoD("Backup names created  - %v", backupNames)
+	return nil, "", *eventData
+}
+
+// Event for schedule Backup Creation
+func eventScheduleBackup(inputsForEventBuilder *PxBackupLongevity) (error, string, EventData) {
+	defer GinkgoRecover()
+	var ctx context1.Context
+	var err error
+	eventData := &EventData{}
+	var backupScheduleNames []string
+	var errors []string // Slice to collect errors
+	if inputsForEventBuilder.BackupUserContext == nil {
+		ctx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+	} else {
+		ctx = inputsForEventBuilder.BackupUserContext
+	}
+
+	for _, namespace := range inputsForEventBuilder.BackupData.Namespaces {
+		scheduleName := fmt.Sprintf("%s-%s-%s", BackupNamePrefix, namespace, RandomString(4))
+		labelSelectors := make(map[string]string)
+		appContextsToBackup := FilterAppContextsByNamespace(inputsForEventBuilder.ApplicationData.SchedulerContext, []string{namespace})
+		log.Infof("Creating a schedule backup for namespace - %s", namespace)
+
+		_, err := CreateScheduleBackupWithValidation(
+			ctx,
+			scheduleName,
+			inputsForEventBuilder.BackupData.ClusterName,
+			inputsForEventBuilder.BackupData.ClusterUid,
+			inputsForEventBuilder.BackupData.BackupLocationName,
+			inputsForEventBuilder.BackupData.BackupLocationUID,
+			appContextsToBackup,
+			labelSelectors,
+			BackupOrgID,
+			"", "", "", "", inputsForEventBuilder.BackupData.SchedulePolicyName, inputsForEventBuilder.BackupData.SchedulePolicyUid)
+
+		backupScheduleNames = append(backupScheduleNames, scheduleName)
+		if err != nil {
+			log.Errorf("Error occurred while taking backup for namespace %s: %v", namespace, err)
+			errors = append(errors, fmt.Sprintf("Namespace %s: %v", namespace, err)) // Collect error message
+			continue                                                                 // Skip to the next namespace
+		}
+	}
+
+	eventData.BackupScheduleNames = backupScheduleNames
+	LongevityAllBackupScheduleNames = append(LongevityAllBackupScheduleNames, backupScheduleNames...)
+	log.InfoD("Backup schedule names created  - %v", backupScheduleNames)
+
+	// If there were errors, return them
+	if len(errors) > 0 {
+		return fmt.Errorf("encountered errors while scheduling backups: %v", errors), "Error occurred while taking backup", *eventData
+	}
+
 	return nil, "", *eventData
 }
 
@@ -743,6 +936,52 @@ func TriggerAddBackupCredAndBucket(contexts *[]*scheduler.Context, recordChan *c
 
 }
 
+// TriggerAddSchedulePolicy triggers the addition of a scheduling policy.
+// It processes the given contexts and sends the event records to the provided channel.
+func TriggerAddSchedulePolicy(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(AddSchedulePolicy)
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: AddSchedulePolicy,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	result := GetLongevityEventResponse()
+	result.Name = "Add schedule policy"
+	inputForBuilder := GetLongevityInputParams()
+	inputForBuilder.BackupPolicyData.incrCount = 6
+	inputForBuilder.BackupPolicyData.retainCount = 5
+
+	log.Infof("Creating schedule policy")
+	eventData := RunBuilder(EventAddSchedulePolicy, &inputForBuilder, &result)
+
+	// Setting global variables for backup
+	LongevitySchedulePolicyName = eventData.SchedulePolicyName
+	LongevitySchedulePolicyUid = eventData.SchedulePolicyUid
+
+	log.Infof("LongevitySchedulePolicyName", LongevitySchedulePolicyName)
+	log.Infof("LongevitySchedulePolicyUid", LongevitySchedulePolicyUid)
+
+	UpdateEventResponse(&result)
+
+	for _, err := range result.Errors {
+		UpdateOutcome(event, err)
+	}
+
+	updateMetrics(*event)
+}
+
 // Trigger to create cred and bucket for backup
 func TriggerAddLockedBackupCredAndBucket(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer GinkgoRecover()
@@ -842,6 +1081,7 @@ func TriggerDeployBackupApps(contexts *[]*scheduler.Context, recordChan *chan *E
 	result := GetLongevityEventResponse()
 	result.Name = "Schedule And Validate App"
 	inputForBuilder := GetLongevityInputParams()
+	inputForBuilder.ApplicationData.AppDeployScale = Inst().GlobalScaleFactor
 
 	eventData := RunBuilder(EventScheduleApps, &inputForBuilder, &result)
 	LongevityScheduledAppContexts = append(LongevityScheduledAppContexts, eventData.SchedulerContext...)
@@ -850,6 +1090,95 @@ func TriggerDeployBackupApps(contexts *[]*scheduler.Context, recordChan *chan *E
 	inputForBuilder.ApplicationData.SchedulerContext = eventData.SchedulerContext
 
 	_ = RunBuilder(EventValidateScheduleApplication, &inputForBuilder, &result)
+
+	UpdateEventResponse(&result)
+
+	for _, err := range result.Errors {
+		UpdateOutcome(event, err)
+	}
+
+}
+
+// TriggerDeployMultipleApps triggers the deployment of multiple applications
+func TriggerDeployMultipleApps(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(DeployMultipleApps)
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: DeployMultipleApps,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	result := GetLongevityEventResponse()
+	result.Name = "Schedule And Validate App"
+	inputForBuilder := GetLongevityInputParams()
+	inputForBuilder.ApplicationData.AppDeployScale = 10
+	numberOfVolumesStr := os.Getenv("VOLUME_COUNT_FOR_PARALLEL_DELETE")
+	numberOfVolumes, err := strconv.Atoi(numberOfVolumesStr)
+
+	if err != nil || numberOfVolumes <= 0 {
+		numberOfVolumes = 3
+	}
+	log.InfoD("The number of PVC to be deployed are %v", numberOfVolumes)
+	appList := Inst().AppList
+	defer func() {
+		Inst().AppList = appList
+	}()
+	Inst().AppList = []string{"vdbench-multi-vol"}
+	Inst().CustomAppConfig["vdbench-multi-vol"] = scheduler.AppConfig{
+		ClaimsCount: numberOfVolumes,
+	}
+	err = Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+	log.FailOnError(err, "Failed to rescan specs from %s for storage provider %s with claim count %v", Inst().SpecDir, Inst().V.String(), numberOfVolumes)
+	eventData := RunBuilder(EventScheduleMultipleApps, &inputForBuilder, &result)
+	LongevityScheduledAppContexts = append(LongevityScheduledAppContexts, eventData.SchedulerContext...)
+	LongevityAllNamespaces = append(LongevityAllNamespaces, eventData.BackupNamespaces...)
+
+	inputForBuilder.ApplicationData.SchedulerContext = eventData.SchedulerContext
+
+	_ = RunBuilder(EventValidateScheduleApplication, &inputForBuilder, &result)
+
+	UpdateEventResponse(&result)
+
+	for _, err := range result.Errors {
+		UpdateOutcome(event, err)
+	}
+
+}
+
+// Trigger to deploy backup apps with or without data validation
+func TriggerRestartPxBackupPod(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(RestartPxBackupPod)
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: RestartPxBackupPod,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	result := GetLongevityEventResponse()
+	result.Name = "Schedule And Validate App"
+	inputForBuilder := GetLongevityInputParams()
+
+	_ = RunBuilder(EventRestartPxBackupPod, &inputForBuilder, &result)
 
 	UpdateEventResponse(&result)
 
@@ -892,6 +1221,56 @@ func TriggerCreateBackup(contexts *[]*scheduler.Context, recordChan *chan *Event
 	inputForBuilder.ApplicationData.SchedulerContext = LongevityScheduledAppContexts
 
 	_ = RunBuilder(EventCreateBackup, &inputForBuilder, &result)
+
+	UpdateEventResponse(&result)
+
+	for _, err := range result.Errors {
+		UpdateOutcome(event, err)
+	}
+
+}
+
+// Trigger to create backup and validate
+func TriggerMultipleScheduleBackupDeletionAndCollectDeleteStats(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(MultipleScheduleBackupDeletionAndCollectDeleteStats)
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: MultipleScheduleBackupDeletionAndCollectDeleteStats,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	result := GetLongevityEventResponse()
+	result.Name = "Create Schedule Backup"
+	inputForBuilder := GetLongevityInputParams()
+
+	log.Infof("Creating Schedule Backup")
+	inputForBuilder.BackupData.BackupLocationName = LongevityBackupLocationName
+	inputForBuilder.BackupData.BackupLocationUID = LongevityBackupLocationUID
+	inputForBuilder.BackupData.ClusterName = SourceClusterName
+	inputForBuilder.BackupData.ClusterUid = LongevitySourceClusterUID
+	inputForBuilder.BackupData.SchedulePolicyName = LongevitySchedulePolicyName
+	inputForBuilder.BackupData.SchedulePolicyUid = LongevitySchedulePolicyUid
+	inputForBuilder.BackupData.Namespaces = LongevityAllNamespaces
+	inputForBuilder.ApplicationData.SchedulerContext = LongevityScheduledAppContexts
+
+	eventData := RunBuilder(EventAddBackupSchedule, &inputForBuilder, &result)
+	log.Infof("Collect Backup Delete State Stats")
+
+	inputForBuilder.BackupData.BackupScheduleNames = eventData.BackupScheduleNames
+	inputForBuilder.BackupData.CollectStatsDuration = 2880 * time.Minute
+	inputForBuilder.BackupData.CollectStatsInterval = 5 * time.Second
+	_ = RunBuilder(EventCollectBackupStateStats, &inputForBuilder, &result)
 
 	UpdateEventResponse(&result)
 

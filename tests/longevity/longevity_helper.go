@@ -119,9 +119,24 @@ func populateBackupIntervals() {
 	triggerInterval[CreateClusterUnshare] = map[int]time.Duration{}
 	triggerInterval[CreateBackupWithUserFromSharedCluster] = map[int]time.Duration{}
 	triggerInterval[DeletePxBackup] = map[int]time.Duration{}
+	triggerInterval[RestartPxBackupPod] = map[int]time.Duration{}
 	triggerInterval[CreateBackupRestoreAndDeleteWithUserFromSharedCluster] = map[int]time.Duration{}
+	triggerInterval[DeployMultipleApps] = map[int]time.Duration{}
+	triggerInterval[AddSchedulePolicy] = map[int]time.Duration{}
+	triggerInterval[MultipleScheduleBackupDeletionAndCollectDeleteStats] = map[int]time.Duration{}
 
 	baseInterval := 1 * time.Minute
+
+	triggerInterval[RestartPxBackupPod][10] = 6 * baseInterval
+	triggerInterval[RestartPxBackupPod][9] = 12 * baseInterval
+	triggerInterval[RestartPxBackupPod][8] = 18 * baseInterval
+	triggerInterval[RestartPxBackupPod][7] = 24 * baseInterval
+	triggerInterval[RestartPxBackupPod][6] = 30 * baseInterval
+	triggerInterval[RestartPxBackupPod][5] = 36 * baseInterval
+	triggerInterval[RestartPxBackupPod][4] = 42 * baseInterval
+	triggerInterval[RestartPxBackupPod][3] = 48 * baseInterval
+	triggerInterval[RestartPxBackupPod][2] = 54 * baseInterval
+	triggerInterval[RestartPxBackupPod][1] = 60 * baseInterval
 
 	triggerInterval[CreatePxBackup][10] = 6 * baseInterval
 	triggerInterval[CreatePxBackup][9] = 12 * baseInterval
@@ -222,6 +237,28 @@ func populateBackupIntervals() {
 	triggerInterval[CreateBackupRestoreAndDeleteWithUserFromSharedCluster][2] = 60 * baseInterval
 	triggerInterval[CreateBackupRestoreAndDeleteWithUserFromSharedCluster][1] = 66 * baseInterval
 
+	triggerInterval[DeployMultipleApps][10] = 6 * baseInterval
+	triggerInterval[DeployMultipleApps][9] = 12 * baseInterval
+	triggerInterval[DeployMultipleApps][8] = 18 * baseInterval
+	triggerInterval[DeployMultipleApps][7] = 24 * baseInterval
+	triggerInterval[DeployMultipleApps][6] = 30 * baseInterval
+	triggerInterval[DeployMultipleApps][5] = 36 * baseInterval
+	triggerInterval[DeployMultipleApps][4] = 42 * baseInterval
+	triggerInterval[DeployMultipleApps][3] = 48 * baseInterval
+	triggerInterval[DeployMultipleApps][2] = 54 * baseInterval
+	triggerInterval[DeployMultipleApps][1] = 60 * baseInterval
+
+	triggerInterval[AddSchedulePolicy][10] = 6 * baseInterval
+	triggerInterval[AddSchedulePolicy][9] = 12 * baseInterval
+	triggerInterval[AddSchedulePolicy][8] = 18 * baseInterval
+	triggerInterval[AddSchedulePolicy][7] = 24 * baseInterval
+	triggerInterval[AddSchedulePolicy][6] = 30 * baseInterval
+	triggerInterval[AddSchedulePolicy][5] = 36 * baseInterval
+	triggerInterval[AddSchedulePolicy][4] = 42 * baseInterval
+	triggerInterval[AddSchedulePolicy][3] = 48 * baseInterval
+	triggerInterval[AddSchedulePolicy][2] = 54 * baseInterval
+	triggerInterval[AddSchedulePolicy][1] = 60 * baseInterval
+
 	baseInterval = 3 * time.Minute
 
 	triggerInterval[CreateClusterUnshare][10] = 6 * baseInterval
@@ -247,6 +284,17 @@ func populateBackupIntervals() {
 	triggerInterval[EmailReporter][3] = 8 * baseInterval
 	triggerInterval[EmailReporter][2] = 12 * baseInterval
 	triggerInterval[EmailReporter][1] = 24 * baseInterval
+
+	triggerInterval[MultipleScheduleBackupDeletionAndCollectDeleteStats][10] = 1 * baseInterval
+	triggerInterval[MultipleScheduleBackupDeletionAndCollectDeleteStats][9] = 2 * baseInterval
+	triggerInterval[MultipleScheduleBackupDeletionAndCollectDeleteStats][8] = 3 * baseInterval
+	triggerInterval[MultipleScheduleBackupDeletionAndCollectDeleteStats][7] = 4 * baseInterval
+	triggerInterval[MultipleScheduleBackupDeletionAndCollectDeleteStats][6] = 5 * baseInterval
+	triggerInterval[MultipleScheduleBackupDeletionAndCollectDeleteStats][5] = 6 * baseInterval
+	triggerInterval[MultipleScheduleBackupDeletionAndCollectDeleteStats][4] = 7 * baseInterval
+	triggerInterval[MultipleScheduleBackupDeletionAndCollectDeleteStats][3] = 8 * baseInterval
+	triggerInterval[MultipleScheduleBackupDeletionAndCollectDeleteStats][2] = 12 * baseInterval
+	triggerInterval[MultipleScheduleBackupDeletionAndCollectDeleteStats][1] = 24 * baseInterval
 
 }
 

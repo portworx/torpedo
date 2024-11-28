@@ -5,7 +5,7 @@ metadata:
   name: vdbench-sc-multi-vol
 provisioner: pxd.portworx.com
 parameters:
-  repl: "3"
+  repl: "1"
   io_profile: db_remote
 volumeBindingMode: Immediate
 allowVolumeExpansion: true

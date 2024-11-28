@@ -18,7 +18,6 @@ import (
 	"github.com/pure-px/torpedo/pkg/s3utils"
 	. "github.com/pure-px/torpedo/tests"
 	"os"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -146,7 +145,10 @@ func BackupInitInstance() {
 	kubeconfigList := strings.Split(kubeconfigs, ",")
 	dash.VerifyFatal(len(kubeconfigList) < 2, false, "minimum 2 kubeconfigs are required for source and destination cluster")
 	DumpKubeconfigs(kubeconfigList)
-	GlobalGkeSecretString, err = GetGkeSecret()
+	if os.Getenv("CLUSTER_PROVIDER") == drivers.ProviderGke {
+		GlobalGkeSecretString, err = GetGkeSecret()
+		log.FailOnError(err, "Fetching gke secret failed")
+	}
 	if os.Getenv("CLUSTER_PROVIDER") == drivers.ProviderRke {
 		// Switch context to destination cluster to update RancherMap with destination cluster details
 		err = SetDestinationKubeConfig()
@@ -179,17 +181,6 @@ func IsBackupAvailable(uid string, currentBackups *api.BackupEnumerateResponse) 
 		}
 	}
 	return false
-}
-
-func GetTestcaseName() string {
-	testCaseName := CurrentSpecReport().FullText()
-	matches := regexp.MustCompile(`\{([^}]+)\}`).FindStringSubmatch(testCaseName)
-	if matches != nil {
-		if len(matches) > 1 {
-			testCaseName = matches[1]
-		}
-	}
-	return testCaseName
 }
 
 var _ = BeforeSuite(func() {

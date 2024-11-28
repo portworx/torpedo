@@ -5,6 +5,7 @@ import (
 	context1 "context"
 	"fmt"
 
+	"encoding/csv"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -13013,4 +13014,123 @@ func ValidateDataExportCR(namespaces []string, expectedCrUid string) error {
 	}
 	_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
 	return err
+}
+
+// CollectBackupDeleteStateStats collects statistics on backup states and directly writes them to a CSV file.
+func CollectBackupDeleteStateStats(testCaseName string, scheduleNames []string, minutes time.Duration, pollingInterval time.Duration) error {
+	// Calculate the end time based on the minutes directly
+	endTime := time.Now().Add(minutes)
+
+	// Create or open the CSV file for writing
+	backupDeleteStatusFileName := fmt.Sprintf("/testresults/backup_state_stats_info_%s.csv", RandomString(5))
+	file, err := os.Create(backupDeleteStatusFileName)
+	if err != nil {
+		return fmt.Errorf("failed to create CSV file: %v", err)
+	}
+
+	// Ensure the file is closed at the end of the function
+	defer func() {
+		if err = file.Close(); err != nil {
+			log.Errorf("Error closing file: %v", err)
+		}
+	}()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	// Write CSV header
+	if err = writer.Write([]string{"TestcaseName", "Timestamp", "BackupCountInDeletingState", "BackupCountInDeletePendingState", "BackupsInDeletingState", "BackupsInDeletePendingState"}); err != nil {
+		return fmt.Errorf("failed to write CSV header: %v", err)
+	}
+
+	// Retrieve the admin context once
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return err
+	}
+
+	// Loop to collect backup states until the end time
+	for time.Now().Before(endTime) {
+
+		// Initialize counters and slices for backup states
+		deletingCount := 0
+		deletePendingCount := 0
+		var backupsInDeletingState []string      // To store backup names in Deleting state
+		var backupsInDeletePendingState []string // To store backup names in DeletePending state
+
+		// Loop through each schedule name and fetch backups
+		for _, scheduleName := range scheduleNames {
+			// Get all backup names for the schedule
+			scheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, BackupOrgID)
+			if err != nil {
+				log.Errorf("failed to get all schedule backup names for schedule %s: %v", scheduleName, err)
+				continue
+			}
+
+			// Loop through all backup names for this schedule
+			for _, scheduleBackupName := range scheduleBackupNames {
+				// Get the backup UID
+				backupUID, err := Inst().Backup.GetBackupUID(ctx, scheduleBackupName, BackupOrgID)
+				if err != nil {
+					log.Errorf("failed to get backup UID for %s: %v", scheduleBackupName, err)
+					continue
+				}
+
+				// Inspect the backup to get backup object
+				backupInspectRequest := &api.BackupInspectRequest{
+					Name:  scheduleBackupName,
+					OrgId: BackupOrgID,
+					Uid:   backupUID,
+				}
+				resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+				if err != nil {
+					log.Errorf("failed to inspect backup for %s: %v", scheduleBackupName, err)
+					continue
+				}
+
+				// Get the backup status and count based on state
+				backupStatus := resp.GetBackup().BackupInfo.Status.GetStatus()
+				switch backupStatus {
+				case api.BackupInfo_StatusInfo_Deleting:
+					deletingCount++
+					backupsInDeletingState = append(backupsInDeletingState, resp.GetBackup().GetName())
+				case api.BackupInfo_StatusInfo_DeletePending:
+					deletePendingCount++
+					backupsInDeletePendingState = append(backupsInDeletePendingState, resp.GetBackup().GetName())
+				}
+			}
+		}
+
+		// Convert backup names to CSV format: join them with commas
+		deletingBackupsCSV := "None"
+		if len(backupsInDeletingState) > 0 {
+			deletingBackupsCSV = strings.Join(backupsInDeletingState, ", ")
+		}
+
+		deletePendingBackupsCSV := "None"
+		if len(backupsInDeletePendingState) > 0 {
+			deletePendingBackupsCSV = strings.Join(backupsInDeletePendingState, ", ")
+		}
+
+		// Write the collected data to the CSV
+		if err = writer.Write([]string{
+			fmt.Sprintf("%v", testCaseName),
+			time.Now().Format(time.RFC3339),
+			fmt.Sprintf("%d", deletingCount),
+			fmt.Sprintf("%d", deletePendingCount),
+			fmt.Sprintf("%v", deletingBackupsCSV),
+			fmt.Sprintf("%v", deletePendingBackupsCSV),
+		}); err != nil {
+			return fmt.Errorf("failed to write to CSV: %v", err)
+		}
+
+		// Log the collected statistics for debugging
+		log.InfoD("The BackupDeleteStateStats is:")
+		log.InfoD("Testcase: %s, Timestamp: %s, BackupCountInDeletingState: %d, BackupCountInDeletePendingState: %d, BackupsInDeletingState: %v, BackupsInDeletePendingState: %v",
+			CurrentSpecReport().FullText(), time.Now().Format(time.RFC3339), deletingCount, deletePendingCount, deletingBackupsCSV, deletePendingBackupsCSV)
+
+		// Sleep for the specified polling interval before collecting data again
+		time.Sleep(pollingInterval)
+	}
+	return nil
 }

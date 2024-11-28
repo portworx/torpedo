@@ -3,6 +3,7 @@ package tests
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/pure-px/torpedo/drivers"
 	"github.com/pure-px/torpedo/pkg/log"
 	. "github.com/pure-px/torpedo/tests"
 	"os"
@@ -27,7 +28,12 @@ var _ = BeforeSuite(func() {
 	dash = Inst().Dash
 	log.Infof("Init instance")
 	value, exists := os.LookupEnv("NOMAD_ADDR")
+	var err error
 	if !exists {
+		if os.Getenv("CLUSTER_PROVIDER") == drivers.ProviderGke {
+			GlobalGkeSecretString, err = GetGkeSecret()
+			log.FailOnError(err, "Fetching gke secret failed")
+		}
 		InitInstance()
 		dash.TestSetBegin(dash.TestSet)
 		EnableAutoFSTrim()

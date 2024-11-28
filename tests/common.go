@@ -15859,3 +15859,15 @@ func ValidateSnapshot(contexts []*scheduler.Context) error {
 	}
 	return nil
 }
+
+// GetTestcaseName extracts and return the name of the current test case from the Ginkgo spec report.
+func GetTestcaseName() string {
+	testCaseName := ginkgo.CurrentSpecReport().FullText()
+	matches := regexp.MustCompile(`\{([^}]+)\}`).FindStringSubmatch(testCaseName)
+	if matches != nil {
+		if len(matches) > 1 {
+			testCaseName = matches[1]
+		}
+	}
+	return testCaseName
+}
