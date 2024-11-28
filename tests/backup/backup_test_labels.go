@@ -338,12 +338,13 @@ const (
 
 // Test type labels
 const (
-	SystemTest      TestCaseLabel = "system-test"
-	ScaleTest       TestCaseLabel = "scale-test"
-	UpgradeTest     TestCaseLabel = "upgrade-test"
-	LongevityTest   TestCaseLabel = "longevity-test"
-	PerformanceTest TestCaseLabel = "performance-test"
-	FunctionalTest  TestCaseLabel = "functional-test"
+	SystemTest       TestCaseLabel = "system-test"
+	ScaleTest        TestCaseLabel = "scale-test"
+	UpgradeTest      TestCaseLabel = "upgrade-test"
+	LockedBucketTest TestCaseLabel = "locked-bucket-test"
+	LongevityTest    TestCaseLabel = "longevity-test"
+	PerformanceTest  TestCaseLabel = "performance-test"
+	FunctionalTest   TestCaseLabel = "functional-test"
 )
 
 // PipelineLabels
@@ -483,7 +484,7 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	AlternateBackupBetweenNfsAndS3:                                                     {AlternateBackupBetweenNfsAndS3Label, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
 	AzureCloudAccountCreationWithMandatoryAndNonMandatoryFields:                        {AzureCloudAccountCreationWithMandatoryAndNonMandatoryFieldsLabel, SystemTest, PxBackupLabel, P0, aksPipeline},
 	AzureCloudAccountForLockedBucket:                                                   {AzureCloudAccountForLockedBucketLabel, SystemTest, PxBackupLabel, P2, aksPipeline},
-	BackupAlternatingBetweenLockedAndUnlockedBuckets:                                   {BackupAlternatingBetweenLockedAndUnlockedBucketsLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3LockedBucket, AzureImmutableBucket},
+	BackupAlternatingBetweenLockedAndUnlockedBuckets:                                   {BackupAlternatingBetweenLockedAndUnlockedBucketsLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3LockedBucket, AzureImmutableBucket, LockedBucketTest},
 	BackupAndRestoreSyncDR:                                                             {BackupAndRestoreSyncDRLabel, ocpPipeline, SystemTest, PxBackupLabel, P2, vanillaPipeline, S3BackupLocationLabel, NfsBackupLocationLabel, PxLabel, DRPipelineLabel},
 	BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResumeSuspendBackupPolicies: {allPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, aksPipeline, NonPxLabel},
 	BackupCRsThenMultipleRestoresOnHigherK8sVersion:                                    {BackupCRsThenMultipleRestoresOnHigherK8sVersionLabel, vanillaPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, DiffK8sVersionLabel},
@@ -498,7 +499,7 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	BackupScheduleForOldAndNewNS:                                                       {BackupScheduleForOldAndNewNSLabel, ocpPipeline, rkePipeline, SystemTest, PxBackupLabel, P1, S3BackupLocationLabel, NfsBackupLocationLabel, FBDALabel, FACDLabel, PxLabel, FADALabel, aksPipeline, NonPxLabel, gkePipeline, iksPipeline, KDMPLabel, CsiOffloadLabel, CsiLabel, roksPipeline},
 	BackupStateTransitionForScheduledBackups:                                           {BackupStateTransitionForScheduledBackupsLabel, PartialBackupLabel, ocpPipeline, iksPipeline, SystemTest, PxBackupLabel, P0},
 	BackupSyncBasicTest:                                                                {BackupSyncBasicTestLabel, allPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FADALabel, ocpPipeline, NonPxLabel, aksPipeline, gkePipeline, iksPipeline, KDMPLabel, CsiOffloadLabel, CsiLabel, roksPipeline},
-	BackupToLockedBucketWithSharedObjects:                                              {BackupToLockedBucketWithSharedObjectsLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3LockedBucket, AzureImmutableBucket},
+	BackupToLockedBucketWithSharedObjects:                                              {BackupToLockedBucketWithSharedObjectsLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3LockedBucket, AzureImmutableBucket, LockedBucketTest},
 	BasicBackupCreation:                                                                {BasicBackupCreationLabel, allPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FBDALabel, FACDLabel, FADALabel, aksPipeline, NonPxLabel, gkePipeline, iksPipeline, KDMPLabel, CsiOffloadLabel, CsiLabel, roksPipeline},
 	BasicSelectiveRestore:                                                              {BasicSelectiveRestoreLabel, rkePipeline, SystemTest, PxBackupLabel, P0, S3BackupLocationLabel, NfsBackupLocationLabel, FBDALabel, PxLabel, ocpPipeline, NonPxLabel, aksPipeline, gkePipeline, iksPipeline, KDMPLabel, CsiOffloadLabel, CsiLabel, roksPipeline},
 	CancelAllRunningBackupJobs:                                                         {CancelAllRunningBackupJobsLabel, ocpPipeline, SystemTest, PxBackupLabel, P2, S3BackupLocationLabel, NfsBackupLocationLabel, FBDALabel, FACDLabel, PxLabel, FADALabel, NonPxLabel, gkePipeline, iksPipeline, KDMPLabel, CsiOffloadLabel, CsiLabel, roksPipeline},
@@ -531,8 +532,8 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	DeleteSharedBackupOfUserFromAdmin:                                                  {DeleteSharedBackupOfUserFromAdminLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FBDALabel, FACDLabel, FADALabel, gkePipeline, iksPipeline, KDMPLabel, CsiOffloadLabel, CsiLabel, roksPipeline},
 	DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAdmin:                   {DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAdminLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FADALabel, gkePipeline},
 	DeleteUsersRole:                                                                    {DeleteUsersRoleLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FADALabel, gkePipeline},
-	DeleteVerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedules:                  {DeleteVerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedulesLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, AzureBackupLocationLabel, Day3LockedBucketLabel, AzureImmutableBucket},
-	DeleteVerifyBackupDeletionWhenRetentionIsMet:                                       {DeleteVerifyBackupDeletionWhenRetentionIsMetLabel, vanillaPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, AzureBackupLocationLabel, Day3LockedBucketLabel, AzureImmutableBucket},
+	DeleteVerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedules:                  {DeleteVerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedulesLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, AzureBackupLocationLabel, Day3LockedBucketLabel, AzureImmutableBucket, LockedBucketTest},
+	DeleteVerifyBackupDeletionWhenRetentionIsMet:                                       {DeleteVerifyBackupDeletionWhenRetentionIsMetLabel, vanillaPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, AzureBackupLocationLabel, Day3LockedBucketLabel, AzureImmutableBucket, LockedBucketTest},
 	DifferentAccessSameUser:                                                            {DifferentAccessSameUserLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FBDALabel, FACDLabel, FADALabel, gkePipeline, iksPipeline, KDMPLabel, CsiOffloadLabel, CsiLabel, roksPipeline},
 	DuplicateSharedBackup:                                                              {DuplicateSharedBackupLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FBDALabel, FACDLabel, FADALabel, gkePipeline, iksPipeline, KDMPLabel, CsiOffloadLabel, CsiLabel, roksPipeline},
 	EnableNsAndClusterLevelPSAWithBackupAndRestore:                                     {EnableNsAndClusterLevelPSAWithBackupAndRestoreLabel, vanillaPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
@@ -555,8 +556,8 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	KubevirtVMWithFreezeUnfreeze:                                                       {KubevirtVMWithFreezeUnfreezeLabel, KubevirtAppLabel, KubevirtAppLabelOCP, ocpPipeline, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
 	LicensingCountBeforeAndAfterBackupPodRestart:                                       {LicensingCountBeforeAndAfterBackupPodRestartLabel, ocpPipeline, SystemTest, PxBackupLabel, P2, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, PxLabel, FADALabel, gkePipeline, iksPipeline, KDMPLabel, CsiOffloadLabel, CsiLabel, roksPipeline},
 	LicensingCountWithNodeLabelledBeforeClusterAddition:                                {LicensingCountWithNodeLabelledBeforeClusterAdditionLabel, ocpPipeline, SystemTest, PxBackupLabel, P2, S3BackupLocationLabel, NfsBackupLocationLabel, FBDALabel, FACDLabel, PxLabel, FADALabel, gkePipeline},
-	LockedBucketResizeOnRestoredVolume:                                                 {LockedBucketResizeOnRestoredVolumeLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3LockedBucket, AzureImmutableBucket},
-	LockedBucketResizeVolumeOnScheduleBackup:                                           {LockedBucketResizeVolumeOnScheduleBackupLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3LockedBucket, AzureImmutableBucket},
+	LockedBucketResizeOnRestoredVolume:                                                 {LockedBucketResizeOnRestoredVolumeLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3LockedBucket, AzureImmutableBucket, LockedBucketTest},
+	LockedBucketResizeVolumeOnScheduleBackup:                                           {LockedBucketResizeVolumeOnScheduleBackupLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3LockedBucket, AzureImmutableBucket, LockedBucketTest},
 	ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit:                                {ManualAndScheduleBackupUsingNSLabelWithMaxCharLimitLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FADALabel, gkePipeline, iksPipeline, KDMPLabel, CsiOffloadLabel, CsiLabel, roksPipeline},
 	ManualAndScheduledBackupUsingNamespaceAndResourceLabel:                             {ManualAndScheduledBackupUsingNamespaceAndResourceLabelLabel, ocpPipeline, rkePipeline, SystemTest, PxBackupLabel, P1, S3BackupLocationLabel, NfsBackupLocationLabel, FBDALabel, FACDLabel, PxLabel, FADALabel, gkePipeline, iksPipeline, KDMPLabel, CsiOffloadLabel, CsiLabel, roksPipeline},
 	MultipleBackupLocationWithSameEndpoint:                                             {MultipleBackupLocationWithSameEndpointLabel, vanillaPipeline, ScaleTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
@@ -612,8 +613,8 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	ValidateFiftyVolumeBackups:                                                         {ValidateFiftyVolumeBackupsLabel, vanillaPipeline, ScaleTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
 	ValidateUserAccessLevel:                                                            {ValidateUserAccessLevelLabel},
 	ValidateMetrics:                                                                    {ValidateMetricsLabel},
-	VerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedules:                        {VerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedulesLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, AzureBackupLocationLabel, Day0LockedBucketLabel, AzureImmutableBucket},
-	VerifyBackupDeletionWhenRetentionIsMet:                                             {VerifyBackupDeletionWhenRetentionIsMetLabel, vanillaPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, AzureBackupLocationLabel, Day0LockedBucketLabel, AzureImmutableBucket},
+	VerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedules:                        {VerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedulesLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, AzureBackupLocationLabel, Day0LockedBucketLabel, AzureImmutableBucket, LockedBucketTest},
+	VerifyBackupDeletionWhenRetentionIsMet:                                             {VerifyBackupDeletionWhenRetentionIsMetLabel, vanillaPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, AzureBackupLocationLabel, Day0LockedBucketLabel, AzureImmutableBucket, LockedBucketTest},
 	VerifyRBACForAppAdmin:                                                              {VerifyRBACForAppAdminLabel, vanillaPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FADALabel, gkePipeline},
 	VerifyRBACForAppUser:                                                               {VerifyRBACForAppUserLabel, vanillaPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FADALabel},
 	VerifyRBACForInfraAdmin:                                                            {VerifyRBACForInfraAdminLabel, vanillaPipeline, gkePipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FACDLabel, FADALabel},
@@ -627,8 +628,8 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	ValidateClusterShareWhileBringDownPxBackupPods:                                     {ValidateClusterShareWhileBringDownPxBackupPodsLabel, ClusterShareAndSuperAdminLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
 	StorkControllerConfigCM:                                                            {StorkControllerConfigCMLabel},
 	BackupShare:                                                                        {BackupShareLabel},
-	SoftDeleteAndRecoverBackupOnContainerAndBlobLevel:                                  {SoftDeleteAndRecoverBackupOnContainerAndBlobLevelLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, AzureBackupLocationLabel, Day3LockedBucketLabel, AzureImmutableBucket},
-	DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel:                            {DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevelLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, AzureBackupLocationLabel, Day3LockedBucketLabel, AzureImmutableBucket},
+	SoftDeleteAndRecoverBackupOnContainerAndBlobLevel:                                  {SoftDeleteAndRecoverBackupOnContainerAndBlobLevelLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, AzureBackupLocationLabel, Day3LockedBucketLabel, AzureImmutableBucket, LockedBucketTest},
+	DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel:                            {DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevelLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, AzureBackupLocationLabel, Day3LockedBucketLabel, AzureImmutableBucket, LockedBucketTest},
 	BackupDeletionWithDynamicPVCGeneration:                                             {BackupDeletionWithDynamicPVCGenerationLabel, vanillaPipeline, ScaleTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
 	BackupScheduleEnumerate:                                                            {BackupScheduleEnumerateLabel},
 }
