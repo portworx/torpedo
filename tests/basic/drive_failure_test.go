@@ -374,3 +374,206 @@ func YankJournalTest(testName, testDesc string) {
 		AfterEachTest(contexts)
 	})
 }
+
+var _ = Describe("{YankMetadataWithNodeReboot}", func() {
+	testName = "YankMetadataWithNodeReboot"
+	testDescription = "Yank metadata drive and reboot node"
+	YankMetadataTest(testName, testDescription)
+})
+
+func YankMetadataTest(testName, testDesc string) {
+	var (
+		nodeSelected node.Node
+		busID, path  string
+		kvdbNodesIDs []string
+	)
+	JustBeforeEach(func() {
+		StartTorpedoTest(testName, testDesc, nil, 0)
+	})
+
+	itLog := testDesc
+	It(itLog, func() {
+		log.InfoD(itLog)
+
+		stepLog := "Schedule apps to perform IOs"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("yankmetadata-%d", i))...)
+			}
+			ValidateApplications(contexts)
+		})
+		defer appsValidateAndDestroy(contexts)
+
+		ctx := contexts[0]
+		volumes, err := Inst().S.GetVolumes(ctx)
+		log.FailOnError(err, "Failed while listing the volume with error")
+		log.InfoD("Vol deatils %v", volumes)
+
+		if len(volumes) == 0 {
+			msg := fmt.Sprintf("There are no volumes associated with the app %v", ctx.App.Key)
+			log.InfoD(msg)
+			Skip(msg)
+		}
+		volumeSelected := volumes[0]
+
+		storageNodes := node.GetStorageNodes()
+		index := rand.Intn(len(storageNodes))
+		tNode := storageNodes[index]
+		stepLog = "Get KVDB nodes"
+
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			kvdbMembers, err := Inst().V.GetKvdbMembers(tNode)
+			log.FailOnError(err, "Error getting KVDB members")
+			log.InfoD("kvdb members %+v", kvdbMembers)
+			for _, n := range kvdbMembers {
+				kvdbNodesIDs = append(kvdbNodesIDs, n.Name)
+			}
+		})
+		stepLog = "Select the volume replica node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			rsDetails, err := Inst().V.GetReplicaSets(volumeSelected)
+			log.FailOnError(err, fmt.Sprintf("error getting replica sets for vol %s", volumeSelected.Name))
+			log.InfoD("Volume Replica info %v", rsDetails)
+			volReplicaNodeIDMap := map[string]bool{}
+
+			for _, nodeId := range rsDetails[0].GetNodes() {
+				volReplicaNodeIDMap[nodeId] = true
+			}
+
+			storageNodes := node.GetStorageNodes()
+			for _, nodeDetail := range storageNodes {
+				_, ok := volReplicaNodeIDMap[nodeDetail.Id]
+				if ok && !Contains(kvdbNodesIDs, nodeDetail.Id) {
+					nodeSelected = nodeDetail
+				}
+			}
+		})
+
+		//add metadata drive if it doesn't exists
+
+		stepLog = "Check node has a metadata disk if not add"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			isDedicatedMetadataDiskExist := false
+			//Check which node has metadata disk if not add one
+
+			path, err = getMetaDataDiskPath(nodeSelected)
+			log.FailOnError(err, "Failed to get metadata disk")
+			if path != "" {
+				log.InfoD("Metadata disk path: %v", path)
+				isDedicatedMetadataDiskExist = true
+			}
+
+			if !isDedicatedMetadataDiskExist {
+				deviceSpec := fmt.Sprintf("size=100 --metadata")
+				log.InfoD("Initiate add cloud drive and validate")
+				// enter pool maintenance mode
+
+				stepLog := "Enter maintenance mode"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					err = Inst().V.EnterPoolMaintenance(nodeSelected)
+					log.FailOnError(err, "node: %v failed to transition to pool maintenance mode", nodeSelected.Name)
+					log.Info("enter pool maintenance mode succeed")
+				})
+
+				stepLog = "Add metadata disk"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					err := Inst().V.AddCloudDrive(&nodeSelected, deviceSpec, -1)
+					log.FailOnError(err, "Failed to add metadata device on node : %s", nodeSelected.Name)
+					log.InfoD("metadata disk added successfully on node [%s]", nodeSelected.Hostname)
+				})
+
+				// exit pool maintenance
+				stepLog = "Exit pool maintenance mode"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					err = Inst().V.ExitPoolMaintenance(nodeSelected)
+					log.FailOnError(err, "Node: %v Failed to exit out of maintenance mode", nodeSelected.Name)
+					log.Info("exit pool maintenance mode succeed")
+				})
+				path, err = getMetaDataDiskPath(nodeSelected)
+				log.FailOnError(err, "Failed to get metadata disk")
+			} else {
+				log.InfoD("Metadata disk already exist: [%s]", path)
+			}
+			//check if selecteNode is empty or not
+			if nodeSelected.Name == "" {
+				log.FailOnError(fmt.Errorf("No node found with metadata disk or metadata disks cannot be added to any nodes"), "No node found with metadata disk ")
+			}
+		})
+
+		path = strings.Trim(path, "/dev/")
+
+		time.Sleep(time.Minute * 5)
+		stepLog = "Yank metadata drive"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			busID, err = Inst().N.YankDrive(nodeSelected, path, node.ConnectionOpts{
+				Timeout:         dfDefaultTimeout,
+				TimeBeforeRetry: dfDefaultRetryInterval,
+			})
+			log.FailOnError(err, fmt.Sprintf("failed to yank metadata drive on node [%s]", nodeSelected.Name))
+			log.InfoD("Bus id - %s", busID)
+		})
+
+		if testName == "YankMetadataWithNodeReboot" {
+			stepLog = "Reboot the node"
+			Step(stepLog, func() {
+				log.Info(stepLog)
+				err = RebootNodeAndWaitForPxUp(nodeSelected)
+				log.FailOnError(err, "Failed to reboot node and wait till it is up")
+			})
+		}
+
+		stepLog = "Verify Px Status"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			status, err := Inst().V.GetPxctlStatus(nodeSelected)
+			log.FailOnError(err, fmt.Sprintf("failed to get pxctl status on node [%s]", nodeSelected.Name))
+			dash.VerifyFatal(status == api.Status_STATUS_OK.String(), true, fmt.Sprintf("node [%s] status is up but PX cluster is not ok. Expected: %v Actual: %v",
+				nodeSelected.Name, api.Status_STATUS_OK, status))
+			log.InfoD("px status %v", status)
+		})
+
+		stepLog = "Recover yank drive"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().N.RecoverDrive(nodeSelected, path, busID, node.ConnectionOpts{
+				Timeout:         driveFailTimeout,
+				TimeBeforeRetry: dfDefaultRetryInterval,
+			})
+			log.FailOnError(err, fmt.Sprintf("failed to recover yank metadata drive on node [%s]", nodeSelected.Name))
+			log.InfoD("Verified recover yank drive")
+		})
+
+		stepLog = "Do pool maintenance"
+		Step(stepLog, func() {
+			log.Info(stepLog)
+			log.InfoD(fmt.Sprintf("Performing pool maintenance cycle on node %s", nodeSelected.Name))
+			err = Inst().V.RecoverPool(nodeSelected)
+			log.FailOnError(err, fmt.Sprintf("error performing pool maintenance cycle on node %s", nodeSelected.Name))
+		})
+
+		stepLog = "Verify pool status"
+		Step(stepLog, func() {
+			log.Info(stepLog)
+			poolsStatus, err := Inst().V.GetNodePoolsStatus(nodeSelected)
+			log.FailOnError(err, "error getting pool status on node %s", nodeSelected.Name)
+			for poolID, status := range poolsStatus {
+				dash.VerifyFatal(status, "Online", fmt.Sprintf("Pool %s Status not Online", poolID))
+			}
+		})
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+}
