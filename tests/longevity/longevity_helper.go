@@ -394,6 +394,7 @@ func populateTriggerFuncs() {
 		PowerOffStorageNodes:              TriggerPowerOffStorageNodes,
 		KubevirtVMLiveMigration:           TriggerKubevirtVMLiveMigration,
 		KubevirtVMStartAndStop:            TriggerKubevirtVMStartAndStop,
+		InjectNetworkDelay:                TriggerInjectNetworkDelay,
 	}
 
 	//Creating a distinct trigger to make sure email triggers at regular intervals
@@ -857,6 +858,7 @@ func populateIntervals() {
 	triggerInterval[PowerOffStorageNodes] = make(map[int]time.Duration)
 	triggerInterval[KubevirtVMLiveMigration] = make(map[int]time.Duration)
 	triggerInterval[KubevirtVMStartAndStop] = make(map[int]time.Duration)
+	triggerInterval[InjectNetworkDelay] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -2042,6 +2044,17 @@ func populateIntervals() {
 	triggerInterval[KubevirtVMStartAndStop][3] = 21 * baseInterval
 	triggerInterval[KubevirtVMStartAndStop][2] = 24 * baseInterval
 	triggerInterval[KubevirtVMStartAndStop][1] = 27 * baseInterval
+
+	triggerInterval[InjectNetworkDelay][10] = 1 * baseInterval
+	triggerInterval[InjectNetworkDelay][9] = 3 * baseInterval
+	triggerInterval[InjectNetworkDelay][8] = 6 * baseInterval
+	triggerInterval[InjectNetworkDelay][7] = 9 * baseInterval
+	triggerInterval[InjectNetworkDelay][6] = 12 * baseInterval
+	triggerInterval[InjectNetworkDelay][5] = 15 * baseInterval
+	triggerInterval[InjectNetworkDelay][4] = 18 * baseInterval
+	triggerInterval[InjectNetworkDelay][3] = 21 * baseInterval
+	triggerInterval[InjectNetworkDelay][2] = 24 * baseInterval
+	triggerInterval[InjectNetworkDelay][1] = 27 * baseInterval
 	// Chaos Level of 0 means disable test trigger
 	triggerInterval[DeployApps][0] = 0
 	triggerInterval[RebootNode][0] = 0

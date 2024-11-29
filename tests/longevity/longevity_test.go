@@ -171,6 +171,7 @@ var _ = Describe("{UpgradeLongevity}", func() {
 			PoolExpansionResizeDisk: TriggerPoolExpansionResizeDisk,
 			KubevirtVMLiveMigration: TriggerKubevirtVMLiveMigration,
 			KubevirtVMStartAndStop:  TriggerKubevirtVMStartAndStop,
+			InjectNetworkDelay:      TriggerInjectNetworkDelay,
 		}
 		// disruptiveTriggerFunctions are mapped to their respective handlers and are invoked by a separate testTrigger
 		disruptiveTriggerFunctions = map[string]TriggerFunction{

@@ -682,6 +682,9 @@ const (
 
 	// Triggers VM start and stop
 	KubevirtVMStartAndStop = "kubevirtVMStartAndStop"
+
+	//Inject network delays
+	InjectNetworkDelay = "injectNetworkDelay"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -14087,5 +14090,109 @@ func TriggerKubevirtVMStartAndStop(contexts *[]*scheduler.Context, recordChan *c
 	if isSSIERun() {
 		validateContexts(event, contexts)
 	}
+	updateMetrics(*event)
+}
+
+func TriggerInjectNetworkDelay(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+
+	startLongevityTest(InjectNetworkDelay)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: InjectNetworkDelay,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+	var workerNodes []node.Node
+	var interfaceName string
+	var baseDelay string
+	var jitter string
+	var ipAddr string
+	stepLog := "Inducing network delay on nodes"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		workerNodes = node.GetStorageDriverNodes()
+		index := rand.Intn(len(workerNodes))
+		nodeToInduceNetworkDelay := workerNodes[index]
+		ipAddr = nodeToInduceNetworkDelay.MgmtIp
+		log.Infof("ip address :[%v] of node : [%v]", ipAddr, nodeToInduceNetworkDelay.Name)
+
+		//Add label to node
+		log.Infof("adding label network-delay-set on node : [%v]",nodeToInduceNetworkDelay.Name)
+		err := Inst().S.AddLabelOnNode(nodeToInduceNetworkDelay,"network-delay-set","true")
+		if err != nil{
+			log.Infof("failed to add label on node : [%v], err :[%v]",nodeToInduceNetworkDelay.Name,err)
+			UpdateOutcome(event,err)
+			return
+		}
+		//remove label on node
+		defer func() {
+			log.Infof("removing label net-delay-set  on node : [%v]",nodeToInduceNetworkDelay.Name)
+			err := Inst().S.RemoveLabelOnNode(nodeToInduceNetworkDelay,"network-delay-set")
+			if err != nil{
+				log.Infof("failed to remove label on node : [%v], err :[%v]",nodeToInduceNetworkDelay.Name,err)
+				UpdateOutcome(event,err)
+				return
+			}
+		}()
+
+		//fetching interface name
+		cmd := fmt.Sprintf("ip -o addr show | grep \"%s\" | awk '\\''{print $2}'\\''", ipAddr)
+		log.Infof("cmd :[%v] to fetch interface name on node :[%v]", cmd, nodeToInduceNetworkDelay.Name)
+		cmdConnectionOpts := node.ConnectionOpts{
+			Timeout:         15 * time.Second,
+			TimeBeforeRetry: 5 * time.Second,
+			Sudo:            true,
+		}
+		out, err := Inst().N.RunCommand(nodeToInduceNetworkDelay, cmd, cmdConnectionOpts)
+		if err != nil {
+			log.InfoD("failed to run command [%v] to fetch interface name, err :[%v]", cmd,err)
+			UpdateOutcome(event, err)
+			return
+		}
+		interfaceName = strings.TrimSpace(out)
+		log.InfoD("Interface name :[%v]", interfaceName)
+		baseDelay = "50ms"
+		jitter = "5ms"
+
+		//add network delay
+		log.InfoD("inducing network delay of base value : [%v] and jitter value : [%v]",baseDelay,jitter)
+		cmd = fmt.Sprintf("sudo tc qdisc add dev %s root netem delay %s %s distribution normal", interfaceName, baseDelay,jitter)
+		log.Infof("command to add network delay : [%v] of [%v]", cmd)
+		_, err = Inst().N.RunCommand(nodeToInduceNetworkDelay, cmd, cmdConnectionOpts)
+		if err != nil {
+			log.InfoD("failed to run command to induce network delay on node [%v]", nodeToInduceNetworkDelay)
+			UpdateOutcome(event, err)
+			return
+		}
+		log.InfoD("successfully induced network delay")
+
+		//sleep for sometime
+		log.InfoD("sleeping for 2 mins")
+		time.Sleep(2 * time.Minute)
+
+		//remove network dealy
+		log.InfoD("removing network delay")
+		cmd = fmt.Sprintf("sudo tc qdisc del dev %s root netem", interfaceName)
+		log.Infof("command to remove delay : [%v]", cmd)
+		_, err = Inst().N.RunCommand(nodeToInduceNetworkDelay, cmd, cmdConnectionOpts)
+		if err != nil {
+			log.InfoD("failed to run command to remove network delay on node [%v]", nodeToInduceNetworkDelay)
+			UpdateOutcome(event, err)
+			return
+		}
+		log.InfoD("successfully removed network delay")
+
+	})
 	updateMetrics(*event)
 }
