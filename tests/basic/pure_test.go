@@ -9617,3 +9617,184 @@ var _ = Describe("{MeasureFADAVolumeCreationTimeTaken}", Label("staging", "p1", 
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{NetworkConnectionLossOnAllNodes}", Label("p0", "negative", "node_ops", "pure_ops", "network_failure"), func() {
+	/*
+
+	   https://purestorage.atlassian.net/browse/HAZEL-1063
+	   1. Schedule applications
+	   2. Now bring down the network interface on all the nodes
+	   3. Bring the network interface
+	   4. Maybe wait for 30 mins and keep checking if px comes up.
+	   5. validate application
+	   6. Check if core is generated and check all the things are fine and running
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("NetworkConnectionLossOnAllNodes", "Network Connection Loss On All Nodes", nil, 0)
+	})
+
+	var (
+		contexts  []*scheduler.Context
+		wg        sync.WaitGroup
+		coreFiles []string
+	)
+
+	itLog := "NetworkConnectionLossOnAllNodes"
+	It(itLog, func() {
+		nodes := node.GetStorageDriverNodes()
+		log.InfoD(itLog)
+		stepLog = "Schedule applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("networkloss-%d", i))...)
+			}
+		})
+
+		ValidateApplications(contexts)
+		defer DestroyApps(contexts, nil)
+
+		stepLog = "Bring down the network interface on all the nodes and then bring up"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			scriptPath := "/tmp/network-interface.sh"
+			servicePath := "/etc/systemd/system/network-interface.service"
+
+			scriptContent := `#!/bin/bash
+network_interface=$(ip -o -4 route show to default | awk "{print \$5}")
+if [ -z "$network_interface" ]; then
+    echo "No default network interface found. Exiting."
+    exit 1
+fi
+sudo ip link set $network_interface down
+sleep 300
+sudo ip link set $network_interface up
+echo "Network interface has been restored."`
+
+			serviceContent := fmt.Sprintf(`[Unit]
+Description=Network Interface Down and Up Service
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=%s
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target`, scriptPath)
+
+			for _, each := range nodes {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					writeScriptCmd := fmt.Sprintf("echo '%s' | sudo tee %s > /dev/null", scriptContent, scriptPath)
+					output, err := Inst().N.RunCommand(each, writeScriptCmd, node.ConnectionOpts{
+						Timeout:         5 * time.Minute,
+						TimeBeforeRetry: 10 * time.Second,
+						Sudo:            false,
+					})
+					log.FailOnError(err, "Failed to write the script to node: %v", each.Name)
+					log.Infof("Script written to node %v: %s", each.Name, output)
+
+					chmodCmd := fmt.Sprintf("sudo chmod +x %s", scriptPath)
+					output, err = Inst().N.RunCommand(each, chmodCmd, node.ConnectionOpts{
+						Timeout:         5 * time.Minute,
+						TimeBeforeRetry: 10 * time.Second,
+						Sudo:            true,
+					})
+					log.FailOnError(err, "Failed to make the script executable on node: %v", each.Name)
+					log.Infof("Script made executable on node %v: %s", each.Name, output)
+
+					writeServiceCmd := fmt.Sprintf("echo '%s' | sudo tee %s > /dev/null", serviceContent, servicePath)
+					output, err = Inst().N.RunCommand(each, writeServiceCmd, node.ConnectionOpts{
+						Timeout:         5 * time.Minute,
+						TimeBeforeRetry: 10 * time.Second,
+						Sudo:            false,
+					})
+					log.FailOnError(err, "Failed to write systemd service to node: %v", each.Name)
+					log.Infof("Systemd service written to node %v: %s", each.Name, output)
+
+					err = Inst().N.Systemctl(each, "network-interface.service", node.SystemctlOpts{
+						Action: "start",
+						ConnectionOpts: node.ConnectionOpts{
+							Timeout:         10 * time.Minute,
+							TimeBeforeRetry: defaultRetryInterval,
+						}})
+					log.FailOnError(err, "Failed to start systemd service on node: %v", each.Name)
+					log.Infof("Systemd service started on node %v", each.Name)
+
+					// Sleep for sometime for node status to change.
+					time.Sleep(30 * time.Second)
+
+					nodeStatusCheck := func() (interface{}, bool, error) {
+						status, err := Inst().V.GetNodeStatus(each)
+						if err != nil {
+							return false, true, err
+						}
+						if *status == api.Status_STATUS_OK {
+							return true, false, nil
+						}
+						return false, true, fmt.Errorf("node %s status is: %v", each.Name, status)
+					}
+					nodeStatus, err := task.DoRetryWithTimeout(nodeStatusCheck, 30*time.Minute, defaultRetryInterval)
+					log.FailOnError(err, "Failed to get node details")
+					dash.VerifyFatal(nodeStatus.(bool), true, "is node status up ?")
+				}()
+			}
+			wg.Wait()
+		})
+
+		stepLog = "Wait for 30 mins and keep checking if px comes up"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, node := range nodes {
+				err := Inst().V.WaitDriverUpOnNode(node, 30*time.Minute)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of node %s", node.Name))
+			}
+			log.InfoD("Portworx is up on all nodes")
+		})
+
+		stepLog = "validate application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			ValidateApplications(contexts)
+		})
+
+		stepLog = "Check if core is generated"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, each := range nodes {
+				log.InfoD("looking for core files on node %s", each.Name)
+				file, err := Inst().N.SystemCheck(each, node.ConnectionOpts{
+					Timeout:         2 * time.Minute,
+					TimeBeforeRetry: 10 * time.Second,
+				})
+				log.FailOnError(err, "Failed to get core file from node %s", each.Name)
+				log.InfoD("log file for node %s :  %v", each.Name, file)
+				coreFiles = append(coreFiles, file)
+			}
+			dash.VerifyFatal(len(coreFiles), len(nodes), "is core file present on all nodes ?")
+		})
+	})
+
+	JustAfterEach(func() {
+		stepLog := "Cleanup script and service files"
+		Step(stepLog, func() {
+			nodes := node.GetStorageDriverNodes()
+			for _, each := range nodes {
+				removeScriptCmd := fmt.Sprintf("sudo rm -f /tmp/network-interface.sh /etc/systemd/system/network-interface.service")
+				output, err := Inst().N.RunCommand(each, removeScriptCmd, node.ConnectionOpts{
+					Timeout:         2 * time.Minute,
+					TimeBeforeRetry: 10 * time.Second,
+					Sudo:            true,
+				})
+				log.FailOnError(err, "Failed to remove script and service files from node: %v", each.Name)
+				log.Infof("Cleanup on node %v: %s", each.Name, output)
+			}
+		})
+
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
