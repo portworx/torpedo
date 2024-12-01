@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"k8s.io/utils/strings/slices"
 	"math"
 	"math/rand"
 	"net/http"
@@ -5227,7 +5228,7 @@ var _ = Describe("{RestartPxandRestartNode}", Label("p1", "negative", "px_vol_op
 })
 
 // Verify volume delete from the new node- Place volumes on the new node and enable trash can features on all volume.
-var _ = Describe("{EnableThrashCanForvolume}", Label("p0", "positive", "px_vol_ops"), Label("p2", "positive", "px_vol_ops", "trashcan"), func() {
+var _ = Describe("{EnableTrashCanForvolume}", Label("p0", "positive", "px_vol_ops", "staging"), Label("p2", "positive", "px_vol_ops", "trashcan"), func() {
 	/*
 		Step1: Take storage node from cluster
 		Step3: Create a  few Volumes on the new node.
@@ -5239,7 +5240,7 @@ var _ = Describe("{EnableThrashCanForvolume}", Label("p0", "positive", "px_vol_o
 	*/
 	var testrailID = 0
 	JustBeforeEach(func() {
-		StartTorpedoTest("EnableThrashCanForvolume", "Create multiple volumes on node and delete and validate trashcan volume expiry", nil, testrailID)
+		StartTorpedoTest("EnableTrashCanForvolume", "Create multiple volumes on node and delete and validate trashcan volume expiry", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	stepLog := "Create volumes on the storage node "
@@ -5835,9 +5836,8 @@ var _ = Describe("{DetachVolSnapshotTest}", func() {
 	})
 })
 
-
 // Verify Delete volumes from trashcan using Volume expiration minutes.
-var _ = Describe("{DeleteVolFromThrashCanWithVEM}", Label("p0", "positive", "px_ops", "px_vol_ops", "pure_ops", "trashcan", "staging"), func() {
+var _ = Describe("{DeleteVolFromTrashCanWithVEM}", Label("p0", "positive", "px_ops", "px_vol_ops", "pure_ops", "trashcan", "staging"), func() {
 	/*
 		Step1: Take storage node from cluster
 		Step3: Scheduled Applications on the node
@@ -5850,7 +5850,7 @@ var _ = Describe("{DeleteVolFromThrashCanWithVEM}", Label("p0", "positive", "px_
 	*/
 	var testrailID = 86093862
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeleteVolFromThrashCanWithVEM", "Create multiple volumes on node and delete and validate trashcan volume expiry", nil, testrailID)
+		StartTorpedoTest("DeleteVolFromTrashCanWithVEM", "Create multiple volumes on node and delete and validate trashcan volume expiry", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	stepLog := "Create volumes on the storage node "
@@ -6176,7 +6176,6 @@ func createNamespace(ns string) {
 	_, err = k8sCore.CreateNamespace(nsName)
 	log.FailOnError(err, "failed to create namespace")
 }
-
 
 var _ = Describe("{SnapValidateWithCredRecreate}", Label("staging", "p0", "negative", "px_ops"), func() {
 	/*
@@ -6552,3 +6551,167 @@ var _ = Describe("{GroupCloudSnapshot}", Label("staging", "p0", "positive", "px_
 	})
 })
 
+// Empty trashcan all volumes should get deleted immediately.
+var _ = Describe("{EmptyTrashcanBeforeVEM}", Label("p0", "positive", "px_vol_ops", "trashcan", "staging"), func() {
+	/*
+		Step1: Take storage node from cluster
+		Step3: Scheduled Applications on the node
+		Step4: Validated those Applications
+		step5: Once volume are created on the node, enable Trashcan.
+		Step6: we need wait for 10 min update to Trashcan.
+		Step7: Once you have trashcan enabled , delete a volume which was created earlier on the new Node
+		make sure the volume deleted should go to trashcan.
+		Step8: Delete the volumes under trashcan immediately
+	*/
+	var testrailID = 0
+	JustBeforeEach(func() {
+		StartTorpedoTest("EmptyTrashcanBeforeVEM", "delete Volumes in trashcan before volume expiry minutes", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	stepLog := "Delete Volumes on Trashcan before Volume Expiration Minutes"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		var (
+			contexts                 = make([]*scheduler.Context, 0)
+			originalTrashcanVols     []string
+			originalTrashcanVolsLeng int
+		)
+
+		log.InfoD("Pick the one Storage node in cluster")
+		pickNode := node.GetStorageNodes()[0]
+		stepLog = "Create volumes on cluster with applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			stepLog = "Scheduling the Applications"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for i := 0; i < Inst().GlobalScaleFactor; i++ {
+					contexts = append(contexts, ScheduleApplications(fmt.Sprintf("storagenodecreatevolume-%d", i))...)
+				}
+				log.InfoD("Applications are scheduled successfully")
+			})
+
+			stepLog = "Validate the applications"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				ValidateApplications(contexts)
+				log.InfoD("scheduled Applications are validated")
+			})
+
+			stepLog = "Enable Trashcan"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				err := Inst().V.SetClusterOptsWithConfirmation(pickNode, map[string]string{
+					"--volume-expiration-minutes": "10",
+				})
+				log.FailOnError(err, "error while enabling trashcan")
+				log.InfoD("Trashcan is successfully enabled")
+			})
+
+			stepLog = "fetching all the originally existing volumes from the Trashcan"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				trashcanVols, err := Inst().V.GetTrashCanVolumeIds(pickNode)
+				log.FailOnError(err, "error while getting volumes from the trashcan")
+				for _, vol := range trashcanVols {
+					if vol = strings.ReplaceAll(vol, " ", ""); vol != "" {
+						originalTrashcanVols = append(originalTrashcanVols, vol)
+					}
+				}
+				originalTrashcanVolsLeng = len(originalTrashcanVols)
+				log.InfoD("Volumes that are already exists in the trashcan [%v]", originalTrashcanVols)
+			})
+
+			stepLog := "Delete volumes on the node"
+			Step(stepLog, func() {
+				log.InfoD("Deleting the Volumes with destroy Apps")
+				appsValidateAndDestroy(contexts)
+			})
+			trashcanVols := make([]string, 0)
+			stepLog = "validate volumes in trashcan"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				t := func() (interface{}, bool, error) {
+					trashcanVolsNew, err := Inst().V.GetTrashCanVolumeIds(pickNode)
+					if err != nil {
+						return "", false, err
+					}
+					if len(trashcanVolsNew) <= originalTrashcanVolsLeng {
+						return "", false, err
+					}
+					return trashcanVolsNew, true, nil
+				}
+				trashcanVolsNew, err := task.DoRetryWithTimeout(t, 5*time.Minute, 5*time.Second)
+				log.FailOnError(err, "error While getting trashcan volumes")
+				for _, vol := range trashcanVolsNew.([]string) {
+					if vol = strings.ReplaceAll(vol, " ", ""); vol != "" {
+						trashcanVols = append(trashcanVols, vol)
+					}
+				}
+				log.InfoD("Listed the trashcan volumes in the node:%s", trashcanVols)
+				log.Infof("trashcan len: %d", len(trashcanVols))
+				dash.VerifyFatal(len(trashcanVols) > 0, true, "validate volumes exist in trashcan")
+			})
+
+			stepLog = "Delete volumes in trashcan"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				trashcanVolsNew, err := Inst().V.GetTrashCanVolumeIds(pickNode)
+				for _, vol := range trashcanVolsNew {
+					log.Infof("Trashcan volume id: %s", vol)
+
+					if !IsVolumeExits(vol) {
+						if vol = strings.ReplaceAll(vol, " ", ""); vol == "" {
+							continue
+						} else if slices.Contains(originalTrashcanVols, vol) {
+							log.Infof("Skipping the volume id: %s since it's already exists", vol)
+							continue
+						}
+					}
+					log.InfoD(fmt.Sprintf("detach volume [%v]", vol))
+					err = Inst().V.DetachVolume(vol)
+					log.FailOnError(err, fmt.Sprintf("Failed to detach volume [%v]", vol))
+					time.Sleep(500 * time.Millisecond)
+					log.InfoD(fmt.Sprintf("detele volume [%v]", vol))
+					err = Inst().V.DeleteVolume(vol)
+					log.FailOnError(err, fmt.Sprintf("Delete volume with ID [%v] failed", vol))
+				}
+			})
+
+			trashcanVolumes := make([]string, 0)
+			stepLog = "validate volumes are permanently delete in trashcan"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				log.InfoD("Get the volumes in trashcan")
+				trashcanVolumesNew, err := Inst().V.GetTrashCanVolumeIds(pickNode)
+				log.FailOnError(err, "error while getting trashcan volumes after expiry time")
+				for _, vol := range trashcanVolumesNew {
+					if vol = strings.ReplaceAll(vol, " ", ""); vol != "" {
+						trashcanVolumes = append(trashcanVolumes, vol)
+					}
+				}
+				log.Infof("Trashcan Volume len: %d", len(trashcanVolumes))
+				if len(trashcanVolumes) == originalTrashcanVolsLeng {
+					log.Infof("Volumes are permanently deleted from trashcan")
+				} else {
+					err := fmt.Errorf("Volumes are not deleted in trashcan")
+					log.FailOnError(err, "Volumes are still in trashcan")
+				}
+			})
+
+			stepLog = "Disable Trashcan"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				err := Inst().V.SetClusterOptsWithConfirmation(pickNode, map[string]string{
+					"--volume-expiration-minutes": "0",
+				})
+				log.FailOnError(err, "error while enabling trashcan")
+				log.InfoD("Trashcan is successfully Disabled")
+			})
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
