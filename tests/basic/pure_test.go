@@ -249,7 +249,9 @@ var _ = Describe("{PureVolumeCRUDWithSDK}", Label("p0", "positive", "pure_ops"),
 	var contexts []*scheduler.Context
 	JustBeforeEach(func() {
 		StartTorpedoTest("PureVolumeCRUDWithSDK", "Test pure volumes on applications, run CRUD", nil, 0)
-		Step("setup credential necessary for cloudsnap", createCloudsnapCredential)
+		if !Inst().V.IsPxLiteCluster() {
+			Step("setup credential necessary for cloudsnap", createCloudsnapCredential)
+		}
 	})
 
 	It("schedule pure volumes on applications, run CRUD, tear down", func() {
@@ -272,8 +274,9 @@ var _ = Describe("{PureVolumeCRUDWithSDK}", Label("p0", "positive", "pure_ops"),
 	})
 
 	JustAfterEach(func() {
-		Step("delete credential used for cloudsnap", deleteCloudsnapCredential)
-
+		if !Inst().V.IsPxLiteCluster() {
+			Step("delete credential used for cloudsnap", deleteCloudsnapCredential)
+		}
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
 	})
@@ -284,7 +287,9 @@ var _ = Describe("{PureVolumeCRUDWithPXCTL}", Label("p0", "positive", "pure_ops"
 	var contexts []*scheduler.Context
 	JustBeforeEach(func() {
 		StartTorpedoTest("PureVolumeCRUDWithPXCTL", "Test pure volumes on applications, run CRUD using pxctl", nil, 0)
-		Step("setup credential necessary for cloudsnap", createCloudsnapCredential)
+		if !Inst().V.IsPxLiteCluster() {
+			Step("setup credential necessary for cloudsnap", createCloudsnapCredential)
+		}
 	})
 	It("schedule pure volumes on applications, run CRUD, tear down", func() {
 		contexts = make([]*scheduler.Context, 0)
@@ -305,8 +310,9 @@ var _ = Describe("{PureVolumeCRUDWithPXCTL}", Label("p0", "positive", "pure_ops"
 		}
 	})
 	JustAfterEach(func() {
-		Step("delete credential used for cloudsnap", deleteCloudsnapCredential)
-
+		if !Inst().V.IsPxLiteCluster() {
+			Step("delete credential used for cloudsnap", deleteCloudsnapCredential)
+		}
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
 	})
