@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"io"
 
-	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	stork_objectstore "github.com/libopenstorage/stork/pkg/objectstore"
+	stork_api "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
+	stork_objectstore "github.com/pure-px/stork/pkg/objectstore"
 	"github.com/portworx/sched-ops/task"
 	"gocloud.dev/blob"
 )

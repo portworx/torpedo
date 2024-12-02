@@ -35,7 +35,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/kubevirt"
 	"github.com/portworx/sched-ops/k8s/storage"
 
-	migration "github.com/libopenstorage/stork/pkg/migration/controllers"
+	migration "github.com/pure-px/stork/pkg/migration/controllers"
 	"github.com/pure-px/torpedo/drivers"
 	"github.com/pure-px/torpedo/drivers/backup/portworx"
 
@@ -51,13 +51,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/hashicorp/go-version"
-	"github.com/libopenstorage/stork/pkg/k8sutils"
+	"github.com/pure-px/stork/pkg/k8sutils"
 	. "github.com/onsi/ginkgo/v2"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/kdmp"
-	"github.com/portworx/sched-ops/k8s/operator"
+	"github.com/pure-px/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/task"
 	v1 "github.com/pure-px/px-operator/pkg/apis/core/v1"
 	"github.com/pure-px/torpedo/drivers/backup"

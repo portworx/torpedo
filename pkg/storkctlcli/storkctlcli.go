@@ -7,9 +7,9 @@ import (
 	"os"
 	"time"
 
-	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/libopenstorage/stork/pkg/storkctl"
-	storkops "github.com/portworx/sched-ops/k8s/stork"
+	storkv1 "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
+	"github.com/pure-px/stork/pkg/storkctl"
+	storkops "github.com/pure-px/stork/pkg/crud/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/sirupsen/logrus"
 

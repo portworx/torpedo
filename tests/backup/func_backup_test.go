@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/libopenstorage/stork/pkg/k8sutils"
+	"github.com/pure-px/stork/pkg/k8sutils"
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"

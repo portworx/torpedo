@@ -5,8 +5,8 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	storkops "github.com/portworx/sched-ops/k8s/stork"
+	"github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
+	storkops "github.com/pure-px/stork/pkg/crud/stork"
 	"github.com/pure-px/torpedo/pkg/log"
 
 	"github.com/libopenstorage/openstorage/api"

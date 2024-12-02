@@ -21,7 +21,7 @@ import (
 	k8s "github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/externalsnapshotter"
 	opnshift "github.com/portworx/sched-ops/k8s/openshift"
-	"github.com/portworx/sched-ops/k8s/operator"
+	"github.com/pure-px/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/task"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/node/vsphere"

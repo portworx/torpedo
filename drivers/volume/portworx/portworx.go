@@ -35,7 +35,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/k8s/operator"
+	"github.com/pure-px/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/task"
 	pxapi "github.com/pure-px/px-operator/api/px"
 	v1 "github.com/pure-px/px-operator/pkg/apis/core/v1"

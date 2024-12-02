@@ -8,7 +8,7 @@ package tests
 /*
 import (
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/k8s/operator"
+	"github.com/pure-px/sched-ops/k8s/operator"
 
 	"strings"
 	"time"

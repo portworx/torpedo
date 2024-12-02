@@ -7,7 +7,7 @@ toolchain go1.23.0
 require (
 	cloud.google.com/go/storage v1.36.0
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.0.0
-	github.com/Azure/azure-storage-blob-go v0.14.0
+	github.com/Azure/azure-storage-blob-go v0.15.0
 	github.com/LINBIT/golinstor v0.27.0
 	github.com/andygrunwald/go-jira v1.15.0
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2
@@ -31,7 +31,6 @@ require (
 	github.com/libopenstorage/autopilot-api v1.3.0
 	github.com/libopenstorage/cloudops v0.0.0-20240528100711-6310e05a2c40
 	github.com/libopenstorage/openstorage v9.4.47+incompatible
-	github.com/libopenstorage/stork v1.4.1-0.20240424105137-8c6fa2a3f934
 	github.com/onsi/gomega v1.31.1
 	github.com/openshift/api v0.0.0-20230503133300-8bbcb7ca7183
 	github.com/oracle/oci-go-sdk/v65 v65.13.1
@@ -43,14 +42,14 @@ require (
 	github.com/portworx/talisman v1.1.3
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.63.0
 	github.com/prometheus/client_golang v1.17.0
-	github.com/pure-px/px-operator v0.0.0-20241022071538-96d1018d4909
+	github.com/pure-px/px-operator v0.0.0-20241128063509-adf970ee20c4
 	github.com/rancher/norman v0.0.0-20230222213531-275a3e921940
 	github.com/rancher/rancher/pkg/client v0.0.0-20230203155537-a67566517525
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.9.0
 	github.com/trivago/tgo v1.0.7
 	github.com/vmware/govmomi v0.30.4
-	gocloud.dev v0.20.0
+	gocloud.dev v0.22.0
 	golang.org/x/crypto v0.21.0
 	golang.org/x/net v0.23.0
 	golang.org/x/sync v0.6.0
@@ -73,6 +72,9 @@ require (
 	contrib.go.opencensus.io/exporter/ocagent v0.7.1-0.20200907061046-05415f1de66d // indirect
 	contrib.go.opencensus.io/exporter/prometheus v0.4.0 // indirect
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20230811130428-ced1acdcaa24 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.4.0 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage v1.5.0 // indirect
+	github.com/AzureAD/microsoft-authentication-library-for-go v1.1.1 // indirect
 	github.com/antlr/antlr4/runtime/Go/antlr/v4 v4.0.0-20230305170008-8188dc5388df // indirect
 	github.com/aquilax/truncate v1.0.0 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.2 // indirect
@@ -100,6 +102,7 @@ require (
 	github.com/go-openapi/errors v0.22.0 // indirect
 	github.com/go-openapi/strfmt v0.23.0 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20230315185526-52ccab3ef572 // indirect
+	github.com/golang-jwt/jwt/v5 v5.0.0 // indirect
 	github.com/golang-sql/civil v0.0.0-20190719163853-cb61b32ac6fe // indirect
 	github.com/golang-sql/sqlexp v0.1.0 // indirect
 	github.com/google/cel-go v0.18.1 // indirect
@@ -114,12 +117,15 @@ require (
 	github.com/jackc/pgservicefile v0.0.0-20200714003250-2b9c44734f2b // indirect
 	github.com/jackc/pgtype v1.11.0 // indirect
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v0.0.0-20191119172530-79f836b90111 // indirect
+	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/moby/sys/mountinfo v0.6.2 // indirect
 	github.com/montanaflynn/stats v0.7.0 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
 	github.com/openshift/custom-resource-status v1.1.2 // indirect
-	github.com/portworx/kdmp v0.4.1-0.20240327131138-e0fa03f5a66c // indirect
+	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8 // indirect
+	github.com/portworx/kdmp v0.4.1-0.20241005051921-7cde58b55260 // indirect
 	github.com/prometheus/statsd_exporter v0.21.0 // indirect
+	github.com/pure-px/kdmp v0.4.1-0.20241130140741-bc664f577237 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/stoewer/go-strcase v1.2.0 // indirect
 	github.com/xdg-go/pbkdf2 v1.0.0 // indirect
@@ -159,6 +165,8 @@ require (
 	github.com/onsi/ginkgo/v2 v2.15.0
 	github.com/pure-px/apis v1.0.0
 	github.com/pure-px/platform-api-go-client v0.0.0-20240619072851-2362e8bfc794
+	github.com/pure-px/sched-ops v1.20.4-rc1.0.20241117135654-f74520ed3fad
+	github.com/pure-px/stork v1.4.1-0.20241130152251-4e15cfa7092f
 	github.com/tektoncd/pipeline v0.56.0
 	go.mongodb.org/mongo-driver v1.14.0
 	go.uber.org/multierr v1.11.0
@@ -253,7 +261,6 @@ require (
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/google/wire v0.4.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.2 // indirect
-	github.com/googleapis/gax-go v2.0.2+incompatible // indirect
 	github.com/googleapis/gax-go/v2 v2.12.0 // indirect
 	github.com/gorilla/mux v1.8.0 // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect
@@ -291,6 +298,7 @@ require (
 	github.com/lib/pq v1.10.9 // indirect
 	github.com/libopenstorage/gossip v0.0.0-20220309192431-44c895e0923e // indirect
 	github.com/libopenstorage/secrets v0.0.0-20230207140542-56a42ef89592 // indirect
+	github.com/libopenstorage/stork v1.4.1-0.20241029050810-2ae9d2b45eb1 // indirect
 	github.com/liggitt/tabwriter v0.0.0-20181228230101-89fcab3d43de // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
@@ -374,7 +382,7 @@ require (
 	k8s.io/kubernetes v1.25.1 // indirect
 	k8s.io/utils v0.0.0-20240102154912-e7106e64919e
 	oras.land/oras-go v1.2.0 // indirect
-	sigs.k8s.io/cluster-api v0.2.11
+	sigs.k8s.io/cluster-api v1.1.6
 	sigs.k8s.io/controller-runtime v0.14.5 // indirect
 	sigs.k8s.io/gcp-compute-persistent-disk-csi-driver v0.7.0 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
@@ -387,7 +395,7 @@ require (
 
 replace (
 	github.com/Azure/azure-sdk-for-go => github.com/Azure/azure-sdk-for-go v68.0.0+incompatible
-	github.com/Azure/azure-storage-blob-go => github.com/Azure/azure-storage-blob-go v0.9.0
+	github.com/Azure/azure-storage-blob-go => github.com/Azure/azure-storage-blob-go v0.15.0
 	github.com/Azure/go-autorest => github.com/Azure/go-autorest v14.2.0+incompatible
 	github.com/docker/distribution => github.com/docker/distribution v0.0.0-20191216044856-a8371794149d
 	github.com/docker/docker => github.com/docker/docker v17.12.0-ce-rc1.0.20190717161051-705d9623b7c1+incompatible
@@ -442,6 +450,7 @@ replace (
 	k8s.io/sample-cli-plugin => k8s.io/sample-cli-plugin v0.25.1
 	k8s.io/sample-controller => k8s.io/sample-controller v0.25.1
 	kubevirt.io/containerized-data-importer-api v1.57.0-alpha1 => kubevirt.io/containerized-data-importer-api v1.56.1
+	sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v0.2.11
 	sigs.k8s.io/controller-runtime => sigs.k8s.io/controller-runtime v0.13.0
 	sigs.k8s.io/sig-storage-lib-external-provisioner/v6 => sigs.k8s.io/sig-storage-lib-external-provisioner/v6 v6.3.0
 )

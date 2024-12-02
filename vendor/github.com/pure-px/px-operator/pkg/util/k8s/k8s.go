@@ -11,11 +11,11 @@ import (
 
 	"github.com/hashicorp/go-version"
 	consolev1 "github.com/openshift/api/console/v1"
-	apiextensionsops "github.com/portworx/sched-ops/k8s/apiextensions"
-	coreops "github.com/portworx/sched-ops/k8s/core"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	corev1 "github.com/pure-px/px-operator/pkg/apis/core/v1"
 	"github.com/pure-px/px-operator/pkg/constants"
+	apiextensionsops "github.com/pure-px/sched-ops/k8s/apiextensions"
+	coreops "github.com/pure-px/sched-ops/k8s/core"
 	"github.com/sirupsen/logrus"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"

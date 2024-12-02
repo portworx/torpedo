@@ -5,8 +5,8 @@ import (
 	"github.com/pure-px/torpedo/pkg/log"
 	"time"
 
-	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/portworx/sched-ops/k8s/stork"
+	storkv1 "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
+	"github.com/pure-px/stork/pkg/crud/stork"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 

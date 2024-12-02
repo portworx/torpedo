@@ -10,8 +10,8 @@ import (
 	"time"
 
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
-	storkdriver "github.com/libopenstorage/stork/drivers"
-	"github.com/libopenstorage/stork/pkg/k8sutils"
+	storkdriver "github.com/pure-px/stork/drivers"
+	"github.com/pure-px/stork/pkg/k8sutils"
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"

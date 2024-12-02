@@ -12,7 +12,7 @@ import (
 
 	"github.com/blang/semver"
 
-	"github.com/libopenstorage/stork/pkg/k8sutils"
+	"github.com/pure-px/stork/pkg/k8sutils"
 	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/pure-px/torpedo/drivers"
 	"github.com/pure-px/torpedo/drivers/scheduler/k8s"

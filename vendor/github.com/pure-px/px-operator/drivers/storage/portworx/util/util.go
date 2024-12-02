@@ -22,7 +22,7 @@ import (
 	ocpconfig "github.com/openshift/api/config/v1"
 	routev1 "github.com/openshift/api/route/v1"
 	kvdb_api "github.com/portworx/kvdb/api/bootstrap"
-	coreops "github.com/portworx/sched-ops/k8s/core"
+	coreops "github.com/pure-px/sched-ops/k8s/core"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -170,6 +170,8 @@ const (
 	AnnotationServerTLSMinVersion = pxAnnotationPrefix + "/tls-min-version"
 	// AnnotationServerTLSCipherSuites sets up TLS-servers w/ requested cipher suites
 	AnnotationServerTLSCipherSuites = pxAnnotationPrefix + "/tls-cipher-suites"
+	// AnnotationsDisableNonDisruptiveUpgrade [=false] is used to disable smart and parallel kubetnetes node upgrades
+	AnnotationsDisableNonDisruptiveUpgrade = pxAnnotationPrefix + "/disable-non-disruptive-upgrade"
 
 	// EnvKeyPXImage key for the environment variable that specifies Portworx image
 	EnvKeyPXImage = "PX_IMAGE"
@@ -318,32 +320,43 @@ var (
 	SpecsBaseDir = getSpecsBaseDir
 
 	// MinimumSupportedK8sVersion minimum k8s version PX supports
-	MinimumSupportedK8sVersion, _ = version.NewVersion("v1.12.0")
+	MinimumSupportedK8sVersion = Must(version.NewVersion("v1.12.0"))
 	// MinimumPxVersionCCM minimum PX version to install ccm
-	MinimumPxVersionCCM, _ = version.NewVersion("2.8")
+	MinimumPxVersionCCM = Must(version.NewVersion("2.8"))
 	// MinimumPxVersionCCMGO minimum PX version to install ccm-go
-	MinimumPxVersionCCMGO, _ = version.NewVersion("2.12")
+	MinimumPxVersionCCMGO = Must(version.NewVersion("2.12"))
 	// MinimumPxVersionMetricsCollector minimum PX version to install metrics collector
-	MinimumPxVersionMetricsCollector, _ = version.NewVersion("2.9.1")
+	MinimumPxVersionMetricsCollector = Must(version.NewVersion("2.9.1"))
 	// MinimumPxVersionAutoTLS is a minimal PX version that supports "auto-TLS" setup
-	MinimumPxVersionAutoTLS, _ = version.NewVersion("4.0.0")
+	MinimumPxVersionAutoTLS = Must(version.NewVersion("4.0.0"))
 	// MinimumPxVersionCO minimum PX version to use 'container orchestrator'
-	MinimumPxVersionCO, _ = version.NewVersion("3.2")
+	MinimumPxVersionCO = Must(version.NewVersion("3.2"))
 	// MinimumCcmGoVersionCO minimum ccm-go version to use 'container orchestrator'
-	MinimumCcmGoVersionCO, _ = version.NewVersion("1.2.3")
+	MinimumCcmGoVersionCO = Must(version.NewVersion("1.2.3"))
 	// MinimumPxVersionQuorumFlag is a minimal PX version that introduces the quorum member
 	// flag in the node object of the PX SDK response.
-	MinimumPxVersionQuorumFlag, _ = version.NewVersion("3.1.0")
+	MinimumPxVersionQuorumFlag = Must(version.NewVersion("3.1.0"))
 
 	// MinimumPxVersionClusterDomain is a minimal PX version that exposes cluster domain field in enumerate nodes response
-	MinimumPxVersionClusterDomain, _ = version.NewVersion("3.1.1")
+	MinimumPxVersionClusterDomain = Must(version.NewVersion("3.1.1"))
 
 	// ConfigMapNameRegex regex of configMap.
 	ConfigMapNameRegex = regexp.MustCompile("[^a-zA-Z0-9]+")
 
 	// ParallelUpgradePDBVersion is the portworx version from which parallel upgrades is supported
-	ParallelUpgradePDBVersion, _ = version.NewVersion("3.1.2")
+	ParallelUpgradePDBVersion = Must(version.NewVersion("3.1.2"))
+
+	// PreconfigTelemetryCMVersion is PX version which always mouunts telemetry configmap
+	PreconfigTelemetryCMVersion = Must(version.NewVersion("3.2.2"))
 )
+
+// Must is a helper function that panics if the error is not nil
+func Must[T any](obj T, err error) T {
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
 
 func getStrippedClusterName(cluster *corev1.StorageCluster) string {
 	return strings.ToLower(ConfigMapNameRegex.ReplaceAllString(GetClusterID(cluster), ""))
@@ -1262,15 +1275,18 @@ func IsCOSupported(cluster *corev1.StorageCluster) bool {
 		return false
 	}
 
-	ccmGoImage := strings.TrimSpace(cluster.Spec.Monitoring.Telemetry.Image)
-	if cluster.Spec.Monitoring.Telemetry.Image == "" {
-		if cluster.Status.DesiredImages == nil {
-			return false
-		}
+	var ccmGoImage string
+	if cluster.Status.DesiredImages != nil {
 		ccmGoImage = cluster.Status.DesiredImages.Telemetry
 	}
-	ccmGoImage = util.GetImageURN(cluster, ccmGoImage)
+	if s := cluster.Spec; s.Monitoring != nil && s.Monitoring.Telemetry != nil && s.Monitoring.Telemetry.Image != "" {
+		ccmGoImage = strings.TrimSpace(s.Monitoring.Telemetry.Image)
+	}
+	if ccmGoImage == "" {
+		return false
+	}
 
+	ccmGoImage = util.GetImageURN(cluster, ccmGoImage)
 	logrus.Infof("ccmGoImage: %s", ccmGoImage)
 
 	if !strings.Contains(ccmGoImage, "ccm-go") {

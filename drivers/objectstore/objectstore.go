@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/portworx/sched-ops/k8s/stork"
+	stork_api "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
+	"github.com/pure-px/stork/pkg/crud/stork"
 	"github.com/pure-px/torpedo/pkg/errors"
 )
 

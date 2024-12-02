@@ -8,9 +8,9 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/pborman/uuid"
 
-	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	storkapi "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
-	storkops "github.com/portworx/sched-ops/k8s/stork"
+	storkops "github.com/pure-px/stork/pkg/crud/stork"
 	"github.com/pure-px/torpedo/drivers/backup"
 	"github.com/pure-px/torpedo/drivers/scheduler"
 	"github.com/pure-px/torpedo/drivers/scheduler/k8s"

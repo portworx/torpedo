@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/libopenstorage/openstorage/api"
-	"github.com/portworx/sched-ops/k8s/operator"
+	"github.com/pure-px/sched-ops/k8s/operator"
 	"github.com/pure-px/torpedo/drivers/node/ibm"
 	"github.com/pure-px/torpedo/drivers/scheduler/aks"
 	"github.com/pure-px/torpedo/drivers/scheduler/anthos"

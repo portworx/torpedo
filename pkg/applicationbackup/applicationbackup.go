@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	storkv1 "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/core"
-	storkops "github.com/portworx/sched-ops/k8s/stork"
+	storkops "github.com/pure-px/stork/pkg/crud/stork"
 	"github.com/portworx/sched-ops/task"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 

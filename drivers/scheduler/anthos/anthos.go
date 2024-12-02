@@ -19,7 +19,7 @@ import (
 	"github.com/hashicorp/go-version"
 	anthosops "github.com/portworx/sched-ops/k8s/anthos"
 	k8s "github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/k8s/operator"
+	"github.com/pure-px/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/task"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/node/ssh"
