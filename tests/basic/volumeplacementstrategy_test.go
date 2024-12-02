@@ -13,6 +13,8 @@ import (
 	"github.com/portworx/sched-ops/k8s/talisman"
 	"github.com/portworx/talisman/pkg/apis/portworx/v1beta1"
 	"github.com/portworx/talisman/pkg/apis/portworx/v1beta2"
+	storkv1 "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
+	storkops "github.com/pure-px/stork/pkg/crud/stork"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/scheduler"
 	"github.com/pure-px/torpedo/drivers/scheduler/k8s"
@@ -24,6 +26,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	storageApi "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -915,6 +918,347 @@ var _ = Describe("{ValidateVPSFailOnInsufficientPools}", Label("p0", "VPS", "sta
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{VolumeCloneWithDifferentPlacementStrategy}", Label("p0", "positive", "VPS", "staging"), func() {
+
+	/*	1. Create 2 volume placement strategies, vps-1, vps-2
+		2. create 2 storage classes using the sc-1(uses vps-1), sc-2 (uses vps-2) (make sure this sc is repl 3)
+		3. Create a pvc
+		4. validate if vps is applied
+		5. Take snapshot of this pvc.
+		6. Clone this snapshot and use the sc-2
+		7. Now validate if vps-2 is applied */
+
+	var (
+		testrailID = 0
+		runID      int
+		namespace  = "default"
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("VolumeCloneWithDifferentPlacementStrategy", "Validate VPS when creating clones with different placement strategies", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	stepLog := "Volume Clone with Placement Strategy"
+	It(stepLog, func() {
+		stepLog = "Adding Labels on Nodes"
+		var nodes []node.Node
+		nodes = node.GetStorageNodes()
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			// Iterate over the nodes and apply labels
+			for i, node := range nodes {
+				log.Infof("Adding labels for the node: %v", node.Name)
+				if i%2 == 0 {
+					// Apply 'zone=A' label for  nodes 1, 3, 5...
+					err := k8sCore.AddLabelOnNode(node.Name, "zone", "A")
+					log.FailOnError(err, "Failed to add label 'zone=A' for node: %v", node)
+					log.Infof("Successfully added label 'zone=A' to node: %v", node.Name)
+				} else {
+					// Apply 'zone=B' label for  nodes 2, 4,6...
+					err := k8sCore.AddLabelOnNode(node.Name, "zone", "B")
+					log.FailOnError(err, "Failed to add label 'zone=B' for node: %v", node)
+					log.Infof("Successfully added label 'zone=B' to node: %v", node.Name)
+				}
+			}
+
+		})
+
+		stepLog = "Creating VPS-1 and VPS-2 with different placement strategies"
+		var (
+			vpsName1 = fmt.Sprintf("mongo-vps-1-%v", time.Now().Unix())
+			vpsName2 = fmt.Sprintf("mongo-vps-2-%v", time.Now().Unix())
+		)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			// Define match expressions for VPS-1 and VPS-2
+			matchExpression1 := []*v1beta1.LabelSelectorRequirement{
+				{
+					Key:      "zone",
+					Operator: v1beta1.LabelSelectorOpIn,
+					Values:   []string{"A"},
+				},
+			}
+			matchExpression2 := []*v1beta1.LabelSelectorRequirement{
+				{
+					Key:      "zone",
+					Operator: v1beta1.LabelSelectorOpIn,
+					Values:   []string{"B"},
+				},
+			}
+			// Create VPS-1 with a match expression for nodes with "zone=A"
+			log.Infof("Creating VPS-1 with placement strategy")
+			vpsSpec1 := vpsutil.ReplicaAffinityByMatchExpression(vpsName1, matchExpression1)
+			_, err := talisman.Instance().CreateVolumePlacementStrategy(&vpsSpec1)
+			log.FailOnError(err, "Failed to apply VPS-1 placement strategy")
+			// Create VPS-2 with a match expression for nodes with "zone=B"
+			log.Infof("Creating VPS-2 with placement strategy")
+			vpsSpec2 := vpsutil.ReplicaAffinityByMatchExpression(vpsName2, matchExpression2)
+			_, err = talisman.Instance().CreateVolumePlacementStrategy(&vpsSpec2)
+			log.FailOnError(err, "Failed to apply VPS-2 placement strategy")
+		})
+
+		stepLog = "Creating Storage Classes using VPS-1 and VPS-2"
+		var (
+			scName1          = fmt.Sprintf("mongo-sc1-%v", time.Now().Unix())
+			scName2          = fmt.Sprintf("mongo-sc2-%v", time.Now().Unix())
+			params1, params2 = map[string]string{}, map[string]string{}
+			k8sStorage       = storage.Instance()
+			bindMode         = storageApi.VolumeBindingImmediate
+		)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			// Create sc-1 with VPS-1
+			log.Infof("Creating sc-1 using VPS-1")
+			params1["repl"] = "2"
+			params1["placement_strategy"] = vpsName1
+			scObj1 := storageApi.StorageClass{
+				ObjectMeta:        metav1.ObjectMeta{Name: scName1},
+				Provisioner:       k8s.CsiProvisioner,
+				Parameters:        params1,
+				VolumeBindingMode: &bindMode,
+			}
+			_, err := k8sStorage.CreateStorageClass(&scObj1)
+			log.FailOnError(err, "Failed to create sc-1")
+			// Create sc-2 with VPS-2
+			log.Infof("Creating sc-2 using VPS-2")
+			params2["repl"] = "3"
+			params2["placement_strategy"] = vpsName2
+			scObj2 := storageApi.StorageClass{
+				ObjectMeta:        metav1.ObjectMeta{Name: scName2},
+				Provisioner:       k8s.CsiProvisioner,
+				Parameters:        params2,
+				VolumeBindingMode: &bindMode,
+			}
+			_, err = k8sStorage.CreateStorageClass(&scObj2)
+			log.FailOnError(err, "Failed to create sc-2")
+		})
+
+		stepLog = "Creating PVC using sc-1 (vps-1)"
+		var pvcName = fmt.Sprintf("mongo-pvc-original-%v", time.Now().Unix())
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			_, err := core.Instance().CreatePersistentVolumeClaim(&corev1.PersistentVolumeClaim{
+				TypeMeta:   metav1.TypeMeta{Kind: "PersistentVolumeClaim"},
+				ObjectMeta: metav1.ObjectMeta{Name: pvcName},
+				Spec: corev1.PersistentVolumeClaimSpec{
+					AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteMany},
+					StorageClassName: &scName1,
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("1Gi")},
+					},
+				},
+			})
+			log.FailOnError(err, "Failed to create PVC with sc-1")
+		})
+
+		stepLog = "Check PVC status and verify volume replica placement on nodes with label 'zone=A'"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			//Waiting for PVC to Bound
+			err = Inst().S.WaitForSinglePVCToBound(pvcName, namespace, 3)
+			log.FailOnError(err, "Failed to wait for pvc to bound")
+			// Get the PVC that was created using sc-1
+			createdPVC, err := k8sCore.GetPersistentVolumeClaim(pvcName, namespace)
+			log.FailOnError(err, "Failed to get PVC")
+			log.Infof("Created PVC details: %v", createdPVC.Status)
+
+			// Check PVC status - Ensure PVC is bound
+			dash.VerifyFatal(createdPVC.Status.Phase == "Bound", true,
+				fmt.Sprintf("PVC should be in 'Bound' status'%v'", createdPVC.Status.Phase))
+
+			// Get the PV bound to the PVC
+			pv, err := core.Instance().GetPersistentVolume(createdPVC.Spec.VolumeName)
+			log.FailOnError(err, "Failed to get PersistentVolume")
+			log.Infof("Persistent Volume details: %v", pv)
+
+			// List all volumes and check replica placement
+			volIDs, err := Inst().V.ListAllVolumes()
+			log.FailOnError(err, "Failed to get volumes")
+			log.Infof("Volume IDs list: %v", volIDs)
+
+			for _, volId := range volIDs {
+				apiVol, err := Inst().V.InspectVolume(volId)
+				log.FailOnError(err, "Failed to inspect volume details")
+				log.Infof("Inspecting volume ID: %s", volId)
+				log.Infof("Found volume %s for createdPVC PVC", createdPVC.Name)
+
+				if apiVol.Locator.VolumeLabels["pvc"] == createdPVC.Name {
+					var nodeList []string
+					for _, replica := range apiVol.ReplicaSets {
+						nodeList = append(nodeList, replica.Nodes...)
+					}
+					// check if volume replicas are placed on nodes with the label 'zone=A'
+					for _, nodeName := range nodeList {
+						nodeID, err := node.GetNodeDetailsByNodeID(nodeName)
+						log.FailOnError(err, "unable to find ID")
+						nodeLabels, err := k8sCore.GetLabelsOnNode(nodeID.Name)
+						log.FailOnError(err, "unable to find the node")
+						labelValue, exists := nodeLabels["zone"]
+						if exists {
+							log.Infof("Found zone label: %s", exists)
+						}
+						dash.VerifyFatal(labelValue == "A", true,
+							fmt.Sprintf("Node '%s' has label 'zone=A'. Found label: '%s'", nodeName, labelValue))
+					}
+
+				}
+			}
+
+		})
+
+		stepLog = "Create local snapshot schedule"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			policyName := "intervalpolicy"
+			fmt.Sprintf("create schedule policy %s", policyName)
+			log.InfoD(stepLog)
+			schedPolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
+			retain := 8
+			interval := 5
+			if err != nil {
+				log.InfoD("Creating a interval schedule policy %v with interval %v minutes", policyName, interval)
+				schedPolicy = &storkv1.SchedulePolicy{
+					ObjectMeta: meta_v1.ObjectMeta{
+						Name: policyName,
+					},
+					Policy: storkv1.SchedulePolicyItem{
+						Interval: &storkv1.IntervalPolicy{
+							Retain:          storkv1.Retain(retain),
+							IntervalMinutes: interval,
+						},
+					}}
+				_, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
+				log.FailOnError(err, fmt.Sprintf("error creating a SchedulePolicy [%s]", policyName))
+			}
+		})
+
+		stepLog = "Clone the snapshot & Create PVC from snapshot"
+		clonedPVCName := fmt.Sprintf("mongo-cloned-pvc-%v", time.Now().Unix())
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			// After snapshotName has been created earlier for PVC-1
+			snapshotName := fmt.Sprintf("%s-snapshot", pvcName)
+			apiGroup := "stork.libopenstorage.org/v1alpha1"
+
+			// Create a new PVC from the snapshot of PVC-1
+			_, err := core.Instance().CreatePersistentVolumeClaim(&corev1.PersistentVolumeClaim{
+				TypeMeta: metav1.TypeMeta{
+					Kind: "PersistentVolumeClaim",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clonedPVCName,
+				},
+				Spec: corev1.PersistentVolumeClaimSpec{
+					AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteMany},
+					StorageClassName: &scName2,
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("3Gi")},
+					},
+					DataSource: &corev1.TypedLocalObjectReference{
+						APIGroup: &apiGroup,
+						Kind:     "VolumeSnapshot",
+						Name:     snapshotName,
+					},
+				},
+			})
+
+			log.FailOnError(err, "Failed to create PVC from snapshot")
+			log.Infof("Successfully created PVC %s from snapshot %s", clonedPVCName, snapshotName)
+		})
+
+		stepLog := "Validate VPS-2 is applied to the cloned PVC"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			//Waiting for PVC to Bound
+			err = Inst().S.WaitForSinglePVCToBound(clonedPVCName, namespace, 3)
+			log.FailOnError(err, "Failed to wait for pvc to bound")
+
+			// Get the cloned PVC and log the details
+			clonedPVC, err := k8sCore.GetPersistentVolumeClaim(clonedPVCName, namespace)
+			log.FailOnError(err, "Failed to get cloned PVC")
+			log.Infof("Cloned PVC details: %v, status: %v", clonedPVC, clonedPVC.Status.Phase)
+
+			// Check if PVC is Bound
+			dash.VerifyFatal(clonedPVC.Status.Phase == "Bound", true, fmt.Sprintf("Cloned PVC should be in 'Bound' status'%v'", clonedPVC.Status.Phase))
+
+			// Get the PV bound to the cloned PVC
+			pv, err := core.Instance().GetPersistentVolume(clonedPVC.Spec.VolumeName)
+			log.FailOnError(err, "Failed to get PersistentVolume for cloned PVC")
+			log.Infof("Persistent Volume details: %v", pv)
+
+			// Check volume placement (replica node labels) for each volume
+			volIDs, err := Inst().V.ListAllVolumes()
+			log.FailOnError(err, "Failed to get volumes")
+			log.Infof("Volume IDs list: %v", volIDs)
+
+			for _, volId := range volIDs {
+				apiVol, err := Inst().V.InspectVolume(volId)
+				log.FailOnError(err, "Failed to inspect volume details")
+				log.Infof("Inspecting volume ID: %s", volId)
+				if apiVol.Locator.VolumeLabels["pvc"] == clonedPVC.Name {
+					log.Infof("Inspecting volume: %s for cloned PVC", clonedPVC.Name)
+					// Gather replica node names
+					var nodeList []string
+					for _, replica := range apiVol.ReplicaSets {
+						nodeList = append(nodeList, replica.Nodes...)
+					}
+					for _, nodeName := range nodeList {
+						nodeID, err := node.GetNodeDetailsByNodeID(nodeName)
+						log.FailOnError(err, "unable to find ID")
+						nodeLabels, err := k8sCore.GetLabelsOnNode(nodeID.Name)
+						log.FailOnError(err, "unable to find the node")
+						labelValue, exists := nodeLabels["zone"]
+						if exists {
+							log.Infof("Found zone label: %s", exists)
+						}
+						dash.VerifyFatal(labelValue == "B", true,
+							fmt.Sprintf("Node '%s' has label 'zone=B'. Found label: '%s'", nodeName, labelValue))
+					}
+				}
+			}
+
+		})
+
+		stepLog = "Remove all newly created specs"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = core.Instance().DeletePersistentVolumeClaim(pvcName, namespace)
+			log.FailOnError(err, "Failed to remove pvc: %v", pvcName)
+			err = core.Instance().DeletePersistentVolumeClaim(clonedPVCName, namespace)
+			log.FailOnError(err, "Failed to remove pvc: %v", pvcName)
+
+			log.Infof("Deleting the newly created storage class")
+			err = k8sStorage.DeleteStorageClass(scName1)
+			log.FailOnError(err, "Failed to remove storage class: %v", scName1)
+			err = k8sStorage.DeleteStorageClass(scName2)
+			log.FailOnError(err, "Failed to remove storage class: %v", scName2)
+
+			log.Infof("Deleting the newly created VPS")
+			err = talisman.Instance().DeleteVolumePlacementStrategy(vpsName1)
+			log.FailOnError(err, "Failed to remove VPS: %v", vpsName1)
+			err = talisman.Instance().DeleteVolumePlacementStrategy(vpsName2)
+			log.FailOnError(err, "Failed to remove VPS: %v", vpsName2)
+
+			for _, node := range nodes {
+				log.Infof("Removing labels for the node: %v", node.Name)
+				// Remove the 'zone' label from all nodes (whether it is 'A' or 'B')
+				err := k8sCore.RemoveLabelOnNode(node.Name, "zone")
+				log.FailOnError(err, "Failed to remove label 'zone' for node: %v", node)
+				log.Infof("Successfully removed label 'zone' from node: %v", node.Name)
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
