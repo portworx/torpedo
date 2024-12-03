@@ -548,6 +548,16 @@ func YankMetadataTest(testName, testDesc string) {
 					log.FailOnError(err, fmt.Sprintf("Error occured while Validating PX restart is done on node:%v", nodeSelected.Name))
 				})
 			})
+		} else if testName == "YankMetadataWithNodeMaintenanceCycle" {
+			stepLog = "Enter maintenance mode"
+			Step(stepLog, func() {
+				log.Info(stepLog)
+				err = Inst().V.EnterMaintenance(nodeSelected)
+				log.FailOnError(err, fmt.Sprintf("fail to enter node %s in maintenance mode", nodeSelected.Name))
+				status, err := Inst().V.GetNodeStatus(nodeSelected)
+				log.FailOnError(err, fmt.Sprintf("Error getting PX status of node %s", nodeSelected.Name))
+				dash.VerifyFatal(*status, api.Status_STATUS_MAINTENANCE, fmt.Sprintf("Node %s Status not Online", nodeSelected.Name))
+			})
 		}
 
 		stepLog = "Recover yank drive"
@@ -560,6 +570,17 @@ func YankMetadataTest(testName, testDesc string) {
 			log.FailOnError(err, fmt.Sprintf("failed to recover yank metadata drive on node [%s]", nodeSelected.Name))
 			log.InfoD("Verified recover yank drive")
 		})
+
+		if testName == "YankMetadataWithNodeMaintenanceCycle" {
+			stepLog = "Exit maintenance mode"
+			Step(stepLog, func() {
+				err = Inst().V.ExitMaintenance(nodeSelected)
+				log.FailOnError(err, fmt.Sprintf("fail to exit node %s in maintenance mode", nodeSelected.Name))
+				status, err := Inst().V.GetNodeStatus(nodeSelected)
+				log.FailOnError(err, fmt.Sprintf("Error getting PX status of node %s", nodeSelected.Name))
+				dash.VerifyFatal(*status, api.Status_STATUS_OK, fmt.Sprintf("Node %s Status not Online", nodeSelected.Name))
+			})
+		}
 
 		stepLog = "Verify Px Status"
 		Step(stepLog, func() {
@@ -596,3 +617,9 @@ func YankMetadataTest(testName, testDesc string) {
 		AfterEachTest(contexts)
 	})
 }
+
+var _ = Describe("{YankMetadataWithNodeMaintenanceCycle}", func() {
+	testName = "YankMetadataWithNodeMaintenanceCycle"
+	testDescription = "Yank metadata drive and node maintenance cycle"
+	YankMetadataTest(testName, testDescription)
+})
