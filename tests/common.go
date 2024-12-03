@@ -13254,6 +13254,10 @@ func GetVolumesOnNode(nodeId string) ([]string, error) {
 	for _, vol := range pvs.Items {
 		volDetails, err := Inst().V.InspectVolume(vol.GetName())
 		if err != nil {
+			log.Errorf("Failed to inspect volume [%s], Err: %v", vol.GetName(), err)
+			if strings.Contains(err.Error(), "not found") {
+				continue
+			}
 			return volumes, err
 		}
 		replSets := volDetails.GetReplicaSets()
@@ -13354,7 +13358,7 @@ func MoveReplica(volName, fromNode, toNode string) error {
 	}
 	log.Infof("Updating replicas for volume [%s/%s]", appVol.Id, volName)
 	opts := volume.Options{
-		ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
+		ValidateReplicationUpdateTimeout: 12 * time.Hour,
 	}
 	replNodes := appVol.GetReplicaSets()[0].GetNodes()
 	log.Infof("Volume %s current Repl node: %v", volName, replNodes)

@@ -8215,14 +8215,14 @@ func (k *K8s) restoreAndValidate(
 	if resPvc, err = k.restoreCsiSnapshot(restorePVCName, *pvc, snaplist[resVolIndex], sc); err != nil {
 		return nil, &scheduler.ErrFailedToRestore{
 			App:   ctx.App,
-			Cause: fmt.Sprintf("Failed to restore snapshot: [%s]", snaplist[resVolIndex].Name),
+			Cause: fmt.Sprintf("Failed to restore snapshot: [%s], Err: %v", snaplist[resVolIndex].Name, err),
 		}
 	}
 	// Validate restored PVC
 	if err = k.ValidateCsiRestore(resPvc.Name, namespace, DefaultTimeout); err != nil {
 		return nil, &scheduler.ErrFailedToValidatePvcAfterRestore{
 			App:   ctx.App,
-			Cause: fmt.Sprintf("Failed to validate after snapshot: [%s] restore", snaplist[resVolIndex].Name),
+			Cause: fmt.Sprintf("Failed to validate after snapshot: [%s] restore,Err:%v", snaplist[resVolIndex].Name, err),
 		}
 	}
 	log.Infof("Successfully restored pvc [%s] from snapshot [%s]", resPvc.Name, snaplist[resVolIndex].Name)

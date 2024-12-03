@@ -24,7 +24,7 @@ var _ = Describe("{DecommissionNode}", Label("p0", "positive", "node_ops", "px_o
 	})
 	var contexts []*scheduler.Context
 
-	testName := "decommissionnode"
+	//testName := "decommissionnode"
 	stepLog := "has to decommission a node and check if node was decommissioned successfully"
 	It(stepLog, func() {
 
@@ -68,14 +68,14 @@ var _ = Describe("{DecommissionNode}", Label("p0", "positive", "node_ops", "px_o
 		}
 		ValidateApplications(contexts)
 
-		var storageDriverNodes []node.Node
+		var storageNodes []node.Node
 		Step(fmt.Sprintf("get storage driver nodes"), func() {
-			storageDriverNodes = node.GetStorageDriverNodes()
-			dash.VerifyFatal(len(storageDriverNodes) > 0, true, "Verify worker nodes")
+			storageNodes = node.GetStorageNodes()
+			dash.VerifyFatal(len(storageNodes) > 0, true, "Verify worker nodes")
 		})
 
 		nodeIndexMap := make(map[int]int)
-		lenWorkerNodes := len(storageDriverNodes)
+		lenWorkerNodes := len(storageNodes)
 		chaosLevel := Inst().ChaosLevel
 		// chaosLevel in this case is the number of worker nodes to be decommissioned
 		// in case of being greater than that, it will assume the total no of worker nodes
@@ -92,7 +92,7 @@ var _ = Describe("{DecommissionNode}", Label("p0", "positive", "node_ops", "px_o
 
 		// decommission nodes one at a time according to chaosLevel
 		for nodeIndex := range nodeIndexMap {
-			nodeToDecommission := storageDriverNodes[nodeIndex]
+			nodeToDecommission := storageNodes[nodeIndex]
 
 			fsTrimStatuses, err := Inst().V.GetAutoFsTrimStatus(nodeToDecommission.MgmtIp)
 			log.FailOnError(err, fmt.Sprintf("error autofstrim status node %v status", nodeToDecommission.Name))

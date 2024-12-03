@@ -2303,11 +2303,12 @@ func TriggerNodeMaintenanceCycle(contexts *[]*scheduler.Context, recordChan *cha
 				continue
 			}
 			wg.Add(1)
-			go func(appNode node.Node) {
+			mNode := appNode
+			go func(mtNode *node.Node) {
 				log.SetTestName(NodeMaintenanceCycle)
 				defer wg.Done()
-				stepLog = fmt.Sprintf("enter maintenance on node: %s", appNode.Name)
-				tmpNodeContexts, err := GetContextsOnNode(contexts, &appNode)
+				stepLog = fmt.Sprintf("enter maintenance on node: %s", mtNode.Name)
+				tmpNodeContexts, err := GetContextsOnNode(contexts, mtNode)
 				UpdateOutcome(event, err)
 				if err != nil {
 					for _, nc := range tmpNodeContexts {
@@ -2323,9 +2324,9 @@ func TriggerNodeMaintenanceCycle(contexts *[]*scheduler.Context, recordChan *cha
 							appNode.Name)
 						event.Event.Type += "<br>" + taskStep
 						dashStats := make(map[string]string)
-						dashStats["node"] = appNode.Name
+						dashStats["node"] = mtNode.Name
 						updateLongevityStats(NodeMaintenanceCycle, stats.NodeMaintenanceEventName, dashStats)
-						err = Inst().V.EnterMaintenance(appNode)
+						err = Inst().V.EnterMaintenance(*mtNode)
 						if err != nil {
 							UpdateOutcome(event, err)
 							return
@@ -2337,20 +2338,20 @@ func TriggerNodeMaintenanceCycle(contexts *[]*scheduler.Context, recordChan *cha
 					log.InfoD(stepLog)
 					time.Sleep(15 * time.Minute)
 				})
-				stepLog = fmt.Sprintf("exit maintenance on node %s", appNode.Name)
+				stepLog = fmt.Sprintf("exit maintenance on node %s", mtNode.Name)
 				Step(stepLog,
 					func() {
 						log.InfoD(stepLog)
 						taskStep := fmt.Sprintf("exit maintenance on node: %s.",
-							appNode.Name)
+							mtNode.Name)
 						event.Event.Type += "<br>" + taskStep
-						err = Inst().V.ExitMaintenance(appNode)
+						err = Inst().V.ExitMaintenance(*mtNode)
 						if err != nil {
 							UpdateOutcome(event, err)
 							return
 						}
 					})
-			}(appNode)
+			}(&mNode)
 		}
 		Step("Giving few seconds for volume driver to stabilize", func() {
 			time.Sleep(20 * time.Second)
@@ -3437,7 +3438,7 @@ func TriggerLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 					policyName := "localintervalpolicy"
 					schedPolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
 					if err != nil {
-						retain = 5
+						retain = 10
 						interval := getCloudSnapInterval(LocalSnapShot)
 						snapshotInterval = time.Duration(interval) * time.Minute
 						log.InfoD("Creating a interval schedule policy %v with interval %v minutes", policyName, interval)
@@ -3872,7 +3873,7 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 					policyName := "intervalpolicy"
 					schedPolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
 					if err != nil {
-						retain = 5
+						retain = 10
 						interval := getCloudSnapInterval(CloudSnapShot)
 						snapshotInterval = time.Duration(interval) * time.Minute
 						log.InfoD("Creating a interval schedule policy %v with interval %v minutes", policyName, interval)
@@ -8833,25 +8834,25 @@ func getCloudSnapInterval(triggerType string) int {
 
 	switch t {
 	case 1:
-		interval = 600
+		interval = 2000
 	case 2:
-		interval = 500
+		interval = 1440
 	case 3:
-		interval = 400
+		interval = 900
 	case 4:
-		interval = 300
+		interval = 720
 	case 5:
-		interval = 200
+		interval = 480
 	case 6:
-		interval = 100
+		interval = 360
 	case 7:
-		interval = 60
+		interval = 240
 	case 8:
-		interval = 45
+		interval = 120
 	case 9:
-		interval = 30
+		interval = 90
 	case 10:
-		interval = 20
+		interval = 60
 	}
 	return interval
 
