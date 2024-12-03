@@ -2075,7 +2075,7 @@ var _ = Describe("{VerifyRBACForAppUser}", Label(TestCaseLabelsMap[VerifyRBACFor
 })
 
 // VerifyRBACForLargeUserSet validates RBAC operations for all the roles when there are large number of users
-var _ = Describe("{VerifyRBACForLargeUserSet}", func() {
+var _ = Describe("{VerifyRBACForLargeUserSet}", Label(TestCaseLabelsMap[VerifyRBACForLargeUserSet]...), func() {
 	const (
 		PermissionDenied = "PermissionDenied"
 	)

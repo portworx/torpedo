@@ -12,8 +12,8 @@ import (
 
 	"github.com/blang/semver"
 
-	"github.com/pure-px/stork/pkg/k8sutils"
 	"github.com/portworx/sched-ops/k8s/storage"
+	"github.com/pure-px/stork/pkg/k8sutils"
 	"github.com/pure-px/torpedo/drivers"
 	"github.com/pure-px/torpedo/drivers/scheduler/k8s"
 	storageApi "k8s.io/api/storage/v1"
@@ -4528,7 +4528,7 @@ var _ = Describe("{NamespaceBackupRestoreWithHugeConfigMap}", func() {
 })
 
 // LargeResourceBackupSync verifies backup sync in case of large resource backups
-var _ = Describe("{LargeResourceBackupSync}", func() {
+var _ = Describe("{LargeResourceBackupSync}", Label(TestCaseLabelsMap[LargeResourceBackupSync]...), func() {
 	/*
 		Steps:
 		1. Schedule applications

@@ -9,11 +9,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pure-px/stork/pkg/k8sutils"
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/pure-px/stork/pkg/k8sutils"
 	"github.com/pure-px/torpedo/drivers/backup"
 	"github.com/pure-px/torpedo/drivers/scheduler"
 	"github.com/pure-px/torpedo/pkg/log"
@@ -793,7 +793,7 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", Label(Test
 })
 
 // This TC takes backup of a namespace with large number of resources and restores it.
-var _ = Describe("{LargeResourceNamespaceBackup}", func() {
+var _ = Describe("{LargeResourceNamespaceBackup}", Label(TestCaseLabelsMap[LargeResourceNamespaceBackup]...), func() {
 	/*
 		1. Deploy large number of secrets and configmaps into a namespace.
 		2. Populate the configmaps and secrets with some data.

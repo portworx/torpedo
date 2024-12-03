@@ -10,8 +10,6 @@ import (
 	"time"
 
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
-	storkdriver "github.com/pure-px/stork/drivers"
-	"github.com/pure-px/stork/pkg/k8sutils"
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
@@ -19,6 +17,8 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/portworx/sched-ops/task"
+	storkdriver "github.com/pure-px/stork/drivers"
+	"github.com/pure-px/stork/pkg/k8sutils"
 	"github.com/pure-px/torpedo/drivers/backup"
 	"github.com/pure-px/torpedo/drivers/backup/portworx"
 	"github.com/pure-px/torpedo/drivers/node"
@@ -2065,7 +2065,7 @@ var _ = Describe("{BackupNetworkErrorTest}", Label(TestCaseLabelsMap[BackupNetwo
 })
 
 // RestartPXBackupDuringLargeResourceScheduledBackup verifies backup/restore operations are successful when PX Backup Pod is restarted while large resource scheduled backup is in progress
-var _ = Describe("{RestartPXBackupDuringLargeResourceScheduledBackup}", func() {
+var _ = Describe("{RestartPXBackupDuringLargeResourceScheduledBackup}", Label(TestCaseLabelsMap[RestartPXBackupDuringLargeResourceScheduledBackup]...), func() {
 	/*
 		Steps:
 		1. Schedule applications
@@ -2332,7 +2332,7 @@ var _ = Describe("{RestartPXBackupDuringLargeResourceScheduledBackup}", func() {
 })
 
 // RestartStorkDuringLargeResourceScheduledBackup verifies backup/restore operations are successful when stork pods are restarted while the large resource backup is in progress
-var _ = Describe("{RestartStorkDuringLargeResourceScheduledBackup}", func() {
+var _ = Describe("{RestartStorkDuringLargeResourceScheduledBackup}", Label(TestCaseLabelsMap[RestartStorkDuringLargeResourceScheduledBackup]...), func() {
 	/*
 		Steps:
 		1. Schedule applications
@@ -2643,7 +2643,7 @@ var _ = Describe("{RestartStorkDuringLargeResourceScheduledBackup}", func() {
 })
 
 // RebootNodesDuringLargeResourceScheduledBackup verifies backup/restore operations are successful when nodes reboot while large resource scheduled backup is in progress
-var _ = Describe("{RebootNodesDuringLargeResourceScheduledBackup}", func() {
+var _ = Describe("{RebootNodesDuringLargeResourceScheduledBackup}", Label(TestCaseLabelsMap[RebootNodesDuringLargeResourceScheduledBackup]...), func() {
 	/*
 		Steps:
 		1. Schedule applications
@@ -2917,7 +2917,7 @@ var _ = Describe("{RebootNodesDuringLargeResourceScheduledBackup}", func() {
 })
 
 // AutopilotEnabledBackupRestore verifies backup and restore operations when autopilot is enabled
-var _ = Describe("{AutopilotEnabledBackupRestore}", func() {
+var _ = Describe("{AutopilotEnabledBackupRestore}", Label(TestCaseLabelsMap[AutopilotEnabledBackupRestore]...), func() {
 	/*
 		Steps:
 		1. Schedule applications with data injection.
@@ -3250,7 +3250,7 @@ var _ = Describe("{AutopilotEnabledBackupRestore}", func() {
 })
 
 // RebootNodesWhileCRRestoreIsInProgress verifies restore operation of Backup CR is successful when nodes are rebooted while restore is in progress
-var _ = Describe("{RebootNodesWhileCRRestoreIsInProgress}", func() {
+var _ = Describe("{RebootNodesWhileCRRestoreIsInProgress}", Label(TestCaseLabelsMap[RebootNodesWhileCRRestoreIsInProgress]...), func() {
 	/*
 		Steps:
 		1. Schedule CRD based applications
