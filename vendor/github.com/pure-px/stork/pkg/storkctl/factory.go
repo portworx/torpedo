@@ -3,13 +3,13 @@ package storkctl
 import (
 	"fmt"
 
-	externalstorageops "github.com/pure-px/stork/pkg/crud/externalstorage"
-	storkops "github.com/pure-px/stork/pkg/crud/stork"
 	appsops "github.com/pure-px/sched-ops/k8s/apps"
 	"github.com/pure-px/sched-ops/k8s/batch"
 	"github.com/pure-px/sched-ops/k8s/core"
 	dynamicops "github.com/pure-px/sched-ops/k8s/dynamic"
 	ocpops "github.com/pure-px/sched-ops/k8s/openshift"
+	externalstorageops "github.com/pure-px/stork/pkg/crud/externalstorage"
+	storkops "github.com/pure-px/stork/pkg/crud/stork"
 	"github.com/spf13/pflag"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"

@@ -3,8 +3,8 @@ package storkctl
 import (
 	"fmt"
 
-	"github.com/pure-px/stork/pkg/version"
 	"github.com/pure-px/sched-ops/k8s/apps"
+	"github.com/pure-px/stork/pkg/version"
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/cli-runtime/pkg/genericclioptions"

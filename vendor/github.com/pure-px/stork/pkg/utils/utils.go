@@ -14,13 +14,13 @@ import (
 
 	"github.com/aquilax/truncate"
 	patch "github.com/evanphx/json-patch"
-	"github.com/pure-px/stork/drivers"
 	kdmpDriver "github.com/pure-px/kdmp/pkg/drivers"
+	"github.com/pure-px/stork/drivers"
 
+	"github.com/pure-px/sched-ops/k8s/core"
 	stork_api "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
 	storkcache "github.com/pure-px/stork/pkg/cache"
 	storkops "github.com/pure-px/stork/pkg/crud/stork"
-	"github.com/pure-px/sched-ops/k8s/core"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"

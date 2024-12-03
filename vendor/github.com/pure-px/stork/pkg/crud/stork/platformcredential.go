@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	storkv1alpha1 "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
 	"github.com/pure-px/sched-ops/k8s/errors"
 	"github.com/pure-px/sched-ops/task"
+	storkv1alpha1 "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 

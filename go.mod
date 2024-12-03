@@ -125,7 +125,7 @@ require (
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8 // indirect
 	github.com/portworx/kdmp v0.4.1-0.20241005051921-7cde58b55260 // indirect
 	github.com/prometheus/statsd_exporter v0.21.0 // indirect
-	github.com/pure-px/kdmp v0.4.1-0.20241130140741-bc664f577237 // indirect
+	github.com/pure-px/kdmp v0.4.1-0.20241202082536-0ad0f900338a // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/stoewer/go-strcase v1.2.0 // indirect
 	github.com/xdg-go/pbkdf2 v1.0.0 // indirect
@@ -166,7 +166,7 @@ require (
 	github.com/pure-px/apis v1.0.0
 	github.com/pure-px/platform-api-go-client v0.0.0-20240619072851-2362e8bfc794
 	github.com/pure-px/sched-ops v1.20.4-rc1.0.20241117135654-f74520ed3fad
-	github.com/pure-px/stork v1.4.1-0.20241130152251-4e15cfa7092f
+	github.com/pure-px/stork v1.4.1-0.20241202132918-e9407682e66b
 	github.com/tektoncd/pipeline v0.56.0
 	go.mongodb.org/mongo-driver v1.14.0
 	go.uber.org/multierr v1.11.0

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	storkapi "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
 	kubevirtops "github.com/pure-px/sched-ops/k8s/kubevirt"
+	storkapi "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
 	"github.com/sirupsen/logrus"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"

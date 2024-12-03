@@ -6,9 +6,9 @@ import (
 	"time"
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
-	storkv1alpha1 "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
 	schederrors "github.com/pure-px/sched-ops/k8s/errors"
 	"github.com/pure-px/sched-ops/task"
+	storkv1alpha1 "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )

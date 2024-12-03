@@ -3,8 +3,8 @@ package status
 import (
 	"fmt"
 
-	"github.com/pure-px/stork/pkg/k8sutils"
 	"github.com/pure-px/sched-ops/k8s/core"
+	"github.com/pure-px/stork/pkg/k8sutils"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"

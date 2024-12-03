@@ -3,10 +3,10 @@ package resourcecollector
 import (
 	"fmt"
 
+	"github.com/pure-px/sched-ops/k8s/core"
 	"github.com/pure-px/stork/drivers/volume"
 	stork_api "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
 	"github.com/pure-px/stork/pkg/utils"
-	"github.com/pure-px/sched-ops/k8s/core"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"

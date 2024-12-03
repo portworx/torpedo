@@ -1471,7 +1471,7 @@ github.com/pure-px/apis/public/portworx/platform/template/apiv1
 github.com/pure-px/apis/public/portworx/platform/tenant/apiv1
 github.com/pure-px/apis/public/portworx/platform/tenant/application/apiv1
 github.com/pure-px/apis/public/portworx/platform/whoami/apiv1
-# github.com/pure-px/kdmp v0.4.1-0.20241130140741-bc664f577237
+# github.com/pure-px/kdmp v0.4.1-0.20241202082536-0ad0f900338a
 ## explicit; go 1.22.6
 github.com/pure-px/kdmp/pkg/drivers
 # github.com/pure-px/platform-api-go-client v0.0.0-20240619072851-2362e8bfc794
@@ -1533,7 +1533,7 @@ github.com/pure-px/sched-ops/k8s/prometheus
 github.com/pure-px/sched-ops/k8s/rbac
 github.com/pure-px/sched-ops/k8s/storage
 github.com/pure-px/sched-ops/task
-# github.com/pure-px/stork v1.4.1-0.20241130152251-4e15cfa7092f
+# github.com/pure-px/stork v1.4.1-0.20241202132918-e9407682e66b
 ## explicit; go 1.22.6
 github.com/pure-px/stork/drivers
 github.com/pure-px/stork/drivers/volume

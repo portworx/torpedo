@@ -8,10 +8,10 @@ import (
 	"time"
 
 	snapclient "github.com/kubernetes-incubator/external-storage/snapshot/pkg/client"
-	storkv1 "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
-	storkclientset "github.com/pure-px/stork/pkg/client/clientset/versioned"
 	"github.com/pure-px/sched-ops/k8s/common"
 	"github.com/pure-px/sched-ops/task"
+	storkv1 "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
+	storkclientset "github.com/pure-px/stork/pkg/client/clientset/versioned"
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"

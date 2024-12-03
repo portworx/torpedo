@@ -9,6 +9,8 @@ import (
 
 	"github.com/hashicorp/go-multierror"
 	snap_v1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	"github.com/pure-px/sched-ops/k8s/apiextensions"
+	"github.com/pure-px/sched-ops/k8s/core"
 	"github.com/pure-px/stork/drivers/volume"
 	stork_api "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
 	"github.com/pure-px/stork/pkg/controllers"
@@ -17,8 +19,6 @@ import (
 	"github.com/pure-px/stork/pkg/k8sutils"
 	"github.com/pure-px/stork/pkg/log"
 	"github.com/pure-px/stork/pkg/version"
-	"github.com/pure-px/sched-ops/k8s/apiextensions"
-	"github.com/pure-px/sched-ops/k8s/core"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"

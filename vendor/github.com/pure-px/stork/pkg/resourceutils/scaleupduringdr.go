@@ -7,11 +7,11 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/pure-px/sched-ops/k8s/core"
 	"github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
 	storkops "github.com/pure-px/stork/pkg/crud/stork"
 	migration "github.com/pure-px/stork/pkg/migration/controllers"
 	"github.com/pure-px/stork/pkg/resourcecollector"
-	"github.com/pure-px/sched-ops/k8s/core"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
