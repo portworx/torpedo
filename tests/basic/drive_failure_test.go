@@ -402,182 +402,6 @@ var _ = Describe("{YankPoolDriveWithIOs}", func() {
 	YankPoolDriveTest(testName, testDescription)
 })
 
-func YankPoolDriveTest(testName, testDesc string) {
-	var nodeSelected *node.Node
-	var busID, poolDrive string
-	JustBeforeEach(func() {
-		StartTorpedoTest(testName, testDesc, nil, 0)
-	})
-
-	itLog := testDesc
-	It(itLog, func() {
-		log.InfoD(itLog)
-
-		stepLog := "Schedule apps to perform IOs"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			contexts = make([]*scheduler.Context, 0)
-			for i := 0; i < Inst().GlobalScaleFactor; i++ {
-				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("yankjournal-%d", i))...)
-			}
-			ValidateApplications(contexts)
-		})
-		defer appsValidateAndDestroy(contexts)
-
-		ctx := contexts[0]
-		volumes, err := Inst().S.GetVolumes(ctx)
-		log.FailOnError(err, "Failed while listing the volume with error")
-		log.InfoD("Vol deatils %v", volumes)
-
-		if len(volumes) == 0 {
-			msg := fmt.Sprintf("There are no volumes associated with the app %v", ctx.App.Key)
-			log.InfoD(msg)
-			Skip(msg)
-		}
-		volumeSelected := volumes[0]
-
-		stepLog = "Select the volume replica node and pool drive"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			rsDetails, err := Inst().V.GetReplicaSets(volumeSelected)
-			log.FailOnError(err, fmt.Sprintf("error getting replica sets for vol %s", volumeSelected.Name))
-			log.InfoD("Volume Replica info %v", rsDetails)
-
-			poolUUIDs := rsDetails[0].GetPoolUuids()
-			poolUUIDSelected := poolUUIDs[rand.Intn(len(poolUUIDs))]
-			poolIDSelected, err := GetPoolIDFromPoolUUID(poolUUIDSelected)
-			log.FailOnError(err, fmt.Sprintf("error getting pool id for the pool %s", poolUUIDSelected))
-
-			nodeSelected, err = GetNodeWithGivenPoolID(poolUUIDSelected)
-			log.FailOnError(err, fmt.Sprintf("error getting node detail for the pool %s", poolUUIDSelected))
-
-			jDev, err := Inst().V.GetJournalDevicePath(nodeSelected)
-			log.FailOnError(err, fmt.Sprintf("error getting journal device path from node %s", nodeSelected.Name))
-			log.InfoD("Journal device path - %s", jDev)
-
-			cmd := fmt.Sprintf("lsblk -no pkname %s", jDev)
-			journalParentDevPath, err := Inst().N.RunCommandWithNoRetry(*nodeSelected, cmd, node.ConnectionOpts{
-				Timeout:         2 * time.Minute,
-				TimeBeforeRetry: 10 * time.Second,
-			})
-			log.FailOnError(err, "error occured running the command to identify the parent device path of the journal partition %s", jDev)
-			journalParentDevPath = strings.TrimRight(journalParentDevPath, "\n")
-			log.InfoD("Parent device path of the journal device is %s", journalParentDevPath)
-
-			driveMap, err := Inst().V.GetPoolDrives(nodeSelected)
-			log.FailOnError(err, fmt.Sprintf("error getting pool drive details for the node %s", nodeSelected))
-
-			drives := driveMap[strconv.Itoa(int(poolIDSelected))]
-
-			for _, drive := range drives {
-				cmd := fmt.Sprintf("lsblk -no pkname %s", drive.Device)
-				poolDriveParentPath, err := Inst().N.RunCommandWithNoRetry(*nodeSelected, cmd, node.ConnectionOpts{
-					Timeout:         2 * time.Minute,
-					TimeBeforeRetry: 10 * time.Second,
-				})
-				log.FailOnError(err, "error occured running the command to identify the parent device path of the drive %s", drive.Device)
-				poolDriveParentPath = strings.TrimRight(poolDriveParentPath, "\n")
-				log.InfoD("Parent device path of the pool device is %s", poolDriveParentPath)
-
-				if (journalParentDevPath != "") && (poolDriveParentPath != "") && (journalParentDevPath == poolDriveParentPath) {
-					continue
-				}
-
-				poolDrive = drive.Device
-				log.InfoD("Pool drive selected - %s", poolDrive)
-				break
-			}
-		})
-
-		//random delay in secs
-		time.Sleep(5 * time.Minute)
-
-		poolDrive = strings.Trim(poolDrive, "/")
-		poolDriveArr := strings.Split(poolDrive, "/")
-		poolDrive = poolDriveArr[len(poolDriveArr)-1]
-		stepLog = "Yank journal drive"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			busID, err = Inst().N.YankDrive(*nodeSelected, poolDrive, node.ConnectionOpts{
-				Timeout:         dfDefaultTimeout,
-				TimeBeforeRetry: dfDefaultRetryInterval,
-			})
-			log.FailOnError(err, fmt.Sprintf("failed to yank journal drive on node [%s]", nodeSelected.Name))
-			log.InfoD("Bus id - %s", busID)
-		})
-
-		if testName == "yank-pool-drive-node-reboot" {
-			stepLog = "Reboot the node"
-			Step(stepLog, func() {
-				log.Info(stepLog)
-				err = RebootNodeAndWaitForPxUp(*nodeSelected)
-				log.FailOnError(err, "Failed to reboot node and wait till it is up")
-			})
-		} else if testName == "yank-pool-drive-px-restart" {
-			stepLog = "Restart portworx and wait for it to come up"
-			Step(stepLog, func() {
-				log.Info(stepLog)
-				Step(fmt.Sprintf("node with Px restart is: %s", nodeSelected.Name), func() {
-					err := Inst().V.RestartDriver(*nodeSelected, nil)
-					log.FailOnError(err, fmt.Sprintf("Error occured while Restart PX on node:%v", nodeSelected.Name))
-				})
-
-				Step(fmt.Sprintf("wait for volume driver to restart on node: %v", nodeSelected.Name), func() {
-					err := Inst().V.WaitForPxPodsToBeUp(*nodeSelected)
-					log.FailOnError(err, fmt.Sprintf("Error occured while Validating PX restart is done on node:%v", nodeSelected.Name))
-				})
-			})
-		}
-
-		if testName == "yank-pool-drive-IO" {
-			//wait for two minutes before recovering pool drive
-			time.Sleep(2 * time.Minute)
-		}
-
-		stepLog = "Recover yank drive"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			err = Inst().N.RecoverDrive(*nodeSelected, poolDrive, busID, node.ConnectionOpts{
-				Timeout:         driveFailTimeout,
-				TimeBeforeRetry: dfDefaultRetryInterval,
-			})
-			log.FailOnError(err, fmt.Sprintf("failed to recover yank journal drive on node [%s]", nodeSelected.Name))
-			log.InfoD("Verified recover yank drive")
-		})
-
-		stepLog = "Verify Px Status"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			err := Inst().V.WaitForPxPodsToBeUp(*nodeSelected)
-			log.FailOnError(err, fmt.Sprintf("Error occured while Validating PX restart is done on node:%v", nodeSelected.Name))
-		})
-
-		stepLog = "Do pool maintenance"
-		Step(stepLog, func() {
-			log.Info(stepLog)
-			log.InfoD(fmt.Sprintf("Performing pool maintenance cycle on node %s", nodeSelected.Name))
-			err = Inst().V.RecoverPool(*nodeSelected)
-			log.FailOnError(err, fmt.Sprintf("error performing pool maintenance cycle on node %s", nodeSelected.Name))
-		})
-
-		stepLog = "Verify pool status"
-		Step(stepLog, func() {
-			log.Info(stepLog)
-			poolsStatus, err := Inst().V.GetNodePoolsStatus(*nodeSelected)
-			log.FailOnError(err, "error getting pool status on node %s", nodeSelected.Name)
-			for poolID, status := range poolsStatus {
-				dash.VerifyFatal(status, "Online", fmt.Sprintf("Pool %s Status not Online", poolID))
-			}
-		})
-
-	})
-
-	JustAfterEach(func() {
-		defer EndTorpedoTest()
-		AfterEachTest(contexts)
-	})
-}
-
 var _ = Describe("{YankMetadataWithPxRestart}", func() {
 	testName = "YankMetadataWithPxRestart"
 	testDescription = "Yank metadata drive with restart PX"
@@ -826,6 +650,221 @@ func YankMetadataTest(testName, testDesc string) {
 	})
 }
 
+func YankPoolDriveTest(testName, testDesc string) {
+	var nodeSelected *node.Node
+	var busID, poolDrive string
+
+	JustBeforeEach(func() {
+		StartTorpedoTest(testName, testDesc, nil, 0)
+	})
+
+	itLog := testDesc
+	It(itLog, func() {
+		log.InfoD(itLog)
+
+		stepLog := "Schedule apps to perform IOs"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("yankjournal-%d", i))...)
+			}
+			ValidateApplications(contexts)
+		})
+		defer appsValidateAndDestroy(contexts)
+
+		ctx := contexts[0]
+		volumes, err := Inst().S.GetVolumes(ctx)
+		log.FailOnError(err, "Failed while listing the volume with error")
+		log.InfoD("Vol deatils %v", volumes)
+
+		if len(volumes) == 0 {
+			msg := fmt.Sprintf("There are no volumes associated with the app %v", ctx.App.Key)
+			log.InfoD(msg)
+			Skip(msg)
+		}
+		volumeSelected := volumes[0]
+
+		stepLog = "Select the volume replica node and pool drive"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			rsDetails, err := Inst().V.GetReplicaSets(volumeSelected)
+			log.FailOnError(err, fmt.Sprintf("error getting replica sets for vol %s", volumeSelected.Name))
+			log.InfoD("Volume Replica info %v", rsDetails)
+
+			poolUUIDs := rsDetails[0].GetPoolUuids()
+			poolUUIDSelected := poolUUIDs[rand.Intn(len(poolUUIDs))]
+			poolIDSelected, err := GetPoolIDFromPoolUUID(poolUUIDSelected)
+			log.FailOnError(err, fmt.Sprintf("error getting pool id for the pool %s", poolUUIDSelected))
+
+			nodeSelected, err = GetNodeWithGivenPoolID(poolUUIDSelected)
+			log.FailOnError(err, fmt.Sprintf("error getting node detail for the pool %s", poolUUIDSelected))
+
+			jDev, err := Inst().V.GetJournalDevicePath(nodeSelected)
+			log.FailOnError(err, fmt.Sprintf("error getting journal device path from node %s", nodeSelected.Name))
+			log.InfoD("Journal device path - %s", jDev)
+
+			cmd := fmt.Sprintf("lsblk -no pkname %s", jDev)
+			journalParentDevPath, err := Inst().N.RunCommandWithNoRetry(*nodeSelected, cmd, node.ConnectionOpts{
+				Timeout:         2 * time.Minute,
+				TimeBeforeRetry: 10 * time.Second,
+			})
+			log.FailOnError(err, "error occured running the command to identify the parent device path of the journal partition %s", jDev)
+			journalParentDevPath = strings.TrimRight(journalParentDevPath, "\n")
+			log.InfoD("Parent device path of the journal device is %s", journalParentDevPath)
+
+			driveMap, err := Inst().V.GetPoolDrives(nodeSelected)
+			log.FailOnError(err, fmt.Sprintf("error getting pool drive details for the node %s", nodeSelected))
+
+			drives := driveMap[strconv.Itoa(int(poolIDSelected))]
+
+			for _, drive := range drives {
+				cmd := fmt.Sprintf("lsblk -no pkname %s", drive.Device)
+				poolDriveParentPath, err := Inst().N.RunCommandWithNoRetry(*nodeSelected, cmd, node.ConnectionOpts{
+					Timeout:         2 * time.Minute,
+					TimeBeforeRetry: 10 * time.Second,
+				})
+				log.FailOnError(err, "error occured running the command to identify the parent device path of the drive %s", drive.Device)
+				poolDriveParentPath = strings.TrimRight(poolDriveParentPath, "\n")
+				log.InfoD("Parent device path of the pool device is %s", poolDriveParentPath)
+
+				if (journalParentDevPath != "") && (poolDriveParentPath != "") && (journalParentDevPath == poolDriveParentPath) {
+					continue
+				}
+
+				poolDrive = drive.Device
+				log.InfoD("Pool drive selected - %s", poolDrive)
+				break
+			}
+		})
+
+		//random delay in secs
+		time.Sleep(time.Minute * 5)
+
+		poolDrive = strings.Trim(poolDrive, "/")
+		poolDriveArr := strings.Split(poolDrive, "/")
+		poolDrive = poolDriveArr[len(poolDriveArr)-1]
+		stepLog = "Yank journal drive"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			busID, err = Inst().N.YankDrive(*nodeSelected, poolDrive, node.ConnectionOpts{
+				Timeout:         dfDefaultTimeout,
+				TimeBeforeRetry: dfDefaultRetryInterval,
+			})
+			log.FailOnError(err, fmt.Sprintf("failed to yank journal drive on node [%s]", nodeSelected.Name))
+			log.InfoD("Bus id - %s", busID)
+		})
+
+		if testName == "yank-pool-drive-node-reboot" {
+			stepLog = "Reboot the node"
+			Step(stepLog, func() {
+				log.Info(stepLog)
+				err = RebootNodeAndWaitForPxUp(*nodeSelected)
+				log.FailOnError(err, "Failed to reboot node and wait till it is up")
+			})
+		} else if testName == "yank-pool-drive-px-restart" {
+			stepLog = "Restart portworx and wait for it to come up"
+			Step(stepLog, func() {
+				log.Info(stepLog)
+				Step(fmt.Sprintf("node with Px restart is: %s", nodeSelected.Name), func() {
+					err := Inst().V.RestartDriver(*nodeSelected, nil)
+					log.FailOnError(err, fmt.Sprintf("Error occured while Restart PX on node:%v", nodeSelected.Name))
+				})
+
+				Step(fmt.Sprintf("wait for volume driver to restart on node: %v", nodeSelected.Name), func() {
+					err := Inst().V.WaitForPxPodsToBeUp(*nodeSelected)
+					log.FailOnError(err, fmt.Sprintf("Error occured while Validating PX restart is done on node:%v", nodeSelected.Name))
+				})
+			})
+		} else if testName == "yank-pool-drive-node-maintenance-cycle" {
+			stepLog = "Enter maintenance mode"
+			Step(stepLog, func() {
+				log.Info(stepLog)
+				err = Inst().V.EnterMaintenance(*nodeSelected)
+				log.FailOnError(err, fmt.Sprintf("fail to enter node %s in maintenance mode", nodeSelected.Name))
+				status, err := Inst().V.GetNodeStatus(*nodeSelected)
+				log.FailOnError(err, fmt.Sprintf("Error getting PX status of node %s", nodeSelected.Name))
+				dash.VerifyFatal(*status, api.Status_STATUS_MAINTENANCE, fmt.Sprintf("Node %s Status not Online", nodeSelected.Name))
+			})
+		}
+
+		if testName == "yank-pool-drive-IO" {
+			//wait for two minutes before recovering pool drive
+			time.Sleep(2 * time.Minute)
+		}
+
+		stepLog = "Recover yank drive"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().N.RecoverDrive(*nodeSelected, poolDrive, busID, node.ConnectionOpts{
+				Timeout:         driveFailTimeout,
+				TimeBeforeRetry: dfDefaultRetryInterval,
+			})
+			log.FailOnError(err, fmt.Sprintf("failed to recover yank journal drive on node [%s]", nodeSelected.Name))
+			log.InfoD("Verified recover yank drive")
+		})
+
+		if testName == "yank-pool-drive-node-maintenance-cycle" {
+			stepLog = "Exit maintenance mode"
+			Step(stepLog, func() {
+				err = Inst().V.ExitMaintenance(*nodeSelected)
+				log.FailOnError(err, fmt.Sprintf("fail to exit node %s in maintenance mode", nodeSelected.Name))
+				status, err := Inst().V.GetNodeStatus(*nodeSelected)
+				log.FailOnError(err, fmt.Sprintf("Error getting PX status of node %s", nodeSelected.Name))
+				dash.VerifyFatal(*status, api.Status_STATUS_OK, fmt.Sprintf("Node %s Status not Online", nodeSelected.Name))
+			})
+		}
+
+		stepLog = "Verify Px Status"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			err := Inst().V.WaitForPxPodsToBeUp(*nodeSelected)
+			log.FailOnError(err, fmt.Sprintf("Error occured while Validating PX restart is done on node:%v", nodeSelected.Name))
+
+			status, err := Inst().V.GetPxctlStatus(*nodeSelected)
+			log.FailOnError(err, fmt.Sprintf("failed to get pxctl status on node [%s]", nodeSelected.Name))
+			dash.VerifyFatal(status == api.Status_STATUS_OK.String(), true, fmt.Sprintf("node [%s] status is up but PX cluster is not ok. Expected: %v Actual: %v",
+				nodeSelected.Name, api.Status_STATUS_OK, status))
+			log.InfoD("px status %v", status)
+		})
+
+		stepLog = "Do pool maintenance"
+		Step(stepLog, func() {
+			log.Info(stepLog)
+			log.InfoD(fmt.Sprintf("Performing pool maintenance cycle on node %s", nodeSelected.Name))
+			err = Inst().V.RecoverPool(*nodeSelected)
+			log.FailOnError(err, fmt.Sprintf("error performing pool maintenance cycle on node %s", nodeSelected.Name))
+		})
+
+		stepLog = "Verify pool status"
+		Step(stepLog, func() {
+			log.Info(stepLog)
+			poolsStatus, err := Inst().V.GetNodePoolsStatus(*nodeSelected)
+			log.FailOnError(err, "error getting pool status on node %s", nodeSelected.Name)
+			for poolID, status := range poolsStatus {
+				dash.VerifyFatal(status, "Online", fmt.Sprintf("Pool %s Status not Online", poolID))
+			}
+		})
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+}
+
+var _ = Describe("{YankPoolDriveWithNodeMaintenanceCycle}", func() {
+	testName = "yank-pool-drive-node-maintenance-cycle"
+	testDescription = "Yank pool drive with node maintenance cycle"
+	YankPoolDriveTest(testName, testDescription)
+})
+var _ = Describe("{YankMetadataWithNodeMaintenanceCycle}", func() {
+	testName = "YankMetadataWithNodeMaintenanceCycle"
+	testDescription = "Yank metadata drive and node maintenance cycle"
+	YankMetadataTest(testName, testDescription)
+})
 var _ = Describe("{DeletePoolAfterYankDriveWithPXRestart}", func() {
 	testName = "delete-yank-drive-px-restart"
 	testDescription = "Delete pool after yanking drive and restart PX"
