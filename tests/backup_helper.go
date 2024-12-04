@@ -51,15 +51,15 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/hashicorp/go-version"
-	"github.com/pure-px/stork/pkg/k8sutils"
 	. "github.com/onsi/ginkgo/v2"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/kdmp"
-	"github.com/pure-px/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/task"
 	v1 "github.com/pure-px/px-operator/pkg/apis/core/v1"
+	"github.com/pure-px/sched-ops/k8s/operator"
+	"github.com/pure-px/stork/pkg/k8sutils"
 	"github.com/pure-px/torpedo/drivers/backup"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/scheduler"
@@ -215,6 +215,7 @@ const (
 	DynamicPvcGenerationTime                  = 300
 	DynamicPvcGenerationTimeOut               = 350
 	DynamicPvcGenerationRetryTime             = 30
+	NfsJobName                                = "backupfilemissing"
 )
 
 var (
@@ -13131,6 +13132,73 @@ func CollectBackupDeleteStateStats(testCaseName string, scheduleNames []string, 
 
 		// Sleep for the specified polling interval before collecting data again
 		time.Sleep(pollingInterval)
+	}
+	return nil
+}
+
+func CheckPxJobLifeForNFSCreation() error {
+	// Getting Px Backup Namespace
+	pxBackupNamespace, err := backup.GetPxBackupNamespace()
+	if err != nil {
+		return err
+	}
+	t := func() (interface{}, bool, error) {
+		// watch if new created job
+		allJobs, err := batch.Instance().ListAllJobs(pxBackupNamespace, metav1.ListOptions{})
+		if err != nil {
+			return "", false, err
+		}
+
+		if len(allJobs.Items) > 0 {
+			log.Infof("List of all the jobs in Px Backup Namespace [%s] - ", pxBackupNamespace)
+			for _, job := range allJobs.Items {
+				if strings.Contains(job.Name, NfsJobName) {
+					log.Infof("Job pod is running :", job.Name)
+					return "job pod found", false, nil
+				}
+			}
+		} else {
+			return nil, true, fmt.Errorf("job is not present or available")
+		}
+		return nil, true, fmt.Errorf("job is not present or removed")
+	}
+
+	_, err = task.DoRetryWithTimeout(t, 20*time.Minute, 10*time.Second)
+	if err != nil {
+		return fmt.Errorf("failed to verify px-backup job %v", err)
+	}
+	return nil
+}
+
+func CheckPvcLifeForNFSCreation() error {
+	// Getting Px Backup Namespace
+	pxBackupNamespace, err := backup.GetPxBackupNamespace()
+	if err != nil {
+		return err
+	}
+
+	t := func() (interface{}, bool, error) {
+		pvcList, err := GetPVCListForNamespace(pxBackupNamespace)
+		if err != nil {
+			return "", false, err
+		}
+
+		if len(pvcList) > 0 {
+			for _, pvc := range pvcList {
+				log.Info("pvc name is:", pvc)
+				if strings.Contains(pvc, NfsJobName) {
+					return "job pvc found", false, nil
+				}
+			}
+		} else {
+			return nil, true, fmt.Errorf("pvc not present now")
+		}
+		return nil, true, fmt.Errorf("pvc is not present or removed")
+	}
+
+	_, err = task.DoRetryWithTimeout(t, 20*time.Minute, 10*time.Second)
+	if err != nil {
+		return fmt.Errorf("failed to verify pvc %v", err)
 	}
 	return nil
 }

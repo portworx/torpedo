@@ -13,6 +13,7 @@ import (
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/pure-px/torpedo/drivers"
 	"github.com/pure-px/torpedo/drivers/backup"
 	"github.com/pure-px/torpedo/drivers/scheduler"
 	"github.com/pure-px/torpedo/pkg/log"
@@ -1225,6 +1226,121 @@ var _ = Describe("{ValidateRestoreAfterDeleteKDMPBackup}", Label(TestCaseLabelsM
 		DestroyApps(scheduledAppContexts, opts)
 
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+
+	})
+})
+
+// Verify the Cloud File missing Job should never be older than 10 mins old. and no accumulation of PVC & PV of the older job should be there.
+var _ = Describe("{ValidateCloudFileMissingJobAgeAndPVC}", Label(TestCaseLabelsMap[KDMPBackup]...), func() {
+
+	var (
+		scheduledAppContexts  []*scheduler.Context
+		s3CloudCredName       string
+		s3CloudCredUID        string
+		nfsBackupLocationName string
+		nfsBackupLocationUID  string
+		backupLocationMap     map[string]string
+		bkpNamespaces         []string
+		providers             []string
+		backupNames           []string
+		clusterUid            string
+		err                   error
+		ctx                   context.Context
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("VerifyValidateCloudFileMissingJobAgeAndPVC", "Verify the Cloud File missing Job should never be older than 10 mins old. and no accumulation of PVC & PV of the older job should be there.", nil, 300406, Pingle, Q3FY24)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		bkpNamespaces = make([]string, 0)
+		backupNames = make([]string, 0)
+		backupLocationMap = make(map[string]string)
+		log.InfoD("Scheduling Applications")
+		// Schedule an Application
+		appContexts := ScheduleApplications(TaskNamePrefix)
+		for _, appCtx := range appContexts {
+			appCtx.ReadinessTimeout = AppReadinessTimeout
+			namespace := GetAppNamespace(appCtx, TaskNamePrefix)
+			bkpNamespaces = append(bkpNamespaces, namespace)
+			scheduledAppContexts = append(scheduledAppContexts, appCtx)
+		}
+		providers = GetBackupProviders()
+	})
+
+	// Verify the Cloud File missing Job should never be older than 10 mins old. and no accumulation of PVC & PV of the older job should be there.
+	It("Verify the Cloud File missing Job should never be older than 10 mins old. and no accumulation of PVC & PV of the older job should be there", func() {
+		numOfBackup := 1
+
+		Step("Validate applications", func() {
+			log.InfoD("Validating applications")
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		Step("common init", func() {
+			ctx, err = backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+		})
+
+		Step("Creating cloud setting and nfs backup locations", func() {
+			log.InfoD("Creating cloud setting and nfs backup locations")
+			for _, provider := range providers {
+				log.InfoD("Creating NFS backup location")
+				nfsBackupLocationName = fmt.Sprintf("%s-%s-%v", "nfs", getGlobalBucketName(drivers.ProviderNfs), RandomString(6))
+				nfsBackupLocationUID = uuid.New()
+				backupLocationMap[nfsBackupLocationUID] = nfsBackupLocationName
+				err = CreateNFSBackupLocation(nfsBackupLocationName, nfsBackupLocationUID, BackupOrgID, " ", getGlobalBucketName(provider), true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of NFS backup location [%s]", nfsBackupLocationName))
+
+				log.InfoD("Creating cloud credentials")
+				s3CloudCredName = fmt.Sprintf("%s-%s-%v", "cred", "s3", RandomString(4))
+				s3CloudCredUID = uuid.New()
+				err = CreateCloudCredential("aws", s3CloudCredName, s3CloudCredUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, "Verifying creation of cloud credential ")
+			}
+		})
+
+		// 4. Create application cluster for backup
+		Step("Register cluster for backup", func() {
+			err := CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+			clusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			clusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			log.InfoD("Uid of [%s] cluster is %s", SourceClusterName, clusterUid)
+		})
+
+		Step("Taking backups of application NFS backup location", func() {
+			log.InfoD("Taking alternate backups of application from source cluster to both S3 and NFS backup locations")
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+			for i := 0; i < numOfBackup; i++ {
+				for locationUID, locationName := range backupLocationMap {
+					log.InfoD("Creating backup using the backup location of [%s]", locationName)
+					backupName := fmt.Sprintf("%s-%v", BackupNamePrefix, RandomString(10))
+					backupNames = append(backupNames, backupName)
+
+					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, locationName, locationUID, appContextsToBackup, nil, BackupOrgID, clusterUid, "", "", "", "")
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
+					log.InfoD("Verifying the type of backup")
+				}
+			}
+			log.Infof("List of backups - %v", backupNames)
+		})
+
+		Step("validate job and pvc is present", func() {
+			err := CheckPxJobLifeForNFSCreation()
+			dash.VerifyFatal(err, nil, "Verifying job creation ")
+			err = CheckPvcLifeForNFSCreation()
+			dash.VerifyFatal(err, nil, "Verifying pvc creation ")
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		// Clean up the cluster
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		CleanupCloudSettingsAndClusters(nil, "", "", ctx)
 
 	})
 })
