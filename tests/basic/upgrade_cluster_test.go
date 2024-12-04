@@ -21,6 +21,7 @@ import (
 	"github.com/pure-px/torpedo/drivers/scheduler/gke"
 	"github.com/pure-px/torpedo/drivers/scheduler/iks"
 	"github.com/pure-px/torpedo/drivers/scheduler/oke"
+	"github.com/pure-px/torpedo/drivers/scheduler/rke"
 	"github.com/pure-px/torpedo/pkg/log"
 	. "github.com/pure-px/torpedo/tests"
 	corev1 "k8s.io/api/core/v1"
@@ -172,6 +173,10 @@ var _ = Describe("{UpgradeCluster}", Label("p0", "positive", "node_ops", "Upgrad
 						"The replacement might affect cluster capacity temporarily, requiring time for stabilization.", Inst().S.String(), strings.ToUpper(Inst().S.String()))
 					log.Infof("Sleeping for %d minutes to let the cluster stabilize after the upgrade..", waitTime)
 					time.Sleep(time.Duration(waitTime) * time.Minute)
+				}
+				if Inst().S.String() == rke.SchedulerName {
+					log.Infof("Sleeping for 10 minutes to let the cluster stabilize after the upgrade..")
+					time.Sleep(10 * time.Minute)
 				}
 
 				// PX pod restart needed for Anthos cluster upgrade after disabling IPv6 in nodes

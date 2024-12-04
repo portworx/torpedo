@@ -1,9 +1,17 @@
 package rke
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"strings"
+	"text/template"
+	"time"
+
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/task"
 	portworx2 "github.com/pure-px/torpedo/drivers/backup/portworx"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/scheduler"
@@ -14,14 +22,11 @@ import (
 	rancherClientBase "github.com/rancher/norman/clientbase"
 	"github.com/rancher/norman/types"
 	rancherClient "github.com/rancher/rancher/pkg/client/generated/management/v3"
-	"os"
-	"strings"
-	"time"
 )
 
 const (
 	// scheduleName is the name of the kubernetes scheduler driver implementation
-	schedulerName = "rke"
+	SchedulerName = "rke"
 	// SystemdScheduleServiceName is the name of the system service responsible for scheduling
 	SystemdScheduleServiceName = "kubelet"
 )
@@ -44,7 +49,7 @@ type RancherClusterParameters struct {
 
 // String returns the string name of this driver.
 func (r *Rancher) String() string {
-	return schedulerName
+	return SchedulerName
 }
 
 // Init Initializes the driver
@@ -486,6 +491,116 @@ func (r *Rancher) GetRKEClusterList() ([]string, error) {
 	}
 	return clusterList, nil
 }
+func (r *Rancher) UpgradeScheduler(version string) error {
+	const (
+		systemUpgradeControllerURL = "https://github.com/rancher/system-upgrade-controller/releases/latest/download/system-upgrade-controller.yaml"
+		crdURL                     = "https://github.com/rancher/system-upgrade-controller/releases/latest/download/crd.yaml"
+		yamlFilePath               = "/torpedo/deployments/customconfigs/rke-upgrade.yaml"
+	)
+
+	var k8sCore = core.Instance()
+	nodes := node.GetNodes()
+	log.Infof("workernode details %v:", nodes)
+	for _, node := range nodes {
+		err := k8sCore.AddLabelOnNode(node.Name, "upgrade-node", "true")
+		log.Infof("Successfully added label upgrade-node=true on node: %v", node.Name)
+		if err != nil {
+			log.Errorf("Failed to add label upgrade-node=true on node [%s]: %v", node.Name, err)
+			return err
+		}
+	}
+	// Apply the system upgrade controller YAML
+	err := r.applySpec(systemUpgradeControllerURL)
+	if err != nil {
+		log.Errorf("Unable to apply URL: %v", systemUpgradeControllerURL)
+		return err
+	}
+	log.Infof("Successfully applied the URL: %v", systemUpgradeControllerURL)
+	// Apply CRD YAML
+	err = r.applySpec(crdURL)
+	if err != nil {
+		log.Errorf("Unable to apply URL: %v", crdURL)
+		return err
+	}
+	log.Infof("Successfully applied the URL: %v", crdURL)
+	data, err := ioutil.ReadFile(yamlFilePath)
+	if err != nil {
+		log.Errorf("Error reading YAML file: %v", err)
+		return err
+	}
+	// Parse YAML template
+	yamlTemplate := string(data)
+	// Execute the template with the version (will be passed as a map of values)
+	t := template.Must(template.New("yaml").Parse(yamlTemplate))
+	var renderedYAML bytes.Buffer
+	err = t.Execute(&renderedYAML, map[string]string{"version": version})
+	if err != nil {
+		log.Errorf("Error executing template: %v", err)
+		return err
+	}
+	renderedYAMLWithFixedVersion := strings.ReplaceAll(renderedYAML.String(), "&#43;", "+")
+	log.Infof("Corrected rendered YAML with version: %s", renderedYAMLWithFixedVersion)
+
+	// Write the corrected rendered YAML to the temporary file
+	tmpFile, err := ioutil.TempFile("", "output-*.yaml")
+	if err != nil {
+		log.Errorf("Error creating temp file: %v", err)
+		return err
+	}
+	defer os.Remove(tmpFile.Name())
+
+	_, err = tmpFile.Write([]byte(renderedYAMLWithFixedVersion))
+	if err != nil {
+		log.Errorf("Error writing to temp file: %v", err)
+		return err
+	}
+	tmpFileContent, err := ioutil.ReadFile(tmpFile.Name())
+	if err != nil {
+		log.Errorf("Error reading from temporary file: %v", err)
+		return err
+	}
+
+	log.Infof("Content of temp file before applying spec:\n%s", tmpFileContent)
+	if err := tmpFile.Close(); err != nil {
+		log.Errorf("Error closing temp file: %v", err)
+		return err
+	}
+
+	// Apply the spec from the temporary file
+	err = r.applySpec(tmpFile.Name())
+	if err != nil {
+		log.Errorf("Error applying spec from temporary file %s", tmpFile.Name())
+		return err
+	}
+
+	retryFunc := func() (interface{}, bool, error) {
+		log.Infof("Verifying that the cluster version is upgraded")
+		k8sVersion, err := k8sCore.GetVersion()
+		log.Infof("Cluster version after upgrade: %v", k8sVersion.String())
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to get cluster version: %v", err)
+		}
+		if k8sVersion.String() != version {
+			log.Errorf("Cluster version not upgraded. Current version: %s, Expected version: %s", k8sVersion.String(), version)
+			return nil, true, fmt.Errorf("version mismatch. Current version: %s, Expected version: %s", k8sVersion.String(), version)
+		} else {
+			log.Infof("Cluster successfully upgraded to version %s", k8sVersion.String())
+			return k8sVersion, false, nil
+		}
+	}
+	_, err = task.DoRetryWithTimeout(retryFunc, 15*time.Minute, 1*time.Minute)
+	log.FailOnError(err, "Cluster version upgrade verification failed after retries")
+	log.Infof("Cluster successfully upgraded to version %s", version)
+	return nil
+}
+func (r *Rancher) applySpec(url string) error {
+	cmdArgs := []string{"kubectl", "apply", "-f", url}
+	_, err := core.Instance().RunCommandInPod(cmdArgs, "torpedo", "torpedo", "default")
+	if err != nil {
+		log.Errorf("Error applying spec from URL: %s", url)
+	}
+	return err
+}
 
 // GetCurrentClusterWidePSA returns the current cluster wide PSA configured
 func (r *Rancher) GetCurrentClusterWidePSA(clusterName string) (string, error) {
@@ -532,5 +647,5 @@ func (r *Rancher) UpdateClusterWidePSA(clusterName string, psaName string) error
 
 func init() {
 	r := &Rancher{}
-	scheduler.Register(schedulerName, r)
+	scheduler.Register(SchedulerName, r)
 }

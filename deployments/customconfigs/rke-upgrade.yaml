@@ -1,0 +1,63 @@
+# Server plan
+apiVersion: upgrade.cattle.io/v1
+kind: Plan
+metadata:
+  name: server-plan
+  namespace: system-upgrade
+  labels:
+    rke2-upgrade: server
+spec:
+  concurrency: 1
+  # Specify a custom label to control which nodes the upgrade is applied to
+  nodeSelector:
+    matchExpressions:
+      - {key: upgrade-node, operator: In, values: ["true"]}
+  tolerations:
+  - key: "CriticalAddonsOnly"
+    operator: "Equal"
+    value: "true"
+    effect: "NoExecute"
+  - key: "node-role.kubernetes.io/control-plane"
+    operator: "Exists"
+    effect: "NoSchedule"
+  serviceAccountName: system-upgrade
+  cordon: true
+  upgrade:
+    image: rancher/rke2-upgrade
+  {{ if .version }}
+  version: {{ .version | printf "%s" }}
+  {{ else }}
+  version: v1.30.1+rke2r1{{ end }}
+---
+# Agent plan
+apiVersion: upgrade.cattle.io/v1
+kind: Plan
+metadata:
+  name: agent-plan
+  namespace: system-upgrade
+  labels:
+    rke2-upgrade: agent
+spec:
+  concurrency: 2
+  nodeSelector:
+    matchExpressions:
+      - {key: beta.kubernetes.io/os, operator: In, values: ["linux"]}
+      - {key: rke2-upgrade, operator: Exists}
+      - {key: rke2-upgrade, operator: NotIn, values: ["disabled", "false"]}
+      - {key: upgrade-node, operator: In, values: ["true"]}
+      - {key: node-role.kubernetes.io/control-plane, operator: NotIn, values: ["true"]}
+  prepare:
+    args:
+    - prepare
+    - server-plan
+    image: rancher/rke2-upgrade
+  serviceAccountName: system-upgrade
+  cordon: true
+  drain:
+    force: true
+  upgrade:
+    image: rancher/rke2-upgrade
+  {{ if .version }}
+  version: {{ .version | printf "%s" }}
+  {{ else }}
+  version: v1.30.1+rke2r1{{ end }}
