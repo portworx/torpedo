@@ -4111,6 +4111,9 @@ var _ = Describe("{KubeAndPxNamespacesSkipOnAllNSBackup}", Label(TestCaseLabelsM
 
 			err = SetSourceKubeConfig()
 			log.FailOnError(err, "Switching context to source cluster failed")
+
+			err = SuspendBackupSchedule(scheduleName, schedulePolicyName, BackupOrgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Suspend schedule backup [%s]", scheduleName))
 		})
 
 		Step("Check if kube-system and px namespace was backed up or not", func() {
