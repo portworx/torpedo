@@ -1410,7 +1410,7 @@ var _ = Describe("{ExcludeInvalidDirectoryFileBackup}", Label(TestCaseLabelsMap[
 })
 
 // This TC deletes the kopia executor pod while backup and restore are in progress and validates their status
-var _ = Describe("{CrashKopiaToolWhenBackUpRestoreInProgress}", func() {
+var _ = Describe("{CrashKopiaToolWhenBackUpRestoreInProgress}", Label(TestCaseLabelsMap[VerifyRBACForLargeUserSet]...), func() {
 
 	/*
 		Steps:

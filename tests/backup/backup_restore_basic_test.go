@@ -4363,7 +4363,7 @@ var _ = Describe("{IssueMultipleBackupsAndRestoreInterleavedCopies}", Label(Test
 })
 
 // Take backup of a namespace with huge configmap and restore on the destnation cluster
-var _ = Describe("{NamespaceBackupRestoreWithHugeConfigMap}", func() {
+var _ = Describe("{NamespaceBackupRestoreWithHugeConfigMap}", Label(TestCaseLabelsMap[VerifyRBACForLargeUserSet]...), func() {
 
 	/*
 		1. Create a namespace.

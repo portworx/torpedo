@@ -170,6 +170,8 @@ const (
 	AutopilotEnabledBackupRestore                                                      TestCaseName = "AutopilotEnabledBackupRestore"
 	RebootNodesWhileCRRestoreIsInProgress                                              TestCaseName = "RebootNodesWhileCRRestoreIsInProgress"
 	VerifyRBACForLargeUserSet                                                          TestCaseName = "VerifyRBACForLargeUserSet"
+	CrashKopiaToolWhenBackUpRestoreInProgress                                          TestCaseName = "CrashKopiaToolWhenBackUpRestoreInProgress"
+	NamespaceBackupRestoreWithHugeConfigMap                                            TestCaseName = "NamespaceBackupRestoreWithHugeConfigMap"
 )
 
 // Test case labels
@@ -338,6 +340,8 @@ const (
 	AutopilotEnabledBackupRestoreLabel                                                      TestCaseLabel = "AutopilotEnabledBackupRestore"
 	RebootNodesWhileCRRestoreIsInProgressLabel                                              TestCaseLabel = "RebootNodesWhileCRRestoreIsInProgress"
 	VerifyRBACForLargeUserSetLabel                                                          TestCaseLabel = "VerifyRBACForLargeUserSet"
+	CrashKopiaToolWhenBackUpRestoreInProgressLabel                                          TestCaseLabel = "CrashKopiaToolWhenBackUpRestoreInProgress"
+	NamespaceBackupRestoreWithHugeConfigMapLabel                                            TestCaseLabel = "NamespaceBackupRestoreWithHugeConfigMap"
 )
 
 // Common Labels
@@ -649,12 +653,14 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel:                            {DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevelLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, AzureBackupLocationLabel, Day3LockedBucketLabel, AzureImmutableBucket, LockedBucketTest},
 	BackupDeletionWithDynamicPVCGeneration:                                             {BackupDeletionWithDynamicPVCGenerationLabel, vanillaPipeline, ScaleTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
 	BackupScheduleEnumerate:                                                            {BackupScheduleEnumerateLabel},
-	LargeResourceNamespaceBackup:                                                       {LargeResourceNamespaceBackupLabel, vanillaPipeline, ScaleTest, LargeResourceLabel, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
-	RestartPXBackupDuringLargeResourceScheduledBackup:                                  {RestartPXBackupDuringLargeResourceScheduledBackupLabel, vanillaPipeline, ScaleTest, LargeResourceLabel, PxBackupLabel, P2, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
-	RestartStorkDuringLargeResourceScheduledBackup:                                     {RestartStorkDuringLargeResourceScheduledBackupLabel, vanillaPipeline, ScaleTest, LargeResourceLabel, PxBackupLabel, P2, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
-	LargeResourceBackupSync:                                                            {LargeResourceBackupSyncLabel, vanillaPipeline, ScaleTest, LargeResourceLabel, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
-	RebootNodesDuringLargeResourceScheduledBackup:                                      {RebootNodesDuringLargeResourceScheduledBackupLabel, vanillaPipeline, ScaleTest, LargeResourceLabel, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
-	AutopilotEnabledBackupRestore:                                                      {AutopilotEnabledBackupRestoreLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
-	RebootNodesWhileCRRestoreIsInProgress:                                              {RebootNodesWhileCRRestoreIsInProgressLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
-	VerifyRBACForLargeUserSet:                                                          {VerifyRBACForLargeUserSetLabel, vanillaPipeline, ScaleTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
+	LargeResourceNamespaceBackup:                                                       {LargeResourceNamespaceBackupLabel, ocpPipeline, ScaleTest, LargeResourceLabel, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
+	RestartPXBackupDuringLargeResourceScheduledBackup:                                  {RestartPXBackupDuringLargeResourceScheduledBackupLabel, ocpPipeline, ScaleTest, LargeResourceLabel, PxBackupLabel, P2, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
+	RestartStorkDuringLargeResourceScheduledBackup:                                     {RestartStorkDuringLargeResourceScheduledBackupLabel, ocpPipeline, ScaleTest, LargeResourceLabel, PxBackupLabel, P2, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
+	LargeResourceBackupSync:                                                            {LargeResourceBackupSyncLabel, ocpPipeline, ScaleTest, LargeResourceLabel, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
+	RebootNodesDuringLargeResourceScheduledBackup:                                      {RebootNodesDuringLargeResourceScheduledBackupLabel, ocpPipeline, ScaleTest, LargeResourceLabel, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
+	NamespaceBackupRestoreWithHugeConfigMap:                                            {NamespaceBackupRestoreWithHugeConfigMapLabel, ocpPipeline, ScaleTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
+	AutopilotEnabledBackupRestore:                                                      {AutopilotEnabledBackupRestoreLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, SkipTestLabel},
+	RebootNodesWhileCRRestoreIsInProgress:                                              {RebootNodesWhileCRRestoreIsInProgressLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, SkipTestLabel},
+	VerifyRBACForLargeUserSet:                                                          {VerifyRBACForLargeUserSetLabel, vanillaPipeline, ScaleTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, SkipTestLabel},
+	CrashKopiaToolWhenBackUpRestoreInProgress:                                          {CrashKopiaToolWhenBackUpRestoreInProgressLabel, ocpPipeline, SystemTest, PxBackupLabel, P2, KDMPLabel, S3BackupLocationLabel, NfsBackupLocationLabel, SkipTestLabel},
 }
