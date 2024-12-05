@@ -1569,6 +1569,8 @@ var _ = Describe("{BackupSuperAdminRoleForLocalUser}", Label(TestCaseLabelsMap[B
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying schedule [%s] is found in the schedule list", scheduleName))
 				} else {
 					log.Infof("Schedule [%s] found in the schedule list , verifying deletion of schedule", scheduleName)
+					err = SuspendBackupSchedule(scheduleName, schedulePolicyName, BackupOrgID, superAdminCtx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Suspending Backup Schedule [%s] for super admin", scheduleName))
 					scheduleUID, err := GetScheduleUID(scheduleName, BackupOrgID, superAdminCtx)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Getting schedule UID for schedule %s", scheduleName))
 					err = DeleteScheduleWithUID(scheduleName, scheduleUID, BackupOrgID, superAdminCtx)
