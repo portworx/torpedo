@@ -38,7 +38,6 @@ import (
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	osapi "github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/pkg/units"
-	storkapi "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
 	admissionregistration "github.com/portworx/sched-ops/k8s/admissionregistration"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/apps"
@@ -48,19 +47,20 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	schederrors "github.com/portworx/sched-ops/k8s/errors"
 	csisnapshot "github.com/portworx/sched-ops/k8s/externalsnapshotter"
-	"github.com/pure-px/stork/pkg/crud/externalstorage"
 	"github.com/portworx/sched-ops/k8s/kubevirt"
 	"github.com/portworx/sched-ops/k8s/networking"
-	"github.com/pure-px/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/k8s/policy"
 	"github.com/portworx/sched-ops/k8s/prometheus"
 	"github.com/portworx/sched-ops/k8s/rbac"
 	"github.com/portworx/sched-ops/k8s/storage"
-	"github.com/pure-px/stork/pkg/crud/stork"
 	tektoncd "github.com/portworx/sched-ops/k8s/tektoncd"
 	"github.com/portworx/sched-ops/task"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	operatorcorev1 "github.com/pure-px/px-operator/pkg/apis/core/v1"
+	"github.com/pure-px/sched-ops/k8s/operator"
+	storkapi "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
+	"github.com/pure-px/stork/pkg/crud/externalstorage"
+	"github.com/pure-px/stork/pkg/crud/stork"
 	"github.com/pure-px/torpedo/drivers/api"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/scheduler"
@@ -1999,8 +1999,10 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 					obj.Parameters["pure_fa_pod_name"] = options.PureFAPodName
 				}
 			}
-
 		}
+
+		k.substituteNamespaceInStorageClass(obj, ns.Name)
+
 		sc, err := k8sStorage.CreateStorageClass(obj)
 		if k8serrors.IsAlreadyExists(err) {
 			if sc, err = k8sStorage.GetStorageClass(obj.Name); err == nil {
@@ -2216,6 +2218,12 @@ func (k *K8s) substituteNamespaceInPVC(pvc *corev1.PersistentVolumeClaim, ns str
 	pvc.Name = namespaceRegex.ReplaceAllString(pvc.Name, ns)
 	for k, v := range pvc.Annotations {
 		pvc.Annotations[k] = namespaceRegex.ReplaceAllString(v, ns)
+	}
+}
+
+func (k *K8s) substituteNamespaceInStorageClass(sc *storageapi.StorageClass, ns string) {
+	for k, v := range sc.Parameters {
+		sc.Parameters[k] = namespaceRegex.ReplaceAllString(v, ns)
 	}
 }
 
