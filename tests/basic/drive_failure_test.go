@@ -590,6 +590,8 @@ func YankMetadataTest(testName, testDesc string) {
 				log.FailOnError(err, fmt.Sprintf("Error getting PX status of node %s", nodeSelected.Name))
 				dash.VerifyFatal(*status, api.Status_STATUS_MAINTENANCE, fmt.Sprintf("Node %s Status not Online", nodeSelected.Name))
 			})
+		} else if testName == "YankMetadataWithIOs" {
+			time.Sleep(time.Minute * 2)
 		}
 
 		stepLog = "Recover yank drive"
@@ -613,6 +615,15 @@ func YankMetadataTest(testName, testDesc string) {
 				dash.VerifyFatal(*status, api.Status_STATUS_OK, fmt.Sprintf("Node %s Status not Online", nodeSelected.Name))
 			})
 		}
+
+		stepLog = fmt.Sprintf("Wait for driver to up")
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().V.WaitDriverUpOnNode(nodeSelected, Inst().DriverStartTimeout)
+			log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", nodeSelected.Name))
+			log.Info("Driver is up")
+
+		})
 
 		stepLog = "Verify Px Status"
 		Step(stepLog, func() {
@@ -649,6 +660,12 @@ func YankMetadataTest(testName, testDesc string) {
 		AfterEachTest(contexts)
 	})
 }
+
+var _ = Describe("{YankMetadataWithIOs}", func() {
+	testName = "YankMetadataWithIOs"
+	testDescription = "Yank metadata drive with IOs"
+	YankMetadataTest(testName, testDescription)
+})
 
 func YankPoolDriveTest(testName, testDesc string) {
 	var nodeSelected *node.Node
