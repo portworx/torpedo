@@ -172,6 +172,7 @@ const (
 	VerifyRBACForLargeUserSet                                                          TestCaseName = "VerifyRBACForLargeUserSet"
 	CrashKopiaToolWhenBackUpRestoreInProgress                                          TestCaseName = "CrashKopiaToolWhenBackUpRestoreInProgress"
 	NamespaceBackupRestoreWithHugeConfigMap                                            TestCaseName = "NamespaceBackupRestoreWithHugeConfigMap"
+	CheckLicensePageIntegrity                                                          TestCaseName = "LicensePageIntegrity"
 )
 
 // Test case labels
@@ -342,6 +343,7 @@ const (
 	VerifyRBACForLargeUserSetLabel                                                          TestCaseLabel = "VerifyRBACForLargeUserSet"
 	CrashKopiaToolWhenBackUpRestoreInProgressLabel                                          TestCaseLabel = "CrashKopiaToolWhenBackUpRestoreInProgress"
 	NamespaceBackupRestoreWithHugeConfigMapLabel                                            TestCaseLabel = "NamespaceBackupRestoreWithHugeConfigMap"
+	CheckLicensePageIntegrityLabel                                                          TestCaseLabel = "CheckLicensePageIntegrity"
 )
 
 // Common Labels

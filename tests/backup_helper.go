@@ -13238,3 +13238,36 @@ func ValidatePodInNamespace(podName, namesapce string, expectedState corev1.PodP
 	}
 	return nil
 }
+
+func VerifyLicenseCount(ctx context1.Context, expected int) error {
+
+	licenseCountCheckFunc := func() (interface{}, bool, error) {
+		licenseInspectRequestObject := &api.LicenseInspectRequest{
+			OrgId: BackupOrgID,
+		}
+
+		licenseInspectResponse, err := Inst().Backup.InspectLicense(ctx, licenseInspectRequestObject)
+		if err != nil {
+			return "", false, err
+		}
+
+		log.Infof("license res is: %v", licenseInspectResponse.LicenseRespInfo.FeatureInfo)
+		var actualLicenseCount int
+		for _, info := range licenseInspectResponse.LicenseRespInfo.FeatureInfo {
+			actualLicenseCount = actualLicenseCount + int(info.GetConsumed())
+		}
+
+		if actualLicenseCount == expected {
+			return "", false, nil
+		}
+		return "", true, fmt.Errorf("licence count expected was [%d] but got [%d]", expected, actualLicenseCount)
+	}
+
+	_, err := task.DoRetryWithTimeout(licenseCountCheckFunc, MaxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second)
+	log.InfoD("License inprogress check finished at [%s]", time.Now().Format("2006-01-02 15:04:05"))
+	if err != nil {
+		return err
+	}
+
+	return err
+}
