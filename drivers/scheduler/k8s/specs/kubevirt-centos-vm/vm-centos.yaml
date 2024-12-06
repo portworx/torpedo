@@ -1,0 +1,107 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  labels:
+    app: centos-vm-multi-disk
+  name: centos-vm-multi-disk
+  annotations:
+    pvc.source: "cloned"
+    username: "centos"
+spec:
+  running: true
+  template:
+    metadata:
+      annotations:
+        vm.kubevirt.io/flavor: small
+        vm.kubevirt.io/os: centos-stream9
+        vm.kubevirt.io/workload: server
+      labels:
+        username: "fedora"
+    spec:
+      domain:
+        cpu:
+          cores: 2
+        devices:
+          disks:
+            - bootOrder: 1
+              disk:
+                bus: virtio
+              name: rootdisk
+            - disk:
+                bus: virtio
+              name: centos-data-disk
+            - disk:
+                bus: virtio
+              name: cloudinitdisk
+          interfaces:
+            - name: default
+              masquerade: {}
+          networkInterfaceMultiqueue: true
+          rng: {}
+        features:
+          acpi: {}
+          smm:
+            enabled: true
+        resources:
+          requests:
+            cpu: 2
+            memory: 2048M
+      networks:
+        - name: default
+          pod: {}
+      tolerations:
+        - effect: NoSchedule
+          key: node-role.kubernetes.io/master
+          operator: Exists
+      evictionStrategy: LiveMigrate
+      terminationGracePeriodSeconds: 180
+      volumes:
+        - dataVolume:
+            name: centos-root-disk
+          name: rootdisk
+        - name: centos-data-disk
+          persistentVolumeClaim:
+            claimName: centos-data-disk
+        - cloudInitNoCloud:
+            userData: |-
+              #cloud-config
+              user: centos
+              password: centos-test
+              chpasswd: { expire: False }
+          name: cloudinitdisk
+  dataVolumeTemplates:
+    - metadata:
+        name: centos-root-disk
+        labels:
+          app: containerized-data-importer
+        annotations:
+          cdi.kubevirt.io/storage.usePopulator: "false"
+      spec:
+        source:
+          pvc:
+            name: centos-template-pvc
+            namespace: openshift-virtualization-os-images
+        pvc:
+          accessModes:
+            - ReadWriteMany
+          resources:
+            requests:
+              storage: 50Gi
+          storageClassName: sc-sharedv4svc-nolock-immediate
+          volumeMode: Filesystem
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: centos-data-disk
+  labels:
+    portworx.io/kubevirt: "true"
+  annotations:
+    cdi.kubevirt.io/storage.usePopulator: "false"
+spec:
+  storageClassName: sc-sharedv4svc-nolock-immediate
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 50Gi

@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: centos-template-pvc
+  namespace: openshift-virtualization-os-images
+  labels:
+    app: containerized-data-importer
+  annotations:
+    cdi.kubevirt.io/storage.import.endpoint: https://cloud.centos.org/centos/10-stream/x86_64/images/CentOS-Stream-GenericCloud-10-20241120.0.x86_64.qcow2
+    pvc.source: "cloned"
+spec:
+  storageClassName: sc-sharedv4svc-nolock-immediate
+  accessModes:
+  - ReadWriteMany
+  resources:
+    requests:
+      storage: 50Gi
