@@ -3013,3 +3013,446 @@ var _ = Describe("{ClusterBackupShareWithExistingBackupsWithRestoreAccessFromMul
 
 	})
 })
+
+// This test case verifies if Backup can be shared at cluster level with view, restorable and Full access from Multiple Backup Locations to different users and groups
+var _ = Describe("{ClusterBackupShareWithExistingBackupsWithViewRestorableAndFullAccessFromMultipleBackupLocations}", Label(TestCaseLabelsMap[ValidateUserAccessLevel]...), func() {
+	var (
+		backupName           string
+		scheduledAppContexts []*scheduler.Context
+		sourceClusterUid     string
+		clusterStatus        api.ClusterInfo_StatusInfo_Status
+		cloudCredName        string
+		cloudCredUID         string
+		backupLocationUID    string
+		backupLocation       string
+		group1               string
+		bkpNamespaces        []string
+		allInfraAdminUsers   []string
+		allNormalUsers       []string
+		restoreNames         []string
+		testAdminUserName    string
+		thirdUserName        string
+		fourthUserName       string
+		fifthUserName        string
+		secondUserName       string
+		bl1                  string
+		bl2                  string
+		bl3                  string
+		blUID1               string
+		blUID2               string
+		blUID3               string
+	)
+	bkpNamespaces = make([]string, 0)
+	labelSelectors := make(map[string]string)
+	backupLocationMap := make(map[string]string)
+	backupNames := make([]string, 0)
+	secondarybackupNames := make([]string, 0)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("VerifyClusterBackupShareWithExistingBackupsWithViewRestorableAndFullAccessFromMultipleBackupLocations",
+			"Share Backup at cluster level with view, restorable and Full access from Multiple Backup Locations to different users and groups", nil, 80157, ABadgujar, Q2FY24)
+		//1.Step-Deploy Applications in the Cluster
+		log.InfoD("Deploy applications")
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
+			appContexts := ScheduleApplications(taskName)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = AppReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
+			}
+		}
+	})
+	It("Share Backup at cluster level with view, restorable and Full access from Multiple Backup Locations to different users and groups", func() {
+		//2.Step-Validate Deployed Applications
+		Step("Validate applications", func() {
+			log.InfoD("Validating apps")
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		//3.Step-Create 4 Users out of which 2 users have Infra Admin Role
+		Step("Create 2 Users with Infra Admin Role", func() {
+			log.InfoD("Create 2 Users with Infra Admin Role")
+			role := backup.InfrastructureOwner
+			allInfraAdminUsers = CreateUsers(2)
+			for _, userName := range allInfraAdminUsers {
+				err := backup.AddRoleToUser(userName, role, fmt.Sprintf("Adding %v role to %s", role, userName))
+				log.FailOnError(err, "Failed to add role for user - %s", userName)
+				//Append both usernames to Slice of Usernames and store them for future use
+				log.FailOnError(err, "Failed to fetch uid for - %s", userName)
+			}
+			testAdminUserName = allInfraAdminUsers[0]
+			secondUserName = allInfraAdminUsers[1]
+			allNormalUsers = CreateUsers(3)
+			thirdUserName = allNormalUsers[0]
+			fourthUserName = allNormalUsers[1]
+			fifthUserName = allNormalUsers[2]
+		})
+
+		//4.Step-Create a group with full access
+		Step("Create Group", func() {
+			log.InfoD("Creating 1 user group for full access")
+			group1 = "group-with-full-access"
+			err := backup.AddGroup(group1)
+			log.FailOnError(err, "Failed to create user group-1- %v", group1)
+		})
+
+		//5.Step-Add user fifthUserName to the group1
+		Step("Add fifth User to group1", func() {
+			log.InfoD("Adding fifth User to group1")
+			err := backup.AddGroupToUser(fifthUserName, group1)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding user %s to group %s", fifthUserName, group1))
+			usersOfGroup, err := backup.GetMembersOfGroup(group1)
+			log.FailOnError(err, "Error fetching members of the group - %v", group1)
+			log.Infof("Group [%v] contains the following users: \n%v", group1, usersOfGroup)
+		})
+
+		//6.Step-Creating Cloud Credentials with testadmin context and 2 Backup Locations
+		Step("Creating backup location and cloud setting in TestAdmin User Context", func() {
+			log.InfoD("Creating backup location in TestAdmin User Context")
+			nonAdminCtx, err := backup.GetNonAdminCtx(testAdminUserName, CommonPassword)
+			log.FailOnError(err, "Fetching TestAdmin User context")
+			providers := GetBackupProviders()
+
+			//For Backup Location 1
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v-ta-cc", "cloudcred", provider, time.Now().Unix())
+				backupLocation = fmt.Sprintf("%v-bl-ta-2", time.Now().Unix())
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = backupLocation
+				blUID2 = backupLocationUID
+				bl2 = backupLocation
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, nonAdminCtx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				err = CreateBackupLocationWithContext(provider, backupLocation, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", nonAdminCtx, true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocation))
+			}
+
+			//For Backup Location 2
+			for _, provider := range providers {
+				backupLocation = fmt.Sprintf("%v-bl-ta-1", time.Now().Unix())
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = backupLocation
+				blUID1 = backupLocationUID
+				bl1 = backupLocation
+				err = CreateBackupLocationWithContext(provider, backupLocation, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", nonAdminCtx, true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocation))
+
+			}
+		})
+
+		//7.Share Ownership of the two Backup locations and cloud credentials with AllNormalUsers
+		Step("Share Ownership of the Two Backup locations with AllNormalUsers", func() {
+			nonAdminCtx, err := backup.GetNonAdminCtx(testAdminUserName, CommonPassword)
+			log.FailOnError(err, "Fetching TestAdmin User context")
+			//Add Ownership to User3 and User4 and User5
+			for backupLocationUIDIteration, backupLocationIteration := range backupLocationMap {
+				err = AddBackupLocationOwnership(backupLocationIteration, backupLocationUIDIteration, allNormalUsers, nil, Read, Invalid, nonAdminCtx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for backuplocation - %s", backupLocationIteration))
+			}
+		})
+
+		//9.Step-Registering Cluster for Backup testAdmin Context
+		Step("Register cluster for backup", func() {
+			nonAdminCtx, err := backup.GetNonAdminCtx(testAdminUserName, CommonPassword)
+			log.FailOnError(err, "Fetching user context")
+			err = CreateApplicationClusters(BackupOrgID, "", "", nonAdminCtx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, nonAdminCtx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			sourceClusterUid, err = Inst().Backup.GetClusterUID(nonAdminCtx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+		})
+
+		//10.Step-Create Backups in all backup locations in testadminUser Context
+		Step("Taking backup of applications", func() {
+			//Common Steps for all backups
+			nonAdminCtx, err := backup.GetNonAdminCtx(testAdminUserName, CommonPassword)
+			log.FailOnError(err, "Fetching user [%s] ctx", testAdminUserName)
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+
+			//Backup1 Taken with BackupLocation1 of TestAdmin Context
+			backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, bkpNamespaces[0], time.Now().Unix())
+			err = CreateBackupWithValidation(nonAdminCtx, backupName, SourceClusterName, bl1, blUID1, appContextsToBackup, labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", backupName))
+			backupNames = append(backupNames, backupName)
+
+			//Backup2 Taken with BackupLocation2 of TestAdmin Context
+			backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, bkpNamespaces[0], time.Now().Unix())
+			err = CreateBackupWithValidation(nonAdminCtx, backupName, SourceClusterName, bl2, blUID2, appContextsToBackup, labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", backupName))
+			backupNames = append(backupNames, backupName)
+
+		})
+
+		//13.Share All Backups with User3 with View Only access
+		Step("Share the backups created by testAdmin User with ViewOnlyAccess with User3", func() {
+			log.Infof("Share the backups created by testAdmin User with ViewOnlyAccess with User3")
+			//For Sharing Backup Context needed is of Sharing Party i.e TestAdmin User
+			nonAdminCtx, err := backup.GetNonAdminCtx(testAdminUserName, CommonPassword)
+			log.FailOnError(err, "Fetching user [%s] ctx", testAdminUserName)
+
+			//Cluster Backup Share of all Backups with ViewOnly Access
+			err = ClusterUpdateBackupShare(SourceClusterName, nil, []string{thirdUserName}, ViewOnlyAccess, true, nonAdminCtx)
+			log.FailOnError(err, "Failed sharing all backups for cluster [%s]", SourceClusterName)
+
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+
+			//Validate the access of Shared Backup
+			log.Infof("Validating the shared backups with ViewOnlyAccess from one of the user")
+			userCtx, err := backup.GetNonAdminCtx(thirdUserName, CommonPassword)
+			log.FailOnError(err, "Fetching user [%s] ctx", thirdUserName)
+			bkVar := 0
+			// Start Restore and confirm that user cannot restore
+			for _, backupName = range backupNames {
+				bkVar++
+				ctx, err := backup.GetAdminCtxFromSecret()
+				Inst().Dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+				log.InfoD("Registering Source and Destination clusters from user context")
+				err = CreateApplicationClusters(BackupOrgID, "", "", userCtx)
+				Inst().Dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+				destClusterUid, err := Inst().Backup.GetClusterUID(userCtx, BackupOrgID, DestinationClusterName)
+				Inst().Dash.VerifyFatal(err, nil, "Getting destination cluster UID")
+				backupDriver := Inst().Backup
+				restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
+				restoreNames = append(restoreNames, restoreName)
+				Inst().Dash.VerifyFatal(err, nil, "Getting destination cluster UID")
+				log.InfoD("Validating if user [%s] with access [%v] can restore and delete backup %s or not", thirdUserName, BackupAccessKeyValue[1], backupName)
+				err = CreateRestoreWithValidation(userCtx, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, appContextsToBackup)
+				if err != nil {
+					log.Infof("Error returned - %s", err.Error())
+				}
+				// Restore validation to make sure that the user with View Access cannot restore
+				dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to restore backup") ||
+					strings.Contains(err.Error(), "failed to retrieve backup location"), true, fmt.Sprintf("Verifying backup restore is not possible for viewonlyUser-iteration-%v", bkVar))
+				backupUID, err := backupDriver.GetBackupUID(ctx, backupName, BackupOrgID)
+				Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backup UID for- %s", backupName))
+				// Delete backup to confirm that the user has ViewOnlyAccess and cannot delete backup
+				_, err = DeleteBackup(backupName, backupUID, BackupOrgID, userCtx)
+				log.Infof("The expected error returned is %v", err)
+				Inst().Dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to delete backup"), true, "Verifying backup deletion is not possible")
+			}
+			log.InfoD("Finished verifying access level - ViewOnlyAccess")
+
+		})
+
+		//11.Share All Backups with User4 with Restore Only access
+		Step("Share the backups created by testAdmin User with Restore Only Access with User4", func() {
+			log.Infof("Share the backups created by testAdmin User with Restore Only Access with User4")
+			//For Sharing Backup Context needed is of Sharing Party i.e TestAdmin User
+			nonAdminCtx, err := backup.GetNonAdminCtx(testAdminUserName, CommonPassword)
+			log.FailOnError(err, "Fetching user [%s] ctx", testAdminUserName)
+
+			//Cluster Backup Share of all Backups with Restore Access
+			err = ClusterUpdateBackupShare(SourceClusterName, nil, []string{fourthUserName}, RestoreAccess, true, nonAdminCtx)
+			log.FailOnError(err, "Failed sharing all backups for cluster [%s]", SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying share of all backups of cluster [%s] with [%#v] access level to user [%s]", SourceClusterName, RestoreAccess, fourthUserName))
+			log.Infof("Validating the shared backups with RestoreAccess from one of the user")
+			for _, backupName := range backupNames {
+				restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
+				restoreNames = append(restoreNames, restoreName)
+				ValidateSharedBackupWithUsers(fourthUserName, RestoreAccess, backupName, restoreName)
+			}
+			log.InfoD("Finished verifying access level - RestoreAccess")
+		})
+
+		//12.Share All Backups with Group1 with Full Access
+		Step("Share the backups created by testAdmin User with Full Access with Group1", func() {
+			log.Infof("Share the backups created by testAdmin User with Full Access with Group1")
+			//For Sharing Backup Context needed is of Sharing Party i.e TestAdmin User
+			nonAdminCtx, err := backup.GetNonAdminCtx(testAdminUserName, CommonPassword)
+			log.FailOnError(err, "Fetching user [%s] ctx", testAdminUserName)
+			//Cluster Backup Share of all Backups with full Access
+			err = ClusterUpdateBackupShare(SourceClusterName, []string{group1}, nil, FullAccess, true, nonAdminCtx)
+			log.FailOnError(err, "Failed sharing all backups for cluster [%s]", SourceClusterName)
+
+			//Validate the access of Shared Backups
+			log.Infof("Validating the shared backups with FullAccess from one of the user")
+			for _, backupName := range backupNames {
+
+				restoreName := fmt.Sprintf("%s-%s-%v", fifthUserName, RestoreNamePrefix, RandomString(5))
+				restoreNames = append(restoreNames, restoreName)
+				ValidateSharedBackupWithUsers(fifthUserName, FullAccess, backupName, restoreName)
+
+			}
+			log.InfoD("Finished verifying access level - FullAccess")
+		})
+
+		//8.Step-Creating Cloud Credentials with User2 context and 1 Backup Location and sharing it with testadmin user
+		Step("Creating backup location and cloud setting with User2 context", func() {
+			log.InfoD("Creating backup location and cloud setting with User2 context")
+			nonAdminCtx, err := backup.GetNonAdminCtx(secondUserName, CommonPassword)
+			log.FailOnError(err, "Fetching User 2 context")
+			providers := GetBackupProviders()
+			//For Backup Location which is created in User2 context and shared with testAdmin User
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cloudcred-su", provider, time.Now().Unix())
+				backupLocation = fmt.Sprintf("%v-bl-su-1", time.Now().Unix())
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = backupLocation
+				blUID3 = backupLocationUID
+				bl3 = backupLocation
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, nonAdminCtx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				err = CreateBackupLocationWithContext(provider, backupLocation, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", nonAdminCtx, true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocation))
+
+			}
+			err = AddCloudCredentialOwnership(cloudCredName, cloudCredUID, []string{testAdminUserName}, nil, Read, Invalid, nonAdminCtx, BackupOrgID)
+			dash.VerifyFatal(err, nil, "couldn't add ownership to Cloud Account")
+			err = AddBackupLocationOwnership(bl3, blUID3, []string{testAdminUserName}, nil, Read, Invalid, nonAdminCtx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for backuplocation - %s", []string{testAdminUserName}))
+		})
+
+		//8.Step-Creating Cloud Credentials with User2 context and 1 Backup Location and sharing it with testadmin user
+		Step("Taking backup of applications", func() {
+			//Common Steps for all backups
+			nonAdminCtx, err := backup.GetNonAdminCtx(testAdminUserName, CommonPassword)
+			log.FailOnError(err, "Fetching user [%s] ctx", testAdminUserName)
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+			//Backup3 Taken with BackupLocation of TestAdmin Context but with Backup Location which was shared to TestAdmin User by Second User.
+			backupName = fmt.Sprintf("%s-%s-sharedbackup3", BackupNamePrefix, bkpNamespaces[0])
+			err = CreateBackupWithValidation(nonAdminCtx, backupName, SourceClusterName, bl3, blUID3, appContextsToBackup, labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", backupName))
+			secondarybackupNames = append(secondarybackupNames, backupName)
+		})
+
+		//11.Share the backup created by testAdmin User with backuplocation created by secondUser with Restore Only Access with User4
+		Step("Share the backup created by testAdmin User with backuplocation created by secondUser with Restore Only Access with User4", func() {
+			log.Infof("Share the backup created by testAdmin User with backuplocation created by secondUser with Restore Only Access with User4")
+			//For Sharing Backup Context needed is of Sharing Party i.e TestAdmin User
+			nonAdminCtx, err := backup.GetNonAdminCtx(testAdminUserName, CommonPassword)
+			log.FailOnError(err, "Fetching user [%s] ctx", testAdminUserName)
+
+			//Cluster Backup Share of all Backups with Restore Access
+			err = ClusterUpdateBackupShare(SourceClusterName, nil, []string{fourthUserName}, RestoreAccess, true, nonAdminCtx)
+			log.FailOnError(err, "Failed sharing all backups for cluster [%s]", SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying share of all backups of cluster [%s] with [%#v] access level to user [%s]", SourceClusterName, RestoreAccess, fourthUserName))
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+
+			log.Infof("Validating the shared backups with RestoreAccess from one of the user")
+			userCtx, err := backup.GetNonAdminCtx(fourthUserName, CommonPassword)
+			log.FailOnError(err, "Fetching user [%s] ctx", fourthUserName)
+			for _, backupName := range secondarybackupNames {
+				ctx, err := backup.GetAdminCtxFromSecret()
+				Inst().Dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+				log.InfoD("Registering Source and Destination clusters from user context")
+				err = CreateApplicationClusters(BackupOrgID, "", "", userCtx)
+				Inst().Dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+				destClusterUid, err := Inst().Backup.GetClusterUID(userCtx, BackupOrgID, DestinationClusterName)
+				Inst().Dash.VerifyFatal(err, nil, "Getting destination cluster UID")
+				backupDriver := Inst().Backup
+				restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
+				restoreNames = append(restoreNames, restoreName)
+				err = CreateRestoreWithValidation(userCtx, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, appContextsToBackup)
+				log.Infof("The expected error returned is %v", err)
+				Inst().Dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to restore backup") ||
+					strings.Contains(err.Error(), "failed to retrieve backup location"), true, "Verifying backup restore is not possible for restore-only-user4 3rd backup")
+				// Try to delete the backup with user having RestoreAccess, and it should not pass
+				backupUID, err := backupDriver.GetBackupUID(ctx, backupName, BackupOrgID)
+				Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backup UID for- %s", backupName))
+				// Delete backup to confirm that the user has Restore Access and delete backup should fail
+				_, err = DeleteBackup(backupName, backupUID, BackupOrgID, userCtx)
+				log.Infof("The expected error returned is %v", err)
+				Inst().Dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to delete backup") ||
+					strings.Contains(err.Error(), "failed to retrieve backup location"), true, "Verifying backup deletion is not possible for restore-only-user4 3rd backup")
+			}
+			log.InfoD("Finished verifying access level for shared backup with shared backuplocation - RestoreAccess")
+		})
+
+		//12.Share the backup created by testAdmin User with backuplocation created by secondUser with Full Access with Group1
+		Step("Share the backup created by testAdmin User with backuplocation created by secondUser with Full Access with Group1", func() {
+			log.Infof("Share the backup created by testAdmin User with backuplocation created by secondUser with Full Access with Group1")
+			//For Sharing Backup Context needed is of Sharing Party i.e TestAdmin User
+			nonAdminCtx, err := backup.GetNonAdminCtx(testAdminUserName, CommonPassword)
+			log.FailOnError(err, "Fetching user [%s] ctx", testAdminUserName)
+			//Cluster Backup Share of all Backups with full Access
+			err = ClusterUpdateBackupShare(SourceClusterName, []string{group1}, nil, FullAccess, true, nonAdminCtx)
+			log.FailOnError(err, "Failed sharing all backups for cluster [%s]", SourceClusterName)
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+			log.Infof("Validating the shared backups with RestoreAccess from one of the user")
+			userCtx, err := backup.GetNonAdminCtx(fifthUserName, CommonPassword)
+			log.FailOnError(err, "Fetching user [%s] ctx", fifthUserName)
+			//Validate the access of Shared Backups
+			log.Infof("Validating the shared backups with FullAccess from one of the user")
+			for _, backupName := range secondarybackupNames {
+				ctx, err := backup.GetAdminCtxFromSecret()
+				Inst().Dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+				log.InfoD("Registering Source and Destination clusters from user context")
+				err = CreateApplicationClusters(BackupOrgID, "", "", userCtx)
+				Inst().Dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+				destClusterUid, err := Inst().Backup.GetClusterUID(userCtx, BackupOrgID, DestinationClusterName)
+				Inst().Dash.VerifyFatal(err, nil, "Getting destination cluster UID")
+				backupDriver := Inst().Backup
+				restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
+				restoreNames = append(restoreNames, restoreName)
+				err = CreateRestoreWithValidation(userCtx, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, appContextsToBackup)
+				log.Infof("The expected error returned is %v", err)
+				Inst().Dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to restore backup") ||
+					strings.Contains(err.Error(), "failed to retrieve backup location"), true, "Verifying backup restore is not possible for FullAccess-user5 3rd backup")
+				// Try to delete the backup with user having RestoreAccess, and it should not pass
+				backupUID, err := backupDriver.GetBackupUID(ctx, backupName, BackupOrgID)
+				Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backup UID for- %s", backupName))
+				// Delete backup to confirm that the user has Restore Access and delete backup should fail
+				_, err = DeleteBackup(backupName, backupUID, BackupOrgID, userCtx)
+				log.Infof("The expected error returned is %v", err)
+				Inst().Dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to delete backup") ||
+					strings.Contains(err.Error(), "failed to retrieve backup location"), true, "Verifying backup deletion is not possible for FullAccess-user5 3rd backup")
+
+			}
+			log.InfoD("Finished verifying access level for shared backup with shared backuplocation - FullAccess")
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		log.InfoD("Deleting the deployed apps after the testcase")
+		// Cleaning up applications created
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		DestroyApps(scheduledAppContexts, opts)
+
+		// Clean the all user created
+		var wg sync.WaitGroup
+		log.Infof("Cleaning up users")
+		for _, userName := range allInfraAdminUsers {
+			wg.Add(1)
+			go func(userName string) {
+				defer GinkgoRecover()
+				defer wg.Done()
+				err := backup.DeleteUser(userName)
+				log.FailOnError(err, "Error deleting user %v", userName)
+			}(userName)
+		}
+		for _, userName := range allNormalUsers {
+			wg.Add(1)
+			go func(userName string) {
+				defer GinkgoRecover()
+				defer wg.Done()
+				err := backup.DeleteUser(userName)
+				log.FailOnError(err, "Error deleting user %v", userName)
+			}(userName)
+		}
+		wg.Wait()
+
+		// Clean up the all group created
+		log.Infof("Cleaning up groups")
+		err := backup.DeleteGroup(group1)
+		log.FailOnError(err, "Error deleting user %v", group1)
+
+		// Clean up the cluster
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		for _, restoreNameIteration := range restoreNames {
+			err = DeleteRestore(restoreNameIteration, BackupOrgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreNameIteration))
+		}
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+
+	})
+})
