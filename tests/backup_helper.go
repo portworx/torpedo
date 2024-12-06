@@ -217,6 +217,7 @@ const (
 	DynamicPvcGenerationTimeOut           = 350
 	DynamicPvcGenerationRetryTime         = 30
 	NfsJobName                            = "backupfilemissing"
+	PxBackupDeleteJobPrifix               = "delete-"
 )
 
 var (
@@ -13200,6 +13201,40 @@ func CheckPvcLifeForNFSCreation() error {
 	_, err = task.DoRetryWithTimeout(t, 20*time.Minute, 10*time.Second)
 	if err != nil {
 		return fmt.Errorf("failed to verify pvc %v", err)
+	}
+	return nil
+}
+func ValidatePodInNamespace(podName, namesapce string, expectedState corev1.PodPhase) error {
+
+	log.Info("pod name is:", podName)
+
+	log.Info("namespace is:", namesapce)
+	t := func() (interface{}, bool, error) {
+		pods, err := core.Instance().GetPods(namesapce, nil)
+		if err != nil {
+			return "", false, err
+		}
+
+		log.Infof("lenth of pods:%v", len(pods.Items))
+
+		for _, pod := range pods.Items {
+			log.Infof("pod status is:%v and pod name is:", pod.Status.Phase, pod.Name)
+
+			if strings.Contains(pod.Name, podName) {
+				log.Infof("pod found:", pod.Name)
+				if pod.Status.Phase == expectedState {
+					return "pod in completed state", false, nil
+				} else {
+					return nil, true, fmt.Errorf("pod is not successed yet")
+				}
+			}
+		}
+		return nil, true, fmt.Errorf("pod not found")
+	}
+
+	_, err := task.DoRetryWithTimeout(t, 20*time.Minute, 15*time.Second)
+	if err != nil {
+		return fmt.Errorf("failed to verify pod %v", err)
 	}
 	return nil
 }

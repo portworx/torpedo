@@ -8,17 +8,18 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pure-px/stork/pkg/k8sutils"
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/pure-px/stork/pkg/k8sutils"
 	"github.com/pure-px/torpedo/drivers"
 	"github.com/pure-px/torpedo/drivers/backup"
 	"github.com/pure-px/torpedo/drivers/scheduler"
 	"github.com/pure-px/torpedo/pkg/log"
 	. "github.com/pure-px/torpedo/tests"
 	"golang.org/x/sync/errgroup"
+	corev1 "k8s.io/api/core/v1"
 )
 
 // This test deletes backup custom resource.
@@ -1341,6 +1342,160 @@ var _ = Describe("{ValidateCloudFileMissingJobAgeAndPVC}", Label(TestCaseLabelsM
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		CleanupCloudSettingsAndClusters(nil, "", "", ctx)
+
+	})
+})
+
+// Once a object is selected for deletion, check if a job pod is created on the PX-Backup cluster
+var _ = Describe("{ValidatPxBackupDeletionJobPodRunning}", Label(TestCaseLabelsMap[PxBackupLabel]...), func() {
+
+	var (
+		scheduledAppContexts []*scheduler.Context
+		bkpNamespaces        []string
+		clusterUid           string
+		clusterStatus        api.ClusterInfo_StatusInfo_Status
+		backupName           string
+		backupLocationUID    string
+		cloudCredName        string
+		cloudCredUID         string
+		bkpLocationName      string
+		backupNames          []string
+		providers            []string
+		ctx                  context.Context
+		backupLocationMap    map[string]string
+		backupDriver         backup.Driver
+		crUid                string
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("VerifyValidatPxBackupDeletionJobPodRunning", "Once a object is selected for deletion, check if a job pod is created on the PX-Backup cluster", nil, 300189, Pingle, Q3FY25)
+
+		backupLocationMap = make(map[string]string)
+		bkpNamespaces = make([]string, 0)
+		backupNames = make([]string, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		bkpNamespaces = make([]string, 0)
+
+		// Schedule an Application
+		appContexts := ScheduleApplications(TaskNamePrefix)
+		for _, ctx := range appContexts {
+			ctx.ReadinessTimeout = AppReadinessTimeout
+			namespace := GetAppNamespace(ctx, TaskNamePrefix)
+			bkpNamespaces = append(bkpNamespaces, namespace)
+			scheduledAppContexts = append(scheduledAppContexts, ctx)
+		}
+	})
+
+	//Once a object is selected for deletion, check if a job pod is created on the PX-Backup cluster
+	It("Once a object is selected for deletion, check if a job pod is created on the PX-Backup cluster.", func() {
+		numOfBackup := 1
+		// 1. validate application
+		Step("Validate applications", func() {
+			log.InfoD("Validating applications")
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		// 2. common initializations
+		Step("common init", func() {
+			backupDriver = Inst().Backup
+			var err error
+			ctx, err = backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			providers = GetBackupProviders()
+		})
+
+		// 3. Create cloud credentials and backup location
+		Step("Creating cloud credentials and backup location", func() {
+			log.InfoD("Creating cloud credentials and backup location")
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, time.Now().Unix())
+				bkpLocationName = fmt.Sprintf("%s-%s-%v-bl", provider, getGlobalBucketName(provider), time.Now().Unix())
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = bkpLocationName
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				err = CreateBackupLocation(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", bkpLocationName))
+			}
+		})
+
+		// 4. Create application cluster for backup
+		Step("Register cluster for backup", func() {
+			err := CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			clusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			log.InfoD("Uid of [%s] cluster is %s", SourceClusterName, clusterUid)
+		})
+
+		// 5. Take the kdmp backup of bkNamespaces.
+		Step("Taking backup of applications", func() {
+			for i := 0; i < numOfBackup; i++ {
+				backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, bkpNamespaces[0], time.Now().Unix())
+				params := map[string]string{"backupName": backupName, "backupOrgID": BackupOrgID, "bkpLocationName": bkpLocationName, "backupLocationUID": backupLocationUID, "clusterName": SourceClusterName, "clusterUid": clusterUid}
+				bkpCreateRequest, err := PrepareGenericBackupRequest(params)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("decorating data of KDMP backup [%s]", backupName))
+				bkpCreateRequest.Namespaces = bkpNamespaces
+				log.InfoD("Backup without check [%s] started at [%s]", backupName, time.Now().Format("2006-01-02 15:04:05"))
+				_, err = backupDriver.CreateBackup(ctx, bkpCreateRequest)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of KDMP backup [%s]", backupName))
+				err = Inst().Backup.WaitForBackupCompletion(ctx, backupName, BackupOrgID, BackupRestoreCompletionTimeoutMin*time.Minute, RetrySeconds*time.Second)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Waiting for [%s] completion", backupName))
+				backupNames = append(backupNames, backupName)
+			}
+		})
+
+		// 6. Get the backup cr uid from backup object
+		Step("Get the backup cr uid from backup object", func() {
+			bkpEnumerateReq := &api.BackupEnumerateRequest{OrgId: BackupOrgID}
+			enumerateRsp, err := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
+			dash.VerifyFatal(err, nil, "Backup enumeration for the ctx")
+			log.Infof("crid is:%d", enumerateRsp.GetBackups()[0].CrUid[0:7])
+
+			crUid = enumerateRsp.GetBackups()[0].CrUid[0:7]
+		})
+
+		// 6. Delete the backup
+		Step("Delete the backup", func() {
+			log.Infof("About to delete backup - %s", backupName)
+			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, BackupOrgID)
+			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
+			_, err = DeleteBackup(backupName, backupUID, BackupOrgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup deletion : %v", backupName))
+		})
+
+		// 7. Check if job pod is getting created
+		Step("Verify the px-backup delete job pod is created", func() {
+			jobPodName := PxBackupDeleteJobPrifix + crUid
+			namespace, err := backup.GetPxBackupNamespace()
+			dash.VerifyFatal(err, nil, "Verifing the px-backup namespace")
+			expectedState := corev1.PodSucceeded
+
+			err = ValidatePodInNamespace(jobPodName, namespace, expectedState)
+			dash.VerifyFatal(err, nil, "Verifing the px-backup delete job pod is created and completed.")
+		})
+
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		defer func() {
+			log.Infof("Unsetting BACKUP_TYPE env variable")
+			err := os.Unsetenv("BACKUP_TYPE")
+			log.FailOnError(err, "Unsetting BACKUP_TYPE env variable")
+		}()
+
+		log.InfoD("Deleting the deployed apps after the testcase")
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		DestroyApps(scheduledAppContexts, opts)
+
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 
 	})
 })
