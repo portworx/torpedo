@@ -6,11 +6,13 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	"github.com/pure-px/sched-ops/k8s/apps"
 	"github.com/pure-px/torpedo/drivers/backup"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/scheduler"
 	"github.com/pure-px/torpedo/pkg/log"
 	. "github.com/pure-px/torpedo/tests"
+	appsV1 "k8s.io/api/apps/v1"
 )
 
 // Add clusters and delete them from backend and check if px-backup license page is breaking or not
@@ -152,5 +154,42 @@ var _ = Describe("{AddAndUpdateClusterCheckLicensePageIntegrity}", Label(TestCas
 		DestroyApps(scheduledAppContexts, opts)
 
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
+})
+
+// This test case verifies if Px-Backup Namespace deployment spec has SOFT_LICENSING_PERIOD set to correct Value
+var _ = Describe("{CheckIfDeploymentSpecHasSOFT_LICENSING_PERIODSet}", Label(TestCaseLabelsMap[VerifySoftLicensingPeriodInDeploymentSpec]...), func() {
+	var (
+		backupDeployment            *appsV1.Deployment
+		expectedSoftLicensingPeriod string
+		actualSoftLicensingPeriod   string
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("VerifyIfDeploymentSpecHasSOFT_LICENSING_PERIODSet",
+			"Deployment spec has SOFT_LICENSING_PERIOD Set to correct value or not", nil, 300718, ABadgujar, Q2FY24)
+		//1.Define what is expected licensing period
+		log.InfoD("Define what is expected licensing period")
+		expectedSoftLicensingPeriod = "36160"
+		log.Infof("Expected licensing period is [%s]", expectedSoftLicensingPeriod)
+	})
+	It("Deployment spec has SOFT_LICENSING_PERIOD Set to correct value or not", func() {
+		//2.Get Px-Backup Namespace and Deployment Spec and soft licensing period from there
+		Step("Get Px-Backup Namespace and Deployment Spec and soft licensing period from there", func() {
+			log.InfoD("Get Px-Backup Namespace and Deployment Spec and soft licensing period from there")
+			pxBackupNS, err := backup.GetPxBackupNamespace()
+			log.FailOnError(err, "Getting Px-Backup namespace")
+			log.Infof("Get Px-Backup Namespace and Deployment Spec from px-backup namespace [%s]", pxBackupNS)
+			backupDeployment, err = apps.Instance().GetDeployment(PxBackupDeployment, pxBackupNS)
+			log.FailOnError(err, fmt.Sprintf("Getting px-backup deployment in backup namespace %s", pxBackupNS))
+			actualSoftLicensingPeriod = backupDeployment.Spec.Template.Spec.Containers[0].Env[6].Value
+			log.InfoD("Actual Soft Licensing Period in Px-Backup Namespace is %v", actualSoftLicensingPeriod)
+		})
+
+		//3.Verify if Actual and Expected SOFT_LICENSING_PERIOD values are matching
+		Step("Verify if Actual and Expected SOFT_LICENSING_PERIOD values are matching", func() {
+			log.InfoD("Verify if Actual and Expected SOFT_LICENSING_PERIOD values are matching")
+			Inst().Dash.VerifyFatal(actualSoftLicensingPeriod, expectedSoftLicensingPeriod, fmt.Sprintf("Actual and Expected Values for SOFT_LICENSING_PERIOD are matching - %s", actualSoftLicensingPeriod))
+		})
 	})
 })

@@ -173,6 +173,7 @@ const (
 	CrashKopiaToolWhenBackUpRestoreInProgress                                          TestCaseName = "CrashKopiaToolWhenBackUpRestoreInProgress"
 	NamespaceBackupRestoreWithHugeConfigMap                                            TestCaseName = "NamespaceBackupRestoreWithHugeConfigMap"
 	CheckLicensePageIntegrity                                                          TestCaseName = "LicensePageIntegrity"
+	VerifySoftLicensingPeriodInDeploymentSpec                                          TestCaseName = "VerifySoftLicensingPeriodInDeploymentSpec"
 )
 
 // Test case labels
@@ -344,6 +345,7 @@ const (
 	CrashKopiaToolWhenBackUpRestoreInProgressLabel                                          TestCaseLabel = "CrashKopiaToolWhenBackUpRestoreInProgress"
 	NamespaceBackupRestoreWithHugeConfigMapLabel                                            TestCaseLabel = "NamespaceBackupRestoreWithHugeConfigMap"
 	CheckLicensePageIntegrityLabel                                                          TestCaseLabel = "CheckLicensePageIntegrity"
+	VerifySoftLicensingPeriodInDeploymentSpecLabel                                          TestCaseLabel = "VerifySoftLicensingPeriodInDeploymentSpec"
 )
 
 // Common Labels
