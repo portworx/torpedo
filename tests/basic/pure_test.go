@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/pure-px/sched-ops/k8s/apps"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -20,17 +21,17 @@ import (
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	"github.com/libopenstorage/openstorage/api"
-	storkv1 "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	k8sApps "github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/pure-px/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/k8s/storage"
-	storkops "github.com/pure-px/stork/pkg/crud/stork"
 	"github.com/portworx/sched-ops/task"
 	v12 "github.com/pure-px/px-operator/pkg/apis/core/v1"
+	"github.com/pure-px/sched-ops/k8s/operator"
+	storkv1 "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
+	storkops "github.com/pure-px/stork/pkg/crud/stork"
 	"github.com/pure-px/torpedo/drivers/node"
 	newFlashArray "github.com/pure-px/torpedo/drivers/pure/flasharray"
 	"github.com/pure-px/torpedo/drivers/scheduler"
@@ -9802,5 +9803,106 @@ WantedBy=multi-user.target`, scriptPath)
 
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{UpgradeFBDAAppImage}", func() {
+	/*
+
+	           	https://purestorage.atlassian.net/browse/PTX-28073
+	           	1. Deploy a Nginx application using FBDA with the base image nginx.
+	           	2. Ensure the applications are running correctly.
+	           	3. Upgrade the FBDA application's image to nginx:1.27.3
+	           	4. Wait for the applications to roll out the new image
+	   	        5. Verify that the pods are running with the new image
+
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("UpgradeFBDAAppImage", "Upgrade FBDA App Image", nil, 0)
+	})
+	itLog := "UpgradeFBDAAppImage"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		var fbdaStorageclass string
+		var deploymentNamespace = make(map[string]string)
+		stepLog := "Deploy a Nginx application using FBDA with the base image nginx"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			if Inst().V.IsPxLiteCluster() {
+				fbdaStorageclass = "px-fb-direct-access-nfsv4"
+			} else {
+				fbNFSMountOptsMap := make(map[string][]string)
+				fbNFSMountOptsMap["nfsv41"] = []string{"vers=4.1", "tcp"}
+				for ver, mountOpts := range fbNFSMountOptsMap {
+					fbdaStorageclass = "fb-" + ver + "-sc"
+					log.Infof("Creating storage class [%s] with mount options [%v]", fbdaStorageclass, mountOpts)
+					err := createFBStorageClassWithMountOpts(fbdaStorageclass, mountOpts)
+					log.FailOnError(err, "failed to create storage class [%s] with mount options [%v]", ver, mountOpts)
+				}
+			}
+			for i := 0; i < 10; i++ {
+				pvcName := fmt.Sprintf("fbda-pvc-%d", i)
+				namespace := fmt.Sprintf("fbda-ns-%d", i)
+				deploymentName := fmt.Sprintf("fbda-deployment-%d", i)
+				log.Infof("Creating pvc [%s] with storage class [%s] in namespace [%s]", pvcName, fbdaStorageclass, namespace)
+				CreateNginxFadaWorkload(pvcName, 1, deploymentName, namespace, fbdaStorageclass)
+				deploymentNamespace[deploymentName] = namespace
+			}
+
+		})
+		stepLog = "Upgrade the FBDA application's image to nginx:1.27.3"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for deploy, namespace := range deploymentNamespace {
+				deployment, err := apps.Instance().GetDeployment(deploy, namespace)
+				log.FailOnError(err, "failed to get deployment [%s] in namespace [%s]", deploy, namespace)
+				log.InfoD("Upgrade the image of deployment [%s] in namespace [%s] to nginx:1.27.3", deploy, namespace)
+				deployment.Spec.Template.Spec.Containers[0].Image = "nginx:1.27.3"
+				_, err = apps.Instance().UpdateDeployment(deployment)
+			}
+		})
+		stepLog = "Wait for the applications to roll out the new image"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.InfoD("Sleep 10 minutes to wait for the applications to roll out the new image")
+			time.Sleep(10 * time.Minute)
+		})
+		stepLog = "Verify that the pods are running with the new image"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for deploy, namespace := range deploymentNamespace {
+				deployment, err := apps.Instance().GetDeployment(deploy, namespace)
+				log.FailOnError(err, "failed to get deployment [%s] in namespace [%s]", deploy, namespace)
+				podList, err := apps.Instance().GetDeploymentPods(deployment)
+				log.FailOnError(err, "failed to get pods for deployment [%s] in namespace [%s]", deploy, namespace)
+				for _, pod := range podList {
+					log.InfoD("checking the image of pod [%s] in namespace [%s]", pod.Name, namespace)
+					if pod.Spec.Containers[0].Image != "nginx:1.27.3" {
+						dash.VerifyFatal(false, true, "failed to upgrade the image to nginx:1.27.3")
+					}
+				}
+
+			}
+			log.InfoD("All pods are running with the new image")
+		})
+		stepLog = "Destroy applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for deployment, namespace := range deploymentNamespace {
+				err := k8sApps.Instance().DeleteDeployment(deployment, namespace)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to delete deployment [%v]", deployment))
+			}
+			for _, ns := range deploymentNamespace {
+				err := core.Instance().DeleteNamespace(ns)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to delete namespace [%v]", ns))
+				log.InfoD("Namespace [%v] destroyed ", ns)
+			}
+			if !Inst().V.IsPxLiteCluster() {
+				err := storage.Instance().DeleteStorageClass(fbdaStorageclass)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to delete storage class [%v]", fbdaStorageclass))
+			}
+
+		})
+
 	})
 })
