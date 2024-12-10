@@ -12811,6 +12811,7 @@ func GetAllCustomRoles() ([]string, error) {
 		string(backup.ApplicationOwner),
 		string(backup.InfrastructureOwner),
 		string(backup.ApplicationUser),
+		string(backup.SuperAdmin),
 	}
 	ctx, err := backup.GetAdminCtxFromSecret()
 	if err != nil {
