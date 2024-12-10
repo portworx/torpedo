@@ -91,7 +91,7 @@ var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResume
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
 				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
-				bkpLocationName = fmt.Sprintf("%s-%s-bl", provider, getGlobalBucketName(provider))
+				bkpLocationName = fmt.Sprintf("%s-%s-bl-%v", provider, getGlobalBucketName(provider), RandomString(5))
 				cloudCredUID = uuid.New()
 				backupLocationUID = uuid.New()
 				backupLocationMap[backupLocationUID] = bkpLocationName
@@ -353,6 +353,16 @@ var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResume
 		}
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
+
+		Step("Suspending all backup schedules", func() {
+			log.InfoD("Suspending all backup schedules")
+			log.InfoD("All backup schedules and policies - [%v]", scheduleAndBackup)
+			for backup, policy := range scheduleAndBackup {
+				err = SuspendBackupSchedule(backup, policy, BackupOrgID, ctx)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Suspending Backup Schedule [%s] with policy [%s]", backup, policy))
+			}
+		})
+
 		log.Infof("Deleting backup schedule policy")
 		for _, scheduleName := range scheduleNames {
 			err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx, true)
