@@ -57,23 +57,23 @@ import (
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	opsapi "github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/pkg/sched"
-	"github.com/pure-px/stork/pkg/storkctl"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/kubevirt"
-	"github.com/pure-px/sched-ops/k8s/operator"
 	policyops "github.com/portworx/sched-ops/k8s/policy"
 	k8sStorage "github.com/portworx/sched-ops/k8s/storage"
 	schedstorage "github.com/portworx/sched-ops/k8s/storage"
-	"github.com/pure-px/stork/pkg/crud/stork"
-	storkops "github.com/pure-px/stork/pkg/crud/stork"
 	"github.com/portworx/sched-ops/task"
 	pxapi "github.com/pure-px/px-operator/api/px"
 	"github.com/pure-px/px-operator/drivers/storage/portworx/util"
 	oputil "github.com/pure-px/px-operator/drivers/storage/portworx/util"
 	optest "github.com/pure-px/px-operator/pkg/util/test"
+	"github.com/pure-px/sched-ops/k8s/operator"
+	"github.com/pure-px/stork/pkg/crud/stork"
+	storkops "github.com/pure-px/stork/pkg/crud/stork"
+	"github.com/pure-px/stork/pkg/storkctl"
 	"go.uber.org/multierr"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/api/iterator"
@@ -84,11 +84,11 @@ import (
 	yaml "gopkg.in/yaml.v2"
 	v1 "k8s.io/api/policy/v1"
 
-	storkapi "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
-	storkv1 "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
 	pdsv1 "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	k8sApps "github.com/portworx/sched-ops/k8s/apps"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	storkapi "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
+	storkv1 "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsapi "k8s.io/api/apps/v1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -10570,8 +10570,8 @@ func GetAllKvdbNodes() ([]KvdbNode, error) {
 	}
 	for !found {
 		randomIndex := rand.Intn(len(workerNodes))
-		randomNode := workerNodes[randomIndex]
-		log.Infof("Random node to run storage %v", randomNode)
+		randomNode = workerNodes[randomIndex]
+		log.Infof("Random node to run storage %s", randomNode.Name)
 		status := Inst().V.IsPxReadyOnNode(randomNode)
 		if status {
 			found = true

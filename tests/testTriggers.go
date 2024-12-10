@@ -37,19 +37,19 @@ import (
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	opsapi "github.com/libopenstorage/openstorage/api"
-	storkapi "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
-	storkv1 "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
 	"github.com/onsi/ginkgo/v2"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/kubevirt"
-	"github.com/pure-px/sched-ops/k8s/operator"
 	storage "github.com/portworx/sched-ops/k8s/storage"
-	storkops "github.com/pure-px/stork/pkg/crud/stork"
 	"github.com/portworx/sched-ops/task"
 	operatorcorev1 "github.com/pure-px/px-operator/pkg/apis/core/v1"
+	"github.com/pure-px/sched-ops/k8s/operator"
+	storkapi "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
+	storkv1 "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
+	storkops "github.com/pure-px/stork/pkg/crud/stork"
 	"github.com/pure-px/torpedo/drivers/backup"
 	"github.com/pure-px/torpedo/drivers/monitor/prometheus"
 	"github.com/pure-px/torpedo/drivers/node"
@@ -132,6 +132,12 @@ const (
 	EssentialsFaFbSKU = "Portworx CSI for FA/FB"
 	fastpathAppName   = "fastpath"
 	IsSSIEKey         = "IS_SSIE"
+	//PureExportRules is a key in map parameter for pure storage class
+	PureExportRules = "pure_export_rules"
+	// PureVolFBExportRule is export rules for pure FB
+	PureVolFBExportRule = "*(rw)"
+	// PureFAPodName is key in map parameter for pure storage class
+	PureFAPodName = "pure_fa_pod_name"
 )
 
 const (
@@ -163,16 +169,34 @@ const (
 )
 
 const (
-	deploymentCount      = 250
-	deploymentNamePrefix = "fada-scale-dep"
-	pvcNamePrefix        = "fada-scale-pvc"
-	fadaNamespacePrefix  = "fada-namespace"
-	podAttachTimeout     = 15 * time.Minute
+	deploymentNamePrefix   = "fada-scale-dep"
+	fbDeploymentNamePrefix = "fbda-scale-dep"
+	pvcNamePrefix          = "fada-scale-pvc"
+	fbPvcNamePrefix        = "fbda-scale-pvc"
+	fadaNamespacePrefix    = "fada-namespace"
+	fbdaNamespacePrefix    = "fbda-namespace"
 )
 
 const (
 	equalSeparator = "="
 	colonSeparator = ":"
+)
+
+const (
+	PureFADAScaleCount    = "pureFADAScaleCount"
+	PureFBDAScaleCount    = "pureFBDAScaleCount"
+	PureFAPodNameForMT    = "pureFAPodName"
+	PureFadaAttachTimeout = "pureFadaAttachTimeout"
+	PureFbdaAttachTimeout = "pureFbdaAttachTimeout"
+)
+
+var (
+	// Pure FA and FB env variables
+	FADADeploymentCount  int64 = 250
+	FBDADeploymentCount  int64 = 250
+	FAPodName                  = ""
+	PodFadaAttachTimeout       = 15 * time.Minute
+	PodFbdaAttachTimeout       = 15 * time.Minute
 )
 
 // TODO Need to add for AutoJournal
@@ -685,6 +709,15 @@ const (
 
 	//Inject network delays
 	InjectNetworkDelay = "injectNetworkDelay"
+
+	// PowerOffAllKvdbVMs power-off all KVDB VMs node in px-lite cluster
+	PowerOffAllKvdbVMs = "powerOffAllKvdbVMs"
+
+	// ScaleFBDAVolumes create and scale FBDA volumes
+	ScaleFBDAVolumes = "scaleFBDAVolumes"
+
+	// RunFlatPxCSI trigger run flat condition in PX CSI cluster
+	RunFlatPxCSI = "runFlatPxCSI"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -8773,7 +8806,7 @@ func TriggerCsiSnapRestore(contexts *[]*scheduler.Context, recordChan *chan *Eve
 			blkScName := PureBlockStorageClass + time.Now().Format("01-02-15h04m05s")
 			// Adding a pure backend parameters
 			param[PureBackend] = k8s.PureBlock
-			if blockSc, err = createPureStorageClass(blkScName, param); err != nil {
+			if blockSc, err = createPureStorageClass(blkScName, param, []string{}); err != nil {
 				log.Errorf("StorageClass creation failed for SC: %s", blkScName)
 				UpdateOutcome(event, err)
 			}
@@ -12792,14 +12825,18 @@ func TriggerScaleFADAVolumeAttach(contexts *[]*scheduler.Context, recordChan *ch
 		fadaScName := PureBlockStorageClass + time.Now().Format("01-02-15h04m05s")
 		log.Infof("Creating pure_block storage class class: %s", fadaScName)
 		param[PureBackend] = k8s.PureBlock
-		_, err := createPureStorageClass(fadaScName, param)
+		// Setting FA Pod name for FA Multi-Tenancy
+		if FAPodName != "" {
+			param[PureFAPodName] = FAPodName
+		}
+		_, err := createPureStorageClass(fadaScName, param, []string{})
 		if err != nil {
 			log.Errorf("StorageClass creation failed for SC: %s", fadaScName)
 			UpdateOutcome(event, err)
 		}
 		log.InfoD("Deployng FADA based applications")
 		startTime := time.Now()
-		for x := 0; x < deploymentCount; x++ {
+		for x := 0; x < int(FADADeploymentCount); x++ {
 			pvcName := fmt.Sprintf("%s-%d", pvcNamePrefix, x)
 			namespace := fmt.Sprintf("%s-%d", fadaNamespacePrefix, x)
 			deploymentName := fmt.Sprintf("%s-%d", fadaScName, x)
@@ -12807,7 +12844,7 @@ func TriggerScaleFADAVolumeAttach(contexts *[]*scheduler.Context, recordChan *ch
 			sem <- struct{}{}
 			go func(scName string, pvcName string, ns string, depName string, wg *sync.WaitGroup, ctx *[]*scheduler.Context, event *EventRecord, sem chan struct{}) {
 				log.SetTestName(ScaleFADAVolumeAttach)
-				deployFadaApps(fadaScName, pvcName, namespace, deploymentName, wg, ctx, event)
+				deployPureApp(fadaScName, pvcName, namespace, deploymentName, wg, ctx, event)
 				<-sem
 			}(fadaScName, pvcName, namespace, deploymentName, &wg, &appContexts, event, sem)
 		}
@@ -12815,16 +12852,16 @@ func TriggerScaleFADAVolumeAttach(contexts *[]*scheduler.Context, recordChan *ch
 		close(sem)
 		log.InfoD("Validating applications context")
 		validateContexts(event, &appContexts)
-		log.Infof("Attaching [%d] FADA volumes took: [%v]", deploymentCount, time.Since(startTime))
-		if time.Since(startTime) > podAttachTimeout {
-			UpdateOutcome(event, fmt.Errorf("failed to complete all fada pods attachment in [%v]", podAttachTimeout))
+		log.Infof("Attaching [%d] FADA volumes took: [%v]", FADADeploymentCount, time.Since(startTime))
+		if time.Since(startTime) > PodFadaAttachTimeout {
+			UpdateOutcome(event, fmt.Errorf("failed to complete all fada pods attachment in [%v]", PodFadaAttachTimeout))
 		}
 
 		stepLog = "Cleaning up the FADA deployments"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			sem := make(chan struct{}, 10)
-			for x := 0; x < deploymentCount; x++ {
+			for x := 0; x < int(FADADeploymentCount); x++ {
 				sem <- struct{}{}
 				wg.Add(1)
 				go func(ctx *scheduler.Context, wg *sync.WaitGroup, event *EventRecord, sem chan struct{}) {
@@ -13434,18 +13471,22 @@ func doNeedToWaitMoreForSchedule(defragSchedule string) (bool, error) {
 	return true, nil
 }
 
-// deployFadaApps deploy deployment using FADA volumes
-func deployFadaApps(scName string, pvcName string, ns string, depName string, wg *sync.WaitGroup, ctx *[]*scheduler.Context, event *EventRecord) {
+// deployPureApp deploy deployment using FADA volumes
+func deployPureApp(scName string, pvcName string, ns string, depName string, wg *sync.WaitGroup, ctx *[]*scheduler.Context, event *EventRecord) {
 	defer wg.Done()
 
 	metadata := make(map[string]string, 0)
 	pvcSize := "1Gi"
-	metadata["app"] = "fada-data-app"
+	metadata["app"] = "pure-data-app"
+	accessMode := v1.ReadWriteOnce
+	if strings.Contains(scName, PureFileStorageClass) {
+		accessMode = v1.ReadWriteMany
+	}
 
 	if err := createNameSpace(ns, metadata); err != nil {
 		UpdateOutcome(event, fmt.Errorf("failed to create namespace: %s. Err: %v", ns, err))
 	}
-	if err := createPVC(pvcName, scName, pvcSize, ns); err != nil {
+	if err := createPVC(pvcName, scName, pvcSize, ns, accessMode); err != nil {
 		UpdateOutcome(event, fmt.Errorf("failed to create pvc: [%s] in ns: [%s]. Err: %v", pvcName, ns, err))
 	}
 	if err := createDeployment(depName, ns, pvcName, ctx); err != nil {
@@ -13476,6 +13517,17 @@ func createDeployment(depName string, ns string, pvcName string, ctx *[]*schedul
 	}
 	limit["cpu"], limit["memory"] = cpuLimit, memLimit
 	deployment := getDeploymentObject(depName, ns, pvcName, request, limit)
+	if len(Inst().TopologyLabels) > 1 {
+		schdOptions := scheduler.ScheduleOptions{
+			AppKeys:            Inst().AppList,
+			StorageProvisioner: Inst().Provisioner,
+			TopologyLabels:     Inst().TopologyLabels,
+		}
+		k8s.RotateTopologyArray(&schdOptions)
+		Inst().TopologyLabels = schdOptions.TopologyLabels
+		affinity := k8s.GetAffinity(Inst().TopologyLabels)
+		deployment.Spec.Template.Spec.Affinity = affinity.DeepCopy()
+	}
 	deployment, err = apps.Instance().CreateDeployment(deployment, metav1.CreateOptions{})
 	if err != nil {
 		return err
@@ -13557,12 +13609,12 @@ func createNameSpace(namespace string, label map[string]string) error {
 	return err
 }
 
-func createPVC(pvcName string, scName string, pvcSize string, ns string) error {
+func createPVC(pvcName string, scName string, pvcSize string, ns string, accessMode v1.PersistentVolumeAccessMode) error {
 	size, err := resource.ParseQuantity(pvcSize)
 	if err != nil {
 		return fmt.Errorf("failed to parse pvc size: %s", pvcSize)
 	}
-	pvcClaimSpec := k8s.MakePVC(size, ns, pvcName, scName)
+	pvcClaimSpec := k8s.MakePVC(size, ns, pvcName, scName, accessMode)
 	_, err = k8sCore.CreatePersistentVolumeClaim(pvcClaimSpec)
 	return err
 }
@@ -13671,7 +13723,7 @@ func getPXVersion(nd node.Node) string {
 }
 
 // createPureStorageClass create storage class
-func createPureStorageClass(name string, params map[string]string) (*storageapi.StorageClass, error) {
+func createPureStorageClass(name string, params map[string]string, mntOptions []string) (*storageapi.StorageClass, error) {
 	var reclaimPolicyDelete v1.PersistentVolumeReclaimPolicy
 	var bindMode storageapi.VolumeBindingMode
 	k8sStorage := storage.Instance()
@@ -13688,6 +13740,9 @@ func createPureStorageClass(name string, params map[string]string) (*storageapi.
 		Parameters:        params,
 		ReclaimPolicy:     &reclaimPolicyDelete,
 		VolumeBindingMode: &bindMode,
+	}
+	if len(mntOptions) > 0 {
+		scObj.MountOptions = mntOptions
 	}
 
 	sc, err := k8sStorage.CreateStorageClass(&scObj)
@@ -13992,7 +14047,6 @@ func TriggerKubevirtVMStartAndStop(contexts *[]*scheduler.Context, recordChan *c
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
-
 	setMetrics(*event)
 	stepLog := "Start and Stop Kubevirt VM"
 	Step(stepLog, func() {
@@ -14129,20 +14183,20 @@ func TriggerInjectNetworkDelay(contexts *[]*scheduler.Context, recordChan *chan 
 		log.Infof("ip address :[%v] of node : [%v]", ipAddr, nodeToInduceNetworkDelay.Name)
 
 		//Add label to node
-		log.Infof("adding label network-delay-set on node : [%v]",nodeToInduceNetworkDelay.Name)
-		err := Inst().S.AddLabelOnNode(nodeToInduceNetworkDelay,"network-delay-set","true")
-		if err != nil{
-			log.Infof("failed to add label on node : [%v], err :[%v]",nodeToInduceNetworkDelay.Name,err)
-			UpdateOutcome(event,err)
+		log.Infof("adding label network-delay-set on node : [%v]", nodeToInduceNetworkDelay.Name)
+		err := Inst().S.AddLabelOnNode(nodeToInduceNetworkDelay, "network-delay-set", "true")
+		if err != nil {
+			log.Infof("failed to add label on node : [%v], err :[%v]", nodeToInduceNetworkDelay.Name, err)
+			UpdateOutcome(event, err)
 			return
 		}
 		//remove label on node
 		defer func() {
-			log.Infof("removing label net-delay-set  on node : [%v]",nodeToInduceNetworkDelay.Name)
-			err := Inst().S.RemoveLabelOnNode(nodeToInduceNetworkDelay,"network-delay-set")
-			if err != nil{
-				log.Infof("failed to remove label on node : [%v], err :[%v]",nodeToInduceNetworkDelay.Name,err)
-				UpdateOutcome(event,err)
+			log.Infof("removing label net-delay-set  on node : [%v]", nodeToInduceNetworkDelay.Name)
+			err := Inst().S.RemoveLabelOnNode(nodeToInduceNetworkDelay, "network-delay-set")
+			if err != nil {
+				log.Infof("failed to remove label on node : [%v], err :[%v]", nodeToInduceNetworkDelay.Name, err)
+				UpdateOutcome(event, err)
 				return
 			}
 		}()
@@ -14157,7 +14211,7 @@ func TriggerInjectNetworkDelay(contexts *[]*scheduler.Context, recordChan *chan 
 		}
 		out, err := Inst().N.RunCommand(nodeToInduceNetworkDelay, cmd, cmdConnectionOpts)
 		if err != nil {
-			log.InfoD("failed to run command [%v] to fetch interface name, err :[%v]", cmd,err)
+			log.InfoD("failed to run command [%v] to fetch interface name, err :[%v]", cmd, err)
 			UpdateOutcome(event, err)
 			return
 		}
@@ -14167,8 +14221,8 @@ func TriggerInjectNetworkDelay(contexts *[]*scheduler.Context, recordChan *chan 
 		jitter = "5ms"
 
 		//add network delay
-		log.InfoD("inducing network delay of base value : [%v] and jitter value : [%v]",baseDelay,jitter)
-		cmd = fmt.Sprintf("sudo tc qdisc add dev %s root netem delay %s %s distribution normal", interfaceName, baseDelay,jitter)
+		log.InfoD("inducing network delay of base value : [%v] and jitter value : [%v]", baseDelay, jitter)
+		cmd = fmt.Sprintf("sudo tc qdisc add dev %s root netem delay %s %s distribution normal", interfaceName, baseDelay, jitter)
 		log.Infof("command to add network delay : [%v] of [%v]", cmd)
 		_, err = Inst().N.RunCommand(nodeToInduceNetworkDelay, cmd, cmdConnectionOpts)
 		if err != nil {
@@ -14196,4 +14250,305 @@ func TriggerInjectNetworkDelay(contexts *[]*scheduler.Context, recordChan *chan 
 
 	})
 	updateMetrics(*event)
+}
+
+// TriggerPowerOffAllKvdbVMs power off all KVDB Vms at same time for px-lite
+func TriggerPowerOffAllKvdbVMs(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(PowerOffAllKvdbVMs)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: PowerOffAllKvdbVMs,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	setMetrics(*event)
+	stepLog := "Power off all KVDB nodes test"
+	Step(stepLog, func() {
+		log.Infof(stepLog)
+		kvdbNodes, err := GetAllKvdbNodes()
+		if err != nil {
+			log.Error(err.Error())
+			UpdateOutcome(event, err)
+		}
+		numberOfThread := 3
+		stNodes := node.GetNodesByVoDriverNodeID()
+
+		// Assign a one KVDB vm to every thread.
+		nodesInThread := make([][]node.Node, numberOfThread)
+		for t := 0; t < numberOfThread; t++ {
+			nodesInThread[t] = make([]node.Node, 1)
+			pxNode, ok := stNodes[kvdbNodes[t].ID]
+			if !ok {
+				log.Error(fmt.Errorf("KVDB node not found"))
+				UpdateOutcome(event, fmt.Errorf("KVDB node not found"))
+			}
+			nodesInThread[t][0] = pxNode
+		}
+		stepLog = "Powering off all kvdb nodes"
+		Step(stepLog, func() {
+			var poweroffwg sync.WaitGroup
+			log.Infof("Power off threads started")
+			for i := 0; i < numberOfThread; i++ {
+				poweroffwg.Add(1)
+				go func(nodeList []node.Node) {
+					defer poweroffwg.Done()
+					log.SetTestName(PowerOffAllKvdbVMs)
+					for _, nodeInfo := range nodeList {
+						log.Infof("Powering off Node Name : %v", nodeInfo.Name)
+						err := Inst().N.PowerOffVM(nodeInfo)
+						UpdateOutcome(event, err)
+					}
+				}(nodesInThread[i])
+			}
+			poweroffwg.Wait()
+			log.Infof("Completed power off all KVDB nodes")
+			log.Infof("Wait for 15 minutes")
+			time.Sleep(15 * time.Minute)
+		})
+		stepLog = "Powering on all older KVDB nodes"
+		Step(stepLog, func() {
+			var poweronwg sync.WaitGroup
+			log.Infof("Power on threads started")
+			for i := 0; i < numberOfThread; i++ {
+				poweronwg.Add(1)
+				go func(nodeList []node.Node) {
+					defer poweronwg.Done()
+					log.SetTestName(PowerOffAllKvdbVMs)
+					for _, nodeInfo := range nodeList {
+						log.Infof("Node Name : %v", nodeInfo.Name)
+						err := Inst().N.PowerOnVM(nodeInfo)
+						UpdateOutcome(event, err)
+					}
+				}(nodesInThread[i])
+			}
+			poweronwg.Wait()
+			log.Infof("Completed power on older KVDB Nodes")
+			time.Sleep(1 * time.Minute)
+			newKvdbNodes, err := GetAllKvdbNodes()
+			if err != nil {
+				log.Error(err.Error())
+				UpdateOutcome(event, err)
+			}
+			if reflect.DeepEqual(kvdbNodes, newKvdbNodes) {
+				log.Error(fmt.Errorf("new nodes didn't become KVDB node after powering all KVDB nodes"))
+				UpdateOutcome(event, fmt.Errorf("new nodes didn't become KVDB node after powering all KVDB nodes"))
+			}
+
+		})
+		if !isSSIERun() {
+			stepLog = "Verify App, volume staus and check data integrity if enabled"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, ctx := range *contexts {
+					log.Infof("Validating context: %v", ctx.App.Key)
+					ctx.SkipVolumeValidation = false
+					errorChan := make(chan error, errorChannelSize)
+					ValidateContext(ctx, &errorChan)
+					for err := range errorChan {
+						UpdateOutcome(event, err)
+					}
+				}
+			})
+		} else {
+			log.Infof("[TriggerPowerOffAllKvdbVMs] is running in SSIE")
+		}
+		log.Infof("[TriggerPowerOffAllKvdbVMs] test completed successfully")
+		updateMetrics(*event)
+	})
+}
+
+func TriggerScaleFBDAVolumes(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(ScaleFBDAVolumes)
+	defer ginkgo.GinkgoRecover()
+	var wg sync.WaitGroup
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: ScaleFBDAVolumes,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	stepLog := "Adding FBDA volumes at scale to validate FBDA volume mounts in scale"
+
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		var param = make(map[string]string)
+		var mntOptions = []string{"nfsvers=4.1", "tcp"}
+		var appContexts []*scheduler.Context
+		sem := make(chan struct{}, 10)
+
+		fbdaScName := PureFileStorageClass + time.Now().Format("01-02-15h04m05s")
+		log.Infof("Creating pure_file storage class: %s", fbdaScName)
+		param[PureBackend] = k8s.PureFile
+		param[PureExportRules] = PureVolFBExportRule
+		_, err := createPureStorageClass(fbdaScName, param, mntOptions)
+		if err != nil {
+			log.Errorf("StorageClass creation failed for SC: %s", fbdaScName)
+			UpdateOutcome(event, err)
+		}
+		log.InfoD("Deployng FBDA based applications")
+		startTime := time.Now()
+		for x := 0; x < int(FBDADeploymentCount); x++ {
+			pvcName := fmt.Sprintf("%s-%d", fbPvcNamePrefix, x)
+			namespace := fmt.Sprintf("%s-%d", fbdaNamespacePrefix, x)
+			deploymentName := fmt.Sprintf("%s-%d", fbdaScName, x)
+			wg.Add(1)
+			sem <- struct{}{}
+			go func(scName string, pvcName string, ns string, depName string, wg *sync.WaitGroup, ctx *[]*scheduler.Context, event *EventRecord, sem chan struct{}) {
+				log.SetTestName(ScaleFBDAVolumes)
+				deployPureApp(fbdaScName, pvcName, namespace, deploymentName, wg, ctx, event)
+				<-sem
+			}(fbdaScName, pvcName, namespace, deploymentName, &wg, &appContexts, event, sem)
+		}
+		wg.Wait()
+		close(sem)
+		log.InfoD("Validating applications context")
+		validateContexts(event, &appContexts)
+		log.Infof("Attaching [%d] FBDA volumes took: [%v]", FBDADeploymentCount, time.Since(startTime))
+		if time.Since(startTime) > PodFbdaAttachTimeout {
+			UpdateOutcome(event, fmt.Errorf("failed to complete all FBDA pods attachment in [%v]", PodFbdaAttachTimeout))
+		}
+
+		stepLog = "Cleaning up the FBDA deployments"
+		startTime = time.Now()
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			sem := make(chan struct{}, 10)
+			for x := 0; x < int(FBDADeploymentCount); x++ {
+				sem <- struct{}{}
+				wg.Add(1)
+				go func(ctx *scheduler.Context, wg *sync.WaitGroup, event *EventRecord, sem chan struct{}) {
+					cleanupDeployment(ctx, wg, event)
+					<-sem
+				}(appContexts[x], &wg, event, sem)
+			}
+			wg.Wait()
+			close(sem)
+			log.InfoD("FBDA apps cleanup took: %v", time.Since(startTime))
+			log.InfoD("Successfully cleaned up the FBDA deployments")
+		})
+		updateMetrics(*event)
+	})
+}
+
+// TriggerRunFlat power off two KVDB Vms at same time for px-lite
+func TriggerRunFlat(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(RunFlatPxCSI)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: RunFlatPxCSI,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	setMetrics(*event)
+	stepLog := "Trigger run flat in a cluster"
+	Step(stepLog, func() {
+		log.Infof(stepLog)
+		kvdbNodes, err := GetAllKvdbNodes()
+		if err != nil {
+			log.Error(err.Error())
+			UpdateOutcome(event, err)
+		}
+		numberOfThread := 2
+		stNodes := node.GetNodesByVoDriverNodeID()
+
+		// Assign a vm to every thread.
+		nodesInThread := make([][]node.Node, numberOfThread)
+		for t := 0; t < numberOfThread; t++ {
+			nodesInThread[t] = make([]node.Node, 1)
+			pxNode, ok := stNodes[kvdbNodes[t].ID]
+			if !ok {
+				log.Error(fmt.Errorf("KVDB node not found"))
+				UpdateOutcome(event, fmt.Errorf("KVDB node not found"))
+			}
+			nodesInThread[t][0] = pxNode
+
+		}
+		stepLog = "Powering off two kvdb nodes"
+		Step(stepLog, func() {
+			var poweroffwg sync.WaitGroup
+			for i := 0; i < numberOfThread; i++ {
+				poweroffwg.Add(1)
+				go func(nodeList []node.Node) {
+					defer poweroffwg.Done()
+					log.SetTestName(RunFlatPxCSI)
+					for _, nodeInfo := range nodeList {
+						log.Infof("Powering off Node with Name : [%v]", nodeInfo.Name)
+						err := Inst().N.PowerOffVM(nodeInfo)
+						UpdateOutcome(event, err)
+					}
+				}(nodesInThread[i])
+			}
+			poweroffwg.Wait()
+			log.Infof("Completed power off in two of KVDB nodes")
+			log.Infof("Wait for 15 minutes")
+			time.Sleep(15 * time.Minute)
+		})
+		stepLog = "Power on two KVDB nodes"
+		Step(stepLog, func() {
+			var poweronwg sync.WaitGroup
+			log.Infof("Power on threads started")
+			for i := 0; i < numberOfThread; i++ {
+				poweronwg.Add(1)
+				go func(nodeList []node.Node) {
+					defer poweronwg.Done()
+					log.SetTestName(PowerOffAllKvdbVMs)
+					for _, nodeInfo := range nodeList {
+						log.Infof("Node Name : %v", nodeInfo.Name)
+						err := Inst().N.PowerOnVM(nodeInfo)
+						UpdateOutcome(event, err)
+					}
+				}(nodesInThread[i])
+			}
+			poweronwg.Wait()
+			log.Infof("Completed power on older KVDB Nodes")
+			newKvdbNodes, err := GetAllKvdbNodes()
+			if err != nil {
+				log.Error(err.Error())
+				UpdateOutcome(event, err)
+			}
+			if reflect.DeepEqual(kvdbNodes, newKvdbNodes) {
+				log.Error(fmt.Errorf("new nodes didn't become KVDB node after powering all KVDB nodes"))
+				UpdateOutcome(event, fmt.Errorf("new nodes didn't become KVDB node after powering all KVDB nodes"))
+			}
+		})
+		if !isSSIERun() {
+			stepLog = "Verify App, volume staus and check data integrity if enabled"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, ctx := range *contexts {
+					log.Infof("Validating context: %v", ctx.App.Key)
+					ctx.SkipVolumeValidation = false
+					errorChan := make(chan error, errorChannelSize)
+					ValidateContext(ctx, &errorChan)
+					for err := range errorChan {
+						UpdateOutcome(event, err)
+					}
+				}
+			})
+		} else {
+			log.Infof("[TriggerRunFlat] is running in SSIE")
+		}
+		log.Infof("[TriggerRunFlat] test completed successfully")
+		updateMetrics(*event)
+	})
 }

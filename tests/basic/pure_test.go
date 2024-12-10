@@ -169,7 +169,7 @@ nsExists:
 	if err != nil {
 		return fmt.Errorf("failed to parse pvc size : %s", pvcSize)
 	}
-	pvcClaimSpec := k8s.MakePVC(size, nsName, pvcName, scName)
+	pvcClaimSpec := k8s.MakePVC(size, nsName, pvcName, scName, v1.ReadWriteOnce)
 	log.Infof("Creating persistent volume claim [%s] with storage class [%s]", pvcName, scName)
 	pvc, err := k8sCore.CreatePersistentVolumeClaim(pvcClaimSpec)
 	if err != nil {
@@ -5243,7 +5243,7 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", Label("p0", "posi
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse pvc size : %s", pvcSize)
 			}
-			pvcClaimSpec := k8s.MakePVC(size, ns, pvcName, scName)
+			pvcClaimSpec := k8s.MakePVC(size, ns, pvcName, scName, v1.ReadWriteOnce)
 			pvc, err := k8sCore.CreatePersistentVolumeClaim(pvcClaimSpec)
 			return pvc, err
 		}

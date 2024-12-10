@@ -952,7 +952,7 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 			options.Namespace = appNamespace
 		}
 		if len(options.TopologyLabels) > 1 {
-			rotateTopologyArray(&options)
+			RotateTopologyArray(&options)
 		}
 		specObjects, err := k.CreateSpecObjects(app, appNamespace, options)
 		if err != nil {
@@ -996,7 +996,7 @@ func (k *K8s) ScheduleWithCustomAppSpecs(apps []*spec.AppSpec, instanceID string
 			options.Namespace = appNamespace
 		}
 		if len(options.TopologyLabels) > 1 {
-			rotateTopologyArray(&options)
+			RotateTopologyArray(&options)
 		}
 
 		specObjects, err := k.CreateSpecObjects(app, appNamespace, options)
@@ -2463,7 +2463,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 			obj.Spec.Template.Spec.SchedulerName = options.Scheduler
 		}
 		if len(options.TopologyLabels) > 0 {
-			Affinity := getAffinity(options.TopologyLabels)
+			Affinity := GetAffinity(options.TopologyLabels)
 			obj.Spec.Template.Spec.Affinity = Affinity.DeepCopy()
 		}
 		fmt.Printf("%+v\n", obj.Spec.Template.Spec)
@@ -2535,7 +2535,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		}
 
 		if len(options.TopologyLabels) > 0 {
-			Affinity := getAffinity(options.TopologyLabels)
+			Affinity := GetAffinity(options.TopologyLabels)
 			obj.Spec.Template.Spec.Affinity = Affinity.DeepCopy()
 		}
 
@@ -8059,10 +8059,10 @@ func MakePod(ns string, pvclaims []*v1.PersistentVolumeClaim, command string, pr
 }
 
 // MakePVC takes namespace, name and storageclass as parameter and returns a PersistentVolumeClaim spec for PVC creation
-func MakePVC(size resource.Quantity, ns string, name string, storageClass string) *v1.PersistentVolumeClaim {
+func MakePVC(size resource.Quantity, ns string, name string, storageClass string, accessMode v1.PersistentVolumeAccessMode) *v1.PersistentVolumeClaim {
 	PVCSpec := &v1.PersistentVolumeClaim{
 		Spec: v1.PersistentVolumeClaimSpec{
-			AccessModes: []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce},
+			AccessModes: []v1.PersistentVolumeAccessMode{accessMode},
 			Resources: v1.ResourceRequirements{
 				Requests: v1.ResourceList{
 					v1.ResourceStorage: size,
@@ -8080,7 +8080,7 @@ func MakePVC(size resource.Quantity, ns string, name string, storageClass string
 // GeneratePVCRestoreSpec takes namespace, name, source snapshot name and storageclass as parameter and returns a PersistentVolumeClaim spec for PVC creation
 func GeneratePVCRestoreSpec(size resource.Quantity, ns string, name string, sourceSnapshotName string, storageClass string) (*v1.PersistentVolumeClaim, error) {
 	snapshotAPIGroup := "snapshot.storage.k8s.io"
-	PVCSpec := MakePVC(size, ns, name, storageClass)
+	PVCSpec := MakePVC(size, ns, name, storageClass, v1.ReadWriteOnce)
 	PVCSpec.ObjectMeta.Name = name
 	PVCSpec.Namespace = ns
 	PVCSpec.ObjectMeta.Namespace = ns
@@ -8103,7 +8103,7 @@ func GeneratePVCCloneSpec(size resource.Quantity, ns string, name string, source
 	if err != nil {
 		return nil, fmt.Errorf("error getting PVC: %s", name)
 	}
-	PVCSpec := MakePVC(size, ns, name, storageClass)
+	PVCSpec := MakePVC(size, ns, name, storageClass, v1.ReadWriteOnce)
 	PVCSpec.ObjectMeta.Name = name
 	PVCSpec.Namespace = ns
 	PVCSpec.ObjectMeta.Namespace = ns
@@ -8934,8 +8934,8 @@ func dumpEvents(namespace, resourceType, name string) string {
 	return buf.String()
 }
 
-// getAffinity return Affinity spec
-func getAffinity(topologyLabels []map[string]string) corev1.Affinity {
+// GetAffinity return Affinity spec
+func GetAffinity(topologyLabels []map[string]string) corev1.Affinity {
 	var matchExpressions []corev1.NodeSelectorRequirement
 	var nodeSelTerms []corev1.NodeSelectorTerm
 	for key, value := range topologyLabels[0] {
@@ -9026,8 +9026,8 @@ func (k *K8s) GetNamespaceLabel(namespace string) (map[string]string, error) {
 	return ns.Labels, nil
 }
 
-// rotateTopologyArray Rotates topology arrays by one
-func rotateTopologyArray(options *scheduler.ScheduleOptions) {
+// RotateTopologyArray Rotates topology arrays by one
+func RotateTopologyArray(options *scheduler.ScheduleOptions) {
 	if len(options.TopologyLabels) > 1 {
 		arr := options.TopologyLabels
 		firstElem := arr[0]

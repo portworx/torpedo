@@ -395,6 +395,9 @@ func populateTriggerFuncs() {
 		KubevirtVMLiveMigration:           TriggerKubevirtVMLiveMigration,
 		KubevirtVMStartAndStop:            TriggerKubevirtVMStartAndStop,
 		InjectNetworkDelay:                TriggerInjectNetworkDelay,
+		PowerOffAllKvdbVMs:                TriggerPowerOffAllKvdbVMs,
+		ScaleFBDAVolumes:                  TriggerScaleFBDAVolumes,
+		RunFlatPxCSI:                      TriggerRunFlat,
 	}
 
 	//Creating a distinct trigger to make sure email triggers at regular intervals
@@ -454,6 +457,7 @@ func populateDataFromConfigMap(configData *map[string]string) error {
 	setVclusterFioRunOptions(configData)
 	setSchedUpgradeHops(configData)
 	setSkipEvents(configData)
+	setPureEnvVaraibles(configData)
 
 	err := populateTriggers(configData)
 	if err != nil {
@@ -560,6 +564,68 @@ func setPureTopology(configData *map[string]string) {
 		}
 		delete(*configData, PureTopologyField)
 	}
+}
+
+// setPureEnvVaraibles set pure env variables for FADA and FBDA
+func setPureEnvVaraibles(configData *map[string]string) {
+	var err error
+	envVal, ok := parsePureEnvIntVariables(configData, PureFADAScaleCount)
+	if ok {
+		FADADeploymentCount, err = strconv.ParseInt(envVal, 10, 64)
+		if err != nil {
+			log.Errorf("Failed to parse [%s] value in config-map in [%s] namespace.Error:[%v]\n",
+				PureFADAScaleCount, configMapNS, err)
+		}
+	}
+
+	envVal, ok = parsePureEnvIntVariables(configData, PureFBDAScaleCount)
+	if ok {
+		FBDADeploymentCount, err = strconv.ParseInt(envVal, 10, 64)
+		if err != nil {
+			log.Errorf("Failed to parse [%s] value in config-map in [%s] namespace.Error:[%v]\n",
+				PureFADAScaleCount, configMapNS, err)
+		}
+	}
+	envVal, ok = parsePureEnvIntVariables(configData, PureFAPodNameForMT)
+	if ok {
+		FAPodName = envVal
+	}
+	envVal, ok = parsePureEnvIntVariables(configData, PureFadaAttachTimeout)
+	if ok {
+		timeInMinute, err := strconv.ParseInt(envVal, 10, 64)
+		if err != nil {
+			log.Errorf("Failed to parse [%s] value in config-map in [%s] namespace.Error:[%v]\n",
+				PureFadaAttachTimeout, configMapNS, err)
+		}
+		PodFadaAttachTimeout = time.Duration(timeInMinute) * time.Minute
+		log.Infof("Setting fada pods attach timeout to: %v", PodFadaAttachTimeout)
+
+	}
+	envVal, ok = parsePureEnvIntVariables(configData, PureFbdaAttachTimeout)
+	if ok {
+		timeInMinute, err := strconv.ParseInt(envVal, 10, 64)
+		if err != nil {
+			log.Errorf("Failed to parse [%s] value in config-map in [%s] namespace.Error:[%v]\n",
+				PureFbdaAttachTimeout, configMapNS, err)
+		}
+		PodFbdaAttachTimeout = time.Duration(timeInMinute) * time.Minute
+		log.Infof("Setting fbda pods attach timeout to: %v", PodFbdaAttachTimeout)
+	}
+
+}
+
+// parsePureEnvIntVariables read the config map for given pure field and set pure env variable
+func parsePureEnvIntVariables(configData *map[string]string, pureEnvField string) (string, bool) {
+	var envVal string
+	var ok bool
+	if envVal, ok = (*configData)[pureEnvField]; !ok {
+		log.Warnf("No [%s] field found in [%s] config-map in [%s] namespace.\n",
+			pureEnvField, testTriggersConfigMap, configMapNS)
+	} else {
+		delete(*configData, pureEnvField)
+	}
+
+	return envVal, ok
 }
 
 func setHyperConvergedType(configData *map[string]string) {
@@ -859,6 +925,9 @@ func populateIntervals() {
 	triggerInterval[KubevirtVMLiveMigration] = make(map[int]time.Duration)
 	triggerInterval[KubevirtVMStartAndStop] = make(map[int]time.Duration)
 	triggerInterval[InjectNetworkDelay] = make(map[int]time.Duration)
+	triggerInterval[ScaleFBDAVolumes] = make(map[int]time.Duration)
+	triggerInterval[PowerOffAllKvdbVMs] = make(map[int]time.Duration)
+	triggerInterval[RunFlatPxCSI] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -1814,6 +1883,28 @@ func populateIntervals() {
 	triggerInterval[ResetDiscardMounts][2] = 24 * baseInterval
 	triggerInterval[ResetDiscardMounts][1] = 27 * baseInterval
 
+	triggerInterval[PowerOffAllKvdbVMs][10] = 1 * baseInterval
+	triggerInterval[PowerOffAllKvdbVMs][9] = 3 * baseInterval
+	triggerInterval[PowerOffAllKvdbVMs][8] = 6 * baseInterval
+	triggerInterval[PowerOffAllKvdbVMs][7] = 9 * baseInterval
+	triggerInterval[PowerOffAllKvdbVMs][6] = 12 * baseInterval
+	triggerInterval[PowerOffAllKvdbVMs][5] = 15 * baseInterval
+	triggerInterval[PowerOffAllKvdbVMs][4] = 18 * baseInterval
+	triggerInterval[PowerOffAllKvdbVMs][3] = 21 * baseInterval
+	triggerInterval[PowerOffAllKvdbVMs][2] = 24 * baseInterval
+	triggerInterval[PowerOffAllKvdbVMs][1] = 27 * baseInterval
+
+	triggerInterval[RunFlatPxCSI][10] = 1 * baseInterval
+	triggerInterval[RunFlatPxCSI][9] = 3 * baseInterval
+	triggerInterval[RunFlatPxCSI][8] = 6 * baseInterval
+	triggerInterval[RunFlatPxCSI][7] = 9 * baseInterval
+	triggerInterval[RunFlatPxCSI][6] = 12 * baseInterval
+	triggerInterval[RunFlatPxCSI][5] = 15 * baseInterval
+	triggerInterval[RunFlatPxCSI][4] = 18 * baseInterval
+	triggerInterval[RunFlatPxCSI][3] = 21 * baseInterval
+	triggerInterval[RunFlatPxCSI][2] = 24 * baseInterval
+	triggerInterval[RunFlatPxCSI][9] = 27 * baseInterval
+
 	baseInterval = 300 * time.Minute
 
 	triggerInterval[SVMotionMultipleNodes][10] = 1 * baseInterval
@@ -1984,6 +2075,7 @@ func populateIntervals() {
 	triggerInterval[OCPStorageNodeRecycle][2] = 24 * baseInterval
 	triggerInterval[OCPStorageNodeRecycle][1] = 30 * baseInterval
 
+	// Added for testing
 	triggerInterval[ScaleFADAVolumeAttach][10] = 1 * baseInterval
 	triggerInterval[ScaleFADAVolumeAttach][9] = 3 * baseInterval
 	triggerInterval[ScaleFADAVolumeAttach][8] = 6 * baseInterval
@@ -2055,6 +2147,18 @@ func populateIntervals() {
 	triggerInterval[InjectNetworkDelay][3] = 21 * baseInterval
 	triggerInterval[InjectNetworkDelay][2] = 24 * baseInterval
 	triggerInterval[InjectNetworkDelay][1] = 27 * baseInterval
+
+	triggerInterval[ScaleFBDAVolumes][10] = 1 * baseInterval
+	triggerInterval[ScaleFBDAVolumes][9] = 3 * baseInterval
+	triggerInterval[ScaleFBDAVolumes][8] = 6 * baseInterval
+	triggerInterval[ScaleFBDAVolumes][7] = 9 * baseInterval
+	triggerInterval[ScaleFBDAVolumes][6] = 12 * baseInterval
+	triggerInterval[ScaleFBDAVolumes][5] = 15 * baseInterval
+	triggerInterval[ScaleFBDAVolumes][4] = 18 * baseInterval
+	triggerInterval[ScaleFBDAVolumes][3] = 21 * baseInterval
+	triggerInterval[ScaleFBDAVolumes][2] = 24 * baseInterval
+	triggerInterval[ScaleFBDAVolumes][1] = 27 * baseInterval
+
 	// Chaos Level of 0 means disable test trigger
 	triggerInterval[DeployApps][0] = 0
 	triggerInterval[RebootNode][0] = 0
@@ -2159,6 +2263,9 @@ func populateIntervals() {
 	triggerInterval[PowerOffStoragelessNodes][0] = 0
 	triggerInterval[KubevirtVMLiveMigration][0] = 0
 	triggerInterval[KubevirtVMStartAndStop][0] = 0
+	triggerInterval[PowerOffAllKvdbVMs][0] = 0
+	triggerInterval[ScaleFBDAVolumes][0] = 0
+	triggerInterval[RunFlatPxCSI][0] = 0
 
 }
 
