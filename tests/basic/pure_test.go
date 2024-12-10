@@ -9952,7 +9952,7 @@ var _ = Describe("{UpgradeFADAFBDAAppImage}", func() {
 var _ = Describe("{RestartMultipathdAndCheckVolumes}", func() {
 	/*
 	   1. Deploy FADA apps
-	   2. Restart Multipathd service on all worker nodes
+	   2. Restart multipathd service on all worker nodes
 	   3. wait for few minutes and for validation resize the volume and check if it is resized in FA backend and Bounce the pods and check if they are running fine
 	*/
 	JustBeforeEach(func() {
@@ -9971,12 +9971,12 @@ var _ = Describe("{RestartMultipathdAndCheckVolumes}", func() {
 		isFABackend := len(pxPureSecret.Arrays) > 0
 		if !isFABackend {
 			log.Warnf("No Arrays in pure.json")
-			Skip("Skipping [ValidateIopsAndMaxBandWidthAfterNodeReboot] as no Flash Arrays found in pure.json")
+			Skip("Skipping the testcase RestartMultipathdAndCheckVolumes as no Flash Arrays found in pure.json")
 		}
 		flashArrays, err := GetFADetailsUsed()
-		log.FailOnError(err, "failed to get FA details used")
+		log.FailOnError(err, "failed to get FA details from pure.json file in the cluster")
 
-		stepLog := "Schedule applications"
+		stepLog := "Schedule FADA applications"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -9985,7 +9985,7 @@ var _ = Describe("{RestartMultipathdAndCheckVolumes}", func() {
 			ValidateApplications(contexts)
 
 		})
-		stepLog = "Restart Multipathd service on all worker nodes"
+		stepLog = "Restart multipathd service on all storage driver nodes"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			workerNodes := node.GetStorageNodes()
@@ -9996,6 +9996,7 @@ var _ = Describe("{RestartMultipathdAndCheckVolumes}", func() {
 				wg.Add(1)
 				go func(n node.Node) {
 					defer wg.Done()
+					defer GinkgoRecover()
 					log.Infof("Restarting multipathd service on node [%s]", n.Name)
 					err := Inst().N.Systemctl(n, "multipathd", node.SystemctlOpts{
 						Action: "restart",
@@ -10007,14 +10008,17 @@ var _ = Describe("{RestartMultipathdAndCheckVolumes}", func() {
 					log.Infof("Systemd service started on node %v", n.Name)
 				}(n)
 			}
-
 			wg.Wait()
 		})
-		stepLog = "Wait for few minutes and for validation resize the volume and check if it is resized in FA backend and Bounce the pods and check if they are running fine"
+		stepLog = "Wait for few minutes for multipath to comeup and do resize of the FADA pvc's volume and check if it is resized in FA backend "
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			log.InfoD("Sleep for 2 minutes for multipathd service to comeup")
 			time.Sleep(2 * time.Minute)
+			cluster, err := Inst().V.InspectCurrentCluster()
+			log.FailOnError(err, "failed to inspect current PX cluster")
+			log.Infof("Current cluster [%s] UID: [%s]", cluster.Cluster.Name, cluster.Cluster.Id)
+			clusterUIDPrefix := strings.Split(cluster.Cluster.Id, "-")[0]
 			for _, ctx := range contexts {
 				pvcs, err := GetAllPVCFromNs(ctx.App.NameSpace, nil)
 				log.FailOnError(err, "Failed to get pvc's from context")
@@ -10022,53 +10026,43 @@ var _ = Describe("{RestartMultipathdAndCheckVolumes}", func() {
 					pvcSize := pvc.Spec.Resources.Requests.Storage().String()
 					pvcSize = strings.TrimSuffix(pvcSize, "Gi")
 					pvcSizeInt, err := strconv.Atoi(pvcSize)
-					log.InfoD("increasing pvc [%s/%s]  size to %v %v", pvc.Namespace, pvc.Name, 2*pvcSizeInt, pvc.UID)
+					log.InfoD("increasing pvc [%s] on namespace[%s]  size to %v %v", pvc.Name, pvc.Namespace, 2*pvcSizeInt, pvc.UID)
 					resizedVol, err := Inst().S.ResizePVC(ctx, &pvc, uint64(2*pvcSizeInt))
-					log.FailOnError(err, "pvc resize failed pvc:%v", pvc.UID)
+					log.FailOnError(err, "pvc %v resize failed", pvc.UID)
 					log.InfoD("pvc [%s/%s] resized to %v", resizedVol.Namespace, resizedVol.Name, 2*pvcSizeInt)
 					requestedVols = append(requestedVols, resizedVol)
 				}
 			}
-		})
-		stepLog = fmt.Sprintf("validate volumes are resized")
-		Step(stepLog,
-			func() {
-				cluster, err := Inst().V.InspectCurrentCluster()
-				log.FailOnError(err, "failed to inspect current cluster")
-				log.Infof("Current cluster [%s] UID: [%s]", cluster.Cluster.Name, cluster.Cluster.Id)
-
-				clusterUIDPrefix := strings.Split(cluster.Cluster.Id, "-")[0]
-				log.InfoD(stepLog)
-				for _, v := range requestedVols {
-					params := make(map[string]string)
-					err := Inst().V.ValidateUpdateVolume(v, params)
-					log.FailOnError(err, "Could not validate volume resize %v", v.Name)
-					for _, eachFA := range flashArrays {
-						log.Info("Connecting to FA [%v]", eachFA.MgmtEndPoint)
-						faClient, err := pureutils.PureCreateClientAndConnect(eachFA.MgmtEndPoint, eachFA.APIToken)
-						log.FailOnError(err, "Failed to connect to FA")
-						volFound := false
-						allVolumes, err := pureutils.ListAllTheVolumesFromSpecificFA(faClient)
-						log.FailOnError(err, "Failed to list all volumes from FA: %v", eachFA.MgmtEndPoint)
-						for _, eachVol := range allVolumes {
-							if strings.Contains(eachVol.Name, v.ID) {
-								volFound = true
-								log.Infof("Volume [%v] present on Host [%v]", eachVol.Name, eachFA.MgmtEndPoint)
-								PureFAVolName := getPureVolName(clusterUIDPrefix, v.ID)
-								size, err := pureutils.GetPureFAVolumeSize(PureFAVolName, eachFA.MgmtEndPoint, eachFA.APIToken)
-								log.FailOnError(err, "Failed to get volume size for vol: %v", PureFAVolName)
-								volInspect, err := Inst().V.InspectVolume(v.ID)
-								volSize := volInspect.Spec.Size / units.GiB
-								dash.VerifyFatal(size, volSize, "validate volume size increase")
-								break
-							}
-						}
-						if volFound {
+			for _, v := range requestedVols {
+				err := Inst().V.ValidateUpdateVolume(v, nil)
+				log.FailOnError(err, "Could not validate volume resize %v", v.Name)
+				for _, eachFA := range flashArrays {
+					log.Info("Connecting to FA [%v]", eachFA.MgmtEndPoint)
+					faClient, err := pureutils.PureCreateClientAndConnect(eachFA.MgmtEndPoint, eachFA.APIToken)
+					log.FailOnError(err, "Failed to connect to FA")
+					volFound := false
+					allVolumes, err := pureutils.ListAllTheVolumesFromSpecificFA(faClient)
+					log.FailOnError(err, "Failed to list all volumes from FA: %v", eachFA.MgmtEndPoint)
+					for _, eachVol := range allVolumes {
+						if strings.Contains(eachVol.Name, v.ID) {
+							volFound = true
+							log.Infof("Volume [%v] present on Host [%v]", eachVol.Name, eachFA.MgmtEndPoint)
+							PureFAVolName := getPureVolName(clusterUIDPrefix, v.ID)
+							size, err := pureutils.GetPureFAVolumeSize(PureFAVolName, eachFA.MgmtEndPoint, eachFA.APIToken)
+							log.FailOnError(err, "Failed to get volume size for vol: %v", PureFAVolName)
+							volInspect, err := Inst().V.InspectVolume(v.ID)
+							volSize := volInspect.Spec.Size / units.GiB
+							dash.VerifyFatal(size, volSize, "validate volume size increase")
 							break
 						}
 					}
+					if volFound {
+						break
+					}
 				}
-			})
+			}
+
+		})
 		stepLog = "Bounce the pods which are running with FADA volumes and make sure they are deleted"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
