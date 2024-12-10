@@ -15550,8 +15550,8 @@ func UpgradePXWithLatestVersion(upgradeHop string, storageNodes []node.Node) err
 	return nil
 }
 
-// CreateNginxFadaWorkload creates an Nginx deployment with a specified PVC in a particular namespace and  with storage class provided.
-func CreateNginxFadaWorkload(pvcName string, replicas int32, deploymentName string, namespace string, storageclassname string) (*appsv1.Deployment, error) {
+// CreateNginxWorkload creates an Nginx deployment with a specified PVC in a particular namespace and  with storage class provided.
+func CreateNginxWorkload(pvcName string, replicas int32, deploymentName string, namespace string, storageclassname string) (*appsv1.Deployment, error) {
 	var gracePeriod int64 = 30
 	pvcSpec := &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
@@ -15701,7 +15701,7 @@ func CloneAndDeployPVCs(namespace string, deploymentName string, storageclassNam
 		}
 
 		log.Infof("Successfully created cloned PVC %s, proceed to mount to a new pod", clonedPVC.Name)
-		_, err = CreateNginxFadaWorkload(ClonedPvcName, 1, ClonedPvcDeployment, namespace, storageclassName)
+		_, err = CreateNginxWorkload(ClonedPvcName, 1, ClonedPvcDeployment, namespace, storageclassName)
 		if err != nil {
 			log.Errorf("Failed to create deployment [%v]: %v", ClonedPvcDeployment, err)
 			return err

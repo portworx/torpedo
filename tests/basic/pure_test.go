@@ -9023,12 +9023,12 @@ var _ = Describe("{CreatePodsUsingClonewithMT}", func() {
 				log.FailOnError(err, fmt.Sprintf("Failed to create namespace [%v] ", ns))
 			}
 			if isRealmExists {
-				_, err = CreateNginxFadaWorkload("fada-pvc-inside-realm", 1, deploymentNameInsideRealm, nsWithRealm, storageClassNameInsideRealm)
+				_, err = CreateNginxWorkload("fada-pvc-inside-realm", 1, deploymentNameInsideRealm, nsWithRealm, storageClassNameInsideRealm)
 				log.FailOnError(err, fmt.Sprintf("Failed to create deployment [%v] ", deploymentNameInsideRealm))
 			}
-			_, err = CreateNginxFadaWorkload("fada-pvc-outside-realm", 1, deploymentNameOutsideRealm, nsWithoutRealm, storageClassNameOutsideRealm)
+			_, err = CreateNginxWorkload("fada-pvc-outside-realm", 1, deploymentNameOutsideRealm, nsWithoutRealm, storageClassNameOutsideRealm)
 			log.FailOnError(err, fmt.Sprintf("Failed to create deployment [%v] ", deploymentNameOutsideRealm))
-			_, err = CreateNginxFadaWorkload("fada-pvc-normal", 1, deploymentNameNormal, nsNormal, storageClassNameNormal)
+			_, err = CreateNginxWorkload("fada-pvc-normal", 1, deploymentNameNormal, nsNormal, storageClassNameNormal)
 			log.FailOnError(err, fmt.Sprintf("Failed to create deployment [%v] ", deploymentNameNormal))
 		})
 		stepLog = "Clone the pvc of the deployment"
@@ -9354,7 +9354,7 @@ var _ = Describe("{DeployedApplicationsInMultipleTenants}", func() {
 					err = createNameSpace(ns)
 					log.FailOnError(err, fmt.Sprintf("Failed to create namespace [%v]", ns))
 					deployments[deployment] = ns
-					_, err = CreateNginxFadaWorkload(pvc, 1, deployment, ns, scName)
+					_, err = CreateNginxWorkload(pvc, 1, deployment, ns, scName)
 					log.FailOnError(err, fmt.Sprintf("Failed to create deployment [%v]", deployment))
 
 				}(i)
@@ -9806,7 +9806,7 @@ WantedBy=multi-user.target`, scriptPath)
 	})
 })
 
-var _ = Describe("{UpgradeFBDAAppImage}", func() {
+var _ = Describe("{UpgradeFADAFBDAAppImage}", func() {
 	/*
 
 	           	https://purestorage.atlassian.net/browse/PTX-28073
@@ -9824,42 +9824,77 @@ var _ = Describe("{UpgradeFBDAAppImage}", func() {
 	It(itLog, func() {
 		log.InfoD(itLog)
 		var fbdaStorageclass string
-		var deploymentNamespace = make(map[string]string)
-		stepLog := "Deploy a Nginx application using FBDA with the base image nginx"
+		var fadaStorageclass string
+		var deploymentFBDANamespace = make(map[string]string)
+		var deploymentFADANamespace = make(map[string]string)
+		combinedNamespaces := make(map[string]string)
+		stepLog := "Deploy a Nginx application using FADA and FBDA with the base image nginx"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			if Inst().V.IsPxLiteCluster() {
 				fbdaStorageclass = "px-fb-direct-access-nfsv4"
+				fadaStorageclass = "px-fa-direct-access"
 			} else {
-				fbNFSMountOptsMap := make(map[string][]string)
-				fbNFSMountOptsMap["nfsv41"] = []string{"vers=4.1", "tcp"}
-				for ver, mountOpts := range fbNFSMountOptsMap {
-					fbdaStorageclass = "fb-" + ver + "-sc"
-					log.Infof("Creating storage class [%s] with mount options [%v]", fbdaStorageclass, mountOpts)
-					err := createFBStorageClassWithMountOpts(fbdaStorageclass, mountOpts)
-					log.FailOnError(err, "failed to create storage class [%s] with mount options [%v]", ver, mountOpts)
-				}
+
+				fbdaStorageclass = "fbda-image-upgrade-sc"
+				fbParams := make(map[string]string)
+				fbParams["pure_export_rules"] = "*(rw)"
+				var allowVolExpansion bool = true
+				// create storage class for FADA volumes
+				err = CreateFlashStorageClass(fbdaStorageclass,
+					"pure_file",
+					v1.PersistentVolumeReclaimDelete,
+					fbParams, nil, &allowVolExpansion,
+					storageApi.VolumeBindingImmediate,
+					nil)
+				log.FailOnError(err, fmt.Sprintf("Failed to create storage class [%v] ", fbdaStorageclass))
+				log.InfoD("Storage class [%s] for FBDA is created", fbdaStorageclass)
+				fadaStorageclass = "fada-image-upgrade-sc"
+
+				err = CreateFlashStorageClass(fadaStorageclass,
+					"pure_block",
+					v1.PersistentVolumeReclaimDelete,
+					nil, nil, &allowVolExpansion,
+					storageApi.VolumeBindingImmediate,
+					nil)
+				log.InfoD("Storage class [%s] is created", fadaStorageclass)
+
 			}
 			for i := 0; i < 10; i++ {
-				pvcName := fmt.Sprintf("fbda-pvc-%d", i)
-				namespace := fmt.Sprintf("fbda-ns-%d", i)
-				deploymentName := fmt.Sprintf("fbda-deployment-%d", i)
-				log.Infof("Creating pvc [%s] with storage class [%s] in namespace [%s]", pvcName, fbdaStorageclass, namespace)
-				CreateNginxFadaWorkload(pvcName, 1, deploymentName, namespace, fbdaStorageclass)
-				deploymentNamespace[deploymentName] = namespace
+				fbdaPvcName := fmt.Sprintf("fbda-pvc-%d", i)
+				fbdaNamespace := fmt.Sprintf("fbda-ns-%d", i)
+				fbdaDeploymentName := fmt.Sprintf("fbda-deployment-%d", i)
+				log.Infof("Creating pvc [%s] with storage class [%s] in namespace [%s]", fbdaPvcName, fbdaStorageclass, fbdaNamespace)
+				CreateNginxWorkload(fbdaPvcName, 1, fbdaDeploymentName, fbdaNamespace, fbdaStorageclass)
+				deploymentFBDANamespace[fbdaDeploymentName] = fbdaNamespace
+
+				fadaPvcName := fmt.Sprintf("fada-pvc-%d", i)
+				fadaNamespace := fmt.Sprintf("fada-ns-%d", i)
+				fadaDeploymentName := fmt.Sprintf("fada-deployment-%d", i)
+				log.Infof("Creating pvc [%s] with storage class [%s] in namespace [%s]", fadaPvcName, fadaStorageclass, fadaNamespace)
+				CreateNginxWorkload(fadaPvcName, 1, fadaDeploymentName, fadaNamespace, fadaStorageclass)
+				deploymentFADANamespace[fadaDeploymentName] = fadaNamespace
 			}
 
 		})
-		stepLog = "Upgrade the FBDA application's image to nginx:1.27.3"
+		stepLog = "Upgrade the FBDA and FADA application's image to nginx:1.27.3"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			for deploy, namespace := range deploymentNamespace {
+
+			for deploy, ns := range deploymentFBDANamespace {
+				combinedNamespaces[deploy] = ns
+			}
+			for deploy, ns := range deploymentFADANamespace {
+				combinedNamespaces[deploy] = ns
+			}
+			for deploy, namespace := range combinedNamespaces {
 				deployment, err := apps.Instance().GetDeployment(deploy, namespace)
 				log.FailOnError(err, "failed to get deployment [%s] in namespace [%s]", deploy, namespace)
 				log.InfoD("Upgrade the image of deployment [%s] in namespace [%s] to nginx:1.27.3", deploy, namespace)
 				deployment.Spec.Template.Spec.Containers[0].Image = "nginx:1.27.3"
 				_, err = apps.Instance().UpdateDeployment(deployment)
 			}
+
 		})
 		stepLog = "Wait for the applications to roll out the new image"
 		Step(stepLog, func() {
@@ -9870,7 +9905,7 @@ var _ = Describe("{UpgradeFBDAAppImage}", func() {
 		stepLog = "Verify that the pods are running with the new image"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			for deploy, namespace := range deploymentNamespace {
+			for deploy, namespace := range combinedNamespaces {
 				deployment, err := apps.Instance().GetDeployment(deploy, namespace)
 				log.FailOnError(err, "failed to get deployment [%s] in namespace [%s]", deploy, namespace)
 				podList, err := apps.Instance().GetDeploymentPods(deployment)
@@ -9888,18 +9923,22 @@ var _ = Describe("{UpgradeFBDAAppImage}", func() {
 		stepLog = "Destroy applications"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			for deployment, namespace := range deploymentNamespace {
+			for deployment, namespace := range combinedNamespaces {
 				err := k8sApps.Instance().DeleteDeployment(deployment, namespace)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to delete deployment [%v]", deployment))
 			}
-			for _, ns := range deploymentNamespace {
+
+			for _, ns := range combinedNamespaces {
 				err := core.Instance().DeleteNamespace(ns)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to delete namespace [%v]", ns))
 				log.InfoD("Namespace [%v] destroyed ", ns)
 			}
+
 			if !Inst().V.IsPxLiteCluster() {
-				err := storage.Instance().DeleteStorageClass(fbdaStorageclass)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to delete storage class [%v]", fbdaStorageclass))
+				fbSCDeleteErr := storage.Instance().DeleteStorageClass(fbdaStorageclass)
+				dash.VerifyFatal(fbSCDeleteErr, nil, fmt.Sprintf("Failed to delete storage class [%v]", fbdaStorageclass))
+				faSCDeleteErr := storage.Instance().DeleteStorageClass(fadaStorageclass)
+				dash.VerifyFatal(faSCDeleteErr, nil, fmt.Sprintf("Failed to delete storage class [%v]", fadaStorageclass))
 			}
 
 		})
