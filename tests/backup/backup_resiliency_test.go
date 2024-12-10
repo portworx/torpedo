@@ -22,7 +22,6 @@ import (
 	"github.com/pure-px/torpedo/drivers/backup"
 	"github.com/pure-px/torpedo/drivers/backup/portworx"
 	"github.com/pure-px/torpedo/drivers/node"
-	"github.com/pure-px/torpedo/drivers/node/ssh"
 	"github.com/pure-px/torpedo/drivers/scheduler"
 	"github.com/pure-px/torpedo/drivers/volume/portworx/schedops"
 	"github.com/pure-px/torpedo/pkg/aututils"
@@ -335,9 +334,9 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", Label(TestCaseLa
 
 		Step("Kill stork when backup in progress", func() {
 			log.InfoD("Kill stork when backup in progress")
-			pxNamespace, err := ssh.GetExecPodNamespace()
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching PX namespace %s", pxNamespace))
-			err = DeletePodWithWithoutLabelInNamespace(pxNamespace, StorkLabel, false)
+			storkNamespace, err := k8sutils.GetStorkPodNamespace()
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching stork namespace %s", storkNamespace))
+			err = DeletePodWithWithoutLabelInNamespace(storkNamespace, StorkLabel, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Killing stork while backups %s is in progress", backupNames))
 		})
 
@@ -364,9 +363,9 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", Label(TestCaseLa
 		})
 		Step("Kill stork when restore in-progress", func() {
 			log.InfoD("Kill stork when restore in-progress")
-			pxNamespace, err := ssh.GetExecPodNamespace()
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching PX namespace %s", pxNamespace))
-			err = DeletePodWithWithoutLabelInNamespace(pxNamespace, StorkLabel, false)
+			storkNamespace, err := k8sutils.GetStorkPodNamespace()
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching stork namespace %s", storkNamespace))
+			err = DeletePodWithWithoutLabelInNamespace(storkNamespace, StorkLabel, false)
 			dash.VerifyFatal(err, nil, "Killing stork while all the restores are in progress")
 		})
 		Step("Check if restore is successful when the stork restart happened", func() {
