@@ -9944,4 +9944,8 @@ var _ = Describe("{UpgradeFADAFBDAAppImage}", func() {
 		})
 
 	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+
+	})
 })
