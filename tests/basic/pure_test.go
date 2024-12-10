@@ -1201,7 +1201,6 @@ var _ = Describe("{StopPXResizePVCDeleteApps}", Label("p1", "negative", "px_ops"
 				context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
 					AppKeys:            Inst().AppList,
 					StorageProvisioner: Provisioner,
-					PvcSize:            6 * units.GiB,
 				})
 				log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
 				contexts = append(contexts, context...)
@@ -9947,5 +9946,168 @@ var _ = Describe("{UpgradeFADAFBDAAppImage}", func() {
 	JustAfterEach(func() {
 		EndTorpedoTest()
 
+	})
+})
+
+var _ = Describe("{RestartMultipathdAndCheckVolumes}", func() {
+	/*
+	   1. Deploy FADA apps
+	   2. Restart Multipathd service on all worker nodes
+	   3. wait for few minutes and for validation resize the volume and check if it is resized in FA backend and Bounce the pods and check if they are running fine
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("RestartMultipathdAndCheckVolumes", "Restart Multipathd and check volumes", nil, 0)
+	})
+	itLog := "RestartMultipathdAndCheckVolumes"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		var contexts []*scheduler.Context
+		var wg sync.WaitGroup
+		var requestedVols []*volume.Volume
+		volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
+		pxPureSecret, err := pureutils.GetPXPureSecret(volDriverNamespace)
+		log.FailOnError(err, "failed to get secret [%s]  in namespace [%s]", PureSecretName, volDriverNamespace)
+		isFABackend := len(pxPureSecret.Arrays) > 0
+		if !isFABackend {
+			log.Warnf("No Arrays in pure.json")
+			Skip("Skipping [ValidateIopsAndMaxBandWidthAfterNodeReboot] as no Flash Arrays found in pure.json")
+		}
+		flashArrays, err := GetFADetailsUsed()
+		log.FailOnError(err, "failed to get FA details used")
+
+		stepLog := "Schedule applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("restart-multipathd-%d", i))...)
+			}
+			ValidateApplications(contexts)
+
+		})
+		stepLog = "Restart Multipathd service on all worker nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			workerNodes := node.GetStorageNodes()
+			if Inst().V.IsPxLiteCluster() {
+				workerNodes = node.GetStorageDriverNodes()
+			}
+			for _, n := range workerNodes {
+				wg.Add(1)
+				go func(n node.Node) {
+					defer wg.Done()
+					log.Infof("Restarting multipathd service on node [%s]", n.Name)
+					err := Inst().N.Systemctl(n, "multipathd", node.SystemctlOpts{
+						Action: "restart",
+						ConnectionOpts: node.ConnectionOpts{
+							Timeout:         10 * time.Minute,
+							TimeBeforeRetry: defaultRetryInterval,
+						}})
+					log.FailOnError(err, "Failed to start systemd service on node: %v", n.Name)
+					log.Infof("Systemd service started on node %v", n.Name)
+				}(n)
+			}
+
+			wg.Wait()
+		})
+		stepLog = "Wait for few minutes and for validation resize the volume and check if it is resized in FA backend and Bounce the pods and check if they are running fine"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.InfoD("Sleep for 2 minutes for multipathd service to comeup")
+			time.Sleep(2 * time.Minute)
+			for _, ctx := range contexts {
+				pvcs, err := GetAllPVCFromNs(ctx.App.NameSpace, nil)
+				log.FailOnError(err, "Failed to get pvc's from context")
+				for _, pvc := range pvcs {
+					pvcSize := pvc.Spec.Resources.Requests.Storage().String()
+					pvcSize = strings.TrimSuffix(pvcSize, "Gi")
+					pvcSizeInt, err := strconv.Atoi(pvcSize)
+					log.InfoD("increasing pvc [%s/%s]  size to %v %v", pvc.Namespace, pvc.Name, 2*pvcSizeInt, pvc.UID)
+					resizedVol, err := Inst().S.ResizePVC(ctx, &pvc, uint64(2*pvcSizeInt))
+					log.FailOnError(err, "pvc resize failed pvc:%v", pvc.UID)
+					log.InfoD("pvc [%s/%s] resized to %v", resizedVol.Namespace, resizedVol.Name, 2*pvcSizeInt)
+					requestedVols = append(requestedVols, resizedVol)
+				}
+			}
+		})
+		stepLog = fmt.Sprintf("validate volumes are resized")
+		Step(stepLog,
+			func() {
+				cluster, err := Inst().V.InspectCurrentCluster()
+				log.FailOnError(err, "failed to inspect current cluster")
+				log.Infof("Current cluster [%s] UID: [%s]", cluster.Cluster.Name, cluster.Cluster.Id)
+
+				clusterUIDPrefix := strings.Split(cluster.Cluster.Id, "-")[0]
+				log.InfoD(stepLog)
+				for _, v := range requestedVols {
+					params := make(map[string]string)
+					err := Inst().V.ValidateUpdateVolume(v, params)
+					log.FailOnError(err, "Could not validate volume resize %v", v.Name)
+					for _, eachFA := range flashArrays {
+						log.Info("Connecting to FA [%v]", eachFA.MgmtEndPoint)
+						faClient, err := pureutils.PureCreateClientAndConnect(eachFA.MgmtEndPoint, eachFA.APIToken)
+						log.FailOnError(err, "Failed to connect to FA")
+						volFound := false
+						allVolumes, err := pureutils.ListAllTheVolumesFromSpecificFA(faClient)
+						log.FailOnError(err, "Failed to list all volumes from FA: %v", eachFA.MgmtEndPoint)
+						for _, eachVol := range allVolumes {
+							if strings.Contains(eachVol.Name, v.ID) {
+								volFound = true
+								log.Infof("Volume [%v] present on Host [%v]", eachVol.Name, eachFA.MgmtEndPoint)
+								PureFAVolName := getPureVolName(clusterUIDPrefix, v.ID)
+								size, err := pureutils.GetPureFAVolumeSize(PureFAVolName, eachFA.MgmtEndPoint, eachFA.APIToken)
+								log.FailOnError(err, "Failed to get volume size for vol: %v", PureFAVolName)
+								volInspect, err := Inst().V.InspectVolume(v.ID)
+								volSize := volInspect.Spec.Size / units.GiB
+								dash.VerifyFatal(size, volSize, "validate volume size increase")
+								break
+							}
+						}
+						if volFound {
+							break
+						}
+					}
+				}
+			})
+		stepLog = "Bounce the pods which are running with FADA volumes and make sure they are deleted"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				wg.Add(1)
+				go func(ctx *scheduler.Context) {
+					defer wg.Done()
+					defer GinkgoRecover()
+					pods, err := core.Instance().GetPods(ctx.App.NameSpace, nil)
+					for _, pod := range pods.Items {
+						log.InfoD("Deleting the pod %v", pod.Name)
+						err = core.Instance().DeletePod(pod.Name, ctx.App.NameSpace, true)
+						log.FailOnError(err, "Failed to delete the pod %v", pods.Items[0].Name)
+						t := func() (interface{}, bool, error) {
+							currentPodList, err := core.Instance().GetPods(ctx.App.NameSpace, nil)
+							log.FailOnError(err, "Failed to get pods in namespace %v", ctx.App.NameSpace)
+							for _, currentPod := range currentPodList.Items {
+								log.InfoD("Deleting the  pod %v", pod.Name)
+								if currentPod.Name == pod.Name {
+									log.FailOnError(fmt.Errorf("Pod %v is still present", pod.Name), "Pod %v should be deleted", pod.Name)
+									return nil, true, nil
+								}
+							}
+							return nil, false, nil
+						}
+						_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
+						log.FailOnError(err, "Failed to wait for pods to delete")
+					}
+				}(ctx)
+			}
+			wg.Wait()
+		})
+		stepLog = "validate the application if pods are again back running"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			ValidateApplications(contexts)
+		})
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
 	})
 })
