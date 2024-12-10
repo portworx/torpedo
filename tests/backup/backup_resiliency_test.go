@@ -2276,15 +2276,16 @@ var _ = Describe("{RestartPXBackupDuringLargeResourceScheduledBackup}", Label(Te
 		Step("Creating restore of the backup taken when PX Backup pod is deleted", func() {
 			log.InfoD("Creating restore of the backup taken when PX Backup pod is deleted")
 			firstRestoreName = fmt.Sprintf("%s-%s", RestoreNamePrefix, RandomString(6))
+			restoreNamespace := fmt.Sprintf("%s-%s", namespace, RandomString(6))
 			restoreNamespaceMapping := map[string]string{
-				namespace: fmt.Sprintf("%s-%s", namespace, RandomString(6)),
+				namespace: restoreNamespace,
 			}
 			err = CreateRestore(firstRestoreName, firstBackupName, restoreNamespaceMapping, DestinationClusterName, destClusterUid, BackupOrgID, ctx, make(map[string]string))
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restore [%s] of the backup [%s] taken when PX Backup pod is deleted", firstRestoreName, firstBackupName))
 			err = SetDestinationKubeConfig()
 			dash.VerifyFatal(err, nil, "switching to destination kubeconfig")
-			configMapList, err := core.Instance().ListConfigMap(namespace, metav1.ListOptions{})
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching configmaps from restored namespace [%s] in [%s]", namespace, DestinationClusterName))
+			configMapList, err := core.Instance().ListConfigMap(restoreNamespace, metav1.ListOptions{})
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching configmaps from restored namespace [%s] in [%s]", restoreNamespace, DestinationClusterName))
 			if len(configMapList.Items) < numberOfResources {
 				dash.Fatal("All the configmaps are not restored")
 			}
@@ -2293,16 +2294,16 @@ var _ = Describe("{RestartPXBackupDuringLargeResourceScheduledBackup}", Label(Te
 				if cm.Name == "kube-root-ca.crt" {
 					continue
 				}
-				_, err = ValidateConfigMapEntries(cm.Name, namespace, configMapEntries)
+				_, err = ValidateConfigMapEntries(cm.Name, restoreNamespace, configMapEntries)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Validating configmap [%s] entries", cm.Name))
 			}
-			secretsList, err := core.Instance().ListSecret(namespace, metav1.ListOptions{})
+			secretsList, err := core.Instance().ListSecret(restoreNamespace, metav1.ListOptions{})
 			if len(secretsList.Items) < numberOfResources {
 				dash.Fatal("All the secrets are not restored")
 			}
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching secrets from restored namespace [%s] in [%s]", namespace, DestinationClusterName))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching secrets from restored namespace [%s] in [%s]", restoreNamespace, DestinationClusterName))
 			for _, cm := range secretsList.Items {
-				_, err = ValidateSecretEntries(cm.Name, namespace, secretEntries)
+				_, err = ValidateSecretEntries(cm.Name, restoreNamespace, secretEntries)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Validating secret [%s] entries", cm.Name))
 			}
 		})
