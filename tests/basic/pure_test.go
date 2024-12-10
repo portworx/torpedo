@@ -9826,6 +9826,7 @@ var _ = Describe("{UpgradeFADAFBDAAppImage}", func() {
 		var fadaStorageclass string
 		var deploymentFBDANamespace = make(map[string]string)
 		var deploymentFADANamespace = make(map[string]string)
+		var wg sync.WaitGroup
 		combinedNamespaces := make(map[string]string)
 		stepLog := "Deploy a Nginx application using FADA and FBDA with the base image nginx"
 		Step(stepLog, func() {
@@ -9859,21 +9860,30 @@ var _ = Describe("{UpgradeFADAFBDAAppImage}", func() {
 				log.InfoD("Storage class [%s] is created", fadaStorageclass)
 
 			}
-			for i := 0; i < 10; i++ {
-				fbdaPvcName := fmt.Sprintf("fbda-pvc-%d", i)
-				fbdaNamespace := fmt.Sprintf("fbda-ns-%d", i)
-				fbdaDeploymentName := fmt.Sprintf("fbda-deployment-%d", i)
-				log.Infof("Creating pvc [%s] with storage class [%s] in namespace [%s]", fbdaPvcName, fbdaStorageclass, fbdaNamespace)
-				CreateNginxWorkload(fbdaPvcName, 1, fbdaDeploymentName, fbdaNamespace, fbdaStorageclass)
-				deploymentFBDANamespace[fbdaDeploymentName] = fbdaNamespace
 
-				fadaPvcName := fmt.Sprintf("fada-pvc-%d", i)
-				fadaNamespace := fmt.Sprintf("fada-ns-%d", i)
-				fadaDeploymentName := fmt.Sprintf("fada-deployment-%d", i)
-				log.Infof("Creating pvc [%s] with storage class [%s] in namespace [%s]", fadaPvcName, fadaStorageclass, fadaNamespace)
-				CreateNginxWorkload(fadaPvcName, 1, fadaDeploymentName, fadaNamespace, fadaStorageclass)
-				deploymentFADANamespace[fadaDeploymentName] = fadaNamespace
+			for i := 0; i < 10; i++ {
+				wg.Add(1)
+				go func(i int) {
+					defer wg.Done()
+					defer GinkgoRecover()
+					fbdaPvcName := fmt.Sprintf("fbda-pvc-%d", i)
+					fbdaNamespace := fmt.Sprintf("fbda-ns-%d", i)
+					fbdaDeploymentName := fmt.Sprintf("fbda-deployment-%d", i)
+					log.Infof("Creating pvc [%s] with storage class [%s] in namespace [%s]", fbdaPvcName, fbdaStorageclass, fbdaNamespace)
+					CreateNginxWorkload(fbdaPvcName, 1, fbdaDeploymentName, fbdaNamespace, fbdaStorageclass)
+					deploymentFBDANamespace[fbdaDeploymentName] = fbdaNamespace
+
+					fadaPvcName := fmt.Sprintf("fada-pvc-%d", i)
+					fadaNamespace := fmt.Sprintf("fada-ns-%d", i)
+					fadaDeploymentName := fmt.Sprintf("fada-deployment-%d", i)
+					log.Infof("Creating pvc [%s] with storage class [%s] in namespace [%s]", fadaPvcName, fadaStorageclass, fadaNamespace)
+					CreateNginxWorkload(fadaPvcName, 1, fadaDeploymentName, fadaNamespace, fadaStorageclass)
+					deploymentFADANamespace[fadaDeploymentName] = fadaNamespace
+
+				}(i)
+
 			}
+			wg.Wait()
 
 		})
 		stepLog = "Upgrade the FBDA and FADA application's image to nginx:1.27.3"
