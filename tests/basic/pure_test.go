@@ -9985,6 +9985,7 @@ var _ = Describe("{RestartMultipathdAndCheckVolumes}", func() {
 		}
 		flashArrays, err := GetFADetailsUsed()
 		log.FailOnError(err, "failed to get FA details from pure.json file in the cluster")
+		defer DestroyApps(contexts, nil)
 
 		stepLog := "Schedule FADA applications"
 		Step(stepLog, func() {
@@ -10112,7 +10113,6 @@ var _ = Describe("{RestartMultipathdAndCheckVolumes}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		DestroyApps(contexts, nil)
 		EndTorpedoTest()
 	})
 })
