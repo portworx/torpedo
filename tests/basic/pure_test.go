@@ -10015,7 +10015,7 @@ var _ = Describe("{RestartMultipathdAndCheckVolumes}", func() {
 							TimeBeforeRetry: defaultRetryInterval,
 						}})
 					log.FailOnError(err, "Failed to start systemd service on node: %v", n.Name)
-					log.Infof("Systemd service started on node %v", n.Name)
+					log.Infof("Systemd service restarted on node %v", n.Name)
 				}(n)
 			}
 			wg.Wait()
@@ -10112,6 +10112,7 @@ var _ = Describe("{RestartMultipathdAndCheckVolumes}", func() {
 		})
 	})
 	JustAfterEach(func() {
+		DestroyApps(contexts, nil)
 		EndTorpedoTest()
 	})
 })
