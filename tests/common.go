@@ -15550,9 +15550,25 @@ func UpgradePXWithLatestVersion(upgradeHop string, storageNodes []node.Node) err
 	return nil
 }
 
-// CreateNginxWorkload creates an Nginx deployment with a specified PVC in a particular namespace and  with storage class provided.
+// CreateNginxWorkload creates a Nginx deployment with a specified PVC in a particular namespace and  with storage class provided.
 func CreateNginxWorkload(pvcName string, replicas int32, deploymentName string, namespace string, storageclassname string) (*appsv1.Deployment, error) {
 	var gracePeriod int64 = 30
+	_, err := k8sCore.GetNamespace(namespace)
+	if k8serrors.IsAlreadyExists(err) {
+		log.Infof("Namespace %s already exists", namespace)
+	} else {
+		nsSpec := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: namespace,
+			},
+		}
+		ns, err := k8sCore.CreateNamespace(nsSpec)
+		if err != nil {
+			log.Errorf("An Error Occured while creating namespace %v", err)
+		}
+		log.InfoD("Namespace created %s", ns)
+	}
+
 	pvcSpec := &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      pvcName,
@@ -15648,7 +15664,7 @@ func CreateNginxWorkload(pvcName string, replicas int32, deploymentName string, 
 	}
 
 	k8sCore := core.Instance()
-	_, err := k8sCore.CreatePersistentVolumeClaim(pvcSpec)
+	_, err = k8sCore.CreatePersistentVolumeClaim(pvcSpec)
 	if err != nil {
 		if !strings.Contains(err.Error(), "already exists") && !strings.Contains(err.Error(), "clone") {
 			log.Errorf("An Error Occured while creating PVC %v", err)
