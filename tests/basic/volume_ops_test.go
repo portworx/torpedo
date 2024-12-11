@@ -19,13 +19,13 @@ import (
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	"github.com/libopenstorage/openstorage/api"
 	opsapi "github.com/libopenstorage/openstorage/api"
-	storkv1 "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/sched-ops/k8s/core"
 	csisnapshot "github.com/portworx/sched-ops/k8s/externalsnapshotter"
 	"github.com/portworx/sched-ops/k8s/storage"
-	storkops "github.com/pure-px/stork/pkg/crud/stork"
 	"github.com/portworx/sched-ops/task"
+	storkv1 "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
+	storkops "github.com/pure-px/stork/pkg/crud/stork"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/scheduler"
 	"github.com/pure-px/torpedo/drivers/scheduler/k8s"
@@ -1181,34 +1181,39 @@ var _ = Describe("{CloudsnapAndRestore}", Label("p0", "positive", "px_vol_ops", 
 			}
 		})
 
-		stepLog = "Update volume io_profiles on all volumes"
-		Step(stepLog, func() {
-			for _, ctx := range contexts {
+		isdmthin, err := IsDMthin()
+		log.FailOnError(err, fmt.Sprintf("failed while checking for cluster type"))
+		if !isdmthin {
+			stepLog = "Update volume io_profiles on all volumes"
+			Step(stepLog, func() {
+				for _, ctx := range contexts {
 
-				appVols, err := Inst().S.GetVolumes(ctx)
-				log.FailOnError(err, "error getting volumes for [%s]", ctx.App.Key)
+					appVols, err := Inst().S.GetVolumes(ctx)
+					log.FailOnError(err, "error getting volumes for [%s]", ctx.App.Key)
 
-				for _, v := range appVols {
-					var volumeSpec *api.VolumeSpecUpdate
-					inspectVolume, err := Inst().V.InspectVolume(v.ID)
-					log.FailOnError(err, fmt.Sprintf("error inspecting volume %s", v.ID))
-					newIOProfile := api.IoProfile_IO_PROFILE_JOURNAL
-					if inspectVolume.DerivedIoProfile != api.IoProfile_IO_PROFILE_JOURNAL {
-						volumeSpec = &api.VolumeSpecUpdate{IoProfileOpt: &api.VolumeSpecUpdate_IoProfile{IoProfile: newIOProfile}}
-					} else {
-						newIOProfile = api.IoProfile_IO_PROFILE_AUTO
-						volumeSpec = &api.VolumeSpecUpdate{IoProfileOpt: &api.VolumeSpecUpdate_IoProfile{IoProfile: newIOProfile}}
+					for _, v := range appVols {
+						var volumeSpec *api.VolumeSpecUpdate
+						inspectVolume, err := Inst().V.InspectVolume(v.ID)
+						log.FailOnError(err, fmt.Sprintf("error inspecting volume %s", v.ID))
+						newIOProfile := api.IoProfile_IO_PROFILE_JOURNAL
+
+						if inspectVolume.DerivedIoProfile != api.IoProfile_IO_PROFILE_JOURNAL {
+							volumeSpec = &api.VolumeSpecUpdate{IoProfileOpt: &api.VolumeSpecUpdate_IoProfile{IoProfile: newIOProfile}}
+						} else {
+							newIOProfile = api.IoProfile_IO_PROFILE_AUTO
+							volumeSpec = &api.VolumeSpecUpdate{IoProfileOpt: &api.VolumeSpecUpdate_IoProfile{IoProfile: newIOProfile}}
+						}
+
+						err = Inst().V.UpdateVolumeSpec(v, volumeSpec)
+						log.FailOnError(err, fmt.Sprintf("failed to update io profile to %v for volume %s", newIOProfile, v.ID))
 					}
-					err = Inst().V.UpdateVolumeSpec(v, volumeSpec)
-					log.FailOnError(err, fmt.Sprintf("failed to update io profile to %v for volume %s", newIOProfile, v.ID))
+
+					ctx.SkipVolumeValidation = true
+					ValidateContext(ctx)
+
 				}
-
-				ctx.SkipVolumeValidation = true
-				ValidateContext(ctx)
-
-			}
-
-		})
+			})
+		}
 
 		stepLog = "Verify cloud snap restore"
 		Step(stepLog, func() {

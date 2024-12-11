@@ -914,6 +914,7 @@ var _ = Describe("{VolumeCreatePXRestart}", Label("p1", "negative", "px_vol_ops"
 
 			for vol, volPath := range createdVolIDs {
 				cVol, err := Inst().V.InspectVolume(vol)
+				log.Infof("Inspect Output [%v]", cVol)
 				if err == nil {
 					dash.VerifySafely(cVol.State, opsapi.VolumeState_VOLUME_STATE_ATTACHED, fmt.Sprintf("Verify vol %s is attached", cVol.Id))
 					dash.VerifySafely(cVol.DevicePath, volPath, fmt.Sprintf("Verify vol %s is has device path", cVol.Id))
