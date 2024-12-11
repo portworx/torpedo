@@ -413,6 +413,7 @@ const (
 	defaultTorpedoJobType                 = "functional"
 	labelNameKey                          = "name"
 	serviceURL                            = "https://us-east.iaas.cloud.ibm.com/v1"
+	networkBandwidthUpdateCmd             = "pxctl cluster options update --cloudsnap-network-limit-cluster"
 )
 
 const (
@@ -6765,6 +6766,20 @@ func DeleteAzureBucket(bucketName string) {
 
 	expect(err).NotTo(haveOccurred(),
 		fmt.Sprintf("Failed to delete container. Error: [%v]", err))
+}
+
+// ThrottleNetworkSpeed sets cloudsnap-network-limit-cluster to a specific value
+// cloudsnap-network-limit-cluster -> Cluster-wide average network bandwith usage limit in mebibytes per second, use 0 to disable this limit
+func ThrottleNetworkSpeed(speed int) error {
+	workerNode := node.GetWorkerNodes()[0]
+	cmd := fmt.Sprintf("%v=%d", networkBandwidthUpdateCmd, speed)
+	output, err := runCmdGetOutput(cmd, workerNode)
+	if err != nil {
+		log.Infof("Running command [%v] failed on node [%v]", cmd, workerNode)
+		return err
+	}
+	log.InfoD("Output of command [%v] [%v]", cmd, output)
+	return nil
 }
 
 // DeleteNfsSubPath delete subpath from nfs shared path.
