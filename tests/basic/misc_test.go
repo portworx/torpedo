@@ -672,6 +672,25 @@ var _ = Describe("{CordonDeployDestroy}", Label("p1", "negative", "px_ops"), fun
 			ValidateApplications(contexts)
 
 		})
+		stepLog = "uncordon other nodes and drain the current node and check if pods are failed over to the other node and running fine or not"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			nodes := node.GetStorageDriverNodes()
+			for _, node := range nodes[1:] {
+				err := Inst().S.EnableSchedulingOnNode(node)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Validate enable scheduling on node %s", node.Name))
+			}
+			pods, err := k8sCore.GetPodsByNode(nodes[0].Name, "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Validate get pods on node %s", nodes[0].Name))
+			err = k8sCore.DrainPodsFromNode(nodes[0].Name, pods.Items, 5*time.Minute, 10*time.Second)
+
+		})
+		stepLog = "Validate Applications after it is failed over to the other nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			ValidateApplications(contexts)
+
+		})
 		stepLog = "Destroy apps"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -693,13 +712,6 @@ var _ = Describe("{CordonDeployDestroy}", Label("p1", "negative", "px_ops"), fun
 		Step("teardown all apps", func() {
 			for _, ctx := range contexts {
 				TearDownContext(ctx, nil)
-			}
-		})
-		Step("Uncordon all nodes", func() {
-			nodes := node.GetStorageDriverNodes()
-			for _, node := range nodes {
-				err := Inst().S.EnableSchedulingOnNode(node)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Validate enable scheduling on node %s", node.Name))
 			}
 		})
 	})

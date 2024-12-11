@@ -15716,6 +15716,17 @@ func CloneAndDeployPVCs(namespace string, deploymentName string, storageclassNam
 		size := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
 		ClonedPvcName := "clone-" + pvc.Name
 		ClonedPvcDeployment := "clone-" + deploymentName
+		existingPVC, err := k8sCore.GetPersistentVolumeClaim(ClonedPvcName, namespace)
+		if err == nil && existingPVC != nil {
+			if existingPVC.Spec.StorageClassName != nil && *existingPVC.Spec.StorageClassName == storageclassName {
+				log.Infof("Cloned PVC %s already exists in namespace %s with the same storage class, skipping creation", ClonedPvcName, namespace)
+				continue
+			} else {
+				ClonedPvcName = "clone-" + storageclassName + "-" + pvc.Name
+				ClonedPvcDeployment = "clone-" + storageclassName + "-" + deploymentName + "-" + pvc.Name
+			}
+		}
+
 		clonedPVCSpec, err := k8s.GeneratePVCCloneSpec(size, namespace, ClonedPvcName, pvc.Name, storageclassName)
 		if err != nil {
 			return fmt.Errorf("failed to build cloned PVC Spec: %s", err)
@@ -15736,6 +15747,50 @@ func CloneAndDeployPVCs(namespace string, deploymentName string, storageclassNam
 		_, err = CreateNginxWorkload(ClonedPvcName, 1, ClonedPvcDeployment, namespace, storageclassName)
 		if err != nil {
 			log.Errorf("Failed to create deployment [%v]: %v", ClonedPvcDeployment, err)
+			return err
+		}
+	}
+
+	return nil
+}
+
+// SnapshotAndRestorePVCs takes snapshot of PersistentVolumeClaims (PVCs) and it is then restored to a pvc and given to Nginx workloads.
+func SnapshotAndRestorePVCs(namespace string, deploymentName string, storageclassName string, snapClass string) error {
+	// Get volumes from a namespace and clone the PVC
+	allPvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
+	if err != nil {
+		log.Errorf("Failed to get volumes from namespace: %v", err)
+		return err
+	}
+	for _, pvc := range allPvcList.Items {
+		size := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
+		restoredPvcName := "restore-" + pvc.Name
+		restoredPvcDeployment := "restore-" + pvc.Name + deploymentName
+		snapName := "snap-" + pvc.Name
+		_, err := Inst().S.CreateCsiSnapshot(snapName, namespace, snapClass, pvc.Name)
+		if err != nil {
+			return fmt.Errorf("failed to create snapshot %s for volume %s", snapName, pvc.Name)
+		}
+		restoredPVCSpec, err := k8s.GeneratePVCRestoreSpec(size, namespace, restoredPvcName, snapName, storageclassName)
+		if err != nil {
+			return fmt.Errorf("failed to build restore PVC Spec: %s", err)
+		}
+		log.Infof("Size of restored PVC in clone test is %v", restoredPVCSpec.Spec.Resources.Requests[corev1.ResourceStorage])
+		restoredPVC, err := k8sCore.CreatePersistentVolumeClaim(restoredPVCSpec)
+		if err != nil {
+			return fmt.Errorf("failed to restore PVC %s from snapshot: %s", pvc.Name, err)
+		}
+
+		// Wait for PVC to be bound
+		err = Inst().S.WaitForSinglePVCToBound(restoredPvcName, namespace, 60)
+		if err != nil {
+			return fmt.Errorf("failed to wait for restored PVC %s to bind: %v", restoredPvcName, err)
+		}
+
+		log.Infof("Successfully restored PVC %s, proceed to mount to a new pod", restoredPVC.Name)
+		_, err = CreateNginxFadaWorkload(restoredPvcName, 1, restoredPvcDeployment, namespace, storageclassName)
+		if err != nil {
+			log.Errorf("Failed to create deployment [%v]: %v", restoredPvcDeployment, err)
 			return err
 		}
 	}

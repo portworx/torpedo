@@ -627,23 +627,21 @@ var _ = Describe("{FADAVolTokenTimout}", Label("p0", "positive", "pure_ops"), fu
 var _ = Describe("{FADARemoteDetach}", Label("p1", "negative", "pure_ops", "error_injection"), func() {
 
 	/*
-								https://portworx.atlassian.net/browse/PTX-20624
+	   		https://portworx.atlassian.net/browse/PTX-20624
+	   		PWX :
+	   		https://portworx.atlassian.net/browse/PWX-33898
+	   		https://portworx.atlassian.net/browse/PWX-34277
 
+	   		Bug Description :
+	   		pod is in to ContainerCreation state for longer time when tried to move deployment from one node to other after cordoning the node
 
-								PWX :
-								https://portworx.atlassian.net/browse/PWX-33898
-								https://portworx.atlassian.net/browse/PWX-34277
-
-								Bug Description :
-									pod is in to ContainerCreation state for longer time when tried to move deployment from one node to other after cordoning the node
-
-							1. Deploying nginx pod with RWO FADA volumes on node-1
-					        2. Cordon the node-1 and rollout another pod consuming same FADA volume in node-2
-				            3. Validate pod is stuck in container creating state.
-							4. Stop PX on node-1, pod running on node-1 should go to Terminating state and pod on node-2 should be in running
-		                    5. Uncordon node-1 and start PX
-							6. pod node-1 should be terminated
-							7. Repeat same step from 2-5 and schedule pod on node-1
+	   		1. Deploying nginx pod with RWO FADA volumes on node-1
+	   		2. Cordon the node-1 and rollout another pod consuming same FADA volume in node-2
+	       		3. Validate pod is stuck in container creating state.
+	   		4. Stop PX on node-1, pod running on node-1 should go to Terminating state and pod on node-2 should be in running
+	   		5. Uncordon node-1 and start PX
+	   		6. pod node-1 should be terminated
+	   		7. Repeat same step from 2-5 and schedule pod on node-1
 	*/
 
 	JustBeforeEach(func() {
@@ -8882,6 +8880,7 @@ var _ = Describe("{CreatePodsUsingClonewithMT}", func() {
 		storageClassNameInsideRealm := "fada-sc-inside-realm"
 		storageClassNameOutsideRealm := "fada-sc-outside-realm"
 		storageClassNameNormal := "fada-sc-normal"
+		snapShotClassName := PureSnapShotClass
 		var (
 			realmName               string
 			faWithRealm             *newFlashArray.Client
@@ -8987,25 +8986,38 @@ var _ = Describe("{CreatePodsUsingClonewithMT}", func() {
 			for k, v := range faParams {
 				faParamsNormal[k] = v
 			}
+			deleteStorageClassIfExists := func(scName string) {
+				_, err := storage.Instance().GetStorageClass(scName)
+				if err == nil {
+					err = storage.Instance().DeleteStorageClass(scName)
+					log.FailOnError(err, fmt.Sprintf("Failed to delete existing storage class [%v]", scName))
+					log.Infof("Deleted existing storage class [%s]", scName)
+				}
+			}
 			if isRealmExists {
 				faParams["pure_fa_pod_name"] = podNameinSC
+				deleteStorageClassIfExists("fada-sc-inside-realm")
 				err = CreateFlashStorageClass("fada-sc-inside-realm", "pure_block", v1.PersistentVolumeReclaimDelete, faParams, nil, &allowVolExpansionFA, storageApi.VolumeBindingImmediate, nil)
 				log.FailOnError(err, fmt.Sprintf("Failed to create storage class [%v] ", "fada-sc-inside-realm"))
 				log.InfoD("Storage class [%s] for FADA inside realm is created", "fada-sc-inside-realm")
 			}
 			if isFAwithoutRealmExists {
 				faParams["pure_fa_pod_name"] = podNameinFAwithoutRealm
+				deleteStorageClassIfExists("fada-sc-outside-realm")
 				err = CreateFlashStorageClass("fada-sc-outside-realm", "pure_block", v1.PersistentVolumeReclaimDelete, faParams, nil, &allowVolExpansionFA, storageApi.VolumeBindingImmediate, nil)
 				log.FailOnError(err, fmt.Sprintf("Failed to create storage class [%v] ", "fada-sc-outside-realm"))
 				log.InfoD("Storage class [%s] for FADA outside realm is created", "fada-sc-outside-realm")
 
 			}
+			//There is an open PWX tracked for this https://purestorage.atlassian.net/browse/PWX-39937
+			faParamsNormal["pure_fa_pod_name"] = ""
+			deleteStorageClassIfExists("fada-sc-normal")
 			err = CreateFlashStorageClass("fada-sc-normal", "pure_block", v1.PersistentVolumeReclaimDelete, faParamsNormal, nil, &allowVolExpansionFA, storageApi.VolumeBindingImmediate, nil)
 			log.FailOnError(err, fmt.Sprintf("Failed to create storage class [%v] ", "fada-sc-normal"))
 			log.InfoD("Normal storage class [%s] is created", "fada-sc-normal")
 
 		})
-		stepLog = "Create a deployment each with  storage classes fada-sc-inside-realm, fada-sc-outside-realm, fada-sc-normal"
+		stepLog = "Create a deployment each with  storage classes fada-sc-inside-realm, fada-sc-outside-realm, fada-sc-normal and volumesnapshotclass"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			createNameSpace := func(namespace string) error {
@@ -9029,6 +9041,13 @@ var _ = Describe("{CreatePodsUsingClonewithMT}", func() {
 			log.FailOnError(err, fmt.Sprintf("Failed to create deployment [%v] ", deploymentNameOutsideRealm))
 			_, err = CreateNginxWorkload("fada-pvc-normal", 1, deploymentNameNormal, nsNormal, storageClassNameNormal)
 			log.FailOnError(err, fmt.Sprintf("Failed to create deployment [%v] ", deploymentNameNormal))
+			volSnapshotClass, err := Inst().S.CreateCsiSnapshotClass(snapShotClassName, "Delete")
+			if err != nil {
+				isSnapshotClassExists := strings.Contains(err.Error(), "already exists")
+				dash.VerifyFatal(isSnapshotClassExists, true, "create volumesnapshotclass")
+			} else {
+				log.InfoD("Successfully created volume snapshot class: %v", volSnapshotClass.Name)
+			}
 		})
 		stepLog = "Clone the pvc of the deployment"
 		Step(stepLog, func() {
@@ -9041,6 +9060,27 @@ var _ = Describe("{CreatePodsUsingClonewithMT}", func() {
 			log.FailOnError(err, fmt.Sprintf("Failed to clone pvc of the deployment [%v] ", deploymentNameOutsideRealm))
 			err = CloneAndDeployPVCs(nsNormal, deploymentNameNormal, storageClassNameNormal)
 			log.FailOnError(err, fmt.Sprintf("Failed to clone pvc of the deployment [%v] ", deploymentNameNormal))
+		})
+		stepLog = "Clone Pvc[Inside FA pod] with a different storage class[which has pure_fa_pod_name empty] and pass it to deployment"
+		//[Also covers clone of the clone because the namespaces has cloned pvc as well]
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = CloneAndDeployPVCs(nsWithoutRealm, "pod-to-nopod-deployment", storageClassNameNormal)
+			log.FailOnError(err, fmt.Sprintf("Failed to clone pvc of the deployment [%v] ", deploymentNameNormal))
+			err = CloneAndDeployPVCs(nsNormal, "nopod-to-pod-deployment", storageClassNameOutsideRealm)
+			log.FailOnError(err, fmt.Sprintf("Failed to clone pvc of the deployment [%v] ", deploymentNameNormal))
+		})
+		stepLog = "Capture a snapshot of the PVC and create a deployment, covering all types of volumes, including clones, clones of clones, and standard volumes."
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			if isRealmExists {
+				err = SnapshotAndRestorePVCs(nsWithRealm, deploymentNameInsideRealm, storageClassNameInsideRealm, snapShotClassName)
+				log.FailOnError(err, fmt.Sprintf("Failed to restore pvc of the deployment [%v] ", deploymentNameInsideRealm))
+			}
+			err = SnapshotAndRestorePVCs(nsWithoutRealm, deploymentNameOutsideRealm, storageClassNameOutsideRealm, snapShotClassName)
+			log.FailOnError(err, fmt.Sprintf("Failed to restore pvc of the deployment [%v] ", deploymentNameOutsideRealm))
+			err = SnapshotAndRestorePVCs(nsNormal, deploymentNameNormal, storageClassNameNormal, snapShotClassName)
+			log.FailOnError(err, fmt.Sprintf("Failed to restore pvc of the deployment [%v] ", deploymentNameNormal))
 		})
 		stepLog = "Destroy FA Pods,namespaces,storageclasses and deployments"
 		Step(stepLog, func() {
@@ -9355,6 +9395,7 @@ var _ = Describe("{DeployedApplicationsInMultipleTenants}", func() {
 					deployments[deployment] = ns
 					_, err = CreateNginxWorkload(pvc, 1, deployment, ns, scName)
 					log.FailOnError(err, fmt.Sprintf("Failed to create deployment [%v]", deployment))
+					CloneAndDeployPVCs(ns, deployment, scName)
 
 				}(i)
 			}
@@ -10107,6 +10148,83 @@ var _ = Describe("{RestartMultipathdResizeVolumesBouncePods}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			ValidateApplications(contexts)
+		})
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+	})
+})
+
+var _ = Describe("{RestartISCSIServicesWithFADAPodsAttached}", func() {
+	/*
+	   1. Deploy FADA pods on a single node, selecting the node with the fewest pods.
+	   2. Make sure all the pods are running on the node
+	   3. Restart the iscsi systemd service on the node
+	   4. check if all the pods are still running fine
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("RestartISCSIServicesWithFADAPodsAttached", "Restart ISCSI Services with FADA pods attached", nil, 0)
+	})
+	itLog := "RestartISCSIServicesWithFADAPodsAttached"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		var (
+			contexts         []*scheduler.Context
+			podCountByNode   = make(map[string]int)
+			iscsiRestartNode node.Node
+		)
+		leastCount := int(^uint(0) >> 1) // setting leastcount as max int value initially
+		stNodes := node.GetStorageDriverNodes()
+		for _, node := range stNodes {
+			log.Infof("Processing node: %s", node.Name)
+			pods, err := k8sCore.GetPodsByNodeAndLabels(node.Name, "", nil)
+			log.FailOnError(err, "Failed to get pods on node %s", node.Name)
+			podCountByNode[node.Name] = len(pods.Items)
+		}
+		for stnodeName, count := range podCountByNode {
+			if count < leastCount {
+				leastCount = count
+				iscsiRestartNode, err = node.GetNodeByName(stnodeName)
+				log.FailOnError(err, "Failed to get node by name %s", stnodeName)
+				log.Infof("Selected node for iSCSI restart: %s with least pod count: %d", stnodeName, count)
+			}
+		}
+		stepLog := "Schedule applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			appList := Inst().AppList
+			Inst().AppList = []string{"nginx-fa-davol"}
+			defer func() {
+				Inst().AppList = appList
+			}()
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				taskName := "fada-iscsid-restart" + Inst().InstanceID
+				context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+					AppKeys: Inst().AppList,
+					Nodes:   []node.Node{iscsiRestartNode},
+				})
+				log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+				contexts = append(contexts, context...)
+			}
+			ValidateApplications(contexts)
+		})
+		stepLog = "Restart the iscsi systemd service on the node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Infof("Restarting multipathd service on node [%s]", iscsiRestartNode.Name)
+			err := Inst().N.Systemctl(iscsiRestartNode, "iscsid", node.SystemctlOpts{
+				Action: "restart",
+				ConnectionOpts: node.ConnectionOpts{
+					Timeout:         10 * time.Minute,
+					TimeBeforeRetry: defaultRetryInterval,
+				}})
+			log.FailOnError(err, "Failed to restart iscsi service on node %s", iscsiRestartNode.Name)
+		})
+		stepLog = "Check if all the pods are still running fine and destory them"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			ValidateApplications(contexts)
+			DestroyApps(contexts, nil)
 		})
 	})
 	JustAfterEach(func() {
