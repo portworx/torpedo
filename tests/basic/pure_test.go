@@ -9959,16 +9959,16 @@ var _ = Describe("{UpgradeFADAFBDAAppImage}", func() {
 	})
 })
 
-var _ = Describe("{RestartMultipathdAndCheckVolumes}", func() {
+var _ = Describe("{RestartMultipathdResizeVolumesBouncePods}", func() {
 	/*
 	   1. Deploy FADA apps
 	   2. Restart multipathd service on all worker nodes
 	   3. wait for few minutes and for validation resize the volume and check if it is resized in FA backend and Bounce the pods and check if they are running fine
 	*/
 	JustBeforeEach(func() {
-		StartTorpedoTest("RestartMultipathdAndCheckVolumes", "Restart Multipathd and check volumes", nil, 0)
+		StartTorpedoTest("RestartMultipathdResizeVolumesBouncePods", "Restart Multipathd and check volumes and bounce pods", nil, 0)
 	})
-	itLog := "RestartMultipathdAndCheckVolumes"
+	itLog := "RestartMultipathdResizeVolumesBouncePods"
 	It(itLog, func() {
 		log.InfoD(itLog)
 		var contexts []*scheduler.Context
@@ -9999,10 +9999,7 @@ var _ = Describe("{RestartMultipathdAndCheckVolumes}", func() {
 		stepLog = "Restart multipathd service on all storage driver nodes"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			workerNodes := node.GetStorageNodes()
-			if Inst().V.IsPxLiteCluster() {
-				workerNodes = node.GetStorageDriverNodes()
-			}
+			workerNodes := node.GetStorageDriverNodes()
 			for _, n := range workerNodes {
 				wg.Add(1)
 				go func(n node.Node) {
