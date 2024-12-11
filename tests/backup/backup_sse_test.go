@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/pure-px/stork/pkg/k8sutils"
 	"strings"
 	"sync"
 	"time"
@@ -12,7 +13,6 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/pure-px/torpedo/drivers/backup"
-	"github.com/pure-px/torpedo/drivers/node/ssh"
 	"github.com/pure-px/torpedo/drivers/scheduler"
 	"github.com/pure-px/torpedo/drivers/scheduler/k8s"
 	"github.com/pure-px/torpedo/pkg/log"
@@ -399,9 +399,9 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 			})
 			Step("kill stork", func() {
 				log.InfoD("Kill stork")
-				pxNamespace, err := ssh.GetExecPodNamespace()
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching PX namespace %s", pxNamespace))
-				err = DeletePodWithWithoutLabelInNamespace(pxNamespace, StorkLabel, false)
+				storkNamespace, err := k8sutils.GetStorkPodNamespace()
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching stork namespace %s", storkNamespace))
+				err = DeletePodWithWithoutLabelInNamespace(storkNamespace, StorkLabel, false)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Killing stork after toggling SSE-S3 type"))
 			})
 			Step("Restart backup pod", func() {
@@ -412,8 +412,8 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 				dash.VerifyFatal(err, nil, "Getting px-backup namespace")
 				err = DeletePodWithWithoutLabelInNamespace(pxbNamespace, backupPodLabel, false)
 				dash.VerifyFatal(err, nil, "Restart backup pod")
-				err = ValidatePodByLabel(backupPodLabel, pxbNamespace, 5*time.Minute, 30*time.Second)
-				log.FailOnError(err, "Checking if px-backup pod is in running state")
+				err = ValidatePxBackupIsReady()
+				dash.VerifyFatal(err, nil, "Validating px-backup pod is ready")
 			})
 			Step("Create a schedule policy", func() {
 				log.InfoD("Create a schedule policy")
