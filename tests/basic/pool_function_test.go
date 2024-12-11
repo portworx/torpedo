@@ -1269,14 +1269,9 @@ var _ = Describe("{StorageFullPoolExpansion}", Label("p0", "positive", "pool_ops
 })
 
 var _ = Describe("{PoolExpandTestLimits}", Label("p1", "positive", "pool_ops", "PoolExpand"), func() {
+	var poolSizeInGiB uint64
 	BeforeEach(func() {
 		contexts = scheduleApps()
-	})
-
-	JustBeforeEach(func() {
-		poolIDToResize = pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, 100)
-		log.Infof("Picked pool %s to resize", poolIDToResize)
-		poolToResize = getStoragePool(poolIDToResize)
 	})
 
 	JustAfterEach(func() {
@@ -1289,6 +1284,13 @@ var _ = Describe("{PoolExpandTestLimits}", Label("p1", "positive", "pool_ops", "
 	})
 
 	It("Initiate pool expansion (DMThin) to its limits (15 TiB)", func() {
+		poolIDToResize = pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, 100)
+		log.Infof("Picked pool %s to resize", poolIDToResize)
+		poolToResize = getStoragePool(poolIDToResize)
+		poolOriginalSize := poolToResize.GetTotalSize()
+		poolSizeInGiB = poolOriginalSize / units.GiB
+		log.InfoD("original size of the pool %s is %d GiB", poolIDToResize, poolSizeInGiB)
+
 		var testrailID = 51292
 		// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/51292
 
@@ -1324,6 +1326,58 @@ var _ = Describe("{PoolExpandTestLimits}", Label("p1", "positive", "pool_ops", "
 			poolIDToResize, targetSizeTiB)
 		err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, targetSizeGiB, true)
 		dash.VerifyFatal(err != nil, true, "DMThin pool expansion to 20 TB should result in error")
+	})
+
+	It("Delete the expanded pool and recreate with original size", func() {
+		nodeSelected, err := GetNodeFromPoolUUID(poolIDToResize)
+		failOnError(err, fmt.Sprintf("failed to get node details from the pool id %s", poolIDToResize))
+
+		poolIDSelected, err := GetPoolIDFromPoolUUID(poolIDToResize)
+		failOnError(err, fmt.Sprintf("failed to get pool id for the pool %s", poolIDToResize))
+
+		stepLog = "Delete the selected pool"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = DeletePoolAndValidate(*nodeSelected, strconv.Itoa(int(poolIDSelected)))
+			log.FailOnError(err, fmt.Sprintf("Error occured while Validating the deleted pool %d in the node %s", int(poolIDSelected), nodeSelected.Name))
+		})
+
+		nodePoolMapBfrAddDrive, err := Inst().V.GetNodePools(*nodeSelected)
+		log.FailOnError(err, fmt.Sprintf("Get Node pools failed on node %s", nodeSelected.Name))
+
+		stepLog = "Create pool with original size"
+		Step(stepLog, func() {
+			log.InfoD("original size of the pool %d is %d GiB", poolIDSelected, poolSizeInGiB)
+
+			//Get cloudrive spec
+			driveSpecs, err := GetCloudDriveDeviceSpecs()
+			log.FailOnError(err, "Error getting cloud drive specs")
+
+			deviceSpec := driveSpecs[0]
+			deviceSpecParams := strings.Split(deviceSpec, ",")
+			paramsArr := make([]string, 0)
+			for _, param := range deviceSpecParams {
+				if strings.Contains(param, "size") {
+					paramsArr = append(paramsArr, fmt.Sprintf("size=%d", poolSizeInGiB))
+				} else {
+					paramsArr = append(paramsArr, param)
+				}
+			}
+			//drive spec generated from actual cloudrive spec
+			newSpec := strings.Join(paramsArr, ",")
+
+			stepLog = "Add drive to create newpool"
+			Step(stepLog, func() {
+				log.Info(stepLog)
+				err = Inst().V.AddCloudDrive(nodeSelected, newSpec, -1)
+				log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", nodeSelected.Name))
+			})
+
+			nodePoolMapAftrAddDrive, err := Inst().V.GetNodePools(*nodeSelected)
+			log.FailOnError(err, fmt.Sprintf("Get Node pools failed on node %s", nodeSelected.Name))
+			dash.VerifyFatal(len(nodePoolMapAftrAddDrive) > len(nodePoolMapBfrAddDrive), true, fmt.Sprintf("verify pool is added successfully"))
+		})
+
 	})
 })
 
