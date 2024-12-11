@@ -92,7 +92,7 @@ spec:
       spec:
         source:
           pvc:
-            name: fio-debian-template-pvc
+            name: fio-data-validation-template-pvc
             namespace: openshift-virtualization-os-images
         pvc:
           accessModes:

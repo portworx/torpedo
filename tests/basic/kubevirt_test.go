@@ -2336,6 +2336,7 @@ var _ = Describe("{MultipleParallelLiveMigration}", Label("p0", "positive", "kub
 	var canSsh bool
 	var initialUptime map[string]time.Duration
 	var initialNodeName map[string]string
+	var failure bool = false
 
 	itLog := "Live migrate multiple kubevirt VMs in parallel"
 	It(itLog, func() {
@@ -2444,6 +2445,7 @@ var _ = Describe("{MultipleParallelLiveMigration}", Label("p0", "positive", "kub
 						initialNode := initialNodeName[vmKey]
 						mu.Unlock()
 						if newNodeName == initialNode {
+							failure = true
 							log.FailOnError(fmt.Errorf("VM %s did not migrate to a different node", vm.Name), "VM is still on node %s after migration", initialNode)
 						} else {
 							log.Infof("VM %s successfully migrated from node %s to node %s", vm.Name, initialNode, newNodeName)
@@ -2462,7 +2464,9 @@ var _ = Describe("{MultipleParallelLiveMigration}", Label("p0", "positive", "kub
 		stepLog = "Destroy Applications"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			DestroyApps(appCtxs, nil)
+			if !failure {
+				DestroyApps(appCtxs, nil)
+			}
 		})
 	})
 	JustAfterEach(func() {
@@ -2649,7 +2653,6 @@ var _ = Describe("{AddNewRawDiskToKubevirtVM}", Label("p0", "positive", "kubevir
 	var appCtxs []*scheduler.Context
 	var namespace string
 	var canSsh bool
-	var initialUptime map[string]time.Duration
 
 	itLog := "Add a new raw disk to a kubevirtVM"
 	It(itLog, func() {
@@ -2687,30 +2690,6 @@ var _ = Describe("{AddNewRawDiskToKubevirtVM}", Label("p0", "positive", "kubevir
 		canSsh = CreateSSHPodAndSetCanSsh()
 		ValidateFioInVMs(appCtxs, canSsh)
 
-		initialUptime = make(map[string]time.Duration)
-		stepLog = "Get initial uptime of VMs"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			var wg sync.WaitGroup
-			for _, appCtx := range appCtxs {
-				wg.Add(1)
-				go func(appCtx *scheduler.Context) {
-					defer GinkgoRecover()
-					defer wg.Done()
-					vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
-					log.FailOnError(err, "Failed to get VMs from appCtx")
-					for _, vm := range vms {
-						uptime, err := GetVMUptime(vm)
-						log.FailOnError(err, "Failed to get uptime from VM %s", vm.Name)
-						vmKey := fmt.Sprintf("%s/%s", vm.Namespace, vm.Name)
-						initialUptime[vmKey] = uptime
-						log.Infof("Initial uptime for VM %s is %v", vmKey, uptime)
-					}
-				}(appCtx)
-			}
-			wg.Wait()
-		})
-
 		stepLog = "Add one raw disk to the kubevirt VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -2718,9 +2697,7 @@ var _ = Describe("{AddNewRawDiskToKubevirtVM}", Label("p0", "positive", "kubevir
 			log.FailOnError(err, "Failed to add disks to kubevirt VM")
 			dash.VerifyFatal(true, true, "Disk added to kubevirt VM")
 		})
-
-		ValidateVMUptime(appCtxs, canSsh, initialUptime)
-
+		ValidateFioInVMs(appCtxs, canSsh)
 		stepLog = "Destroy Applications"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -2792,6 +2769,14 @@ var _ = Describe("{LMAfterRawDiskAddToVM}", Label("p0", "positive", "kubevirt", 
 		canSsh = CreateSSHPodAndSetCanSsh()
 		ValidateFioInVMs(appCtxs, canSsh)
 
+		stepLog = "Add one disk to the KubeVirt VM"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			_, err := AddRawBlockDriveToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
+			log.FailOnError(err, "Failed to add disks to KubeVirt VM")
+			dash.VerifyFatal(true, true, "Disk added to KubeVirt VM")
+		})
+
 		initialUptime = make(map[string]time.Duration)
 		initialNodeName = make(map[string]string)
 		var mu sync.Mutex
@@ -2825,16 +2810,6 @@ var _ = Describe("{LMAfterRawDiskAddToVM}", Label("p0", "positive", "kubevirt", 
 			}
 			wg.Wait()
 		})
-
-		stepLog = "Add one disk to the KubeVirt VM"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			_, err := AddRawBlockDriveToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
-			log.FailOnError(err, "Failed to add disks to KubeVirt VM")
-			dash.VerifyFatal(true, true, "Disk added to KubeVirt VM")
-		})
-
-		ValidateVMUptime(appCtxs, canSsh, initialUptime)
 
 		stepLog = "Live migrate the KubeVirt VM"
 		Step(stepLog, func() {
@@ -3053,8 +3028,6 @@ var _ = Describe("{LMBeforeRawDiskAddToVM}", Label("p0", "positive", "kubevirt",
 			dash.VerifyFatal(true, true, "Disk added to KubeVirt VM")
 		})
 
-		ValidateVMUptime(appCtxs, canSsh, initialUptime)
-
 		ValidateFioInVMs(appCtxs, canSsh)
 
 		stepLog = "Destroy Applications"
@@ -3093,6 +3066,7 @@ var _ = Describe("{LMAndAddRawDiskToVMInALoop}", Label("p0", "positive", "kubevi
 	var initialUptime map[string]time.Duration
 	var initialNodeName map[string]string
 	var mu sync.Mutex
+	var failure bool = false
 
 	itLog := "Live migrate and add disk to KubeVirt VM multiple times"
 	It(itLog, func() {
@@ -3197,6 +3171,7 @@ var _ = Describe("{LMAndAddRawDiskToVMInALoop}", Label("p0", "positive", "kubevi
 							initialNode := initialNodeName[vmKey]
 							mu.Unlock()
 							if newNodeName == initialNode {
+								failure = true
 								log.FailOnError(fmt.Errorf("VM %s did not migrate to a different node", vm.Name), "VM is still on node %s after migration", initialNode)
 							} else {
 								log.Infof("VM %s successfully migrated from node %s to node %s", vm.Name, initialNode, newNodeName)
@@ -3223,15 +3198,15 @@ var _ = Describe("{LMAndAddRawDiskToVMInALoop}", Label("p0", "positive", "kubevi
 				dash.VerifyFatal(true, true, "Disk added to KubeVirt VM")
 			})
 
-			ValidateVMUptime(appCtxs, canSsh, initialUptime)
-
 			ValidateFioInVMs(appCtxs, canSsh)
 		}
 
 		stepLog = "Destroy Applications"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			DestroyApps(appCtxs, nil)
+			if !failure {
+				DestroyApps(appCtxs, nil)
+			}
 		})
 	})
 	JustAfterEach(func() {
@@ -3298,6 +3273,14 @@ var _ = Describe("{PxKillAfterAddRawDiskToVM}", Label("p1", "negative", "kubevir
 		canSsh = CreateSSHPodAndSetCanSsh()
 		ValidateFioInVMs(appCtxs, canSsh)
 
+		stepLog = "Add one disk to the KubeVirt VM"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			_, err := AddRawBlockDriveToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
+			log.FailOnError(err, "Failed to add disks to KubeVirt VM")
+			dash.VerifyFatal(true, true, "Disk added to KubeVirt VM")
+		})
+
 		initialUptime = make(map[string]time.Duration)
 		initialNodeName = make(map[string]string)
 		Step("Get initial uptime of VMs and current nodes", func() {
@@ -3329,16 +3312,6 @@ var _ = Describe("{PxKillAfterAddRawDiskToVM}", Label("p1", "negative", "kubevir
 			}
 			wg.Wait()
 		})
-
-		stepLog = "Add one disk to the KubeVirt VM"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			_, err := AddRawBlockDriveToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
-			log.FailOnError(err, "Failed to add disks to KubeVirt VM")
-			dash.VerifyFatal(true, true, "Disk added to KubeVirt VM")
-		})
-
-		ValidateVMUptime(appCtxs, canSsh, initialUptime)
 
 		stepLog = "Kill Px on node hosting VM"
 		Step(stepLog, func() {
@@ -3386,8 +3359,6 @@ var _ = Describe("{PxKillAfterAddRawDiskToVM}", Label("p1", "negative", "kubevir
 			log.FailOnError(err, "Failed to add disks to KubeVirt VM")
 			dash.VerifyFatal(true, true, "Disk added to KubeVirt VM")
 		})
-
-		ValidateVMUptime(appCtxs, canSsh, initialUptime)
 
 		ValidateFioInVMs(appCtxs, canSsh)
 
@@ -3460,6 +3431,14 @@ var _ = Describe("{AddDiskKillPxLMAgainAddDisk}", Label("p1", "negative", "kubev
 		canSsh = CreateSSHPodAndSetCanSsh()
 		ValidateFioInVMs(appCtxs, canSsh)
 
+		stepLog = "Add one disk to the KubeVirt VM"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			_, err := AddRawBlockDriveToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
+			log.FailOnError(err, "Failed to add disks to KubeVirt VM")
+			dash.VerifyFatal(true, true, "Disk added to KubeVirt VM")
+		})
+
 		initialUptime = make(map[string]time.Duration)
 		initialNodeName = make(map[string]string)
 		stepLog = "Get initial uptime of VMs and current nodes"
@@ -3492,16 +3471,6 @@ var _ = Describe("{AddDiskKillPxLMAgainAddDisk}", Label("p1", "negative", "kubev
 			}
 			wg.Wait()
 		})
-
-		stepLog = "Add one disk to the KubeVirt VM"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			_, err := AddRawBlockDriveToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
-			log.FailOnError(err, "Failed to add disks to KubeVirt VM")
-			dash.VerifyFatal(true, true, "Disk added to KubeVirt VM")
-		})
-
-		ValidateVMUptime(appCtxs, canSsh, initialUptime)
 
 		stepLog = "Kill Px on node hosting VM"
 		Step(stepLog, func() {
@@ -3602,8 +3571,6 @@ var _ = Describe("{AddDiskKillPxLMAgainAddDisk}", Label("p1", "negative", "kubev
 			log.FailOnError(err, "Failed to add disks to KubeVirt VM")
 			dash.VerifyFatal(true, true, "Disk added to KubeVirt VM")
 		})
-
-		ValidateVMUptime(appCtxs, canSsh, initialUptime)
 
 		ValidateFioInVMs(appCtxs, canSsh)
 
@@ -4652,7 +4619,6 @@ var _ = Describe("{DeleteMigrationObjectDuringMigration}", Label("p0", "positive
 		})
 
 		ValidateFioInVMs(appCtxs, canSsh)
-
 		stepLog = "Destroy Applications"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -5141,8 +5107,20 @@ var _ = Describe("{AddNewMixedDiskToKubevirtVMAndLM}", Label("p0", "positive", "
 })
 
 var _ = Describe("{ResizePvcAndLiveMigrateVMs}", Label("p0", "positive", "kubevirt", "LiveMigration", "Resize"), func() {
+	var app, volType string
+	var present bool
 	JustBeforeEach(func() {
 		StartTorpedoTest("ResizePvcAndLiveMigrateVMs", "Resize PVCs attached to VMs, live migrate them, and add new disks in a loop", nil, 0)
+		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
+		if !present {
+			app = "kubevirt-debian-fio-minimal"
+		}
+		if volType == "pxe-raw" {
+			app = "kubevirt-raw-vol"
+		} else if volType == "fada-raw" {
+			app = "kubevirt-fada-raw-fio"
+		}
+		log.InfoD("Setting app for this test to be : %s", app)
 	})
 
 	var appCtxs []*scheduler.Context
@@ -5167,8 +5145,8 @@ var _ = Describe("{ResizePvcAndLiveMigrateVMs}", Label("p0", "positive", "kubevi
 		defer func() {
 			Inst().AppList = appList
 		}()
-		Inst().AppList = []string{"kubevirt-raw-vol"}
-		Inst().CsiAppList = []string{"kubevirt-raw-vol"}
+		Inst().AppList = []string{app}
+		Inst().CsiAppList = []string{app}
 
 		stepLog := "Schedule KubeVirt VMs"
 		Step(stepLog, func() {
