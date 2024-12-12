@@ -427,7 +427,7 @@ const (
 	defaultCmdTimeout           = 20 * time.Second
 	defaultCmdRetryInterval     = 5 * time.Second
 	defaultDriverStartTimeout   = 15 * time.Minute
-	defaultKvdbRetryInterval    = 5 * time.Minute
+	defaultKvdbRetryInterval    = 7 * time.Minute
 	addDriveUpTimeOut           = 15 * time.Minute
 	podDestroyTimeout           = 5 * time.Minute
 	kubeApiServerBringUpTimeout = 20 * time.Minute
