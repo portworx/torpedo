@@ -9396,6 +9396,7 @@ var _ = Describe("{DeployedApplicationsInMultipleTenants}", func() {
 					_, err = CreateNginxWorkload(pvc, 1, deployment, ns, scName)
 					log.FailOnError(err, fmt.Sprintf("Failed to create deployment [%v]", deployment))
 					CloneAndDeployPVCs(ns, deployment, scName)
+					SnapshotAndRestorePVCs(ns, deployment, scName, PureSnapShotClass)
 
 				}(i)
 			}
