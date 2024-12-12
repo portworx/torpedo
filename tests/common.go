@@ -180,6 +180,8 @@ import (
 
 	// import portworx driver to invoke it's init
 	_ "github.com/pure-px/torpedo/drivers/volume/portworx"
+	"github.com/pure-px/torpedo/drivers/volume/portworx/schedops"
+
 	// import gce driver to invoke it's init
 	_ "github.com/pure-px/torpedo/drivers/volume/gce"
 	// import aws driver to invoke it's init
@@ -15905,4 +15907,28 @@ func GetTestcaseName() string {
 		}
 	}
 	return testCaseName
+}
+
+// PopulateDataInNamespacePods writes random data to mount paths in pods in given namespace (size is in MB)
+func PopulateDataInNamespacePods(namespace string, size int) error {
+	pods, err := core.Instance().GetPods(namespace, nil)
+	if err != nil {
+		return err
+	}
+	for _, pod := range pods.Items {
+		containerPaths := schedops.GetContainerPVCMountMap(pod)
+		for containerName, mountPaths := range containerPaths {
+			for _, mountPath := range mountPaths {
+				dir := fmt.Sprintf("%s/testdata", mountPath)
+				cmd := fmt.Sprintf("mkdir %s; dd if=/dev/urandom of=%s/data bs=1M count=%d", dir, dir, size)
+				cmdArgs := []string{"/bin/sh", "-c", cmd}
+				_, err := core.Instance().RunCommandInPod(cmdArgs, pod.Name, containerName, pod.Namespace)
+				if err != nil {
+					log.Errorf("failed to write data to the pod %s on path %s", pod.Name, dir)
+					return err
+				}
+			}
+		}
+	}
+	return nil
 }

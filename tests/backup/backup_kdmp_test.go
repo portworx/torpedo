@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -1479,6 +1480,12 @@ var _ = Describe("{CrashKopiaToolWhenBackUpRestoreInProgress}", Label(TestCaseLa
 			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
+		Step("Disk dumping data into the application pods", func() {
+			log.InfoD("Disk dumping data into the application pods")
+			err = PopulateDataInNamespacePods(namespaces[0], 1024)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Writing data to the pods in namespace [%s]", namespaces[0]))
+		})
+
 		Step("Creating backup location and cloud setting", func() {
 			log.InfoD("Creating backup location and cloud setting")
 
@@ -1537,6 +1544,31 @@ var _ = Describe("{CrashKopiaToolWhenBackUpRestoreInProgress}", Label(TestCaseLa
 
 			err = BackupSuccessCheckWithValidation(ctx, backupName, appContextsToBackup, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, []string{}...)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of backup:[%s] after deleting kopia executor pod", backupName))
+		})
+
+		Step("Create storage class on destination cluster for restore", func() {
+			log.InfoD("Create storage class on destination cluster for restore")
+			pvcs, err := core.Instance().GetPersistentVolumeClaims(namespaces[0], make(map[string]string))
+			log.FailOnError(err, "Getting PVCs on source cluster")
+			var storageClasses []*storagev1.StorageClass
+			for _, singlePvc := range pvcs.Items {
+				storageClass, err := core.Instance().GetStorageClassForPVC(&singlePvc)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting storage class %v from PVC in source cluster", storageClass.Name))
+				storageClasses = append(storageClasses, storageClass)
+			}
+			defer func() {
+				err = SetSourceKubeConfig()
+				dash.VerifyFatal(err, nil, "Setting source kubeconfig")
+			}()
+			err = SetDestinationKubeConfig()
+			dash.VerifyFatal(err, nil, "Setting destination kubeconfig")
+			for _, sc := range storageClasses {
+				sc.ResourceVersion = ""
+				_, err = storage.Instance().CreateStorageClass(sc)
+				if err != nil && !strings.Contains(err.Error(), "already exists") {
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creating storage class %s on dest cluster", sc.Name))
+				}
+			}
 		})
 
 		Step("Restoring the backup on the destination cluster", func() {
