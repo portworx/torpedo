@@ -36,6 +36,13 @@ func GetAppDataDir(namespace string) (string, int) {
 	if strings.HasPrefix(namespace, "nginx-fa-darawvol") {
 		return "/dev/xvda", units.GiB
 	}
+	if strings.HasPrefix(namespace, "postgres-fada") {
+		return "/var/lib/postgresql/data", units.GiB
+	}
+	if strings.HasPrefix(namespace, "nginx-fada-deploy") {
+		return "/testvol", units.GiB
+	}
+
 	return "", 0
 }
 

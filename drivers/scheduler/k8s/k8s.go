@@ -7690,7 +7690,10 @@ func (k *K8s) CSICloneTest(ctx *scheduler.Context, request scheduler.CSICloneReq
 			data := fmt.Sprint(dirtyData, strconv.Itoa(int(time.Now().Unix())))
 			podCmd := fmt.Sprintf("touch %s/aaaa.txt", mountPath)
 			cmdArgs := []string{"/bin/bash", "-c", podCmd}
-			_, err := k8sCore.RunCommandInPod(cmdArgs, pod.GetName(), "", pod.GetNamespace())
+			// It is failing with app which has 2 containers in pod spec
+			// Always running the command with container 0
+			containerName := pod.Spec.Containers[0].Name
+			_, err := k8sCore.RunCommandInPod(cmdArgs, pod.GetName(), containerName, pod.GetNamespace())
 			if err != nil {
 				return fmt.Errorf("failed to execute command to Pod: %s", err)
 			}

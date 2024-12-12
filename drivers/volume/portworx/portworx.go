@@ -35,11 +35,11 @@ import (
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/pure-px/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/task"
 	pxapi "github.com/pure-px/px-operator/api/px"
 	v1 "github.com/pure-px/px-operator/pkg/apis/core/v1"
 	optest "github.com/pure-px/px-operator/pkg/util/test"
+	"github.com/pure-px/sched-ops/k8s/operator"
 	driver_api "github.com/pure-px/torpedo/drivers/api"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/scheduler"
@@ -122,8 +122,8 @@ const (
 	podUpRetryInterval                = 30 * time.Second
 	maintenanceOpTimeout              = 1 * time.Minute
 	maintenanceWaitTimeout            = 10 * time.Minute
-	inspectVolumeTimeout              = 2 * time.Minute
-	inspectVolumeRetryInterval        = 3 * time.Second
+	inspectVolumeTimeout              = 5 * time.Minute
+	inspectVolumeRetryInterval        = 30 * time.Second
 	validateDeleteVolumeTimeout       = 15 * time.Minute
 	validateReplicationUpdateTimeout  = 60 * time.Minute
 	validateClusterStartTimeout       = 2 * time.Minute
@@ -1417,6 +1417,15 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 			}
 		}
 
+		// Checking volume state
+		// Fixing bug: PTX-27110 (Snapshot creation fails if volume is not attached)
+		if len(vol.VolumeConsumers) > 0 && vol.Spec.ProxySpec != nil && vol.Spec.ProxySpec.ProxyProtocol != api.ProxyProtocol_PROXY_PROTOCOL_PURE_FILE && vol.State != api.VolumeState_VOLUME_STATE_ATTACHED && vol.AttachedState != api.AttachState_ATTACH_STATE_EXTERNAL {
+			return vol, true, fmt.Errorf("volume is not attached yet: %s", volumeName)
+		}
+
+		if len(vol.VolumeConsumers) > 0 && vol.Spec.ProxySpec != nil && vol.Spec.ProxySpec.ProxyProtocol != api.ProxyProtocol_PROXY_PROTOCOL_PURE_FILE {
+			log.Debugf("Successfully validated that volume state is: [%v]", vol.State)
+		}
 		// DevicePath
 		// TODO: remove this retry once PWX-27773 is fixed
 		// It is noted that the DevicePath is intermittently empty.
