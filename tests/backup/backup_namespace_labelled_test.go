@@ -832,6 +832,8 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", Label(TestCaseLab
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup success for %s schedule backup %s", scheduleBkpAfterNSRemovalTwo, scheduleName))
 			scheduleBkpAfterNSRemovalThree, err := GetNextScheduleBackupName(scheduleName, time.Duration(schPolicyInterval), ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup success for %s schedule backup %s", scheduleBkpAfterNSRemovalThree, scheduleName))
+			err = SuspendBackupSchedule(scheduleName, periodicSchPolicyName, BackupOrgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the suspension of schedule %s", scheduleName))
 		})
 		Step("Restore the backup which was taken with less namespaces", func() {
 			log.InfoD("Restore the backup which was taken with less namespaces")
