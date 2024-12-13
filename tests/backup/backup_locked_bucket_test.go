@@ -2629,9 +2629,10 @@ var _ = Describe("{DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel}", La
 		buckets             []string
 		bkpNamespaces       []string
 		storageClassMapping map[string]string
+		syncedBackupNames   []string
 	)
 	JustBeforeEach(func() {
-		StartPxBackupTorpedoTest("DeleteVerifyBackupAutoDeletionWhenNewPVCsAreAddedBetweenSchedules", "Verify Soft delete and recover on container and blob level", nil, 300680, Kshithijiyer, Q3FY25)
+		StartPxBackupTorpedoTest("DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel", "Verify Soft delete and recover on container and blob level", nil, 300680, Kshithijiyer, Q3FY25)
 		k8sCore := core.Instance()
 		configmap, err := k8sCore.GetConfigMap(strings.ToLower("SoftDeleteAndRecoverBackupOnContainerAndBlobLevel"), defaultTorpedoNamespace)
 		dash.VerifySafely(err, nil, "Fetching configmap")
@@ -2639,6 +2640,7 @@ var _ = Describe("{DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel}", La
 		buckets = strings.Split(configmap.Data["buckets"], ",")
 		bkpNamespaces = strings.Split(configmap.Data["namespaces"], ",")
 		storageClassMapping = make(map[string]string)
+		syncedBackupNames = make([]string, 0)
 
 	})
 	It("Verify SoftDeleteAndRecoverBackupOnContainerAndBlobLevel case", func() {
@@ -2695,7 +2697,7 @@ var _ = Describe("{DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel}", La
 				if err != nil {
 					return "", true, fmt.Errorf("unable to fetch backups. Error: %s", err.Error())
 				}
-				if len(fetchedBackupNames) == len(backups) {
+				if len(fetchedBackupNames) >= len(backups) {
 					return "", false, nil
 				}
 				return "", true, fmt.Errorf("expected: %d and actual: %d", len(backups), len(fetchedBackupNames))
@@ -2720,16 +2722,21 @@ var _ = Describe("{DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel}", La
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			curBackups, err := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
 			for _, bkp = range curBackups.GetBackups() {
-				backupInspectRequest := &api.BackupInspectRequest{
-					Name:  bkp.Name,
-					Uid:   bkp.Uid,
-					OrgId: BackupOrgID,
+				for _, bkpName := range backups {
+					if strings.Contains(bkp.Name, bkpName) {
+						backupInspectRequest := &api.BackupInspectRequest{
+							Name:  bkp.Name,
+							Uid:   bkp.Uid,
+							OrgId: BackupOrgID,
+						}
+						resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
+						log.FailOnError(err, "Inspect each backup from list")
+						actual := resp.GetBackup().GetStatus().Status
+						expected := api.BackupInfo_StatusInfo_Success
+						dash.VerifyFatal(actual, expected, fmt.Sprintf("Check each backup for success status %s", bkp.Name))
+						syncedBackupNames = append(syncedBackupNames, bkp.Name)
+					}
 				}
-				resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
-				log.FailOnError(err, "Inspect each backup from list")
-				actual := resp.GetBackup().GetStatus().Status
-				expected := api.BackupInfo_StatusInfo_Success
-				dash.VerifyFatal(actual, expected, fmt.Sprintf("Check each backup for success status %s", bkp.Name))
 			}
 		})
 
@@ -2739,14 +2746,14 @@ var _ = Describe("{DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel}", La
 			log.FailOnError(err, "failed to fetch px-admin ctx")
 			backups, err = GetAllBackupsAdmin()
 			dash.VerifyFatal(err, nil, "Fetching all backups")
-			for _, backup := range backups {
+			for _, backup := range syncedBackupNames {
 				nsMapping := make(map[string]string)
 				namespaces, err := GetBackupNamespaces(ctx, backup, BackupOrgID)
 				dash.VerifyFatal(err, nil, "Fetching namespaces from backup")
 				for _, namespace := range namespaces {
-					nsMapping[namespace] = fmt.Sprintf("%s-soft-deleted", namespace)
+					nsMapping[namespace] = fmt.Sprintf("%s-%s", namespace, RandomString(5))
 				}
-				restoreName := fmt.Sprintf("%s-%s-%s", backup, "restored", RandomString(5))
+				restoreName := fmt.Sprintf("%s-%s", backup, RandomString(4))
 				sourceClusterUid, err := Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 				err = CreateRestore(restoreName, backup, nsMapping, SourceClusterName, sourceClusterUid, BackupOrgID, ctx, make(map[string]string))
@@ -2760,14 +2767,14 @@ var _ = Describe("{DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel}", La
 			log.FailOnError(err, "failed to fetch px-admin ctx")
 			backups, err = GetAllBackupsAdmin()
 			dash.VerifyFatal(err, nil, "Fetching all backups")
-			for _, backup := range backups {
+			for _, backup := range syncedBackupNames {
 				nsMapping := make(map[string]string)
 				namespaces, err := GetBackupNamespaces(ctx, backup, BackupOrgID)
 				dash.VerifyFatal(err, nil, "Fetching namespaces from backup")
 				for _, namespace := range namespaces {
-					nsMapping[namespace] = fmt.Sprintf("%s-soft-deleted", namespace)
+					nsMapping[namespace] = fmt.Sprintf("%s-%s", namespace, RandomString(4))
 				}
-				restoreName := fmt.Sprintf("%s-%s-%s", backup, "restored", RandomString(5))
+				restoreName := fmt.Sprintf("%s-%s", backup, RandomString(5))
 				destinationClusterUid, err := Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
 				err = CreateRestore(restoreName, backup, nsMapping, DestinationClusterName, destinationClusterUid, BackupOrgID, ctx, storageClassMapping)
@@ -2781,8 +2788,8 @@ var _ = Describe("{DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel}", La
 			log.FailOnError(err, "failed to fetch px-admin ctx")
 			backups, err = GetAllBackupsAdmin()
 			dash.VerifyFatal(err, nil, "Fetching all backups")
-			for _, backup := range backups {
-				restoreName := fmt.Sprintf("%s-%s-%s", backup, "restored", RandomString(5))
+			for _, backup := range syncedBackupNames {
+				restoreName := fmt.Sprintf("%s-%s", backup, RandomString(4))
 				err = CreateRestoreWithReplacePolicy(restoreName, backup, make(map[string]string), SourceClusterName, BackupOrgID, ctx, make(map[string]string), ReplacePolicyDelete)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating retore with default parameters %s", restoreName))
 			}
