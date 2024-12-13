@@ -10113,3 +10113,175 @@ var _ = Describe("{RestartMultipathdResizeVolumesBouncePods}", func() {
 		EndTorpedoTest()
 	})
 })
+
+// getClusterOptions retrieves the cluster options from the specified node.
+// It runs the "pxctl cluster options list" command on the given node and parses the output into a map.
+func getClusterOptions(selectedNode node.Node) (map[string]interface{}, error) {
+	cmd := fmt.Sprintf("pxctl cluster options list")
+	output, err := runCmd(cmd, selectedNode)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cluster options: %v", err)
+	}
+	log.InfoD("Cluster options: %v", output)
+	clusterOptions := make(map[string]interface{})
+	lines := strings.Split(output, "\n")
+	for _, line := range lines {
+		parts := strings.Split(line, ":")
+		if len(parts) > 1 {
+			key := strings.TrimSpace(parts[0])
+			clusterOptions[key] = strings.TrimSpace(parts[1])
+		}
+	}
+	return clusterOptions, nil
+}
+
+var _ = Describe("{ValidatePXcsiClusterOptionList}", func() {
+	/*
+	   https://purestorage.atlassian.net/browse/PTX-28154
+	   1. Get the list of cluster options for the PX-CSI cluster
+	   2. Fail The Testcase if there are any additional options other than the expected for PX-CSI
+	   3. Update Each option and check if it is getting updated
+	   4. Revert to the original option again and check if it is updated back
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("ValidatePXcsiClusterOptionList", "Validate PXcsi Cluster Option List", nil, 0)
+	})
+	itLog := "ValidatePXcsiClusterOptionList"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		//Below are the cluster options defined for PX-CSI
+		clusterOptions := []string{
+			"Default RPC timeout (minutes)",
+			"Auto decommission timeout (minutes)",
+			"License expiry check (days)",
+			"License expiry check interval",
+			"PxHttpProxy",
+			"Temporary Kvdb loss support",
+			"Maximum concurrent API invocations",
+			"Runtime options",
+			"Kvdb defrag frequency in hours",
+			"Kvdb min DB size to trigger a defrag (MiB)",
+			"Incremental Journal Uploads Disabled",
+			"Incremental Journal Uploads interval (minutes)",
+			"FlashArray iSCSI Allowed IFaces",
+			"Detect RO volumes to bounce interval (seconds)",
+			"Type of RO volumes that bounce pods",
+			"FBLockTimeoutDuration timeout (minutes)",
+			"FBStatsExpiryDuration duration (minutes)",
+		}
+		//Taking random values here , Just to make sure the values can be applied and be reflected in cluster options list
+		clusterOptionsUpdatCommands := []string{
+			"pxctl cluster options update --auto-decommission-timeout 30",
+			"pxctl cluster options update --concurrent-api-limit 30",
+			"pxctl cluster options update --default-rpc-timeout 10",
+			"pxctl cluster options update --disabled-temporary-kvdb-loss-support \"on\"",
+			"pxctl cluster options update --fb-lock-timeout 10",
+			"pxctl cluster options update --fb-stats-expiry-duration 30",
+			"pxctl cluster options update --flasharray-iscsi-allowed-ifaces \"eth0\"",
+			"pxctl cluster options update --incremental-uploads-disabled \"true\"",
+			"pxctl cluster options update --incremental-uploads-interval-mins 60",
+			"pxctl cluster options update --kvdb-defrag-frequency-in-hours 672",
+			"pxctl cluster options update --license-expiry-check 14",
+			"pxctl cluster options update --license-expiry-check-interval \"12h\"",
+			"pxctl cluster options update --min-kvdb-defrag-limit-mb 200",
+			"pxctl cluster options update --ro-vol-pod-bounce-interval 60",
+		}
+		// Mapped each feature to its own flag
+		clusterOptionsUpdateFlags := map[string]string{
+			"Default RPC timeout (minutes)":                  "--default-rpc-timeout",
+			"Auto decommission timeout (minutes)":            "--auto-decommission-timeout",
+			"License expiry check (days)":                    "--license-expiry-check",
+			"License expiry check interval":                  "--license-expiry-check-interval",
+			"Temporary Kvdb loss support":                    "--disabled-temporary-kvdb-loss-support",
+			"Maximum concurrent API invocations":             "--concurrent-api-limit",
+			"Kvdb defrag frequency in hours":                 "--kvdb-defrag-frequency-in-hours",
+			"Kvdb min DB size to trigger a defrag (MiB)":     "--min-kvdb-defrag-limit-mb",
+			"Incremental Journal Uploads Disabled":           "--incremental-uploads-disabled",
+			"Incremental Journal Uploads interval (minutes)": "--incremental-uploads-interval-mins",
+			"FlashArray iSCSI Allowed IFaces":                "--flasharray-iscsi-allowed-ifaces",
+			"Detect RO volumes to bounce interval (seconds)": "--ro-vol-pod-bounce-interval",
+			"FBLockTimeoutDuration timeout (minutes)":        "--fb-lock-timeout",
+			"FBStatsExpiryDuration duration (minutes)":       "--fb-stats-expiry-duration",
+		}
+		clusterOptionsBeforeUpdate := make(map[string]interface{})
+		ClusterOptionAfterUpdate := make(map[string]interface{})
+		ClusterOptionAfterRevert := make(map[string]interface{})
+		workerNodes := node.GetStorageDriverNodes()
+		selectedNode := workerNodes[0]
+
+		stepLog := "Get the list of cluster options for the PX-CSI cluster"
+		Step(stepLog, func() {
+			cmd := fmt.Sprintf("pxctl cluster options list")
+			output, err := runCmd(cmd, selectedNode)
+			log.FailOnError(err, "failed to get cluster options")
+			log.InfoD("Cluster options: %v", output)
+			for _, option := range clusterOptions {
+				if !strings.Contains(output, option) {
+					log.Errorf("Cluster option [%v] not found in the list", option)
+				}
+			}
+			clusterOptionsBeforeUpdate, err = getClusterOptions(selectedNode)
+			log.FailOnError(err, "failed to get cluster options before update")
+
+		})
+		steplog := "Update Each option and check if it is getting reflected or not"
+		Step(steplog, func() {
+			log.InfoD(steplog)
+			for _, cmd := range clusterOptionsUpdatCommands {
+				log.InfoD("Running command: %v", cmd)
+				output, err := runCmd(cmd, selectedNode)
+				log.FailOnError(err, "failed to update cluster options cmd: %v", cmd)
+				log.InfoD("cluster options list output after update: %v", output)
+
+			}
+			ClusterOptionAfterUpdate, err = getClusterOptions(selectedNode)
+			log.FailOnError(err, "failed to get cluster options after update")
+		})
+		steplog = "Validate the updated cluster options"
+		Step(steplog, func() {
+			log.InfoD(steplog)
+			// Below are the options which are immutable and should not be updated
+			immutableOptions := map[string]bool{
+				"Type of RO volumes that bounce pods": true,
+			}
+			for key, value := range ClusterOptionAfterUpdate {
+				if value != "" && !immutableOptions[key] && value == clusterOptionsBeforeUpdate[key] {
+					log.FailOnError(fmt.Errorf("Cluster option [%v] not updated", key), "Cluster option [%v] not updated", key)
+				}
+			}
+		})
+		steplog = "Revert the cluster options to original values and compare with the original values which are fetched before updation of cluster options"
+		Step(steplog, func() {
+			log.InfoD(steplog)
+			for key, value := range clusterOptionsBeforeUpdate {
+				if _, exists := clusterOptionsUpdateFlags[key]; exists {
+					// Need to add this because the flag option is reverse to update the value for Temporary Kvdb loss support
+					if key == "Temporary Kvdb loss support" {
+						if value == "on" {
+							value = "off"
+						} else if value == "off" {
+							value = "on"
+						}
+					}
+					// Need to add this because the flag option is "" for Incremental Journal Uploads Disabled
+					if value == "" {
+						value = "\"\""
+					}
+					cmd := fmt.Sprintf("pxctl cluster options update %v %v", clusterOptionsUpdateFlags[key], value)
+					log.InfoD("Running command update command: %v", cmd)
+					output, err := runCmd(cmd, selectedNode)
+					log.FailOnError(err, "failed to update cluster options cmd: %v", cmd)
+					log.InfoD("cluster options list output after adding back the original values: %v", output)
+				}
+			}
+			ClusterOptionAfterRevert, err = getClusterOptions(selectedNode)
+			for key, value := range clusterOptionsBeforeUpdate {
+				if _, exists := clusterOptionsUpdateFlags[key]; exists {
+					if value != "" && value != ClusterOptionAfterRevert[key] {
+						log.FailOnError(fmt.Errorf("Cluster option [%v] not reverted", key), "Cluster option [%v] not reverted", key)
+					}
+				}
+			}
+		})
+	})
+})
