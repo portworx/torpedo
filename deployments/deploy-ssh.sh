@@ -420,6 +420,11 @@ fi
 
 echo '' > torpedo.yaml
 
+#Check if variable  $IS_STORK_NFS_LOCATION is set
+if [ -z "${IS_STORK_NFS_LOCATION}" ]; then
+    IS_STORK_NFS_LOCATION="false"
+fi
+
 
 cat >> torpedo.yaml <<EOF
 ---
@@ -856,6 +861,8 @@ spec:
       value: "${BACKUP_DELETE_RETRY_TIME}"
     - name: BACKUP_DELETE_WAIT_TIME
       value: "${BACKUP_DELETE_WAIT_TIME}"
+    - name: IS_STORK_NFS_LOCATION
+      value: "${IS_STORK_NFS_LOCATION}"
     - name: VOLUME_COUNT_FOR_PARALLEL_DELETE
       value: "${VOLUME_COUNT_FOR_PARALLEL_DELETE}"
     - name: SIMULATE_FB_FQDN

@@ -4251,10 +4251,9 @@ func ScheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings strin
 
 	defer func() {
 		var config *rest.Config
-		config, err = clientcmd.BuildConfigFromFlags("", srcKubeConfigPath)
-		if err != nil {
-			return
-		}
+		config, newErr := clientcmd.BuildConfigFromFlags("", srcKubeConfigPath)
+		dash.VerifySafely(newErr, nil, "Verifying if the cluster context is switched to the source cluster")
+		//Hard setting config to switch to source config
 		core.Instance().SetConfig(config)
 		apps.Instance().SetConfig(config)
 		stork.Instance().SetConfig(config)
@@ -4323,6 +4322,7 @@ func ScheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings strin
 		// Get external object store details and append to the command accordingily
 		objectStoreArgs, err := getObjectStoreArgs(objectStoreType, secretName)
 		if err != nil {
+			log.Errorf("Creation of bidirectional cluster pair using storkctl failed: %v", err)
 			return fmt.Errorf("failed to get  %s secret in configmap secret-config in default namespace", objectStoreType)
 		}
 		cmdArgs = append(cmdArgs, objectStoreArgs...)
@@ -4373,6 +4373,19 @@ func getObjectStoreArgs(objectStoreType storkv1.BackupLocationType, secretName s
 			objectStoreArgs = append(objectStoreArgs, "--encryption-key")
 			objectStoreArgs = append(objectStoreArgs, string(val))
 		}
+	} else if objectStoreType == storkv1.BackupLocationNFS {
+		objectStoreArgs = append(objectStoreArgs,
+			[]string{"--provider", "nfs",
+				"--nfs-server", string(secretData.Data["nfsServer"]),
+				"--nfs-sub-path", string(secretData.Data["nfsSubPath"]),
+				"--nfs-export-path", string(secretData.Data["nfsExportPath"]),
+				"--nfs-mount-opts", string(secretData.Data["nfsMountOpts"]),
+				"--nfs-timeout-seconds", string(secretData.Data["nfsTimeoutSeconds"])}...)
+		if val, ok := secretData.Data["encryptionKey"]; ok && len(val) > 0 {
+			objectStoreArgs = append(objectStoreArgs, "--encryption-key")
+			objectStoreArgs = append(objectStoreArgs, string(val))
+		}
+
 	}
 
 	return objectStoreArgs, nil
@@ -15933,3 +15946,4 @@ func PopulateDataInNamespacePods(namespace string, size int) error {
 	}
 	return nil
 }
+

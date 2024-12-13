@@ -10,14 +10,14 @@ import (
 	"strings"
 	"time"
 
-	storkapi "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/task"
+	storkapi "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
 	"github.com/pure-px/stork/pkg/crud/stork"
 	storkops "github.com/pure-px/stork/pkg/crud/stork"
-	"github.com/portworx/sched-ops/task"
 	v1 "k8s.io/api/core/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
@@ -59,7 +59,9 @@ const (
 var (
 	kubeConfigWritten     bool
 	defaultBackupLocation = "s3"
+	nfsBackupLocation     = "nfs"
 	defaultSecret         = "s3secret"
+	nfsSecret             = "nfssecret"
 )
 
 type failoverFailbackParam struct {
@@ -999,6 +1001,9 @@ func upgradePX(upgradeHop string, storageNodes []node.Node) (string, string, int
 }
 
 func validateFailoverFailback(clusterType, taskNamePrefix string, single, skipSourceOp, includeNs, excludeNs bool) {
+	isNfs := os.Getenv("IS_STORK_NFS_LOCATION") == "true"
+	log.Infof(" User has opted for IS_STORK_NFS_LOCATION to  %s ", os.Getenv("IS_STORK_NFS_LOCATION"))
+
 	defaultNs := "kube-system"
 	migrationNamespaces, contexts := initialSetupApps(taskNamePrefix, single)
 	migNamespaces := strings.Join(migrationNamespaces, ",")
@@ -1053,9 +1058,7 @@ func validateFailoverFailback(clusterType, taskNamePrefix string, single, skipSo
 	} else if cloudName == "gke" {
 		defaultSecret = googleSecret
 		defaultBackupLocation = googleBackupLocation
-	}
-
-	if cloudName == "eks" {
+	} else if cloudName == "eks" {
 		extraArgsCp["src-ep"] = srcEp + ":" + defaultPort
 		extraArgsCp["dest-ep"] = destEp + ":" + defaultPort
 	}
@@ -1064,7 +1067,13 @@ func validateFailoverFailback(clusterType, taskNamePrefix string, single, skipSo
 	cpName := defaultClusterPairName + time.Now().Format("15h03m05s")
 
 	if clusterType == "asyncdr" {
-		err = ScheduleBidirectionalClusterPair(cpName, defaultNs, "", storkapi.BackupLocationType(defaultBackupLocation), defaultSecret, "async-dr", asyncdr.FirstCluster, asyncdr.SecondCluster, extraArgsCp)
+		if isNfs {
+			log.Infof("Cluster pair will be created wrt nfs object location ")
+			err = ScheduleBidirectionalClusterPair(cpName, defaultNs, "", storkapi.BackupLocationType(nfsBackupLocation), nfsSecret, "async-dr", asyncdr.FirstCluster, asyncdr.SecondCluster, extraArgsCp)
+		} else {
+			err = ScheduleBidirectionalClusterPair(cpName, defaultNs, "", storkapi.BackupLocationType(defaultBackupLocation), defaultSecret, "async-dr", asyncdr.FirstCluster, asyncdr.SecondCluster, extraArgsCp)
+		}
+
 	} else {
 		err = ScheduleBidirectionalClusterPair(cpName, defaultNs, "", "", "", "sync-dr", asyncdr.FirstCluster, asyncdr.SecondCluster, extraArgsCp)
 	}
