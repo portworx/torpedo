@@ -2924,7 +2924,7 @@ var _ = Describe("{PXBackupUpgradeWithAzureCredChange}", Label(TestCaseLabelsMap
 })
 
 // This testcase Upgrade px version to latest px version and take a backup and restore it
-var _ = Describe("{PxUpgradeWithBackupAndRestore}", func() {
+var _ = Describe("{PxUpgradeWithBackupAndRestore}", Label(TestCaseLabelsMap[PxUpgradeWithBackupAndRestore]...), func() {
 	var (
 		scheduledAppContexts   []*scheduler.Context
 		controlChannel         chan string

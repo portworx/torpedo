@@ -174,6 +174,7 @@ const (
 	NamespaceBackupRestoreWithHugeConfigMap                                            TestCaseName = "NamespaceBackupRestoreWithHugeConfigMap"
 	CheckLicensePageIntegrity                                                          TestCaseName = "LicensePageIntegrity"
 	VerifySoftLicensingPeriodInDeploymentSpec                                          TestCaseName = "VerifySoftLicensingPeriodInDeploymentSpec"
+	PxUpgradeWithBackupAndRestore                                                      TestCaseName = "PxUpgradeWithBackupAndRestore"
 )
 
 // Test case labels
@@ -346,6 +347,7 @@ const (
 	NamespaceBackupRestoreWithHugeConfigMapLabel                                            TestCaseLabel = "NamespaceBackupRestoreWithHugeConfigMap"
 	CheckLicensePageIntegrityLabel                                                          TestCaseLabel = "CheckLicensePageIntegrity"
 	VerifySoftLicensingPeriodInDeploymentSpecLabel                                          TestCaseLabel = "VerifySoftLicensingPeriodInDeploymentSpec"
+	PxUpgradeWithBackupAndRestoreLabel                                                      TestCaseLabel = "PxUpgradeWithBackupAndRestore"
 )
 
 // Common Labels
@@ -669,4 +671,5 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	RebootNodesWhileCRRestoreIsInProgress:                                  {RebootNodesWhileCRRestoreIsInProgressLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, SkipTestLabel},
 	VerifyRBACForLargeUserSet:                                              {VerifyRBACForLargeUserSetLabel, vanillaPipeline, ScaleTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, SkipTestLabel},
 	CrashKopiaToolWhenBackUpRestoreInProgress:                              {CrashKopiaToolWhenBackUpRestoreInProgressLabel, ocpPipeline, SystemTest, PxBackupLabel, P2, KDMPLabel, S3BackupLocationLabel, NfsBackupLocationLabel, SkipTestLabel},
+	PxUpgradeWithBackupAndRestore:                                          {PxUpgradeWithBackupAndRestoreLabel, SystemTest, PxBackupLabel},
 }
