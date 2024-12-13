@@ -15788,7 +15788,7 @@ func SnapshotAndRestorePVCs(namespace string, deploymentName string, storageclas
 		}
 
 		log.Infof("Successfully restored PVC %s, proceed to mount to a new pod", restoredPVC.Name)
-		_, err = CreateNginxFadaWorkload(restoredPvcName, 1, restoredPvcDeployment, namespace, storageclassName)
+		_, err = CreateNginxWorkload(restoredPvcName, 1, restoredPvcDeployment, namespace, storageclassName)
 		if err != nil {
 			log.Errorf("Failed to create deployment [%v]: %v", restoredPvcDeployment, err)
 			return err
