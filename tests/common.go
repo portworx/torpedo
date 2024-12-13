@@ -2457,6 +2457,7 @@ func ValidateApplicationsPurePxctl(contexts []*scheduler.Context) {
 // ValidateApplicationsPureSDK validates applications
 func ValidateApplicationsPureSDK(contexts []*scheduler.Context) {
 	Step("validate applications", func() {
+		ValidateApplications(contexts)
 		for _, ctx := range contexts {
 			ValidateContextForPureVolumesSDK(ctx)
 		}
