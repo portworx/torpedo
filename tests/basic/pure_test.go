@@ -8894,6 +8894,7 @@ var _ = Describe("{CreatePodsUsingClonewithMT}", func() {
 			flashArrays             []pureutils.FlashArrayEntry
 			max_iops                = uint64(rand.Intn(99999999) + 1)
 			max_bandwidth           = uint64(rand.Intn(511) + 1)
+			wg                      sync.WaitGroup
 		)
 		namespaces := []string{
 			nsWithRealm,
@@ -9081,6 +9082,26 @@ var _ = Describe("{CreatePodsUsingClonewithMT}", func() {
 			log.FailOnError(err, fmt.Sprintf("Failed to restore pvc of the deployment [%v] ", deploymentNameOutsideRealm))
 			err = SnapshotAndRestorePVCs(nsNormal, deploymentNameNormal, storageClassNameNormal, snapShotClassName)
 			log.FailOnError(err, fmt.Sprintf("Failed to restore pvc of the deployment [%v] ", deploymentNameNormal))
+		})
+		stepLog = "Create Multiple Snaphots for a single volume and check if created"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			allPvcList, err := core.Instance().GetPersistentVolumeClaims(nsNormal, nil)
+			log.FailOnError(err, fmt.Sprintf("Failed to get pvc list in namespace [%v] ", nsNormal))
+			pvc := allPvcList.Items[0]
+			//Currently PX-CSI supports upto 64 snapshots per volume
+			go func() {
+				wg.Add(1)
+				defer wg.Done()
+				defer GinkgoRecover()
+				for i := 0; i < 64; i++ {
+					snapName := fmt.Sprintf("snap-%v", i)
+					_, err := Inst().S.CreateCsiSnapshot(snapName, nsNormal, snapShotClassName, pvc.Name)
+					log.FailOnError(err, fmt.Sprintf("Failed to create snapshot [%v] ", snapName))
+
+				}
+			}()
+			wg.Wait()
 		})
 		stepLog = "Destroy FA Pods,namespaces,storageclasses and deployments"
 		Step(stepLog, func() {
