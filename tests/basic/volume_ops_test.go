@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"k8s.io/utils/strings/slices"
 	"math"
 	"math/rand"
 	"net/http"
@@ -13,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"k8s.io/utils/strings/slices"
 
 	"github.com/google/uuid"
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
@@ -6718,5 +6719,196 @@ var _ = Describe("{EmptyTrashcanBeforeVEM}", Label("p0", "positive", "px_vol_ops
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{ValidateVolumeResizeInParallelWithPXKill}", Label("p0", "staging", "negative", "px_vol_ops", "VolResize"), func() {
+	/*
+		    Ticket id: https://purestorage.atlassian.net/browse/HAZEL-1060
+			Schedule applications
+			Get all the volumes of the apps
+			parallel trigger resize on all the volumes
+			Kill Px on half of the nodes in cluster
+			Once Px is up again, again parallel trigger resize on all the volumes
+			Validate new size for all
+			Validate IO Continuity
+	*/
+	var testrailID = 0
+	JustBeforeEach(func() {
+		StartTorpedoTest("ValidateVolumeResizeInParallelWithPXKill", "Trigger parallel volume resizes, simulate Portworx failure on half the nodes, re-trigger resizes, and validate the new sizes and IO continuity.", nil, 0)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+	stepLog := "Resize volumes for scheduled applications and validate resized successfully"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		var err error
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("volumeresize-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer DestroyApps(contexts, nil)
+		var resizedVols []*volume.Volume
+		var wg sync.WaitGroup
+		var mu sync.Mutex
+		storagenodes := node.GetStorageNodes()
+		if len(storagenodes) <= 5 {
+			log.Warnf("Skipping test as there are only %d storage nodes, required 6", len(storagenodes))
+			Skip("Skipping test as there are only %d storage nodes, required 6", len(storagenodes))
+		}
+		log.Infof("Get all the list of available volumes with IO running")
+		iopsVolumes := make(map[*scheduler.Context][]*volume.Volume)
+		for _, eachContext := range contexts {
+			vols, err := Inst().S.GetVolumes(eachContext)
+			log.FailOnError(err, "Failed to get app %s's volumes", eachContext.App.Key)
+			log.Infof("list of all volumes present in the cluster [%v]", vols)
+			for _, eachVol := range vols {
+				isIOsInProgress, err := Inst().V.IsIOsInProgressForTheVolume(&node.GetStorageNodes()[0], eachVol.ID)
+				log.FailOnError(err, "unable to get IO status for volume: %v", eachVol.ID)
+				if isIOsInProgress {
+					iopsVolumes[eachContext] = append(iopsVolumes[eachContext], eachVol)
+				}
+			}
+		}
+		log.FailOnError(err, "Failed to get volumes with IO Running")
+		log.InfoD("List of all volumes with IO Running [%v]", iopsVolumes)
+		resizeVolumes := func(ctx *scheduler.Context, vol *volume.Volume) error {
+			resizedVols = []*volume.Volume{}
+			pvc, err := GetPVCObjFromVol(vol)
+			if err != nil {
+				return fmt.Errorf("failed to get PVC for volume %v: %v", vol.ID, err)
+			}
+			pvcSize := pvc.Spec.Resources.Requests.Storage().String()
+			pvcSize = strings.TrimSuffix(pvcSize, "Gi")
+			pvcSizeInt, err := strconv.Atoi(pvcSize)
+			if err != nil {
+				return fmt.Errorf("failed to convert PVC size %v to int: %v", pvcSize, err)
+			}
+			log.InfoD("Increasing PVC [%s/%s] size to %v Gi", pvc.Namespace, pvc.Name, pvcSizeInt)
+			resizedVol, err := Inst().S.ResizePVC(ctx, pvc, uint64(pvcSizeInt))
+			if err != nil {
+				return fmt.Errorf("failed to resize PVC for volume %v: %v", vol.ID, err)
+			}
+			log.InfoD("Volume UID %v of app %s resized", resizedVol.ID, ctx.App.Key)
+			log.Infof("Successfully resized volume [%v] to [%v Gi]", resizedVol.ID, pvcSizeInt)
+			mu.Lock()
+			resizedVols = append(resizedVols, resizedVol)
+			mu.Unlock()
+			return nil
+		}
+
+		stepLog := "Do parallel resize of apps' volumes and crash nodes in parallel"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			totalVolumes := 0
+			for _, vols := range iopsVolumes {
+				totalVolumes += len(vols)
+			}
+			errCh := make(chan error, totalVolumes+len(storagenodes)/2)
+			for ctx, vols := range iopsVolumes {
+				for _, vol := range vols {
+					wg.Add(1)
+					go func(ctx *scheduler.Context, vol *volume.Volume) {
+						defer wg.Done()
+						defer GinkgoRecover()
+						log.Infof("Resizing volume %s for context %s", vol.ID, ctx.App.Key)
+						err := resizeVolumes(ctx, vol)
+						if err != nil {
+							errCh <- fmt.Errorf("resize failed for volume %s: %v", vol.ID, err)
+						}
+						log.Infof("Successfully resized volume %s for context %s", vol.ID, ctx.App.Key)
+					}(ctx, vol)
+				}
+			}
+			PxKillNodes := len(storagenodes) / 2
+			for i := 0; i < PxKillNodes; i++ {
+				wg.Add(1)
+				go func(i int) {
+					defer wg.Done()
+					defer GinkgoRecover()
+					log.InfoD("Crashing node: %v", storagenodes[i].Name)
+					err := Inst().N.CrashNode(storagenodes[i], node.CrashNodeOpts{
+						Force: true,
+						ConnectionOpts: node.ConnectionOpts{
+							Timeout:         1 * time.Minute,
+							TimeBeforeRetry: 5 * time.Second,
+						},
+					})
+					if err != nil {
+						errCh <- fmt.Errorf("failed to crash node %s: %v", storagenodes[i].Name, err)
+					}
+					log.Infof("Successfully crashed node: %s", storagenodes[i].Name)
+					log.InfoD("Waiting for node: %v to come up", storagenodes[i].Name)
+					err = Inst().N.TestConnection(storagenodes[i], node.ConnectionOpts{
+						Timeout:         defaultTestConnectionTimeout,
+						TimeBeforeRetry: defaultWaitRebootRetry,
+					})
+					if err != nil {
+						errCh <- fmt.Errorf("node %s failed to come up: %v", storagenodes[i].Name, err)
+					}
+					err = Inst().V.WaitDriverUpOnNode(storagenodes[i], 10*time.Minute)
+					if err != nil {
+						errCh <- fmt.Errorf("Portworx failed to come up on node %s: %v", storagenodes[i].Name, err)
+					}
+					log.Infof("Successfully Portworx is up on the node: %v", storagenodes[i].Name)
+				}(i)
+			}
+			wg.Wait()
+			close(errCh)
+			var errSlice []string
+			for err := range errCh {
+				errSlice = append(errSlice, err.Error())
+			}
+			if len(errSlice) > 0 {
+				err := fmt.Errorf("encountered %d failure(s) during the volume resize and node crash operations: %s", len(errSlice), strings.Join(errSlice, "; "))
+				log.FailOnError(err, "Volume resize or node crash failed due to errors")
+			}
+			log.InfoD("Successfully resized all volumes and crashed nodes.")
+
+		})
+
+		stepLog = "Validate new size for all volumes after resize"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, v := range resizedVols {
+				log.Infof("volume need to be verify %+v", v)
+				params := make(map[string]string)
+				if Inst().ConfigMap != "" {
+					params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+					log.FailOnError(err, "Failed to get token from configMap")
+				}
+				err := Inst().V.ValidateUpdateVolume(v, params)
+				dash.VerifyFatal(err, nil, "Validate volume update successful?")
+			}
+
+		})
+
+		stepLog = "Verify after Resize volume if IO is running"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, v := range resizedVols {
+				isIOsInProgress := func() (interface{}, bool, error) {
+					isIOsInProgress, err := Inst().V.IsIOsInProgressForTheVolume(&storagenodes[0], v.ID)
+					if err != nil {
+						return nil, true, fmt.Errorf("Error while checking IO progress for volume [%v]: %v", v.ID, err)
+					}
+
+					if isIOsInProgress {
+						return nil, true, nil
+					} else {
+						return nil, false, nil
+					}
+				}
+				_, err := task.DoRetryWithTimeout(isIOsInProgress, 30*time.Second, 5*time.Minute)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("verify IO running on the volume [%v] after resize", v.Name))
+			}
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+
 	})
 })

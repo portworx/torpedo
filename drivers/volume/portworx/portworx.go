@@ -998,7 +998,6 @@ func (d *portworx) InspectVolume(name string) (*api.Volume, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	return response.Volume, nil
 }
 
@@ -2432,7 +2431,6 @@ func (d *portworx) ValidateUpdateVolume(vol *torpedovolume.Volume, params map[st
 		}
 
 		respVol := volumeInspectResponse.Volume
-
 		// Size Update
 		if respVol.Spec.Size != vol.RequestedSize {
 			log.InfoD("Volume size differs. Expected: [%vGB] Actual: [%vGB] !!!", vol.RequestedSize/units.GiB, respVol.Spec.Size/units.GiB)
