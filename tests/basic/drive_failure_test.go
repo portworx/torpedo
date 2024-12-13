@@ -9,6 +9,7 @@ import (
 
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/pure-px/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/units"
 
 	"github.com/pure-px/torpedo/pkg/testrailuttils"
 
@@ -402,17 +403,17 @@ var _ = Describe("{YankPoolDriveWithIOs}", func() {
 	YankPoolDriveTest(testName, testDescription)
 })
 
-var _ = Describe("{YankMetadataWithPxRestart}", func() {
+var _ = Describe("{YankMetadataWithPxRestart}", Label("p1", "YankMetadataDrive", "px_restart"), func() {
 	testName = "YankMetadataWithPxRestart"
 	testDescription = "Yank metadata drive with restart PX"
 	YankMetadataTest(testName, testDescription)
 })
-var _ = Describe("{YankMetadataWithNodeReboot}", func() {
+var _ = Describe("{YankMetadataWithNodeReboot}", Label("p1", "YankMetadataDrive", "node_reboot"), func() {
 	testName = "YankMetadataWithNodeReboot"
 	testDescription = "Yank metadata drive and reboot node"
 	YankMetadataTest(testName, testDescription)
 })
-var _ = Describe("{YankMetadataWithNodeMaintenanceCycle}", func() {
+var _ = Describe("{YankMetadataWithNodeMaintenanceCycle}", Label("p1", "YankMetadataDrive", "NodeMaintenance"), func() {
 	testName = "YankMetadataWithNodeMaintenanceCycle"
 	testDescription = "Yank metadata drive and node maintenance cycle"
 	YankMetadataTest(testName, testDescription)
@@ -872,12 +873,17 @@ func YankPoolDriveTest(testName, testDesc string) {
 	})
 }
 
-var _ = Describe("{YankPoolDriveWithNodeMaintenanceCycle}", func() {
+var _ = Describe("{ExpandPoolResizeDriveAfterYankingDrive}", Label("p1", "PoolExpand", "YankPoolDrive"), func() {
+	testName = "ExpandPoolResizeDriveAfterYankingDrive"
+	testDescription = "Yank pool drive with expand pool resize drive"
+	PoolResize(testName, testDescription)
+})
+var _ = Describe("{YankPoolDriveWithNodeMaintenanceCycle}", Label("p1", "YankPoolDrive", "NodeMaintenance"), func() {
 	testName = "yank-pool-drive-node-maintenance-cycle"
 	testDescription = "Yank pool drive with node maintenance cycle"
 	YankPoolDriveTest(testName, testDescription)
 })
-var _ = Describe("{YankMetadataWithNodeMaintenanceCycle}", func() {
+var _ = Describe("{YankMetadataWithNodeMaintenanceCycle}", Label("p1", "YankMetadataDrive", "NodeMaintenance"), func() {
 	testName = "YankMetadataWithNodeMaintenanceCycle"
 	testDescription = "Yank metadata drive and node maintenance cycle"
 	YankMetadataTest(testName, testDescription)
@@ -1046,5 +1052,237 @@ func DeletePoolAfterYankDrive(testName, testDesc string) {
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+	})
+}
+
+func PoolResize(testName, description string) {
+
+	var (
+		poolUUIDSelected              string
+		poolToResize                  *api.StoragePool
+		bufferSizeInGB, targetSizeGiB uint64
+		isJournalEnabled              bool
+		contexts                      []*scheduler.Context
+		nodeSelected                  *node.Node
+		poolDrive                     string
+		busID                         string
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest(testName, description, nil, 0)
+		isJournalEnabled, err = IsJournalEnabled()
+		log.FailOnError(err, "Failed to get journal enable or not")
+		bufferSizeInGB = uint64(0)
+		if isJournalEnabled {
+			bufferSizeInGB = JournalDeviceSizeInGB
+		}
+	})
+
+	It(testName, func() {
+		stepLog := "Schedule Apps"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Info("schedule app succeed")
+			contexts = scheduleApps()
+			time.Sleep(5 * time.Minute)
+		})
+
+		stepLog = "Select a pool to resize"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			poolUUIDSelected = pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, 100)
+			dash.VerifyFatal(len(poolUUIDSelected) > 0, true, fmt.Sprintf("Expected poolIDToResize to not be empty, pool id to resize %s", poolIDToResize))
+			poolToResize = getStoragePool(poolUUIDSelected)
+			nodeSelected, err = GetNodeWithGivenPoolID(poolUUIDSelected)
+			log.FailOnError(err, "Failed to get node from pool id [%v]", poolUUIDSelected)
+
+			log.Info(fmt.Sprintf("Pool going to resize is UUID: %s", poolUUIDSelected))
+		})
+		if testName == "ExpandPoolResizeDriveAfterYankingDrive" {
+			stepLog = "Select pool drive"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				poolIDSelected, err := GetPoolIDFromPoolUUID(poolUUIDSelected)
+				log.FailOnError(err, fmt.Sprintf("error getting pool id for the pool %s", poolUUIDSelected))
+				jDev, err := Inst().V.GetJournalDevicePath(nodeSelected)
+				log.FailOnError(err, fmt.Sprintf("error getting journal device path from node %s", nodeSelected.Name))
+				log.InfoD("Journal device path - %s", jDev)
+
+				cmd := fmt.Sprintf("lsblk -no pkname %s", jDev)
+				journalParentDevPath, err := Inst().N.RunCommandWithNoRetry(*nodeSelected, cmd, node.ConnectionOpts{
+					Timeout:         2 * time.Minute,
+					TimeBeforeRetry: 10 * time.Second,
+				})
+				log.FailOnError(err, "error occured running the command to identify the parent device path of the journal partition %s", jDev)
+				journalParentDevPath = strings.TrimRight(journalParentDevPath, "\n")
+				log.InfoD("Parent device path of the journal device is %s", journalParentDevPath)
+
+				driveMap, err := Inst().V.GetPoolDrives(nodeSelected)
+				log.FailOnError(err, fmt.Sprintf("error getting pool drive details for the node %s", nodeSelected))
+
+				drives := driveMap[strconv.Itoa(int(poolIDSelected))]
+
+				for _, drive := range drives {
+					cmd := fmt.Sprintf("lsblk -no pkname %s", drive.Device)
+					poolDriveParentPath, err := Inst().N.RunCommandWithNoRetry(*nodeSelected, cmd, node.ConnectionOpts{
+						Timeout:         2 * time.Minute,
+						TimeBeforeRetry: 10 * time.Second,
+					})
+					log.FailOnError(err, "error occured running the command to identify the parent device path of the drive %s", drive.Device)
+					poolDriveParentPath = strings.TrimRight(poolDriveParentPath, "\n")
+					log.InfoD("Parent device path of the pool device is %s", poolDriveParentPath)
+
+					if (journalParentDevPath != "") && (poolDriveParentPath != "") && (journalParentDevPath == poolDriveParentPath) {
+						continue
+					}
+
+					poolDrive = drive.Device
+					log.InfoD("Pool drive selected - %s", poolDrive)
+					break
+				}
+			})
+
+			poolDrive = strings.Trim(poolDrive, "/")
+			poolDriveArr := strings.Split(poolDrive, "/")
+			poolDrive = poolDriveArr[len(poolDriveArr)-1]
+			stepLog = "Yank drive"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				busID, err = Inst().N.YankDrive(*nodeSelected, poolDrive, node.ConnectionOpts{
+					Timeout:         dfDefaultTimeout,
+					TimeBeforeRetry: dfDefaultRetryInterval,
+				})
+				log.FailOnError(err, fmt.Sprintf("failed to yank journal drive on node [%s]", nodeSelected.Name))
+				log.InfoD("Bus id - %s", busID)
+			})
+
+			time.Sleep(time.Minute * 2)
+
+			stepLog = "Recover yank drive"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				err = Inst().N.RecoverDrive(*nodeSelected, poolDrive, busID, node.ConnectionOpts{
+					Timeout:         driveFailTimeout,
+					TimeBeforeRetry: dfDefaultRetryInterval,
+				})
+				log.FailOnError(err, fmt.Sprintf("failed to recover yank journal drive on node [%s]", nodeSelected.Name))
+				log.InfoD("Verified recover yank drive")
+			})
+
+			stepLog = fmt.Sprintf("Wait for driver to up and check px status")
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				err = Inst().V.WaitDriverUpOnNode(*nodeSelected, Inst().DriverStartTimeout)
+				log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", nodeSelected.Name))
+				log.Info("Driver is up")
+
+				status, err := Inst().V.GetPxctlStatus(*nodeSelected)
+				log.FailOnError(err, fmt.Sprintf("failed to get pxctl status on node [%s]", nodeSelected.Name))
+				dash.VerifyFatal(status == api.Status_STATUS_OK.String(), true, fmt.Sprintf("node [%s] status is up but PX cluster is not ok. Expected: %v Actual: %v",
+					nodeSelected.Name, api.Status_STATUS_OK, status))
+				log.InfoD("px status %v", status)
+			})
+
+		}
+
+		originalSizeInBytes := poolToResize.TotalSize
+		targetSizeInBytes := originalSizeInBytes + 100*units.GiB // getDesiredSize(originalSizeInBytes)
+		targetSizeGiB = targetSizeInBytes / units.GiB
+
+		stepLog = "Expand it by 100 GiB with resize-disk type"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.InfoD("Current size of pool %s is %d GiB. Trying to expand to %v GiB",
+				poolUUIDSelected, poolToResize.TotalSize/units.GiB, targetSizeGiB+bufferSizeInGB)
+			triggerPoolExpansion(poolUUIDSelected, targetSizeGiB+bufferSizeInGB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
+			log.Info(fmt.Sprintf("Pool expansion started [%s]", poolUUIDSelected))
+		})
+
+		if testName == "PoolResizeWithNodeMaintenanceCycleWithTimeInterval" {
+			sleepTime := rand.Intn(100) + 1
+			time.Sleep(time.Second * (time.Duration(sleepTime)))
+
+			stepLog = fmt.Sprintf("Performing node maintenance cycle on node [%s] after [%d] seconds", nodeSelected.Name, sleepTime)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				err = Inst().V.RecoverDriver(*nodeSelected)
+				log.FailOnError(err, fmt.Sprintf("error performing maintenance cycle on node %s", nodeSelected.Name))
+				dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after maintenance cycle on node %s", nodeSelected.Name))
+			})
+		} else if testName == "PoolResizeWithNodeRebootWithTimeInterval" {
+			sleepTime := rand.Intn(100) + 1
+			time.Sleep(time.Second * (time.Duration(sleepTime)))
+
+			stepLog = fmt.Sprintf("Verify reboot after [%d] seconds", sleepTime)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				err = Inst().N.RebootNodeAndWait(*nodeSelected)
+				log.FailOnError(err, "Failed to reboot node and wait till it is up")
+				log.Info("Verify reboot succeed")
+			})
+
+		} else if testName == "PoolResizeWithPXRestartWithTimeInterval" {
+			sleepTime := rand.Intn(100) + 1
+			time.Sleep(time.Second * (time.Duration(sleepTime)))
+
+			stepLog = fmt.Sprintf("Restart Portworx after [%d] seconds", sleepTime)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				err := Inst().N.Systemctl(*nodeSelected, "portworx.service", node.SystemctlOpts{
+					Action: "restart",
+					ConnectionOpts: node.ConnectionOpts{
+						Timeout:         5 * time.Minute,
+						TimeBeforeRetry: defaultRetryInterval,
+					}})
+				log.FailOnError(err, "failed to restart portworx on node [%v]", nodeSelected.Name)
+				log.Infof("restarting portworx is done")
+			})
+		}
+
+		stepLog = fmt.Sprintf("Wait for driver to up")
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().V.WaitDriverUpOnNode(*nodeSelected, Inst().DriverStartTimeout)
+			log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", nodeSelected.Name))
+			log.Info("Driver is up")
+
+		})
+
+		stepLog = fmt.Sprint("Wait for pool to resize")
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			resizeErr := waitForOngoingPoolExpansionToComplete(poolUUIDSelected)
+			dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
+			log.Info(fmt.Sprintf("Pool expansion succeed [%s]", poolUUIDSelected))
+		})
+
+		stepLog = fmt.Sprintf("Verify pool resized [%s]", poolUUIDSelected)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			verifyPoolSizeEqualOrLargerThanExpected(poolUUIDSelected, targetSizeGiB)
+			log.Info("Verify pool resized succeed")
+		})
+
+		stepLog = "Check px status"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			status, err := Inst().V.GetPxctlStatus(*nodeSelected)
+			log.FailOnError(err, fmt.Sprintf("failed to get pxctl status on node [%s]", nodeSelected.Name))
+			dash.VerifyFatal(status == api.Status_STATUS_OK.String(), true, fmt.Sprintf("node [%s] status is up but PX cluster is not ok. Expected: %v Actual: %v",
+				nodeSelected.Name, api.Status_STATUS_OK, status))
+			log.InfoD("px status %v", status)
+		})
+
+		stepLog = fmt.Sprintf("Check if apps are running")
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			ValidateApplications(contexts)
+			log.Info("validate application succeed")
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		appsValidateAndDestroy(contexts)
+		AfterEachTest(contexts)
 	})
 }
