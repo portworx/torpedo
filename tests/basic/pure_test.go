@@ -9095,10 +9095,9 @@ var _ = Describe("{CreatePodsUsingClonewithMT}", func() {
 				defer wg.Done()
 				defer GinkgoRecover()
 				for i := 0; i < 64; i++ {
-					snapName := fmt.Sprintf("snap-%v", i)
+					snapName := fmt.Sprintf("snap-pxcsi-%v", i)
 					_, err := Inst().S.CreateCsiSnapshot(snapName, nsNormal, snapShotClassName, pvc.Name)
 					log.FailOnError(err, fmt.Sprintf("Failed to create snapshot [%v] ", snapName))
-
 				}
 			}()
 			wg.Wait()
@@ -10275,18 +10274,19 @@ func getClusterOptions(selectedNode node.Node) (map[string]interface{}, error) {
 	return clusterOptions, nil
 }
 
-var _ = Describe("{ValidatePXcsiClusterOptionList}", func() {
+var _ = Describe("{ValidatePXcsiClusterOptionsAndLicenseList}", func() {
 	/*
-	   https://purestorage.atlassian.net/browse/PTX-28154
-	   1. Get the list of cluster options for the PX-CSI cluster
-	   2. Fail The Testcase if there are any additional options other than the expected for PX-CSI
-	   3. Update Each option and check if it is getting updated
-	   4. Revert to the original option again and check if it is updated back
+	              https://purestorage.atlassian.net/browse/PTX-28154
+	              1. Get the list of cluster options for the PX-CSI cluster
+	              2. Fail The Testcase if there are any additional options other than the expected for PX-CSI
+	              3. Update Each option and check if it is getting updated
+	              4. Revert to the original option again and check if it is updated back
+	   	   5. Get the license list for the PX-CSI cluster
 	*/
 	JustBeforeEach(func() {
-		StartTorpedoTest("ValidatePXcsiClusterOptionList", "Validate PXcsi Cluster Option List", nil, 0)
+		StartTorpedoTest("ValidatePXcsiClusterOptionsAndLicenseList", "Validate PXcsi Cluster Options and License list", nil, 0)
 	})
-	itLog := "ValidatePXcsiClusterOptionList"
+	itLog := "ValidatePXcsiClusterOptionsAndLicenseList"
 	It(itLog, func() {
 		log.InfoD(itLog)
 		//Below are the cluster options defined for PX-CSI
@@ -10423,5 +10423,54 @@ var _ = Describe("{ValidatePXcsiClusterOptionList}", func() {
 				}
 			}
 		})
+		stepLog = "Validate the pxctl license list"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			cmd := fmt.Sprintf("pxctl license list")
+			output, err := runCmd(cmd, selectedNode)
+			log.FailOnError(err, "failed to get license list")
+			log.InfoD("License list: %v", output)
+			licenseMap := map[string]interface{}{
+				"Number of nodes maximum":                     "1000",
+				"Number of attached volumes per node maximum": "128",
+				"Bare-metal hosts":                            "yes",
+				"Virtual machine hosts":                       "yes",
+				"Number of Pure volumes per cluster maximum":  "100000",
+				"Product SKU":                                 "Portworx CSI for FA/FB",
+			}
+			licenseOutputMap := make(map[string]interface{})
+			lines := strings.Split(output, "\n")
+			for _, line := range lines {
+				// Adjusted regex for parsing lines with more flexible spacing
+				re := regexp.MustCompile(`^(.*?)(\s{2,})(.+?)(?:\s{2,}|\t)(.*)$`)
+				matches := re.FindStringSubmatch(line)
+				if len(matches) > 3 {
+					description := strings.TrimSpace(matches[1])
+					enablement := strings.TrimSpace(matches[3])
+					// Special handling for "Product SKU"
+					if description == "Product SKU" {
+						enablementParts := strings.Split(matches[3], "lease renewal")
+						if len(enablementParts) > 0 {
+							enablement = strings.TrimSpace(enablementParts[0])
+						}
+					}
+					licenseOutputMap[description] = enablement
+				}
+			}
+			for key, value := range licenseMap {
+				if parsedValue, exists := licenseOutputMap[key]; exists {
+					if parsedValue == value {
+						log.InfoD("Match: %s: %s\n", key, value)
+					} else {
+						log.Errorf("Mismatch: %s: expected %s, got %s\n", key, value, parsedValue)
+					}
+				} else {
+					log.Errorf("Key not found: %s\n", key)
+				}
+			}
+		})
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
 	})
 })
