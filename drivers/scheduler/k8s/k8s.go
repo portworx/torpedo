@@ -228,8 +228,10 @@ const (
 
 var (
 	// use underscore to avoid conflicts to text/template from golang
-	namespaceRegex      = regexp.MustCompile("_NAMESPACE_")
-	defaultTorpedoLabel = map[string]string{
+	namespacePlaceholder         = "_NAMESPACE_"
+	namespacePlaceholderRegex    = regexp.MustCompile(namespacePlaceholder)
+	namespacePlaceholderInBase64 = base64.StdEncoding.EncodeToString([]byte(namespacePlaceholder))
+	defaultTorpedoLabel          = map[string]string{
 		"creator": "torpedo",
 	}
 	k8sCore                  = core.Instance()
@@ -674,7 +676,38 @@ func isValidProvider(specPath, storageProvisioner string) bool {
 	return true
 }
 
+func processSpec(data []byte) ([]byte, error) {
+	var yamlObj map[string]interface{}
+	if err := yaml.Unmarshal(data, &yamlObj); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal YAML. Err: [%w]", err)
+	}
+	if kind, ok := yamlObj["kind"].(string); ok {
+		switch kind {
+		case "Secret":
+			if data, ok := yamlObj["data"].(map[string]interface{}); ok {
+				for key, value := range data {
+					// Here we check if the value contains the namespace placeholder,
+					// and replace it with its base64-encoded equivalent, as Secret data must be base64-encoded
+					// and cannot contain plain text values
+					if strValue, ok := value.(string); ok && strValue == namespacePlaceholder {
+						data[key] = namespacePlaceholderInBase64
+					}
+				}
+			}
+		}
+	}
+	data, err := yaml2.Marshal(yamlObj)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal YAML. Err: [%w]", err)
+	}
+	return data, nil
+}
+
 func decodeSpec(specContents []byte) (runtime.Object, error) {
+	specContents, err := processSpec(specContents)
+	if err != nil {
+		return nil, err
+	}
 	obj, _, err := scheme.Codecs.UniversalDeserializer().Decode([]byte(specContents), nil, nil)
 	if err != nil {
 		schemeObj := runtime.NewScheme()
@@ -2214,16 +2247,22 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 	return nil, nil
 }
 
+func (k *K8s) substituteNamespaceInSecret(secret *corev1.Secret, ns string) {
+	for k, v := range secret.Data {
+		secret.Data[k] = []byte(namespacePlaceholderRegex.ReplaceAllString(string(v), ns))
+	}
+}
+
 func (k *K8s) substituteNamespaceInPVC(pvc *corev1.PersistentVolumeClaim, ns string) {
-	pvc.Name = namespaceRegex.ReplaceAllString(pvc.Name, ns)
+	pvc.Name = namespacePlaceholderRegex.ReplaceAllString(pvc.Name, ns)
 	for k, v := range pvc.Annotations {
-		pvc.Annotations[k] = namespaceRegex.ReplaceAllString(v, ns)
+		pvc.Annotations[k] = namespacePlaceholderRegex.ReplaceAllString(v, ns)
 	}
 }
 
 func (k *K8s) substituteNamespaceInStorageClass(sc *storageapi.StorageClass, ns string) {
 	for k, v := range sc.Parameters {
-		sc.Parameters[k] = namespaceRegex.ReplaceAllString(v, ns)
+		sc.Parameters[k] = namespacePlaceholderRegex.ReplaceAllString(v, ns)
 	}
 }
 
@@ -2627,6 +2666,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 
 	} else if obj, ok := spec.(*corev1.Secret); ok {
 		obj.Namespace = ns.Name
+		k.substituteNamespaceInSecret(obj, ns.Name)
 		if k.SecretType == scheduler.SecretVault {
 			if err := k.createVaultSecret(obj); err != nil {
 				return nil, err
@@ -2965,7 +3005,7 @@ func (k *K8s) substituteNamespaceInContainers(containers []corev1.Container, ns 
 	for _, container := range containers {
 		var temp []string
 		for _, arg := range container.Args {
-			temp = append(temp, namespaceRegex.ReplaceAllString(arg, ns))
+			temp = append(temp, namespacePlaceholderRegex.ReplaceAllString(arg, ns))
 		}
 		container.Args = temp
 		updatedContainers = append(updatedContainers, container)
@@ -2977,7 +3017,7 @@ func (k *K8s) substituteNamespaceInVolumes(volumes []corev1.Volume, ns string) [
 	var updatedVolumes []corev1.Volume
 	for _, vol := range volumes {
 		if vol.VolumeSource.PersistentVolumeClaim != nil {
-			claimName := namespaceRegex.ReplaceAllString(vol.VolumeSource.PersistentVolumeClaim.ClaimName, ns)
+			claimName := namespacePlaceholderRegex.ReplaceAllString(vol.VolumeSource.PersistentVolumeClaim.ClaimName, ns)
 			vol.VolumeSource.PersistentVolumeClaim.ClaimName = claimName
 		}
 		updatedVolumes = append(updatedVolumes, vol)
@@ -4353,6 +4393,22 @@ func getPVCStorageClassName(pvc *corev1.PersistentVolumeClaim) string {
 }
 
 func (k *K8s) appendVolForPVC(vols []*volume.Volume, pvc *v1.PersistentVolumeClaim) ([]*volume.Volume, error) {
+	var err error
+	validatePVC := func() (interface{}, bool, error) {
+		pvc, err = k8sCore.GetPersistentVolumeClaim(pvc.Name, pvc.Namespace)
+		if err != nil {
+			return nil, false, err
+		}
+		if pvc.Spec.VolumeName == "" {
+			return nil, true, fmt.Errorf("the PVC [%v/%v] has an empty volume name and status is [%v]", pvc.Namespace, pvc.Name, pvc.Status.Phase)
+		}
+		return nil, false, nil
+	}
+	_, err = task.DoRetryWithTimeout(validatePVC, 5*time.Minute, 30*time.Second)
+	if err != nil {
+		return nil, err
+	}
+
 	shouldAdd, err := k.filterPureVolumesIfEnabled(pvc)
 	if err != nil {
 		return nil, err
@@ -4362,41 +4418,40 @@ func (k *K8s) appendVolForPVC(vols []*volume.Volume, pvc *v1.PersistentVolumeCla
 	}
 
 	labels := pvc.Labels
+	volumeName := pvc.Spec.VolumeName
 
-	if pvc.Spec.VolumeName != "" {
-		log.Debugf("pvc spec volume name [%s]", pvc.Spec.VolumeName)
+	log.Debugf("pvc spec volume name [%s]", volumeName)
+	// If this is a Pure volume, run some extra checks to get more information.
+	// Store them as labels as they are not applicable to all volume types.
+	driver, err := volume.Get(k.VolDriverName)
+	if err != nil {
+		log.Errorf("error getting volume driver name")
+		return nil, err
+	}
+
+	inspectedVol, err := driver.InspectVolume(volumeName)
+	if err != nil {
+		log.Warnf("error inspecting volume [%s],err: %v", volumeName, err)
+		if _, ok := err.(*errors.ErrNotSupported); !ok {
+			return nil, fmt.Errorf("failed to inspect volume %s: %v", pvc.Name, err)
+		}
+		// If the driver doesn't support InspectVolume, then it's definitely not a Pure volume. Do nothing special
+	} else {
+		log.Debugf("inspected volume [%s] to add labels", inspectedVol.Id)
 		// If this is a Pure volume, run some extra checks to get more information.
 		// Store them as labels as they are not applicable to all volume types.
-		driver, err := volume.Get(k.VolDriverName)
-		if err != nil {
-			log.Errorf("error getting volume driver name")
-			return nil, err
+		if labels == nil {
+			labels = make(map[string]string)
 		}
-
-		inspectedVol, err := driver.InspectVolume(pvc.Spec.VolumeName)
-		if err != nil {
-			log.Warnf("error inspecting volume [%s],err: %v", pvc.Spec.VolumeName, err)
-			if _, ok := err.(*errors.ErrNotSupported); !ok {
-				return nil, fmt.Errorf("failed to inspect volume %s: %v", pvc.Name, err)
-			}
-			// If the driver doesn't support InspectVolume, then it's definitely not a Pure volume. Do nothing special
-		} else {
-			log.Debugf("inspected volume [%s] to add labels", inspectedVol.Id)
-			// If this is a Pure volume, run some extra checks to get more information.
-			// Store them as labels as they are not applicable to all volume types.
-			if labels == nil {
-				labels = make(map[string]string)
-			}
-			if inspectedVol.Spec.IsPureVolume() {
-				switch inspectedVol.Spec.ProxySpec.ProxyProtocol {
-				case osapi.ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK:
-					labels[PureDAVolumeLabel] = PureDAVolumeLabelValueFA
-					labels[FADAVolumeSerialLabel] = inspectedVol.Spec.ProxySpec.PureBlockSpec.SerialNum
-				case osapi.ProxyProtocol_PROXY_PROTOCOL_PURE_FILE:
-					labels[PureDAVolumeLabel] = PureDAVolumeLabelValueFB
-				default:
-					return nil, fmt.Errorf("unknown proxy type %v for Pure volume", inspectedVol.Spec.ProxySpec.ProxyProtocol)
-				}
+		if inspectedVol.Spec.IsPureVolume() {
+			switch inspectedVol.Spec.ProxySpec.ProxyProtocol {
+			case osapi.ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK:
+				labels[PureDAVolumeLabel] = PureDAVolumeLabelValueFA
+				labels[FADAVolumeSerialLabel] = inspectedVol.Spec.ProxySpec.PureBlockSpec.SerialNum
+			case osapi.ProxyProtocol_PROXY_PROTOCOL_PURE_FILE:
+				labels[PureDAVolumeLabel] = PureDAVolumeLabelValueFB
+			default:
+				return nil, fmt.Errorf("unknown proxy type %v for Pure volume", inspectedVol.Spec.ProxySpec.ProxyProtocol)
 			}
 		}
 	}
@@ -4405,9 +4460,9 @@ func (k *K8s) appendVolForPVC(vols []*volume.Volume, pvc *v1.PersistentVolumeCla
 	pvcSize, _ := pvcSizeObj.AsInt64()
 	isRaw := pvc.Spec.VolumeMode != nil && *pvc.Spec.VolumeMode == corev1.PersistentVolumeBlock
 	vol := &volume.Volume{
-		ID:               pvc.Spec.VolumeName,
+		ID:               volumeName,
 		Name:             pvc.Name,
-		VolumeName:       pvc.Spec.VolumeName,
+		VolumeName:       volumeName,
 		Namespace:        pvc.Namespace,
 		Shared:           k.isPVCShared(pvc),
 		Annotations:      pvc.Annotations,
