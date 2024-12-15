@@ -708,7 +708,7 @@ var _ = Describe("{FaFbPodEvictionTest}", Label("p1", "positive", "VolumeSnapsho
 			defer func() {
 				Inst().AppList = appList
 			}()
-			appNs, contexts := initialSetupApps(taskNamePrefix, true)
+			appNs, contexts := initialSetupApps(taskNamePrefix, true, false)
 			pods, err := core.Instance().GetPods(appNs[0], nil)
 			log.FailOnError(err, fmt.Sprintf("Failed to get pods in [%v] namespace", appNs[0]))
 			for _, pod := range pods.Items {
@@ -1169,7 +1169,7 @@ var _ = Describe("{AutoVolumeSnapshot}", Label("p1", "positive", "VolumeSnapshot
 				retain         storkapi.Retain = 2
 				scpolName                      = "auto-schedule-policy"
 			)
-			snapNs, _ := initialSetupApps(taskNamePrefix, true)
+			snapNs, _ := initialSetupApps(taskNamePrefix, true, false)
 			_, err := asyncdr.CreateSchedulePolicyWithRetain(scpolName, snapInterval, retain)
 			log.FailOnError(err, "Failed to create schedule policy")
 			pvcs, err := GetPVCListForNamespace(snapNs[0])
@@ -1230,7 +1230,7 @@ var _ = Describe("{AutoVolumeSnapshotCloud}", Label("p1", "positive", "VolumeSna
 				retain         storkapi.Retain = 2
 				scpolName                      = "auto-schedule-policy"
 			)
-			snapNs, _ := initialSetupApps(taskNamePrefix, true)
+			snapNs, _ := initialSetupApps(taskNamePrefix, true, false)
 			_, err := asyncdr.CreateSchedulePolicyWithRetain(scpolName, snapInterval, retain)
 			log.FailOnError(err, "Failed to create schedule policy")
 			pvcs, err := GetPVCListForNamespace(snapNs[0])
