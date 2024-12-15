@@ -970,6 +970,128 @@ var _ = Describe("{UpgradeVolumeDriverDuringAsyncDrMigration}", Label("p2", "pos
 	})
 })
 
+var _ = Describe("{AutoVolumeSnapshot}", Label("p1", "positive", "VolumeSnapshot"), func() {
+	testrailID = 302510
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/302510
+	BeforeEach(func() {
+		if !kubeConfigWritten {
+			// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+			WriteKubeconfigToFiles()
+			kubeConfigWritten = true
+		}
+		wantAllAfterSuiteActions = false
+	})
+	JustBeforeEach(func() {
+		StartTorpedoTest("AutoVolumeSnaphpt", "AutoVolumeSnapshot test", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	It("has to deploy app, see if volumesnapshot started automatically", func() {
+		appList := Inst().AppList
+		stc, err := Inst().V.GetDriver()
+		log.FailOnError(err, "Failed to get storage cluster")
+		if stc.Spec.Security != nil && stc.Spec.Security.Enabled {
+			log.InfoD("Security is enabled, changing the app to use auth app")
+			Inst().AppList = []string{"auto-localsnap-auth"}
+		}
+		defer func() {
+			Inst().AppList = appList
+		}()
+		Step("has to deploy app, see if volumesnapshot started automatically", func() {
+			log.Infof("AppList is %v", Inst().AppList)
+			var (
+				taskNamePrefix                 = "auto-volumesnapshot"
+				snapInterval                   = 2
+				retain         storkapi.Retain = 2
+				scpolName                      = "auto-schedule-policy"
+			)
+			snapNs, _ := initialSetupApps(taskNamePrefix, true)
+			_, err := asyncdr.CreateSchedulePolicyWithRetain(scpolName, snapInterval, retain)
+			log.FailOnError(err, "Failed to create schedule policy")
+			pvcs, err := GetPVCListForNamespace(snapNs[0])
+			log.FailOnError(err, "Failed to get PVC list")
+			for _, pvcName := range pvcs {
+				scheduleName := string(pvcName) + "-test-schedule"
+				log.InfoD("SnapSchedule is %v", scheduleName)
+				err := asyncdr.ValidateSnapshotScheduleRetainCount(scheduleName, snapNs[0], snapInterval, retain)
+				log.FailOnError(err, "Failed to validate snapshot schedule")
+			}
+			for _, ctx := range contexts {
+				TearDownContext(ctx, nil)
+			}
+			err = asyncdr.WaitForNamespaceDeletion(snapNs)
+			if err != nil {
+				log.Errorf("Failed to delete namespaces: %v", err)
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{AutoVolumeSnapshotCloud}", Label("p1", "positive", "VolumeSnapshot"), func() {
+	testrailID = 302510
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/302510
+	BeforeEach(func() {
+		if !kubeConfigWritten {
+			// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+			WriteKubeconfigToFiles()
+			kubeConfigWritten = true
+		}
+		wantAllAfterSuiteActions = false
+	})
+	JustBeforeEach(func() {
+		StartTorpedoTest("AutoVolumeSnaphptCloud", "AutoVolumeSnapshotCloud test", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	It("has to deploy app, see if volumesnapshot started automatically", func() {
+		appList := Inst().AppList
+		stc, err := Inst().V.GetDriver()
+		log.FailOnError(err, "Failed to get storage cluster")
+		if stc.Spec.Security != nil && stc.Spec.Security.Enabled {
+			log.InfoD("Security is enabled, changing the app to use auth app")
+			Inst().AppList = []string{"auto-cloudsnap-auth"}
+		}
+		defer func() {
+			Inst().AppList = appList
+		}()
+		Step("has to deploy app, see if volumesnapshot started automatically", func() {
+			log.Infof("AppList is %v", Inst().AppList)
+			var (
+				taskNamePrefix                 = "auto-volumesnapshot"
+				snapInterval                   = 2
+				retain         storkapi.Retain = 2
+				scpolName                      = "auto-schedule-policy"
+			)
+			snapNs, _ := initialSetupApps(taskNamePrefix, true)
+			_, err := asyncdr.CreateSchedulePolicyWithRetain(scpolName, snapInterval, retain)
+			log.FailOnError(err, "Failed to create schedule policy")
+			pvcs, err := GetPVCListForNamespace(snapNs[0])
+			log.FailOnError(err, "Failed to get PVC list")
+			for _, pvcName := range pvcs {
+				scheduleName := string(pvcName) + "-test-schedule"
+				log.InfoD("SnapSchedule is %v", scheduleName)
+				err := asyncdr.ValidateSnapshotScheduleRetainCount(scheduleName, snapNs[0], snapInterval, retain)
+				log.FailOnError(err, "Failed to validate snapshot schedule")
+			}
+			for _, ctx := range contexts {
+				TearDownContext(ctx, nil)
+			}
+			err = asyncdr.WaitForNamespaceDeletion(snapNs)
+			if err != nil {
+				log.Errorf("Failed to delete namespaces: %v", err)
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
 func upgradePX(upgradeHop string, storageNodes []node.Node) (string, string, int) {
 	var timeBeforeUpgrade time.Time
 	var timeAfterUpgrade time.Time

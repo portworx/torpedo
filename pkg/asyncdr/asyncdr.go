@@ -10,18 +10,18 @@ import (
 	"time"
 
 	crdv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
-	oputils "github.com/pure-px/px-operator/drivers/storage/portworx/util"
-	opcorev1 "github.com/pure-px/px-operator/pkg/apis/core/v1"
-	storkdriver "github.com/pure-px/stork/drivers/volume"
-	storkapi "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
-	"github.com/pure-px/stork/pkg/k8sutils"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/pure-px/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/k8s/storage"
-	storkops "github.com/pure-px/stork/pkg/crud/stork"
 	"github.com/portworx/sched-ops/task"
+	oputils "github.com/pure-px/px-operator/drivers/storage/portworx/util"
+	opcorev1 "github.com/pure-px/px-operator/pkg/apis/core/v1"
+	"github.com/pure-px/sched-ops/k8s/operator"
+	storkdriver "github.com/pure-px/stork/drivers/volume"
+	storkapi "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
+	storkops "github.com/pure-px/stork/pkg/crud/stork"
+	"github.com/pure-px/stork/pkg/k8sutils"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	storageapi "k8s.io/api/storage/v1"
@@ -332,6 +332,23 @@ func CreateSchedulePolicyWithRetain(policyName string, interval int, retain stor
 		log.Infof("schedPolicy %v already exists", schedPolicy.Name)
 	}
 	return schedPolicy, err
+}
+
+func ValidateSnapshotScheduleRetainCount(snapScheduleName, snapScheduleNs string, snapInterval int, retain storkapi.Retain) error {
+	err := WaitForRetainSnapshotsSuccessful(snapScheduleName, snapScheduleNs, int(retain), snapInterval)
+	if err != nil {
+		return fmt.Errorf("Error waiting for retain snapshots: %v", err)
+	}
+	time.Sleep(10 * time.Second)
+	schedule, err := storkops.Instance().GetSnapshotSchedule(snapScheduleName, snapScheduleNs)
+	if err != nil {
+		return fmt.Errorf("Failed to get snapshot schedule [%v/%v], Error: %v", snapScheduleName, snapScheduleNs, err)
+	}
+	scheduleCount := len(schedule.Status.Items["Interval"])
+	if scheduleCount != int(retain) {
+		return fmt.Errorf("Error matching snapshot count, actual %v, expected %v", scheduleCount, int(retain))
+	}
+	return nil
 }
 
 func ValidateSnapshotScheduleCount(pvcs []string, schedNs, schedPol, snapshotType string, snapInterval int, retain storkapi.Retain) error {
