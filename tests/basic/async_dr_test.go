@@ -311,7 +311,35 @@ var _ = Describe("{StorkctlPerformFailoverFailbackDefaultAsyncSingle}", Label("p
 
 	It("has to deploy app, create cluster pair, migrate app and do failover/failback", func() {
 		Step("Deploy app, Create cluster pair, Migrate app and Do failover/failback", func() {
-			validateFailoverFailback("asyncdr", "asyncdr-failover-failback", true, false, false, false)
+			validateFailoverFailback("asyncdr", "asyncdr-failover-failback", true, false, false, false, false)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{StorkctlPerformFailoverFailbackDefaultAsyncJob}", Label("p0", "positive", "AsyncDR"), func() {
+	testrailID = 302499
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/302499
+	// run this test only with k8s job resource spec
+	BeforeEach(func() {
+		if !kubeConfigWritten {
+			// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+			WriteKubeconfigToFiles()
+			kubeConfigWritten = true
+		}
+		wantAllAfterSuiteActions = false
+	})
+	JustBeforeEach(func() {
+		StartTorpedoTest("StorkctlPerformFailoverFailbackDefaultAsyncJob", "Failover and Failback using storkctl on async cluster for a job resource", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	It("has to deploy app, create cluster pair, migrate app and do failover/failback", func() {
+		Step("Deploy app, Create cluster pair, Migrate app and Do failover/failback", func() {
+			validateFailoverFailback("asyncdr", "asyncdr-failover-failback", true, false, false, false, true)
 		})
 	})
 	JustAfterEach(func() {
@@ -338,7 +366,7 @@ var _ = Describe("{StorkctlPerformFailoverFailbackDefaultAsyncSkipSourceOperatio
 
 	It("has to deploy app, create cluster pair, migrate app and do failover/failback", func() {
 		Step("Deploy app, Create cluster pair, Migrate app and Do failover/failback", func() {
-			validateFailoverFailback("asyncdr", "asyncdr-failover-failback", false, true, false, false)
+			validateFailoverFailback("asyncdr", "asyncdr-failover-failback", false, true, false, false, false)
 		})
 	})
 	JustAfterEach(func() {
@@ -365,7 +393,7 @@ var _ = Describe("{StorkctlPerformFailoverFailbackDefaultAsyncIncludeNs}", Label
 
 	It("has to deploy app, create cluster pair, migrate app and do failover/failback", func() {
 		Step("Deploy app, Create cluster pair, Migrate app and Do failover/failback", func() {
-			validateFailoverFailback("asyncdr", "asyncdr-failover-failback", false, false, true, false)
+			validateFailoverFailback("asyncdr", "asyncdr-failover-failback", false, false, true, false, false)
 		})
 	})
 	JustAfterEach(func() {
@@ -392,7 +420,7 @@ var _ = Describe("{StorkctlPerformFailoverFailbackDefaultAsyncExcludeNs}", Label
 
 	It("has to deploy app, create cluster pair, migrate app and do failover/failback", func() {
 		Step("Deploy app, Create cluster pair, Migrate app and Do failover/failback", func() {
-			validateFailoverFailback("asyncdr", "asyncdr-failover-failback", false, false, false, true)
+			validateFailoverFailback("asyncdr", "asyncdr-failover-failback", false, false, false, true, false)
 		})
 	})
 	JustAfterEach(func() {
@@ -419,7 +447,7 @@ var _ = Describe("{StorkctlPerformFailoverFailbackDefaultAsyncMultiple}", Label(
 
 	It("has to deploy app, create cluster pair, migrate app and do failover/failback", func() {
 		Step("Deploy app, Create cluster pair, Migrate app and Do failover/failback", func() {
-			validateFailoverFailback("asyncdr", "asyncdr-failover-failback", false, false, false, false)
+			validateFailoverFailback("asyncdr", "asyncdr-failover-failback", false, false, false, false, false)
 		})
 	})
 	JustAfterEach(func() {
@@ -450,7 +478,7 @@ var _ = Describe("{StorkctlPerformFailoverFailbackDefaultMetroSingle}", Label("p
 
 	It("has to deploy app, create cluster pair, migrate app and do failover/failback", func() {
 		Step("Deploy app, Create cluster pair, Migrate app and Do failover/failback", func() {
-			validateFailoverFailback("metrodr", "metrodr-failover-failback", true, false, false, false)
+			validateFailoverFailback("metrodr", "metrodr-failover-failback", true, false, false, false, false)
 		})
 	})
 	JustAfterEach(func() {
@@ -481,7 +509,7 @@ var _ = Describe("{StorkctlPerformFailoverFailbackDefaultMetroMultiple}", Label(
 
 	It("has to deploy app, create cluster pair, migrate app and do failover/failback", func() {
 		Step("Deploy app, Create cluster pair, Migrate app and Do failover/failback", func() {
-			validateFailoverFailback("metrodr", "metrodr-failover-failback", false, false, false, false)
+			validateFailoverFailback("metrodr", "metrodr-failover-failback", false, false, false, false, false)
 		})
 	})
 	JustAfterEach(func() {
@@ -820,7 +848,7 @@ var _ = Describe("{UpgradeVolumeDriverDuringAppBkpRestore}", Label("p2", "positi
 			defaultNs          = "kube-system"
 			timeout            = 10 * time.Minute
 		)
-		bkpNs, contexts := initialSetupApps(taskNamePrefix, true)
+		bkpNs, contexts := initialSetupApps(taskNamePrefix, true, false)
 		storageNodes := node.GetStorageNodes()
 
 		// AddDrive is added to test to Vsphere Cloud drive upgrades when kvdb-device is part of storage in non-kvdb nodes
@@ -941,7 +969,7 @@ var _ = Describe("{UpgradeVolumeDriverDuringAsyncDrMigration}", Label("p2", "pos
 
 		taskNamePrefix := "asyncdr-upgradepx"
 		defaultNs := "kube-system"
-		migrationNamespaces, contexts := initialSetupApps(taskNamePrefix, false)
+		migrationNamespaces, contexts := initialSetupApps(taskNamePrefix, false, false)
 		migNamespaces := strings.Join(migrationNamespaces, ",")
 		kubeConfigPath := map[int]string{}
 		for _, cluster := range []int{asyncdr.FirstCluster, asyncdr.SecondCluster} {
@@ -1258,12 +1286,12 @@ func upgradePX(upgradeHop string, storageNodes []node.Node) (string, string, int
 	return upgradeStatus, updatedPXVersion, durationInMins
 }
 
-func validateFailoverFailback(clusterType, taskNamePrefix string, single, skipSourceOp, includeNs, excludeNs bool) {
+func validateFailoverFailback(clusterType, taskNamePrefix string, single, skipSourceOp, includeNs, excludeNs bool, volumeSkip bool) {
 	isNfs := os.Getenv("IS_STORK_NFS_LOCATION") == "true"
 	log.Infof(" User has opted for IS_STORK_NFS_LOCATION to  %s ", os.Getenv("IS_STORK_NFS_LOCATION"))
 
 	defaultNs := "kube-system"
-	migrationNamespaces, contexts := initialSetupApps(taskNamePrefix, single)
+	migrationNamespaces, contexts := initialSetupApps(taskNamePrefix, single, volumeSkip)
 	migNamespaces := strings.Join(migrationNamespaces, ",")
 	kubeConfigPathSrc, err := GetCustomClusterConfigPath(asyncdr.FirstCluster)
 	log.FailOnError(err, "Failed to get source configPath: %v", err)
@@ -1274,10 +1302,10 @@ func validateFailoverFailback(clusterType, taskNamePrefix string, single, skipSo
 		migNamespaces = defaultNs
 	}
 	extraArgs := map[string]string{
-		"namespaces": migNamespaces,
-		"kubeconfig": kubeConfigPathSrc,
+		"namespaces":   migNamespaces,
+		"kubeconfig":   kubeConfigPathSrc,
+		"include-jobs": "",
 	}
-
 	stc, err := Inst().V.GetDriver()
 	log.FailOnError(err, "Failed to get driver")
 
@@ -1372,8 +1400,8 @@ func validateFailoverFailback(clusterType, taskNamePrefix string, single, skipSo
 		contexts:                  contexts,
 	}
 	performFailoverFailback(failoverParam)
+	time.Sleep(1 * time.Minute)
 	if clusterType != "asyncdr" {
-		time.Sleep(1 * time.Minute)
 		validateDomains("failover", kubeConfigPathDest)
 	}
 	if skipSourceOp {
@@ -1545,7 +1573,7 @@ func DeleteAndWaitForMigrationDeletion(name, namespace string) error {
 	return err
 }
 
-func initialSetupApps(taskNamePrefix string, single bool) ([]string, []*scheduler.Context) {
+func initialSetupApps(taskNamePrefix string, single bool, volumeSkip bool) ([]string, []*scheduler.Context) {
 	var contexts []*scheduler.Context
 	var migrationNamespaces []string
 
@@ -1569,6 +1597,11 @@ func initialSetupApps(taskNamePrefix string, single bool) ([]string, []*schedule
 		migrationNamespaces = append(migrationNamespaces, namespace)
 	}
 	log.Infof("Migration Namespaces are : [%v]", migrationNamespaces)
+	if volumeSkip {
+		for _, ctx := range contexts {
+			ctx.SkipVolumeValidation = volumeSkip
+		}
+	}
 	ValidateApplications(contexts)
 	return migrationNamespaces, contexts
 }
