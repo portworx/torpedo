@@ -7,10 +7,10 @@ import (
 	"os"
 	"time"
 
-	storkv1 "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
-	"github.com/pure-px/stork/pkg/storkctl"
-	storkops "github.com/pure-px/stork/pkg/crud/stork"
 	"github.com/portworx/sched-ops/task"
+	storkv1 "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
+	storkops "github.com/pure-px/stork/pkg/crud/stork"
+	"github.com/pure-px/stork/pkg/storkctl"
 	"github.com/sirupsen/logrus"
 
 	"github.com/pure-px/torpedo/pkg/aetosutil"
@@ -39,6 +39,20 @@ func ScheduleStorkctlMigrationSched(schedName, clusterPair, namespace string, ex
 	}
 	err := createMigrationScheduleCli(schedName, cmdArgs, extraArgs)
 	return err
+}
+
+func UpdateVolumeSnapshotSchedulePVC(schedName, namespace, newPvcName string) error {
+	factory := storkctl.NewFactory()
+	var outputBuffer bytes.Buffer
+	cmd := storkctl.NewCommand(factory, os.Stdin, &outputBuffer, os.Stderr)
+	cmdArgs := []string{"update", "volumesnapshotschedule", schedName, "--new-pvc-name", newPvcName, "--namespace", namespace}
+	cmd.SetArgs(cmdArgs)
+	// execute the command
+	logrus.Infof("The storkctl command being executed is %v", cmdArgs)
+	if err := cmd.Execute(); err != nil {
+		return fmt.Errorf("failed to update volume snapshot schedule [%v/%v]. Err: [%v]", namespace, schedName, err)
+	}
+	return nil
 }
 
 func createMigrationScheduleCli(schedName string, cmdArgs map[string]string, extraArgs map[string]string) error {

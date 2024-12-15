@@ -653,6 +653,142 @@ var _ = Describe("{StorkctlPerformFailoverFailbackeckEsClusterwide}", Label("p1"
 	})
 })
 
+var _ = Describe("{FaFbPodEvictionTest}", Label("p1", "positive", "VolumeSnapshot"), func() {
+	testrailID = 302503
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/302503
+	BeforeEach(func() {
+		if !kubeConfigWritten {
+			// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+			WriteKubeconfigToFiles()
+			kubeConfigWritten = true
+		}
+		wantAllAfterSuiteActions = false
+	})
+	JustBeforeEach(func() {
+		StartTorpedoTest("FaFbPodEvictionTest", "Fada/Fbda pods should not get evicted when px is down on a node", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	It("has to deploy FADA/FBDA app and make sure pod should not get evicted when PX is offline on the scheduled node", func() {
+		Step("has to deploy FADA/FBDA app and make sure pod should not get evicted when PX is offline on the scheduled node", func() {
+			log.Infof("AppList is %v, it should be FA/FB spec for running this test", Inst().AppList)
+			var (
+				taskNamePrefix = "fafbtest"
+			)
+			appList := Inst().AppList
+			Inst().AppList = []string{"nginx-fa-davol"}
+			defer func() {
+				Inst().AppList = appList
+			}()
+			appNs, contexts := initialSetupApps(taskNamePrefix, true)
+			pods, err := core.Instance().GetPods(appNs[0], nil)
+			log.FailOnError(err, fmt.Sprintf("Failed to get pods in [%v] namespace", appNs[0]))
+			for _, pod := range pods.Items {
+				log.Infof("Pod name: %s, Node name: %s", pod.Name, pod.Spec.NodeName)
+				podNode := pod.Spec.NodeName
+				nodeObj, err := node.GetNodeByName(podNode)
+				log.FailOnError(err, "Failed to get node object")
+				err = Inst().V.StopDriver([]node.Node{nodeObj}, false, nil)
+				log.FailOnError(err, "Failed to stop px on node")
+				log.Infof("Sleeping for 300 seconds to check if pod is evicted")
+				time.Sleep(5 * time.Minute)
+				podObj, err := core.Instance().GetPodByName(pod.Name, pod.Namespace)
+				log.FailOnError(err, "Failed to get pod object")
+				podNodeStop := podObj.Spec.NodeName
+				dash.VerifyFatal(podNodeStop == podNode, true, "Pod should be running on the same node after stopping px")
+				dash.VerifyFatal(podObj.Status.Phase == v1.PodRunning, true, "Pod should be in running state")
+				err = Inst().V.StartDriver(nodeObj)
+				log.FailOnError(err, "Failed to start px on node")
+				err = Inst().V.WaitDriverUpOnNode(nodeObj, Inst().DriverStartTimeout)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Validate volume is driver up on node [%v]", nodeObj.Name))
+				podObj, err = core.Instance().GetPodByName(pod.Name, pod.Namespace)
+				log.FailOnError(err, "Failed to get pod object")
+				podNodeStart := podObj.Spec.NodeName
+				dash.VerifyFatal(podNodeStart == podNode, true, "Pod should be running on the same node after starting px")
+				dash.VerifyFatal(podObj.Status.Phase == v1.PodRunning, true, "Pod should be in running state")
+			}
+			for _, ctx := range contexts {
+				TearDownContext(ctx, nil)
+				ctxNamespace := GetAppNamespace(ctx, "")
+				err = asyncdr.WaitForNamespaceDeletion([]string{ctxNamespace})
+				log.Errorf("Failed to delete namespaces: %v", err)
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{UpdateVolumeSnapshotSchedule}", Label("p1", "positive", "VolumeSnapshot"), func() {
+	testrailID = 302510
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/302510
+	BeforeEach(func() {
+		if !kubeConfigWritten {
+			// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+			WriteKubeconfigToFiles()
+			kubeConfigWritten = true
+		}
+		wantAllAfterSuiteActions = false
+	})
+	JustBeforeEach(func() {
+		StartTorpedoTest("UpdateVolumeSnapshotSchedule", "Update PVC name in VolumeSnapshotSchedule", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	It("has to create a volumesnapshotschedule and update it to use another PVC", func() {
+		Step("has to create a volumesnapshotschedule and update it to use another PVC", func() {
+			log.Infof("AppList is %v, it should be FA/FB spec for running this test", Inst().AppList)
+			var (
+				snapInterval                 = 1
+				retain       storkapi.Retain = 1
+				scpolName                    = "auto-schedule-policy"
+				ns                           = "test-update-pvc"
+				schdName                     = "test-schedule"
+			)
+			_, err := core.Instance().GetNamespace(ns)
+			if err == nil {
+				err = asyncdr.WaitForNamespaceDeletion([]string{ns})
+				if err != nil {
+					log.Infof("Failed to delete namespaces: %v", err)
+				}
+			}
+			_, err = asyncdr.CreateSchedulePolicyWithRetain(scpolName, snapInterval, retain)
+			log.FailOnError(err, "Failed to create schedule policy")
+			for i := 0; i < 2; i++ {
+				err := createPVC(fmt.Sprintf("pvc-%d", i), "px-csi-db", "10Gi", ns)
+				log.FailOnError(err, "Failed to create PVC")
+			}
+			snapSched, err := asyncdr.CreateSnapshotSchedule(ns, "pvc-0", schdName, scpolName, "local")
+			log.FailOnError(err, "Failed to create snapshot schedule")
+			time.Sleep(10 * time.Second)
+			err = asyncdr.WaitForRetainSnapshotsSuccessful(schdName, ns, int(retain), snapInterval)
+			log.FailOnError(err, "Failed to wait for retain snapshots")
+			err = storkctlcli.UpdateVolumeSnapshotSchedulePVC(schdName, ns, "pvc-1")
+			log.FailOnError(err, "Failed to update snapshot schedule")
+			time.Sleep(time.Duration(snapInterval) * time.Minute)
+			snapSched, err = storkops.Instance().GetSnapshotSchedule(schdName, ns)
+			log.FailOnError(err, "Failed to get snapshot schedule")
+			snapSchedPVC := snapSched.Spec.Template.Spec.PersistentVolumeClaimName
+			dash.VerifyFatal(snapSchedPVC == "pvc-1", true, "PVC name in snapshot schedule should be updated")
+			err = asyncdr.WaitForRetainSnapshotsSuccessful(schdName, ns, int(retain), snapInterval)
+			for i := 0; i < 2; i++ {
+				err := core.Instance().DeletePersistentVolumeClaim(fmt.Sprintf("pvc-%d", i), ns)
+				log.FailOnError(err, "Failed to delete PVC")
+			}
+			err = asyncdr.WaitForNamespaceDeletion([]string{ns})
+			if err != nil {
+				log.Errorf("Failed to delete namespaces: %v", err)
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
 var _ = Describe("{UpgradeVolumeDriverDuringAppBkpRestore}", Label("p2", "positive", "AsyncDR", "Upgrade"), func() {
 	BeforeEach(func() {
 		if !kubeConfigWritten {
