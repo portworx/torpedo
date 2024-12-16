@@ -16002,3 +16002,87 @@ func PopulateDataInNamespacePods(namespace string, size int) error {
 	return nil
 }
 
+// enable scheduled FSTrim on supported PX version.
+func EnableScheduledFSTrim(nodes []node.Node, duration int, trimStartTime string) error {
+	var isPXNodeAvailable bool
+	var pxVersionList []string
+	for _, pxNode := range nodes {
+		isPxInstalled, err := Inst().V.IsDriverInstalled(pxNode)
+		if err != nil {
+			log.Debugf("Could not get PX status on %s", pxNode.Name)
+			return err
+		}
+		if isPxInstalled {
+			isPXNodeAvailable = true
+			pxVersion, err := Inst().V.GetDriverVersionOnNode(pxNode)
+			if err != nil {
+				log.Debugf("Unable to get driver version on node [%s]", pxNode.Name)
+				return err
+			}
+
+			log.Infof("PX version %s", pxVersion)
+			pxVersionList = []string{}
+			pxVersionList = strings.Split(pxVersion, ".")
+			log.Infof("PX version %s", pxVersionList)
+			majorVer, err := strconv.Atoi(pxVersionList[0])
+			if err != nil {
+				log.Debugf("Failed to get the major version")
+				return err
+			}
+			minorVer, err := strconv.Atoi(pxVersionList[1])
+			if err != nil {
+				log.Debugf("Failed to get the minor version")
+				return err
+			}
+			if majorVer < 2 || (majorVer == 2 && minorVer < 10) {
+				return fmt.Errorf("scheduled FSTrim cannot be enabled on PX version %s", pxVersion)
+			} else {
+				err = Inst().V.SetClusterOpts(pxNode, map[string]string{
+					"--fstrim-schedule-start":    trimStartTime,
+					"--fstrim-schedule-duration": fmt.Sprintf("%d", duration)})
+				if err != nil {
+					log.Debugf("Failed to enabled scheduled fstrim on the cluster using the node %v", pxNode.Name)
+					return err
+				}
+
+				log.Infof("Waiting for 3 minutes to scheduled fs trim to start")
+				time.Sleep(3 * time.Minute)
+				log.Infof("Scheduled FSTrim enabled on the clusterusing the node %v", pxNode.Name)
+			}
+			break
+		}
+	}
+	if !isPXNodeAvailable {
+		return fmt.Errorf("no px node available for enabling scheduled-fstrim")
+	}
+	return nil
+}
+
+// enable nodiscard on volume
+func EnableNodiscardOnVolume(nodeToRunCmd node.Node, volume *volume.Volume) {
+	cmd := fmt.Sprintf("pxctl volume update --nodiscard on %v", volume.ID)
+	_, err := Inst().N.RunCommand(nodeToRunCmd, cmd, node.ConnectionOpts{
+		Timeout:         5 * time.Minute,
+		TimeBeforeRetry: 10 * time.Second,
+		Sudo:            false,
+	})
+	log.FailOnError(err, "error while running command on the node: %v", nodeToRunCmd.Name)
+	log.Infof("Nodiscard enabled on the volume: %v", volume.ID)
+}
+
+func CheckFSTrimRunningOnNode(selectedNode node.Node, vol *opsapi.Volume, fsTrimTimeout, fsTrimRetryInterval time.Duration) (map[string]opsapi.FilesystemTrim_FilesystemTrimStatus, error) {
+	var fsTrimStatuses map[string]opsapi.FilesystemTrim_FilesystemTrimStatus
+	checkFSTrimRunning := func() (interface{}, bool, error) {
+		var err error
+		fsTrimStatuses, err = Inst().V.GetAutoFsTrimStatus(selectedNode.DataIp)
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to get Fstrim status for node [%v]: %v", selectedNode, err)
+		}
+		if _, exists := fsTrimStatuses[vol.Id]; !exists {
+			return false, true, fmt.Errorf("FSTrim status not available for the volume %v, Retrying", vol.Id)
+		}
+		return fsTrimStatuses, false, nil
+	}
+	_, err := task.DoRetryWithTimeout(checkFSTrimRunning, fsTrimTimeout, fsTrimRetryInterval)
+	return fsTrimStatuses, err
+}

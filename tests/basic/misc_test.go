@@ -2663,3 +2663,144 @@ var _ = Describe("{ValidateKVDBQuorumCheck}", Label("staging", "kvdb_ops", "p1",
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
+
+var _ = Describe("{VerifyFstrimWithFastPathVolumes}", Label("staging", "p0", "negative", "px_vol_ops"), func() {
+	/*
+	   https://purestorage.atlassian.net/browse/HAZEL-1074
+	   1. Enabel scheduled FSTrim on the cluster
+	   2. Verify scheduled FSTrim with fast path volumes
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("VerifyFstrimWithFastPathVolumes", "Enable Fstrim Schedule on FastPath Volumes and verify its running", nil, 0)
+	})
+
+	stepLog := "Enable Fstrim Schedule on FastPath Volumes and verify its running"
+	It(stepLog, func() {
+		var (
+			storageNodes        []node.Node
+			selectedStorageNode node.Node
+			volAttachedNode     node.Node
+			contexts            []*scheduler.Context
+			volumeList          []*opsapi.Volume
+		)
+
+		cleanup := func() {
+			log.Info("Executing cleanup tasks")
+			DestroyApps(contexts, nil)
+			_ = Inst().V.SetClusterOpts(selectedStorageNode, map[string]string{"--fstrim-schedule-start": ""})
+			err = RemoveLabelsAllNodes(k8s.NodeType, true, false)
+			log.FailOnError(err, "error removing label on all nodes")
+		}
+		defer cleanup()
+
+		stepLog = "Add label on the selected storage node and Schedule application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			// Select storage node
+			storageNodes = node.GetStorageNodes()
+			selectedStorageNode = GetRandomNode(storageNodes)
+			log.Infof("The Selected node for Fast path label is %v : ", selectedStorageNode.Name)
+
+			// Add label on the selected node
+			err = Inst().S.AddLabelOnNode(selectedStorageNode, k8s.NodeType, k8s.FastpathNodeType)
+			log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedStorageNode.Name))
+
+			// Deploy application on the selected node
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				taskName := fmt.Sprintf("fastpath-%d", i)
+				appSpec := "fio-fastpath-repl1"
+				provisioner := Inst().Provisioner
+				contexts = append(contexts, ScheduleApplicationsWithScheduleOptions(taskName, appSpec, provisioner)...)
+			}
+		})
+
+		ValidateApplications(contexts)
+
+		stepLog = "Get app volumes and Check fast path is active on the node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				stepLog = fmt.Sprintf("get volumes for %s app", ctx.App.Key)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					appVolumes, err := Inst().S.GetVolumes(ctx)
+					log.FailOnError(err, "Failed to get volumes for app %s", ctx.App.Key)
+					dash.VerifyFatal(len(appVolumes) > 0, true, "App volumes exist?")
+					log.Infof("App volumes details: %v ", appVolumes)
+
+					// Loop through the apps and check if the volumes are fastpath active before reboot
+					for _, appvolume := range appVolumes {
+						log.Infof("current volume : %v", appvolume.Name)
+						if strings.Contains(ctx.App.Key, fastpathAppName) {
+							err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
+							log.FailOnError(err, "fastpath volume validation failed for the volume %v", appvolume.Name)
+						}
+					}
+				})
+			}
+		})
+
+		stepLog = fmt.Sprintf("Enabel nodiscard and scheduled fstrim on fast path volumes")
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			stepLog = fmt.Sprintf("Enabel nodiscard on fast path volumes")
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, ctx := range contexts {
+					appVolumes, err := Inst().S.GetVolumes(ctx)
+					log.FailOnError(err, "Failed to get volumes for app %s", ctx.App.Key)
+
+					for _, appvolume := range appVolumes {
+						apivol, err := Inst().V.InspectVolume(appvolume.ID)
+						log.FailOnError(err, "Failed to inspect the volume: %v", appvolume.ID)
+						volumeList = append(volumeList, apivol)
+
+						attachedNode := apivol.AttachedOn
+						volAttachedNode, err = node.GetNodeByIP(attachedNode)
+						log.FailOnError(err, "Failed to get the node details by IP: %v", attachedNode)
+						log.Infof("FastPath volume attached on the node: %v", volAttachedNode.Name)
+
+						EnableNodiscardOnVolume(volAttachedNode, appvolume)
+					}
+				}
+			})
+
+			stepLog = fmt.Sprintf("Enabel scheduled fs trim for fast path volumes")
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				// Daily: daily=HH:MM, Weekly: weekly=day@hh:mm
+				log.Infof("Enable scheduled fs trim on the cluster")
+				formattedTime := time.Now().UTC().Add(1 * time.Minute).Format("15:04")
+				scheduleStartTime := fmt.Sprintf("daily=%s", formattedTime)
+				err := EnableScheduledFSTrim(storageNodes, 10, scheduleStartTime)
+				log.FailOnError(err, "failed to enable scheduled fs trim")
+			})
+		})
+
+		stepLog = fmt.Sprintf("verify FSTrim on fast path valume is running")
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			for _, vol := range volumeList {
+				attachedNode := vol.AttachedOn
+				volAttachedNode, err = node.GetNodeByIP(attachedNode)
+				log.FailOnError(err, "Failed to get the node details by IP: %v", attachedNode)
+
+				fsTrimStatuses, err := CheckFSTrimRunningOnNode(volAttachedNode, vol, 30*time.Minute, 2*time.Minute)
+				log.FailOnError(err, "error getting fstrim status for the volume %v", vol.Id)
+
+				for vol, status := range fsTrimStatuses {
+					dash.VerifySafely(status != opsapi.FilesystemTrim_FS_TRIM_FAILED, true, fmt.Sprintf("verify autofstrim for volume %s, current status %v", vol, status))
+				}
+			}
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
