@@ -4964,6 +4964,7 @@ func (k *K8s) DeleteCsiSnapshotsFromNamespace(ctx *scheduler.Context, namespace 
 			return err
 		}
 	}
+
 	return nil
 
 }
@@ -8537,8 +8538,8 @@ func (k *K8s) CreateVolumeSnapshotClassesWithParameters(snapClassName string, pr
 	return volumeSnapClass, nil
 }
 
-// WaitForCsiSnapToBeReady wait for snapshot status to be ready
-func WaitForCsiSnapToBeReady(snapName string, namespace string) error {
+// WaitForCsiSnapToBeReadyWithTimeout wait for snapshot status to be ready, with a custom timeout
+func WaitForCsiSnapToBeReadyWithTimeout(snapName string, namespace string, timeout time.Duration) error {
 	var snap *volsnapv1.VolumeSnapshot
 	var err error
 	log.Infof("Waiting for snapshot [%s] to be ready in namespace: %s ", snapName, namespace)
@@ -8547,18 +8548,27 @@ func WaitForCsiSnapToBeReady(snapName string, namespace string) error {
 			return "", true, err
 		}
 		if snap.Status == nil || !*snap.Status.ReadyToUse {
+			contentName := "notavailable"
+			if snap.Status != nil && snap.Status.BoundVolumeSnapshotContentName != nil {
+				contentName = *snap.Status.BoundVolumeSnapshotContentName
+			}
 			return "", true, &scheduler.ErrFailedToValidateSnapshot{
 				Name:  snapName,
-				Cause: fmt.Errorf("snapshot [%s] is not ready", snapName),
+				Cause: fmt.Errorf("snapshot [%s] with content name [%s] is not ready", snapName, contentName),
 			}
 		}
 		return "", false, nil
 	}
-	if _, err := task.DoRetryWithTimeout(t, SnapshotReadyTimeout, DefaultRetryInterval); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, timeout, DefaultRetryInterval); err != nil {
 		return err
 	}
 	log.Infof("Snapshot is ready to use: %s", snap.Name)
 	return nil
+}
+
+// WaitForCsiSnapToBeReady wait for snapshot status to be ready
+func WaitForCsiSnapToBeReady(snapName string, namespace string) error {
+	return WaitForCsiSnapToBeReadyWithTimeout(snapName, namespace, SnapshotReadyTimeout)
 }
 
 // waitForCsiSnapToBeReady wait for snapshot status to be ready
@@ -8717,7 +8727,7 @@ func (k *K8s) CreateCsiSnapshot(name string, namespace string, class string, pvc
 	if err = WaitForCsiSnapToBeReady(snapshot.Name, namespace); err != nil {
 		return nil, &scheduler.ErrFailedToCreateSnapshot{
 			PvcName: pvc,
-			Cause:   fmt.Errorf("snapshot is not ready. Error: %v", err),
+			Cause:   fmt.Errorf("snapshot with name [%s] is not ready. Error: %v", snapshot.Name, err),
 		}
 	}
 	return snapshot, nil

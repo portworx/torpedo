@@ -1699,7 +1699,7 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotInvalidCredentials}", func() {
 	stepLog := "has to test with invalid credentials"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		err := CreatePXCloudCredential()
+		err := CreatePXCloudCredentialWithRetry()
 		log.FailOnError(err, "failed to create cloud credential")
 
 		stepLog = "Create CSI storage class"
@@ -1744,7 +1744,8 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotInvalidCredentials}", func() {
 			log.FailOnError(err, fmt.Sprintf("error creating namespace [%s] failed [%v]", ns, err))
 
 			pvcName = fmt.Sprintf("csi-creds-test-%v", time.Now().Unix())
-			pvc = create50GiReadWriteOncePVC(pvcName, ns, scName)
+			pvc, err = createPVC(pvcName, scName, "50Gi", ns)
+			log.FailOnError(err, fmt.Sprintf("PVC [%s/%s] with sc [%s] creation should not have failed", ns, pvcName, scName))
 		})
 
 		stepLog = "Create cloud-snap with invalid credentials"
@@ -1848,11 +1849,15 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotInvalidCredentials}", func() {
 			log.FailOnError(err, fmt.Sprintf("error deleting snapshot %s in namespace [%s]", snapName, ns))
 
 			t := func() (interface{}, bool, error) {
-				_, err = csisnapshot.Instance().GetSnapshot(snapName, ns)
+				snap, err := csisnapshot.Instance().GetSnapshot(snapName, ns)
 				if err != nil && k8serrors.IsNotFound(err) {
 					return "", false, nil
 				}
-				return "", true, fmt.Errorf("snapshot is not deleted")
+				contentName := "notavailable"
+				if snap.Status != nil && snap.Status.BoundVolumeSnapshotContentName != nil {
+					contentName = *snap.Status.BoundVolumeSnapshotContentName
+				}
+				return "", true, fmt.Errorf("snapshot with name %s and content %s is not deleted", snap.Name, contentName)
 			}
 			if _, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second); err != nil {
 				log.FailOnError(err, fmt.Sprintf("error deleting snapshot %s in namespace [%s]", snapName, ns))
@@ -1891,7 +1896,7 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotHAUpdateState}", func() {
 	stepLog := "Take snapshots of volume in HA update state mode"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		err := CreatePXCloudCredential()
+		err := CreatePXCloudCredentialWithRetry()
 		log.FailOnError(err, "failed to create cloud credential")
 
 		ns = fmt.Sprintf("csi-snapshot-ha-update-test-ns-%v", time.Now().Unix())
@@ -1915,7 +1920,8 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotHAUpdateState}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			pvcName = fmt.Sprintf("csi-snapshot-ha-update-test-%v", time.Now().Unix())
-			pvc = create50GiReadWriteOncePVC(pvcName, ns, scName)
+			pvc, err = createPVC(pvcName, scName, "50Gi", ns)
+			log.FailOnError(err, fmt.Sprintf("PVC [%s/%s] with sc [%s] creation should not have failed", ns, pvcName, scName))
 		})
 
 		stepLog = "Create Pod"
@@ -1978,7 +1984,7 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotRestartPX}", func() {
 	stepLog := "Create snapshot, with restart px"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		err := CreatePXCloudCredential()
+		err := CreatePXCloudCredentialWithRetry()
 		log.FailOnError(err, "failed to create cloud credential")
 
 		ns = fmt.Sprintf("csi-snapshot-restart-px-test-ns-%v", time.Now().Unix())
@@ -1988,7 +1994,7 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotRestartPX}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			scName = fmt.Sprintf("csi-storage-class-restart-px")
-			createStorageClass(scName, nil)
+			createStorageClass(scName, map[string]string{"repl": "2"})
 		})
 
 		stepLog = "Create volume snapshot class"
@@ -2002,7 +2008,8 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotRestartPX}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			pvcName = fmt.Sprintf("csi-snapshot-restart-px-test-%v", time.Now().Unix())
-			pvc = create50GiReadWriteOncePVC(pvcName, ns, scName)
+			pvc, err = createPVC(pvcName, scName, "50Gi", ns)
+			log.FailOnError(err, fmt.Sprintf("PVC [%s/%s] with sc [%s] creation should not have failed", ns, pvcName, scName))
 		})
 
 		stepLog = "Create Pod"
@@ -2046,6 +2053,8 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotRestartPX}", func() {
 			replicaSets, err := Inst().V.GetReplicaSets(&volume.Volume{
 				ID: pvc.Spec.VolumeName,
 			})
+			log.FailOnError(err, "could not get replica sets for volume")
+
 			var nodeForPxStop node.Node
 			// Put the volume in Degraded state.
 			replicasNodes := replicaSets[0].Nodes
@@ -2059,7 +2068,7 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotRestartPX}", func() {
 			}
 			restartPx(nodeForPxStop)
 
-			err = k8s.WaitForCsiSnapToBeReady(snapName, ns)
+			err = k8s.WaitForCsiSnapToBeReadyWithTimeout(snapName, ns, 30*time.Minute)
 			log.FailOnError(err, "snapshot should have been completed successfully")
 		})
 	})
@@ -2086,7 +2095,7 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotMultipleSnapshotAndRestore}", func() 
 	count := 100
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		err := CreatePXCloudCredential()
+		err := CreatePXCloudCredentialWithRetry()
 		log.FailOnError(err, "failed to create cloud credential")
 
 		ns = fmt.Sprintf("csi-snapshot-multiple-test-ns-%v", time.Now().Unix())
@@ -2114,14 +2123,13 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotMultipleSnapshotAndRestore}", func() 
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			for i := 0; i < count; i++ {
-				num := i
-				go func() {
+				go func(num int) {
 					defer wg.Done()
 					defer GinkgoRecover()
 					pvcName := fmt.Sprintf("csi-snapshot-multiple-test-%d-%v", num, timeNow)
-					create50GiReadWriteOncePVC(pvcName, ns, scName)
-
-				}()
+					_, err = createPVC(pvcName, scName, "50Gi", ns)
+					log.FailOnError(err, fmt.Sprintf("PVC [%s/%s] with sc [%s] creation should not have failed", ns, pvcName, scName))
+				}(i)
 			}
 		})
 		wg.Wait()
@@ -2132,8 +2140,7 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotMultipleSnapshotAndRestore}", func() 
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			for i := 0; i < count; i++ {
-				num := i
-				go func() {
+				go func(num int) {
 					defer wg.Done()
 					defer GinkgoRecover()
 					pvcName := fmt.Sprintf("csi-snapshot-multiple-test-%d-%v", num, timeNow)
@@ -2141,7 +2148,7 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotMultipleSnapshotAndRestore}", func() 
 					snapName := fmt.Sprintf("csi-snapshot-multiple-test-snap-%d-%v", num, timeNow)
 					_, err := Inst().S.CreateCsiSnapshot(snapName, ns, snapShotClassName, pvcName)
 					log.FailOnError(err, "snapshot failed")
-				}()
+				}(i)
 			}
 		})
 		wg.Wait()
@@ -2152,8 +2159,7 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotMultipleSnapshotAndRestore}", func() 
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			for i := 0; i < count; i++ {
-				num := i
-				go func() {
+				go func(num int) {
 					defer wg.Done()
 					defer GinkgoRecover()
 					snapName := fmt.Sprintf("csi-snapshot-multiple-test-snap-%d-%v", num, timeNow)
@@ -2165,7 +2171,7 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotMultipleSnapshotAndRestore}", func() 
 					log.FailOnError(err, "failed to restore PVC")
 					err = Inst().S.WaitForSinglePVCToBound(restoredPvc.Name, ns, 3)
 					log.FailOnError(err, "restore failed with error")
-				}()
+				}(i)
 			}
 		})
 		wg.Wait()
@@ -2195,7 +2201,7 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotRestartNode}", func() {
 	stepLog := "Create snapshot, with restart node"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		err := CreatePXCloudCredential()
+		err := CreatePXCloudCredentialWithRetry()
 		log.FailOnError(err, "failed to create cloud credential")
 
 		ns = fmt.Sprintf("csi-snapshot-restart-node-test-ns-%v", time.Now().Unix())
@@ -2205,7 +2211,7 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotRestartNode}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			scName = fmt.Sprintf("csi-storage-class-restart-node")
-			createStorageClass(scName, nil)
+			createStorageClass(scName, map[string]string{"repl": "2"})
 		})
 
 		stepLog = "Create volume snapshot class"
@@ -2219,7 +2225,8 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotRestartNode}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			pvcName = fmt.Sprintf("csi-snapshot-restart-node-test-%v", time.Now().Unix())
-			pvc = create50GiReadWriteOncePVC(pvcName, ns, scName)
+			pvc, err = createPVC(pvcName, scName, "50Gi", ns)
+			log.FailOnError(err, fmt.Sprintf("pvc [%s/%s] with sc [%s] creation should not have failed", ns, pvcName, scName))
 		})
 
 		stepLog = "Create Pod"
@@ -2263,32 +2270,40 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotRestartNode}", func() {
 			replicaSets, err := Inst().V.GetReplicaSets(&volume.Volume{
 				ID: pvc.Spec.VolumeName,
 			})
-			var nodeForPxStop node.Node
-			// Put the volume in Degraded state.
-			replicasNodes := replicaSets[0].Nodes
-			// Stop Driver on one of the replicas.
-			storagenodes, err := GetStorageNodes()
-			for _, n := range storagenodes {
-				if n.Id == replicasNodes[0] {
-					nodeForPxStop = n
-					break
+			nodes := make(map[string]bool)
+			for _, replicaSet := range replicaSets {
+				for _, node := range replicaSet.Nodes {
+					nodes[node] = true
 				}
 			}
-			err = Inst().N.RebootNodeAndWait(nodeForPxStop)
-			dash.VerifyFatal(err == nil, true, fmt.Sprintf("Reboot node %s", nodeForPxStop.Name))
-
-			err = Inst().V.WaitDriverUpOnNode(nodeForPxStop, 5*time.Minute)
-			dash.VerifyFatal(err == nil, true, fmt.Sprintf("Wait for driver to start"))
-
-			err = k8s.WaitForCsiSnapToBeReady(snapName, ns)
-			log.FailOnError(err, "Snapshot creation failed")
+			// Stop both replica nodes
+			storagenodes, err := GetStorageNodes()
+			wg := sync.WaitGroup{}
+			for _, n := range storagenodes {
+				// if the volume is not present in the node, ignore restart
+				_, ok := nodes[n.Id]
+				if !ok {
+					log.Infof("Ignoring node %s for restart", n.Id)
+					continue
+				}
+				wg.Add(1)
+				go func(node node.Node) {
+					defer wg.Done()
+					defer GinkgoRecover()
+					err = Inst().N.RebootNodeAndWait(node)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if node [%s] has rebooted", node.Name))
+					err = Inst().V.WaitDriverUpOnNode(node, Inst().DriverStartTimeout)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if volume driver is up on node [%s]", node.Name))
+				}(n)
+			}
+			wg.Wait()
+			err = k8s.WaitForCsiSnapToBeReadyWithTimeout(snapName, ns, 30*time.Minute)
+			log.FailOnError(err, fmt.Sprintf("Snapshot [%s/%s] creation failed", ns, snapName))
 		})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-
 		cleanupSnapshotests(context, ns)
-
 		AfterEachTest(contexts)
 	})
 })
@@ -2310,7 +2325,7 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotRestartCSIPods}", func() {
 	stepLog := "Create snapshot with CSI pod restart"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		err := CreatePXCloudCredential()
+		err := CreatePXCloudCredentialWithRetry()
 		log.FailOnError(err, "failed to create cloud credential")
 
 		ns = fmt.Sprintf("csi-snapshot-restart-csi-pods-test-ns-%v", time.Now().Unix())
@@ -2334,7 +2349,8 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotRestartCSIPods}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			pvcName = fmt.Sprintf("csi-snapshot-restart-csi-pods-%v", time.Now().Unix())
-			pvc = create50GiReadWriteOncePVC(pvcName, ns, scName)
+			pvc, err = createPVC(pvcName, scName, "50Gi", ns)
+			log.FailOnError(err, fmt.Sprintf("PVC [%s/%s] with sc [%s] creation should not have failed", ns, pvcName, scName))
 		})
 
 		stepLog = "Create Pod"
@@ -2379,7 +2395,7 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotRestartCSIPods}", func() {
 			wg.Add(3)
 
 			pods, err := core.Instance().ListPods(map[string]string{"app": "px-csi-driver"})
-			dash.VerifyFatal(err == nil, true, fmt.Sprintf("Listed CSI pods"))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verify that CSI pods can be listed"))
 
 			for _, pod := range pods.Items {
 				pod := pod
@@ -2387,7 +2403,7 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotRestartCSIPods}", func() {
 					defer wg.Done()
 					defer GinkgoRecover()
 					err = core.Instance().DeletePod(pod.Name, pod.Namespace, false)
-					dash.VerifyFatal(err == nil, true, fmt.Sprintf("delete csi pod"))
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verify that CSI pod with name [%s] can be deleted", pod.Name))
 				}()
 			}
 			wg.Wait()
@@ -2420,7 +2436,7 @@ var _ = Describe("{CSIOnlyTestCloudRestoreRestartCSIPods}", func() {
 	stepLog := "Create restore, with restart node"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		err := CreatePXCloudCredential()
+		err := CreatePXCloudCredentialWithRetry()
 		log.FailOnError(err, "failed to create cloud credential")
 
 		ns = fmt.Sprintf("csi-restore-restart-csi-pods-test-ns-%v", time.Now().Unix())
@@ -2444,7 +2460,8 @@ var _ = Describe("{CSIOnlyTestCloudRestoreRestartCSIPods}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			pvcName = fmt.Sprintf("csi-restore-restart-csi-pods-%v", time.Now().Unix())
-			pvc = create50GiReadWriteOncePVC(pvcName, ns, scName)
+			pvc, err = createPVC(pvcName, scName, "50Gi", ns)
+			log.FailOnError(err, fmt.Sprintf("PVC [%s/%s] with sc [%s] creation should not have failed", ns, pvcName, scName))
 		})
 
 		stepLog = "Create Pod"
@@ -2465,7 +2482,7 @@ var _ = Describe("{CSIOnlyTestCloudRestoreRestartCSIPods}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			log.Infof("create cloudsnapshot with valid credentials")
-			snapName = fmt.Sprintf("csi-snapshot-restart-node-test-snap-%v", time.Now().Unix())
+			snapName = fmt.Sprintf("csi-snapshot-restart-csi-pod-test-snap-%v", time.Now().Unix())
 
 			_, err = Inst().S.CreateCsiSnapshot(snapName, ns, snapShotClassName, pvcName)
 			log.FailOnError(err, fmt.Sprintf("error creating snapshot [%v]", snapName))
@@ -2480,7 +2497,7 @@ var _ = Describe("{CSIOnlyTestCloudRestoreRestartCSIPods}", func() {
 			log.FailOnError(err, "failed to restore PVC")
 
 			pods, err := core.Instance().ListPods(map[string]string{"app": "px-csi-driver"})
-			dash.VerifyFatal(err == nil, true, fmt.Sprintf("Listed CSI pods"))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verify that CSI pods can be listed"))
 
 			wg := sync.WaitGroup{}
 			wg.Add(3)
@@ -2491,7 +2508,7 @@ var _ = Describe("{CSIOnlyTestCloudRestoreRestartCSIPods}", func() {
 					defer wg.Done()
 					defer GinkgoRecover()
 					err = core.Instance().DeletePod(pod.Name, pod.Namespace, false)
-					dash.VerifyFatal(err == nil, true, fmt.Sprintf("delete csi pod"))
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verify that CSI pod with name [%s] can be deleted", pod.Name))
 				}()
 			}
 			wg.Wait()
@@ -2523,7 +2540,7 @@ var _ = Describe("{CSIOnlyTestCloudRestoreRestartNode}", func() {
 	stepLog := "Create restore, with restart node"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		err := CreatePXCloudCredential()
+		err := CreatePXCloudCredentialWithRetry()
 		log.FailOnError(err, "failed to create cloud credential")
 
 		ns = fmt.Sprintf("csi-restore-restart-node-test-ns-%v", time.Now().Unix())
@@ -2533,7 +2550,7 @@ var _ = Describe("{CSIOnlyTestCloudRestoreRestartNode}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			scName = fmt.Sprintf("csi-storage-class-restart-node")
-			createStorageClass(scName, nil)
+			createStorageClass(scName, map[string]string{"repl": "2"})
 		})
 
 		stepLog = "Create volume snapshot class"
@@ -2547,7 +2564,8 @@ var _ = Describe("{CSIOnlyTestCloudRestoreRestartNode}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			pvcName = fmt.Sprintf("csi-snapshot-restart-node-test-%v", time.Now().Unix())
-			pvc = create50GiReadWriteOncePVC(pvcName, ns, scName)
+			pvc, err = createPVC(pvcName, scName, "50Gi", ns)
+			log.FailOnError(err, fmt.Sprintf("PVC [%s/%s] with sc [%s] creation should not have failed", ns, pvcName, scName))
 		})
 
 		stepLog = "Create Pod"
@@ -2582,20 +2600,19 @@ var _ = Describe("{CSIOnlyTestCloudRestoreRestartNode}", func() {
 			restoredPvc, err := k8sCore.CreatePersistentVolumeClaim(restoredPVCSpec)
 			log.FailOnError(err, "failed to restore PVC")
 
-			// Stop Driver on one of the replicas.
+			// Stop Driver on all of the replicas.
 			storagenodes, err := GetStorageNodes()
 			wg := sync.WaitGroup{}
-			wg.Add(3)
+			wg.Add(len(storagenodes))
 			for _, n := range storagenodes {
-				num := n
-				go func() {
+				go func(node node.Node) {
 					defer wg.Done()
 					defer GinkgoRecover()
-					err = Inst().N.RebootNodeAndWait(num)
-					dash.VerifyFatal(err == nil, true, fmt.Sprintf("Reboot node"))
-					err = Inst().V.WaitDriverUpOnNode(num, 5*time.Minute)
-					dash.VerifyFatal(err == nil, true, fmt.Sprintf("Wait for driver to start"))
-				}()
+					err = Inst().N.RebootNodeAndWait(node)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if node [%s] has rebooted", node.Name))
+					err = Inst().V.WaitDriverUpOnNode(node, Inst().DriverStartTimeout)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if volume driver is up on node [%s]", node.Name))
+				}(n)
 			}
 			wg.Wait()
 			err = Inst().S.WaitForSinglePVCToBound(restoredPvc.Name, ns, 3)
@@ -2626,7 +2643,7 @@ var _ = Describe("{CSIOnlyTestCloudRestoreRestartPx}", func() {
 	stepLog := "Create restore, with restart px"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		err := CreatePXCloudCredential()
+		err := CreatePXCloudCredentialWithRetry()
 		log.FailOnError(err, "failed to create cloud credential")
 
 		ns = fmt.Sprintf("csi-restore-restart-px-test-ns-%v", time.Now().Unix())
@@ -2636,7 +2653,7 @@ var _ = Describe("{CSIOnlyTestCloudRestoreRestartPx}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			scName = fmt.Sprintf("csi-storage-class-restart-node")
-			createStorageClass(scName, nil)
+			createStorageClass(scName, map[string]string{"repl": "2"})
 		})
 
 		stepLog = "Create volume snapshot class"
@@ -2650,7 +2667,8 @@ var _ = Describe("{CSIOnlyTestCloudRestoreRestartPx}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			pvcName = fmt.Sprintf("csi-snapshot-restart-px-test-%v", time.Now().Unix())
-			pvc = create50GiReadWriteOncePVC(pvcName, ns, scName)
+			pvc, err = createPVC(pvcName, scName, "50Gi", ns)
+			log.FailOnError(err, fmt.Sprintf("PVC [%s/%s] with sc [%s] creation should not have failed", ns, pvcName, scName))
 		})
 
 		stepLog = "Create Pod"
@@ -2689,15 +2707,14 @@ var _ = Describe("{CSIOnlyTestCloudRestoreRestartPx}", func() {
 			// Stop Driver on one of the replicas.
 			storagenodes, err := GetStorageNodes()
 			wg := sync.WaitGroup{}
-			wg.Add(3)
+			wg.Add(len(storagenodes))
 			for _, n := range storagenodes {
-				num := n
-				go func() {
+				go func(node node.Node) {
 					defer wg.Done()
 					defer GinkgoRecover()
 					// restart portworx on node.
-					restartPx(num)
-				}()
+					restartPx(node)
+				}(n)
 			}
 			wg.Wait()
 			err = Inst().S.WaitForSinglePVCToBound(restoredPvc.Name, ns, 3)
@@ -2727,7 +2744,7 @@ var _ = Describe("{CSIOnlyTestCloudRestoreAfterBucketDelete}", func() {
 	stepLog := "Create restore, after deleting bucket"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		err := CreatePXCloudCredential()
+		err := CreatePXCloudCredentialWithRetry()
 		log.FailOnError(err, "failed to create cloud credential")
 
 		ns = fmt.Sprintf("csi-restore-bucket-delete-ns-%v", time.Now().Unix())
@@ -2751,7 +2768,8 @@ var _ = Describe("{CSIOnlyTestCloudRestoreAfterBucketDelete}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			pvcName = fmt.Sprintf("csi-snapshot-bucket-delete-test-%v", time.Now().Unix())
-			pvc = create50GiReadWriteOncePVC(pvcName, ns, scName)
+			pvc, err = createPVC(pvcName, scName, "50Gi", ns)
+			log.FailOnError(err, fmt.Sprintf("PVC [%s/%s] with sc [%s] creation should not have failed", ns, pvcName, scName))
 		})
 
 		stepLog = "Create cloud-snap"
@@ -2824,7 +2842,7 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotDegradedState}", func() {
 	stepLog := "Take snapshot in volume degraded state"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		err := CreatePXCloudCredential()
+		err := CreatePXCloudCredentialWithRetry()
 		log.FailOnError(err, "failed to create cloud credential")
 
 		ns = fmt.Sprintf("csi-snapshot-degraded-test-ns-%v", time.Now().Unix())
@@ -2848,7 +2866,8 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotDegradedState}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			pvcName = fmt.Sprintf("si-snapshot-degraded-test-%v", time.Now().Unix())
-			pvc = create50GiReadWriteOncePVC(pvcName, ns, scName)
+			pvc, err = createPVC(pvcName, scName, "50Gi", ns)
+			log.FailOnError(err, fmt.Sprintf("PVC [%s/%s] with sc [%s] creation should not have failed", ns, pvcName, scName))
 		})
 
 		stepLog = "Get PV, put volume in degraded mode, and take snapshot"
@@ -2870,16 +2889,10 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotDegradedState}", func() {
 				}
 			}
 			// Stop px, and try taking snapshot
-			err = Inst().V.StopDriver([]node.Node{nodeForPxStop}, false, nil)
-			dash.VerifyFatal(err == nil, true, fmt.Sprintf("Stop driver"))
-			err = Inst().V.WaitDriverDownOnNode(nodeForPxStop)
-			dash.VerifyFatal(err == nil, true, fmt.Sprintf("Wait for driver to sop"))
+			stopDriver(nodeForPxStop)
 			// defer Restart
 			defer func() {
-				err = Inst().V.StartDriver(nodeForPxStop)
-				dash.VerifyFatal(err == nil, true, fmt.Sprintf("Start driver"))
-				err = Inst().V.WaitDriverUpOnNode(nodeForPxStop, 5*time.Minute)
-				dash.VerifyFatal(err == nil, true, fmt.Sprintf("Wait for driver to start"))
+				startDriver(nodeForPxStop)
 			}()
 
 			log.Infof("create cloudsnapshot with valid credentials")
@@ -2912,7 +2925,7 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotOutOfQuorum}", func() {
 	stepLog := "Take snapshot in volume out of quorum state"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		err := CreatePXCloudCredential()
+		err := CreatePXCloudCredentialWithRetry()
 		log.FailOnError(err, "failed to create cloud credential")
 
 		ns = fmt.Sprintf("csi-snapshot-out-of-quorum-test-ns-%v", time.Now().Unix())
@@ -2936,7 +2949,8 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotOutOfQuorum}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			pvcName = fmt.Sprintf("csi-snapshot-out-of-quorum-test-%v", time.Now().Unix())
-			pvc = create50GiReadWriteOncePVC(pvcName, ns, scName)
+			pvc, err = createPVC(pvcName, scName, "50Gi", ns)
+			log.FailOnError(err, fmt.Sprintf("PVC [%s/%s] with sc [%s] creation should not have failed", ns, pvcName, scName))
 		})
 
 		stepLog = "Get PV, put volume in degraded mode, and take snapshot"
@@ -2958,16 +2972,10 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotOutOfQuorum}", func() {
 				}
 			}
 			// Stop node and take snapshot
-			err = Inst().V.StopDriver([]node.Node{nodeForPxStop}, false, nil)
-			dash.VerifyFatal(err == nil, true, fmt.Sprintf("Stop driverr"))
-			err = Inst().V.WaitDriverDownOnNode(nodeForPxStop)
-			dash.VerifyFatal(err == nil, true, fmt.Sprintf("Wait for driver to sopt"))
+			stopDriver(nodeForPxStop)
 			// defer Restart
 			defer func() {
-				err = Inst().V.StartDriver(nodeForPxStop)
-				dash.VerifyFatal(err == nil, true, fmt.Sprintf("Start driver"))
-				err = Inst().V.WaitDriverUpOnNode(nodeForPxStop, 5*time.Minute)
-				dash.VerifyFatal(err == nil, true, fmt.Sprintf("Wait for driver to start"))
+				startDriver(nodeForPxStop)
 			}()
 
 			log.Infof("create cloudsnapshot with valid credentials")
@@ -5952,14 +5960,22 @@ var _ = Describe("{DeleteVolFromTrashCanWithVEM}", Label("p0", "positive", "px_o
 
 func restartPx(nodeForPxStop node.Node) {
 	// restart portworx on node.
-	err = Inst().V.StopDriver([]node.Node{nodeForPxStop}, false, nil)
-	dash.VerifyFatal(err == nil, true, fmt.Sprintf("Stop px driver"))
-	err = Inst().V.WaitDriverDownOnNode(nodeForPxStop)
-	dash.VerifyFatal(err == nil, true, fmt.Sprintf("Wait for driver down"))
+	stopDriver(nodeForPxStop)
+	startDriver(nodeForPxStop)
+}
+
+func startDriver(nodeForPxStop node.Node) {
 	err = Inst().V.StartDriver(nodeForPxStop)
-	dash.VerifyFatal(err == nil, true, fmt.Sprintf("Start px driver"))
-	err = Inst().V.WaitDriverUpOnNode(nodeForPxStop, 5*time.Minute)
-	dash.VerifyFatal(err == nil, true, fmt.Sprintf("Wait for driver to start"))
+	dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if start driver has been called on node [%s]", nodeForPxStop.Name))
+	err = Inst().V.WaitDriverUpOnNode(nodeForPxStop, Inst().DriverStartTimeout)
+	dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if volume driver is up on node [%s]", nodeForPxStop.Name))
+}
+
+func stopDriver(nodeForPxStop node.Node) {
+	err = Inst().V.StopDriver([]node.Node{nodeForPxStop}, false, nil)
+	dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if stop driver has been called on node [%s]", nodeForPxStop.Name))
+	err = Inst().V.WaitDriverDownOnNode(nodeForPxStop)
+	dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if driver has been stopped on node [%s]", nodeForPxStop.Name))
 }
 
 func verifyNoError(err error, description string) {
@@ -6064,33 +6080,6 @@ func createVolumeSnapshotClass(snapShotClassName string, params map[string]strin
 	}
 }
 
-func create50GiReadWriteOncePVC(pvcName string, ns string, scName string) *corev1.PersistentVolumeClaim {
-	log.InfoD("creating PVC [%s] in namespace [%s]", pvcName, ns)
-	pvcObj := &corev1.PersistentVolumeClaim{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      pvcName,
-			Namespace: ns,
-		},
-		Spec: corev1.PersistentVolumeClaimSpec{
-			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
-			Resources: corev1.ResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceStorage: resource.MustParse("50Gi"),
-				},
-			},
-			StorageClassName: &scName,
-		},
-	}
-	_, err := core.Instance().CreatePersistentVolumeClaim(pvcObj)
-	dash.VerifyFatal(err, nil, fmt.Sprintf("Verify PVC [%s] is created successfully", pvcName))
-	time.Sleep(10 * time.Second)
-	pvc, err := core.Instance().GetPersistentVolumeClaim(pvcName, ns)
-	log.FailOnError(err, "Failed to create PVC [%v]. Error : [%v]", pvcName, err)
-	err = Inst().S.WaitForSinglePVCToBound(pvcName, ns, 3)
-	dash.VerifyFatal(err, nil, fmt.Sprintf("Verify PVC [%s] got bound successfully.", pvc.Name))
-	return pvc
-}
-
 func validatePodCreationWithPVCName(restoredPVCSpec *corev1.PersistentVolumeClaim) {
 	podSpec := &corev1.Pod{
 		TypeMeta: metav1.TypeMeta{
@@ -6166,6 +6155,9 @@ func cleanupSnapshotests(context *scheduler.Context, ns string) {
 
 	err = Inst().S.DeleteCsiSnapshotsFromNamespace(context, ns)
 	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting snapshots in namespace [%s]", ns))
+
+	err = Inst().S.WaitForSnapshotsToBeDeleted(context, ns)
+	dash.VerifySafely(err, nil, fmt.Sprintf("Snapshots deleted successfully in namespace [%s]", ns))
 
 	log.Infof("Deleting namespace[%s]", ns)
 	err = core.Instance().DeleteNamespace(ns)

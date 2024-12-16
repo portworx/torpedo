@@ -49,6 +49,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	storageApi "k8s.io/api/storage/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -142,46 +143,47 @@ func createFBStorageClassWithMountOpts(scName string, mountOpts []string) error 
 }
 
 // createPVC creates a PVC with the given storage class
-func createPVC(pvcName string, scName string, pvcSize string, nsName string) error {
-	nsList, err := core.Instance().ListNamespaces(nil)
+func createPVC(pvcName string, scName string, pvcSize string, nsName string) (*corev1.PersistentVolumeClaim, error) {
+	_, err := core.Instance().GetNamespace(nsName)
 	if err != nil {
-		return fmt.Errorf("failed to list namespaces. Err: [%v]", err)
-	}
-	namespace := v1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: nsName,
-			Labels: map[string]string{
-				"creator": "torpedo",
-			},
-		},
-	}
-	for _, ns := range nsList.Items {
-		if ns.Name == nsName {
-			goto nsExists
+		if !errors.IsNotFound(err) {
+			return nil, fmt.Errorf("failed to get namespaces. Err: [%v]", err)
+		} else {
+			namespace := v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: nsName,
+					Labels: map[string]string{
+						"creator": "torpedo",
+					},
+				},
+			}
+			log.Infof("Creating namespace [%s]", nsName)
+			_, err = core.Instance().CreateNamespace(&namespace)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create namespace [%s]. Err: [%v]", nsName, err)
+			}
 		}
 	}
-	log.Infof("Creating namespace [%s]", nsName)
-	_, err = core.Instance().CreateNamespace(&namespace)
-	if err != nil {
-		return fmt.Errorf("failed to create namespace [%s]. Err: [%v]", nsName, err)
-	}
-nsExists:
 	size, err := resource.ParseQuantity(pvcSize)
 	if err != nil {
-		return fmt.Errorf("failed to parse pvc size : %s", pvcSize)
+		return nil, fmt.Errorf("failed to parse pvc size : %s", pvcSize)
 	}
 	pvcClaimSpec := k8s.MakePVC(size, nsName, pvcName, scName, v1.ReadWriteOnce)
 	log.Infof("Creating persistent volume claim [%s] with storage class [%s]", pvcName, scName)
 	pvc, err := k8sCore.CreatePersistentVolumeClaim(pvcClaimSpec)
 	if err != nil {
-		return fmt.Errorf("failed to create pvc [%s] with storage class [%s]. Err: [%v]", pvcName, scName, err)
+		return nil, fmt.Errorf("failed to create pvc [%s] with storage class [%s]. Err: [%v]", pvcName, scName, err)
 	}
 	log.Infof("Validating pvc [%s] with storage class [%s]", pvcName, scName)
 	err = k8sCore.ValidatePersistentVolumeClaim(pvc, defaultCommandTimeout, defaultCommandRetry)
 	if err != nil {
-		return fmt.Errorf("failed to validate pvc [%s] with storage class [%s]. Err: [%v]", pvcName, scName, err)
+		return nil, fmt.Errorf("failed to validate pvc [%s] with storage class [%s]. Err: [%v]", pvcName, scName, err)
 	}
-	return nil
+	pvc, err = k8sCore.GetPersistentVolumeClaim(pvcName, nsName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pvc [%s]. Err: [%v]", pvcName, err)
+	}
+	return pvc, nil
 }
 
 // createVdBenchPodSpec creates a vdbench pod spec with the given namespace and pvcName
@@ -4366,7 +4368,8 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotFA}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			pvcName = fmt.Sprintf("csi-snapshot-fa-test-%v", timeNow)
-			create50GiReadWriteOncePVC(pvcName, ns, scName)
+			_, err = createPVC(pvcName, scName, "50Gi", ns)
+			log.FailOnError(err, "pvc creation should not have failed")
 		})
 
 		stepLog = "Create snapshot"
@@ -9182,7 +9185,7 @@ var _ = Describe("{FlashBladeVolumesMountedWithNFSv3Andv4}", func() {
 				pvcSize := "200Gi"
 				namespace := fmt.Sprintf("%s-ns-%v", pvcName, time.Now().Unix())
 				log.Infof("Creating pvc [%s] with storage class [%s] in namespace [%s]", pvcName, scName, namespace)
-				err := createPVC(pvcName, scName, pvcSize, namespace)
+				_, err := createPVC(pvcName, scName, pvcSize, namespace)
 				log.FailOnError(err, "failed to create pvc [%s] with storage class [%s]", pvcName, scName)
 				scPodMap[scName] = createVdBenchPodSpec(pvcName+"-pod", namespace, pvcName)
 			}

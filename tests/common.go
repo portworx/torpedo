@@ -12794,6 +12794,22 @@ func PrintK8sClusterInfo() {
 	// }
 }
 
+func CreatePXCloudCredentialWithRetry() error {
+	t := func() (interface{}, bool, error) {
+		err := CreatePXCloudCredential()
+
+		if err == nil {
+			return "", false, nil
+		}
+		return "", true, err
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second); err != nil {
+		return err
+	}
+	return nil
+}
+
 func CreatePXCloudCredential() error {
 	/*
 		Creating a cloud credential for cloudsnap wit the given params
@@ -12922,7 +12938,6 @@ func GetPXCloudCredential() (string, error) {
 
 	if output != "" {
 		log.Infof("Cloud Cred exists [%s]", output)
-		log.Warnf("Deleting existing cred and creating new cred with given params")
 		credUUID := strings.Split(output, ":")[1]
 		credUUID = strings.ReplaceAll(strings.TrimSpace(credUUID), "\"", "")
 		return credUUID, nil
