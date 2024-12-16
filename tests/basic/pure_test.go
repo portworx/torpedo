@@ -2,7 +2,6 @@ package tests
 
 import (
 	"fmt"
-	"github.com/pure-px/sched-ops/k8s/apps"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -12,6 +11,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/pure-px/sched-ops/k8s/apps"
 
 	"strings"
 
@@ -4378,7 +4379,7 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotFA}", func() {
 			pvcName := fmt.Sprintf("csi-snapshot-fa-test-%v", timeNow)
 			log.Infof("Create cloudsnapshot with valid credentials for pvc %s", pvcName)
 			snapName := fmt.Sprintf("csi-snapshot-fa-test-snap-%v", timeNow)
-			_, err := Inst().S.CreateCsiSnapshot(snapName, ns, snapShotClassName, pvcName)
+			_, err := Inst().S.CreateCsiSnapshot(snapName, ns, snapShotClassName, pvcName, true)
 			log.FailOnNoError(err, "Snapshot should have failed")
 		})
 	})
@@ -9099,7 +9100,7 @@ var _ = Describe("{CreatePodsUsingClonewithMT}", func() {
 					defer wg.Done()
 					defer GinkgoRecover()
 					snapName := fmt.Sprintf("snap-%v", i)
-					_, err := Inst().S.CreateCsiSnapshot(snapName, nsNormal, snapShotClassName, pvc.Name)
+					_, err := Inst().S.CreateCsiSnapshot(snapName, nsNormal, snapShotClassName, pvc.Name, true)
 					log.FailOnError(err, fmt.Sprintf("Failed to create snapshot [%v] ", snapName))
 				}(i)
 			}

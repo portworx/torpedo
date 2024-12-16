@@ -7595,7 +7595,7 @@ func (k *K8s) CreateCsiSnapsForVolumes(ctx *scheduler.Context, snapClass string)
 			if snapshotOkay {
 				snapName := "snap-" + pvc.Name + "-" + strconv.Itoa(int(time.Now().Unix()))
 				log.Debugf("Creating snapshot: [%s] for pvc: %s", snapName, pvc.Name)
-				volSnapshot, err := k.CreateCsiSnapshot(snapName, obj.Namespace, snapClass, pvc.Name)
+				volSnapshot, err := k.CreateCsiSnapshot(snapName, obj.Namespace, snapClass, pvc.Name, true)
 				if err != nil {
 					return nil, err
 				}
@@ -7627,7 +7627,7 @@ func (k *K8s) CreateCsiSnapsForVolumes(ctx *scheduler.Context, snapClass string)
 				if snapshotOkay {
 					snapName := "snap-" + pvc.Name + "-" + strconv.Itoa(int(time.Now().Unix()))
 					log.Debugf("Creating snapshot: [%s] for pvc: %s", snapName, pvc.Name)
-					volSnapshot, err := k.CreateCsiSnapshot(snapName, obj.Namespace, snapClass, pvc.Name)
+					volSnapshot, err := k.CreateCsiSnapshot(snapName, obj.Namespace, snapClass, pvc.Name, true)
 					if err != nil {
 						return nil, err
 					}
@@ -7790,7 +7790,7 @@ func (k *K8s) CSISnapshotAndRestoreMany(ctx *scheduler.Context, request schedule
 	log.Infof("Proceeding with storage class %s", storageClassName)
 
 	// creating the snapshot
-	volSnapshot, err := k.CreateCsiSnapshot(request.SnapName, pvcObj.Namespace, request.SnapshotclassName, pvcObj.Name)
+	volSnapshot, err := k.CreateCsiSnapshot(request.SnapName, pvcObj.Namespace, request.SnapshotclassName, pvcObj.Name, true)
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot %s for volume %s", request.SnapName, pvcObj.Name)
 	}
@@ -7893,7 +7893,7 @@ func (k *K8s) snapshotAndVerify(size resource.Quantity, data, snapName, namespac
 	}
 
 	// creating the snapshot
-	volSnapshot, err := k.CreateCsiSnapshot(snapName, namespace, snapClass, originalPVC)
+	volSnapshot, err := k.CreateCsiSnapshot(snapName, namespace, snapClass, originalPVC, true)
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot %s for volume %s", snapName, originalPVC)
 	}
@@ -8695,7 +8695,7 @@ func (k *K8s) waitForRestoredPVCsToBound(pvcNamePrefix string, namespace string,
 }
 
 // CreateCsiSnapshot create snapshot for given pvc
-func (k *K8s) CreateCsiSnapshot(name string, namespace string, class string, pvc string) (*volsnapv1.VolumeSnapshot, error) {
+func (k *K8s) CreateCsiSnapshot(name string, namespace string, class string, pvc string, waitForSnap bool) (*volsnapv1.VolumeSnapshot, error) {
 	var err error
 	var snapshot *volsnapv1.VolumeSnapshot
 
@@ -8780,7 +8780,7 @@ func (k *K8s) ValidateCsiSnapshots(ctx *scheduler.Context, volSnapMap map[string
 					}
 				}
 
-				if err = k.validateCsiSnap(pvc.Name, obj.Namespace, *volSnapMap[pvc.Spec.VolumeName]); err != nil {
+				if err = k.ValidateCsiSnap(pvc.Name, obj.Namespace, *volSnapMap[pvc.Spec.VolumeName]); err != nil {
 					return err
 				}
 			}
@@ -8813,7 +8813,7 @@ func (k *K8s) ValidateCsiSnapshots(ctx *scheduler.Context, volSnapMap map[string
 							Cause: fmt.Sprintf("Snapshot is empty for a pvc: %v", pvc.Name),
 						}
 					}
-					if err = k.validateCsiSnap(pvc.Name, obj.Namespace, *volSnapMap[pvc.Spec.VolumeName]); err != nil {
+					if err = k.ValidateCsiSnap(pvc.Name, obj.Namespace, *volSnapMap[pvc.Spec.VolumeName]); err != nil {
 						return err
 					}
 				}
@@ -8823,8 +8823,8 @@ func (k *K8s) ValidateCsiSnapshots(ctx *scheduler.Context, volSnapMap map[string
 	return nil
 }
 
-// validateCsiSnapshot validates the given snapshot is successfully created or not
-func (k *K8s) validateCsiSnap(pvcName string, namespace string, csiSnapshot volsnapv1.VolumeSnapshot) error {
+// ValidateCsiSnapshot validates the given snapshot is successfully created or not
+func (k *K8s) ValidateCsiSnap(pvcName string, namespace string, csiSnapshot volsnapv1.VolumeSnapshot) error {
 	var snap *volsnapv1.VolumeSnapshot
 	var err error
 

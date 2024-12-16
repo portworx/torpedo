@@ -5,6 +5,7 @@ import (
 	"container/ring"
 	ctxt "context"
 	"fmt"
+	"maps"
 	"math"
 	"math/rand"
 	"net/url"
@@ -138,6 +139,8 @@ const (
 	PureVolFBExportRule = "*(rw)"
 	// PureFAPodName is key in map parameter for pure storage class
 	PureFAPodName = "pure_fa_pod_name"
+	// Node selector key for FADA pods
+	FADANodeSelectorKey = "fada-attach-by-node-name"
 )
 
 const (
@@ -175,6 +178,7 @@ const (
 	fbPvcNamePrefix        = "fbda-scale-pvc"
 	fadaNamespacePrefix    = "fada-namespace"
 	fbdaNamespacePrefix    = "fbda-namespace"
+	maxFadaAttachLimit     = 128
 )
 
 const (
@@ -718,6 +722,12 @@ const (
 
 	// RunFlatPxCSI trigger run flat condition in PX CSI cluster
 	RunFlatPxCSI = "runFlatPxCSI"
+
+	// TestPxCSIFadaAttachLimit validate 128 FADA volume attach limit per node
+	TestPxCSIFadaAttachLimit = "pxCSIFadaAttachLimit"
+
+	// FadaSimultaneousSnapshots create 1K snapshots in 20 nodes px-csi cluster
+	FadaSimultaneousSnapshots = "fadaSimultaneousSnapshots"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -12844,7 +12854,7 @@ func TriggerScaleFADAVolumeAttach(contexts *[]*scheduler.Context, recordChan *ch
 			sem <- struct{}{}
 			go func(scName string, pvcName string, ns string, depName string, wg *sync.WaitGroup, ctx *[]*scheduler.Context, event *EventRecord, sem chan struct{}) {
 				log.SetTestName(ScaleFADAVolumeAttach)
-				deployPureApp(fadaScName, pvcName, namespace, deploymentName, wg, ctx, event)
+				deployPureApp(fadaScName, pvcName, namespace, deploymentName, map[string]string{}, wg, ctx, event)
 				<-sem
 			}(fadaScName, pvcName, namespace, deploymentName, &wg, &appContexts, event, sem)
 		}
@@ -13472,9 +13482,8 @@ func doNeedToWaitMoreForSchedule(defragSchedule string) (bool, error) {
 }
 
 // deployPureApp deploy deployment using FADA volumes
-func deployPureApp(scName string, pvcName string, ns string, depName string, wg *sync.WaitGroup, ctx *[]*scheduler.Context, event *EventRecord) {
+func deployPureApp(scName string, pvcName string, ns string, depName string, affLabel map[string]string, wg *sync.WaitGroup, ctx *[]*scheduler.Context, event *EventRecord) {
 	defer wg.Done()
-
 	metadata := make(map[string]string, 0)
 	pvcSize := "1Gi"
 	metadata["app"] = "pure-data-app"
@@ -13489,12 +13498,12 @@ func deployPureApp(scName string, pvcName string, ns string, depName string, wg 
 	if err := createPVC(pvcName, scName, pvcSize, ns, accessMode); err != nil {
 		UpdateOutcome(event, fmt.Errorf("failed to create pvc: [%s] in ns: [%s]. Err: %v", pvcName, ns, err))
 	}
-	if err := createDeployment(depName, ns, pvcName, ctx); err != nil {
+	if err := createDeployment(depName, ns, pvcName, ctx, affLabel); err != nil {
 		UpdateOutcome(event, fmt.Errorf("failed to create deployment: %s. Err: %v", depName, err))
 	}
 }
 
-func createDeployment(depName string, ns string, pvcName string, ctx *[]*scheduler.Context) error {
+func createDeployment(depName string, ns string, pvcName string, ctx *[]*scheduler.Context, affLabel map[string]string) error {
 	request := make(map[v1.ResourceName]resource.Quantity, 0)
 	limit := make(map[v1.ResourceName]resource.Quantity, 0)
 	cpu, err := resource.ParseQuantity("50m")
@@ -13523,11 +13532,21 @@ func createDeployment(depName string, ns string, pvcName string, ctx *[]*schedul
 			StorageProvisioner: Inst().Provisioner,
 			TopologyLabels:     Inst().TopologyLabels,
 		}
-		k8s.RotateTopologyArray(&schdOptions)
 		Inst().TopologyLabels = schdOptions.TopologyLabels
+		if len(affLabel) > 0 {
+			maps.Copy(Inst().TopologyLabels[0], affLabel)
+		}
 		affinity := k8s.GetAffinity(Inst().TopologyLabels)
 		deployment.Spec.Template.Spec.Affinity = affinity.DeepCopy()
+		k8s.RotateTopologyArray(&schdOptions)
 	}
+
+	// Adding node selector affinity label to test max fada limit in a node
+	if len(Inst().TopologyLabels) <= 1 && len(affLabel) > 0 {
+		affinity := k8s.GetAffinity([]map[string]string{affLabel})
+		deployment.Spec.Template.Spec.Affinity = affinity.DeepCopy()
+	}
+
 	deployment, err = apps.Instance().CreateDeployment(deployment, metav1.CreateOptions{})
 	if err != nil {
 		return err
@@ -13574,6 +13593,7 @@ func getDeploymentObject(depName string, ns string, pvcName string, request, lim
 			ImagePullPolicy: v1.PullIfNotPresent,
 		},
 	}
+
 	return &appsapi.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      depName,
@@ -14411,7 +14431,7 @@ func TriggerScaleFBDAVolumes(contexts *[]*scheduler.Context, recordChan *chan *E
 			sem <- struct{}{}
 			go func(scName string, pvcName string, ns string, depName string, wg *sync.WaitGroup, ctx *[]*scheduler.Context, event *EventRecord, sem chan struct{}) {
 				log.SetTestName(ScaleFBDAVolumes)
-				deployPureApp(fbdaScName, pvcName, namespace, deploymentName, wg, ctx, event)
+				deployPureApp(fbdaScName, pvcName, namespace, deploymentName, map[string]string{}, wg, ctx, event)
 				<-sem
 			}(fbdaScName, pvcName, namespace, deploymentName, &wg, &appContexts, event, sem)
 		}
@@ -14551,4 +14571,395 @@ func TriggerRunFlat(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 		log.Infof("[TriggerRunFlat] test completed successfully")
 		updateMetrics(*event)
 	})
+}
+
+// TriggerPxCSIFadaAttachLimit validate 128 FADA volume attach limit per node for px-csi
+func TriggerPxCSIFadaAttachLimit(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(TestPxCSIFadaAttachLimit)
+	defer ginkgo.GinkgoRecover()
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: TestPxCSIFadaAttachLimit,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	stepLog := "Attaching 128 FADA volumes in 5 nodes of a cluster"
+
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		var param = make(map[string]string)
+		var appContexts []*scheduler.Context
+		var nodeCounter = 0
+		errorChan := make(chan error, errorChannelSize)
+
+		fadaScName := PureBlockStorageClass + time.Now().Format("01-02-15h04m05s")
+		log.Infof("Creating pure_block storage class: %s", fadaScName)
+		param[PureBackend] = k8s.PureBlock
+		_, err := createPureStorageClass(fadaScName, param, []string{})
+		if err != nil {
+			log.Errorf("StorageClass creation failed for SC: %s", fadaScName)
+			UpdateOutcome(event, err)
+		}
+		log.InfoD("Adding labels to a node")
+		if err = addFADALabelsToNode(); err != nil {
+			log.Errorf("Failed to add label in nodes. Error: [%v]", err)
+			UpdateOutcome(event, err)
+		}
+
+		pureVolAttachedMap, err := Inst().V.GetNodePureVolumeAttachedCountMap()
+		if err != nil {
+			log.Errorf("Failed to get pure volume attached count map. Error: %v", err.Error())
+			UpdateOutcome(event, err)
+		}
+
+		log.InfoD("Deployng FADA based applications in each node to test max fada attach limit")
+		targetNodes := node.GetStorageDriverNodes()
+
+		for _, n := range targetNodes {
+			log.Infof("Deploying App in a node: %s", n.Name)
+			remVolumeTobeAttached := maxFadaAttachLimit - pureVolAttachedMap[n.Name]
+			log.Infof("Remaining [%d] volume to be deployed in a node: %s", remVolumeTobeAttached, n.Name)
+			affLabel := map[string]string{FADANodeSelectorKey: n.Name}
+			startTime := time.Now()
+			var wg sync.WaitGroup
+			sem := make(chan struct{}, 10)
+			for x := 0; x < remVolumeTobeAttached; x++ {
+				pvcName := fmt.Sprintf("%s-%d", pvcNamePrefix, x)
+				namespace := fmt.Sprintf("%s-%s-%d", fadaNamespacePrefix, n.Name, x)
+				deploymentName := fmt.Sprintf("%s-%d", fadaScName, x)
+				wg.Add(1)
+				sem <- struct{}{}
+				go func(scName string, pvcName string, ns string, depName string, wg *sync.WaitGroup, ctx *[]*scheduler.Context, event *EventRecord, sem chan struct{}) {
+					log.SetTestName(TestPxCSIFadaAttachLimit)
+					deployPureApp(fadaScName, pvcName, namespace, deploymentName, affLabel, wg, ctx, event)
+					<-sem
+				}(fadaScName, pvcName, namespace, deploymentName, &wg, &appContexts, event, sem)
+			}
+			wg.Wait()
+			close(sem)
+			log.InfoD("Validating applications context")
+			validateContexts(event, &appContexts)
+			log.InfoD("attaching [%d] FADA volumes in a node: [%s] took : %v", remVolumeTobeAttached, n.Name, time.Since(startTime))
+			nodeCounter += 1
+			if nodeCounter == 5 {
+				log.Infof("Successfully deployed 128 pods in all 5 nodes: [%v]", targetNodes[:nodeCounter])
+				break
+			}
+		}
+		stepLog = "Measuring the PX resource consumption in nodes where deployed the 128 FADA pods"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, n := range targetNodes[:nodeCounter] {
+				cpu, mem, err := GetCPUAndMemOfPxProcess(n, "px")
+				if err != nil {
+					log.Errorf("Failed to retrieve cpu and memory usage for px process in a node: [%s]. Error: %v", n.Name, err.Error())
+					UpdateOutcome(event, err)
+				}
+				log.Infof("PX utilizing cpu:[%f] and memory: [%f] in a node: [%s]", cpu, mem, n.Name)
+			}
+		})
+
+		stepLog = "Restart iSCSI service in a node where deployed the 128 FADA pods"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().N.Systemctl(targetNodes[0], "iscsid", node.SystemctlOpts{
+				Action: "restart",
+				ConnectionOpts: node.ConnectionOpts{
+					Timeout:         5 * time.Minute,
+					TimeBeforeRetry: 10 * time.Second,
+				}})
+			if err != nil {
+				log.Errorf("Failed to restart iscsid service in a node: [%s]. Error: %v", targetNodes[0].Name, err.Error())
+				UpdateOutcome(event, err)
+			}
+			log.Infof("Validating applications context after iscsid service restart in a node: %s", targetNodes[0].Name)
+			validateContexts(event, &appContexts)
+		})
+
+		stepLog = "Restart PX service in a node where deployed the 128 FADA pods"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Infof("Stopping volume driver in a node: [%s]", targetNodes[0].Name)
+			StopVolDriverAndWait([]node.Node{targetNodes[0]}, &errorChan)
+			log.Infof("Starting volume driver in a node: [%s]", targetNodes[0].Name)
+			if err := Inst().V.StartDriver(targetNodes[0]); err != nil {
+				log.Errorf("failed to start volume driver in a node: %s. Error: %v", targetNodes[0].Name, err)
+				UpdateOutcome(event, err)
+			}
+			log.Infof("Waiting for volume driver to be up in a node: [%s]", targetNodes[0].Name)
+			if err := Inst().V.WaitDriverUpOnNode(targetNodes[0], Inst().DriverStartTimeout); err != nil {
+				log.Errorf("failed to bring up volume driver in a node: %s. Error: %v", targetNodes[0].Name, err)
+				UpdateOutcome(event, err)
+			}
+			log.Infof("Volume driver successfully came up in a node: %s", targetNodes[0].Name)
+			log.Infof("Validating applications context after px restart in a node: %s", targetNodes[0].Name)
+			validateContexts(event, &appContexts)
+		})
+
+		stepLog = "Shutdown a node where 128 FADA pods are deployed"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			// TBD: PTX-28207 need to be fixed for shutdown the VM
+			// Using power off for workaround until ticket got fixed
+			err := Inst().N.PowerOffVM(targetNodes[0])
+			/*err := Inst().N.ShutdownNode(targetNodes[0]), node.ShutdownNodeOpts{
+				Force: true,
+				ConnectionOpts: node.ConnectionOpts{
+					Timeout:         60,
+					TimeBeforeRetry: 10,
+				},
+			})*/
+			if err != nil {
+				log.Errorf("Failed to power off a node: [%s]. Err: %v", targetNodes[0].Name, err)
+				UpdateOutcome(event, err)
+			}
+			time.Sleep(5 * time.Minute)
+			err = Inst().N.PowerOnVM(targetNodes[0])
+			if err != nil {
+				log.Errorf("Failed to power on a node: [%s]. Err: %v", targetNodes[0].Name, err)
+				UpdateOutcome(event, err)
+			}
+			startTime := time.Now()
+			err = Inst().V.WaitDriverUpOnNode(targetNodes[0], Inst().DriverStartTimeout)
+			if err != nil {
+				log.Errorf("Failed to start volume driver in a node: [%s]. Err: %v", targetNodes[0].Name, err)
+				UpdateOutcome(event, err)
+			}
+			log.InfoD("PX took: [%v] to come up in a node: [%s] took", time.Since(startTime), targetNodes[0].Name)
+			log.InfoD("Validating applications context after a node: %s shutdown", targetNodes[0].Name)
+			validateContexts(event, &appContexts)
+		})
+
+		stepLog = "Cleaning up the FADA deployments"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			var wg sync.WaitGroup
+			sem := make(chan struct{}, 10)
+			for x := 0; x < len(appContexts); x++ {
+				sem <- struct{}{}
+				wg.Add(1)
+				go func(ctx *scheduler.Context, wg *sync.WaitGroup, event *EventRecord, sem chan struct{}) {
+					cleanupDeployment(ctx, wg, event)
+					<-sem
+				}(appContexts[x], &wg, event, sem)
+			}
+			wg.Wait()
+			close(sem)
+			deleteFADALabelsToNode()
+			log.InfoD("Successfully cleaned up the FADA deployments")
+		})
+		updateMetrics(*event)
+	})
+}
+
+// TriggerFadaSimultaneousSnapshots takes simultaneous snapshots of the volumes and validates snapshot
+func TriggerFadaSimultaneousSnapshots(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	var err error
+	var snapShotClassName string
+
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+
+	startLongevityTest(FadaSimultaneousSnapshots)
+	uuid := GenerateUUID()
+	event := &EventRecord{
+		Event: Event{
+			ID:   uuid,
+			Type: FadaSimultaneousSnapshots,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		deleteFADALabelsToNode()
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	stepLog := "Create and Validate simultaneous snapshots for FA DA volumes"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+
+		volumeSnapshotMap := make(map[*volume.Volume][]*volsnapv1.VolumeSnapshot, 0)
+		volumes := make([]*volume.Volume, 0)
+
+		numberOfThread := 20
+		startCount := 0
+		snapCountPerThread := 50
+		snapCountPerVolumes := 0
+
+		if !isCsiVolumeSnapshotClassExist && Inst().S.String() != openshift.SchedName {
+			log.InfoD("Creating csi volume snapshot class")
+			snapShotClassName = PureSnapShotClass + time.Now().Format("01-02-15h04m05s")
+			if volSnapshotClass, err = Inst().S.CreateCsiSnapshotClass(snapShotClassName, "Delete"); err != nil {
+				log.Errorf("Create volume snapshot class failed with error: [%v]", err)
+				UpdateOutcome(event, err)
+			}
+			log.InfoD("Successfully created volume snapshot class: %v", volSnapshotClass.Name)
+			isCsiVolumeSnapshotClassExist = true
+		} else if Inst().S.String() == openshift.SchedName {
+			snapShotClassName = PureSnapShotClass
+		}
+
+		// Collecting volume across all app specs
+		for _, ctx := range *contexts {
+			appVolumes, err := Inst().S.GetVolumes(ctx)
+			UpdateOutcome(event, err)
+			for _, v := range appVolumes {
+				isPureFileVol, err := Inst().V.IsPureFileVolume(v)
+				if err != nil {
+					log.Errorf("failed to parse pure volume")
+					UpdateOutcome(event, err)
+				}
+				if !isPureFileVol {
+					volumes = append(volumes, v)
+				}
+			}
+		}
+		// Assign volumes to every thread.
+		if len(volumes) < numberOfThread {
+			numberOfThread = len(volumes)
+		}
+		volumesInThread := make([][]*volume.Volume, numberOfThread)
+		numberOfVolumesPerThread := len(volumes) / numberOfThread
+
+		for t := 0; t < numberOfThread; t++ {
+			volumesInThread[t] = make([]*volume.Volume, numberOfVolumesPerThread)
+			for v := 0; v < numberOfVolumesPerThread; v++ {
+				volumesInThread[t][v] = volumes[startCount+v]
+			}
+			startCount += numberOfVolumesPerThread
+		}
+		snapCountPerVolumes = snapCountPerThread / len(volumes)
+		stepLog = "starting snapshot create threads"
+		Step(stepLog, func() {
+			var snapwg sync.WaitGroup
+			log.Infof(stepLog)
+			for i := 0; i < numberOfThread; i++ {
+				snapwg.Add(1)
+				go func(volList []*volume.Volume) {
+					defer snapwg.Done()
+					log.SetTestName(FadaSimultaneousSnapshots)
+					for _, vol := range volList {
+						for x := 0; x < snapCountPerVolumes; x++ {
+							snapName := fmt.Sprintf("snap-%s-%d", vol.Name, x)
+							log.Debugf("Creating snapshot: [%s] for volume : [%s]", snapName, vol.Name)
+							snapshot, err := Inst().S.CreateCsiSnapshot(snapName, vol.Namespace, snapShotClassName, vol.Name, false)
+							if err != nil {
+								UpdateOutcome(event, err)
+
+							}
+							volumeSnapshotMap[vol] = append(volumeSnapshotMap[vol], snapshot)
+						}
+					}
+				}(volumesInThread[i])
+				snapwg.Wait()
+			}
+			log.Infof("Completed Triggering all snapshots")
+			log.Infof("Waiting for 15 minutes")
+			time.Sleep(15 * time.Minute)
+		})
+		stepLog = "Validating snapshots for app volumes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			var snapwg sync.WaitGroup
+			for i := 0; i < numberOfThread; i++ {
+				snapwg.Add(1)
+				go func(volList []*volume.Volume) {
+					defer snapwg.Done()
+					log.SetTestName(FadaSimultaneousSnapshots)
+					for _, vol := range volList {
+						snapList, ok := volumeSnapshotMap[vol]
+						if !ok {
+							log.Errorf("Volume not found in volume snapMap. Err: %v", err)
+							UpdateOutcome(event, err)
+						}
+						for _, snapInfo := range snapList {
+							log.Debugf("Validating snapshots: [%s] a volume: [%s]", snapInfo.Name, vol.Name)
+							err = Inst().S.ValidateCsiSnap(vol.Name, vol.Namespace, *snapInfo)
+							if err != nil {
+								log.Errorf("failed to validate snapshot: [%s] for volume: [%s]", snapInfo.Name, vol.Name)
+								UpdateOutcome(event, err)
+							}
+						}
+					}
+				}(volumesInThread[i])
+				snapwg.Wait()
+			}
+		})
+		stepLog = "Deleting snapshots for app volumes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			var snapwg sync.WaitGroup
+			for i := 0; i < numberOfThread; i++ {
+				snapwg.Add(1)
+				go func(volList []*volume.Volume) {
+					defer snapwg.Done()
+					log.SetTestName(FadaSimultaneousSnapshots)
+					for _, vol := range volList {
+						isPureFileVol, err := Inst().V.IsPureFileVolume(vol)
+						if err != nil {
+							log.Errorf("failed to parse pure volume. Err: %v", err)
+							UpdateOutcome(event, err)
+						}
+						if !isPureFileVol {
+							snapList, ok := volumeSnapshotMap[vol]
+							if !ok {
+								log.Errorf("Volume not found in volume snapMap. Err: %v", err)
+								UpdateOutcome(event, err)
+							}
+							for _, snapInfo := range snapList {
+								log.Debugf("Deleting snapshots: [%s] a volume: [%s]", snapInfo.Name, vol.Name)
+								err = Inst().S.DeleteCsiSnapshot((*contexts)[0], snapInfo.Name, vol.Namespace)
+								if err != nil {
+									log.Errorf("failed to delete snapshot: [%s] for volume: [%s]", snapInfo.Name, vol.Name)
+									UpdateOutcome(event, err)
+								}
+							}
+						}
+					}
+				}(volumesInThread[i])
+				snapwg.Wait()
+			}
+		})
+
+	})
+	updateMetrics(*event)
+}
+
+func addFADALabelsToNode() error {
+	// Adding the labels on node.
+	for _, n := range node.GetStorageDriverNodes() {
+		if err := Inst().S.AddLabelOnNode(n, FADANodeSelectorKey, n.Name); err != nil {
+			return fmt.Errorf("failed to add label key [%s] and value [%s] in node [%s]. Error:[%v]",
+				FADANodeSelectorKey, n.Name, n.Name, err)
+		}
+	}
+	return nil
+}
+
+func deleteFADALabelsToNode() error {
+	// Adding the labels on node.
+	for _, n := range node.GetStorageDriverNodes() {
+		if err := Inst().S.RemoveLabelOnNode(n, FADANodeSelectorKey); err != nil {
+			return fmt.Errorf("failed to remove label [%s] in node [%s]. Error:[%v]",
+				FADANodeSelectorKey, n.Name, err)
+		}
+	}
+	return nil
 }

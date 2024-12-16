@@ -1752,7 +1752,7 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotInvalidCredentials}", func() {
 		Step(stepLog, func() {
 			log.Infof("create cloudsnapshot with invalid credentials")
 
-			_, err := Inst().S.CreateCsiSnapshot(fmt.Sprintf("csi-creds-test-%v", time.Now().Unix()), ns, snapShotClassName, pvcName)
+			_, err := Inst().S.CreateCsiSnapshot(fmt.Sprintf("csi-creds-test-%v", time.Now().Unix()), ns, snapShotClassName, pvcName, true)
 			log.FailOnNoError(err, "snapshot should have failed as credentials were invalid")
 		})
 
@@ -1785,7 +1785,7 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotInvalidCredentials}", func() {
 			log.InfoD(stepLog)
 			snapName = fmt.Sprintf("csi-creds-test-%v", time.Now().Unix())
 
-			_, err := Inst().S.CreateCsiSnapshot(snapName, ns, snapShotClassName, pvcName)
+			_, err := Inst().S.CreateCsiSnapshot(snapName, ns, snapShotClassName, pvcName, true)
 			log.FailOnError(err, "snapshot should not have failed")
 		})
 
@@ -1954,7 +1954,7 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotHAUpdateState}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			snapName = fmt.Sprintf("csi-snapshot-ha-update-test-snap-%v", time.Now().Unix())
-			_, err := Inst().S.CreateCsiSnapshot(snapName, ns, snapShotClassName, pvcName)
+			_, err := Inst().S.CreateCsiSnapshot(snapName, ns, snapShotClassName, pvcName, true)
 			log.FailOnError(err, "snapshot should not have failed")
 		})
 	})
@@ -2146,7 +2146,7 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotMultipleSnapshotAndRestore}", func() 
 					pvcName := fmt.Sprintf("csi-snapshot-multiple-test-%d-%v", num, timeNow)
 					log.Infof("Create cloudsnapshot with valid credentials for pvc %s", pvcName)
 					snapName := fmt.Sprintf("csi-snapshot-multiple-test-snap-%d-%v", num, timeNow)
-					_, err := Inst().S.CreateCsiSnapshot(snapName, ns, snapShotClassName, pvcName)
+					_, err := Inst().S.CreateCsiSnapshot(snapName, ns, snapShotClassName, pvcName, true)
 					log.FailOnError(err, "snapshot failed")
 				}(i)
 			}
@@ -2484,7 +2484,7 @@ var _ = Describe("{CSIOnlyTestCloudRestoreRestartCSIPods}", func() {
 			log.Infof("create cloudsnapshot with valid credentials")
 			snapName = fmt.Sprintf("csi-snapshot-restart-csi-pod-test-snap-%v", time.Now().Unix())
 
-			_, err = Inst().S.CreateCsiSnapshot(snapName, ns, snapShotClassName, pvcName)
+			_, err = Inst().S.CreateCsiSnapshot(snapName, ns, snapShotClassName, pvcName, true)
 			log.FailOnError(err, fmt.Sprintf("error creating snapshot [%v]", snapName))
 		})
 		stepLog = "Restore cloud-snap with CSI pod restart"
@@ -2588,7 +2588,7 @@ var _ = Describe("{CSIOnlyTestCloudRestoreRestartNode}", func() {
 			log.Infof("create cloudsnapshot with valid credentials")
 			snapName = fmt.Sprintf("csi-snapshot-restart-node-test-snap-%v", time.Now().Unix())
 
-			_, err = Inst().S.CreateCsiSnapshot(snapName, ns, snapShotClassName, pvcName)
+			_, err = Inst().S.CreateCsiSnapshot(snapName, ns, snapShotClassName, pvcName, true)
 			log.FailOnError(err, fmt.Sprintf("error creating snapshot [%v]", snapName))
 		})
 		stepLog = "Restore cloud-snap with Node restart"
@@ -2691,7 +2691,7 @@ var _ = Describe("{CSIOnlyTestCloudRestoreRestartPx}", func() {
 			log.Infof("create cloudsnapshot with valid credentials")
 			snapName = fmt.Sprintf("csi-snapshot-restart-px-test-snap-%v", time.Now().Unix())
 
-			_, err = Inst().S.CreateCsiSnapshot(snapName, ns, snapShotClassName, pvcName)
+			_, err = Inst().S.CreateCsiSnapshot(snapName, ns, snapShotClassName, pvcName, true)
 			log.FailOnError(err, fmt.Sprintf("error creating snapshot [%v]", snapName))
 		})
 
@@ -2778,7 +2778,7 @@ var _ = Describe("{CSIOnlyTestCloudRestoreAfterBucketDelete}", func() {
 			log.Infof("create cloudsnapshot with valid credentials")
 			snapName = fmt.Sprintf("csi-snapshot-restart-px-test-snap-%v", time.Now().Unix())
 
-			_, err = Inst().S.CreateCsiSnapshot(snapName, ns, snapShotClassName, pvcName)
+			_, err = Inst().S.CreateCsiSnapshot(snapName, ns, snapShotClassName, pvcName, true)
 			log.FailOnError(err, fmt.Sprintf("error creating snapshot [%v]", snapName))
 		})
 
@@ -2897,7 +2897,7 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotDegradedState}", func() {
 
 			log.Infof("create cloudsnapshot with valid credentials")
 			snapName = fmt.Sprintf("si-snapshot-degraded-test-snap-%v", time.Now().Unix())
-			_, err = Inst().S.CreateCsiSnapshot(snapName, ns, snapShotClassName, pvcName)
+			_, err = Inst().S.CreateCsiSnapshot(snapName, ns, snapShotClassName, pvcName, true)
 			log.FailOnError(err, "snapshot should have failed")
 		})
 	})
@@ -2980,7 +2980,7 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotOutOfQuorum}", func() {
 
 			log.Infof("create cloudsnapshot with valid credentials")
 			snapName = fmt.Sprintf("csi-creds-test-%v", time.Now().Unix())
-			_, err = Inst().S.CreateCsiSnapshot(snapName, ns, snapShotClassName, pvcName)
+			_, err = Inst().S.CreateCsiSnapshot(snapName, ns, snapShotClassName, pvcName, true)
 			log.FailOnNoError(err, "snapshot should have failed")
 		})
 	})

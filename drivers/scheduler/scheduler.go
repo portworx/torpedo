@@ -96,8 +96,8 @@ type AppConfig struct {
 	PvcStart                    int      `yaml:"start"`
 	PvcEnd                      int      `yaml:"end"`
 	DeploymentCount             int      `yaml:"deploymentCount"`
-	MaxIOPS						string	 `yaml:"max_iops"`
-	MaxBandwidth				string   `yaml:"max_bandwidth"`
+	MaxIOPS                     string   `yaml:"max_iops"`
+	MaxBandwidth                string   `yaml:"max_bandwidth"`
 }
 
 // InitOptions initialization options
@@ -441,7 +441,7 @@ type Driver interface {
 	// TODO: there's probably better place to place this test, it creates the snapshot and also does the validation.
 	// At the same time, there's also other validation functions in this interface as well. So we should look into ways
 	// to make the interface consistent
-	CreateCsiSnapshot(name string, namespace string, class string, pvc string) (*volsnapv1.VolumeSnapshot, error)
+	CreateCsiSnapshot(name string, namespace string, class string, pvc string, waitForSnap bool) (*volsnapv1.VolumeSnapshot, error)
 
 	// CSISnapshotTest create csi snapshot and return a pvc using that snapshot
 	// TODO: there's probably better place to place this test, it creates the snapshot and also does the validation.
@@ -509,6 +509,9 @@ type Driver interface {
 
 	// GetPodMetrics gets the metrics for a pod
 	GetPodMetrics(podName, namespace string) (*v1beta1.PodMetrics, error)
+
+	// ValidateCsiSnap validate CSI snapshot for a given PVC
+	ValidateCsiSnap(pvcName string, namespace string, snapshot volsnapv1.VolumeSnapshot) error
 }
 
 var (

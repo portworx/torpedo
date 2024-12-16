@@ -15125,7 +15125,7 @@ func CheckIfVolumeExistsInFBorFA(flashBlades []pureutils.FlashBladeEntry, flashA
 }
 
 func GetCPUAndMemOfPxProcess(n node.Node, processName string) (float64, float64, error) {
-	getPxPidCmd := "pidof px-storage"
+	getPxPidCmd := fmt.Sprintf("pidof %s", processName)
 
 	output, err := Inst().N.RunCommand(n, getPxPidCmd, node.ConnectionOpts{Timeout: 30 * time.Second, TimeBeforeRetry: 20 * time.Second, Sudo: true})
 	if err != nil {
@@ -15782,7 +15782,7 @@ func SnapshotAndRestorePVCs(namespace string, deploymentName string, storageclas
 		restoredPvcName := "restore-" + pvc.Name
 		restoredPvcDeployment := "restore-" + pvc.Name + deploymentName
 		snapName := "snap-" + pvc.Name
-		_, err := Inst().S.CreateCsiSnapshot(snapName, namespace, snapClass, pvc.Name)
+		_, err := Inst().S.CreateCsiSnapshot(snapName, namespace, snapClass, pvc.Name, true)
 		if err != nil {
 			return fmt.Errorf("failed to create snapshot %s for volume %s", snapName, pvc.Name)
 		}

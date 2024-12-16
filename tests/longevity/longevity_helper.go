@@ -398,6 +398,8 @@ func populateTriggerFuncs() {
 		PowerOffAllKvdbVMs:                TriggerPowerOffAllKvdbVMs,
 		ScaleFBDAVolumes:                  TriggerScaleFBDAVolumes,
 		RunFlatPxCSI:                      TriggerRunFlat,
+		FadaSimultaneousSnapshots:         TriggerFadaSimultaneousSnapshots,
+		TestPxCSIFadaAttachLimit:          TriggerPxCSIFadaAttachLimit,
 	}
 
 	//Creating a distinct trigger to make sure email triggers at regular intervals
@@ -928,6 +930,8 @@ func populateIntervals() {
 	triggerInterval[ScaleFBDAVolumes] = make(map[int]time.Duration)
 	triggerInterval[PowerOffAllKvdbVMs] = make(map[int]time.Duration)
 	triggerInterval[RunFlatPxCSI] = make(map[int]time.Duration)
+	triggerInterval[TestPxCSIFadaAttachLimit] = make(map[int]time.Duration)
+	triggerInterval[FadaSimultaneousSnapshots] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -1903,7 +1907,29 @@ func populateIntervals() {
 	triggerInterval[RunFlatPxCSI][4] = 18 * baseInterval
 	triggerInterval[RunFlatPxCSI][3] = 21 * baseInterval
 	triggerInterval[RunFlatPxCSI][2] = 24 * baseInterval
-	triggerInterval[RunFlatPxCSI][9] = 27 * baseInterval
+	triggerInterval[RunFlatPxCSI][1] = 27 * baseInterval
+
+	triggerInterval[TestPxCSIFadaAttachLimit][10] = 1 * baseInterval
+	triggerInterval[TestPxCSIFadaAttachLimit][9] = 3 * baseInterval
+	triggerInterval[TestPxCSIFadaAttachLimit][8] = 6 * baseInterval
+	triggerInterval[TestPxCSIFadaAttachLimit][7] = 9 * baseInterval
+	triggerInterval[TestPxCSIFadaAttachLimit][6] = 12 * baseInterval
+	triggerInterval[TestPxCSIFadaAttachLimit][5] = 15 * baseInterval
+	triggerInterval[TestPxCSIFadaAttachLimit][4] = 18 * baseInterval
+	triggerInterval[TestPxCSIFadaAttachLimit][3] = 21 * baseInterval
+	triggerInterval[TestPxCSIFadaAttachLimit][2] = 24 * baseInterval
+	triggerInterval[TestPxCSIFadaAttachLimit][1] = 27 * baseInterval
+
+	triggerInterval[FadaSimultaneousSnapshots][10] = 1 * baseInterval
+	triggerInterval[FadaSimultaneousSnapshots][9] = 3 * baseInterval
+	triggerInterval[FadaSimultaneousSnapshots][8] = 6 * baseInterval
+	triggerInterval[FadaSimultaneousSnapshots][7] = 9 * baseInterval
+	triggerInterval[FadaSimultaneousSnapshots][6] = 12 * baseInterval
+	triggerInterval[FadaSimultaneousSnapshots][5] = 15 * baseInterval
+	triggerInterval[FadaSimultaneousSnapshots][4] = 18 * baseInterval
+	triggerInterval[FadaSimultaneousSnapshots][3] = 21 * baseInterval
+	triggerInterval[FadaSimultaneousSnapshots][2] = 24 * baseInterval
+	triggerInterval[FadaSimultaneousSnapshots][1] = 27 * baseInterval
 
 	baseInterval = 300 * time.Minute
 
@@ -2266,6 +2292,8 @@ func populateIntervals() {
 	triggerInterval[PowerOffAllKvdbVMs][0] = 0
 	triggerInterval[ScaleFBDAVolumes][0] = 0
 	triggerInterval[RunFlatPxCSI][0] = 0
+	triggerInterval[TestPxCSIFadaAttachLimit][0] = 0
+	triggerInterval[FadaSimultaneousSnapshots][0] = 0
 
 }
 

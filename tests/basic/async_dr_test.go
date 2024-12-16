@@ -785,7 +785,7 @@ var _ = Describe("{UpdateVolumeSnapshotSchedule}", Label("p1", "positive", "Volu
 			_, err = asyncdr.CreateSchedulePolicyWithRetain(scpolName, snapInterval, retain)
 			log.FailOnError(err, "Failed to create schedule policy")
 			for i := 0; i < 2; i++ {
-				err := createPVC(fmt.Sprintf("pvc-%d", i), "px-csi-db", "10Gi", ns)
+				_, err := createPVC(fmt.Sprintf("pvc-%d", i), "px-csi-db", "10Gi", ns)
 				log.FailOnError(err, "Failed to create PVC")
 			}
 			snapSched, err := asyncdr.CreateSnapshotSchedule(ns, "pvc-0", schdName, scpolName, "local")

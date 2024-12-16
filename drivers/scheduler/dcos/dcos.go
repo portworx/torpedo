@@ -3,12 +3,13 @@ package dcos
 import (
 	"encoding/json"
 	"fmt"
-	v1 "github.com/pure-px/px-operator/pkg/apis/core/v1"
 	"io/ioutil"
-	"k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	"os"
 	"path/filepath"
 	"time"
+
+	v1 "github.com/pure-px/px-operator/pkg/apis/core/v1"
+	"k8s.io/metrics/pkg/apis/metrics/v1beta1"
 
 	docker "github.com/docker/docker/client"
 	marathon "github.com/gambol99/go-marathon"
@@ -1035,7 +1036,7 @@ func (d *dcos) CreateVolumeSnapshotClassesWithParameters(snapClassName string, p
 	}
 }
 
-func (d *dcos) CreateCsiSnapshot(name string, namespace string, class string, pvc string) (*volsnapv1.VolumeSnapshot, error) {
+func (d *dcos) CreateCsiSnapshot(name string, namespace string, class string, pvc string, waitForSnap bool) (*volsnapv1.VolumeSnapshot, error) {
 	//CreateCsiSanpshot is not supported
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -1251,6 +1252,14 @@ func (k *dcos) DeletePodsFromNamespace(ctx *scheduler.Context, namespace string)
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "DeletePodsFromNamespace()",
+	}
+}
+
+func (k *dcos) ValidateCsiSnap(pvcName string, namespace string, snapshot volsnapv1.VolumeSnapshot) error {
+	// ValidateCsiSnap is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateCsiSnap()",
 	}
 }
 
