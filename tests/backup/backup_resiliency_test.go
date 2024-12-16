@@ -23,6 +23,7 @@ import (
 	"github.com/pure-px/torpedo/drivers/backup/portworx"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/drivers/scheduler/k8s"
 	"github.com/pure-px/torpedo/drivers/volume/portworx/schedops"
 	"github.com/pure-px/torpedo/pkg/aututils"
 	"github.com/pure-px/torpedo/pkg/log"
@@ -30,7 +31,10 @@ import (
 	"golang.org/x/sync/errgroup"
 	appsV1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
+	storageApi "k8s.io/api/storage/v1"
 	storagev1 "k8s.io/api/storage/v1"
+	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -3491,5 +3495,173 @@ var _ = Describe("{RebootNodesWhileCRRestoreIsInProgress}", Label(TestCaseLabels
 		log.InfoD("Deleting deployed applications")
 		DestroyApps(scheduledAppContexts, opts)
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
+})
+
+// Install px-backup on destination cluster and taking px-backup on destination cluster, uninstall px-backup of destination cluster and restore from the backup on destination cluster
+var _ = Describe("{UninstallPxBackupAndRestoreFromTheBackup}", func() {
+
+	var err error
+	var ctx context.Context
+	var backupName, restoreName string
+	var scheduledAppContexts []*scheduler.Context
+	var destClusterUid string
+	var sourceClusterStatus api.ClusterInfo_StatusInfo_Status
+	var destClusterStatus api.ClusterInfo_StatusInfo_Status
+	var cloudCredName string
+	var cloudCredUID string
+	var backupLocationUID string
+	var bkpLocationName string
+	var pxBackupNamespace string
+	var destinationKubeConfigPath string
+	var providers []string
+	var backupLocationMap map[string]string
+	var namespace, scName string
+	var releaseName string
+	var k8sStorage storage.Ops
+	var params map[string]string
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("UninstallPxBackupAndRestoreFromTheBackup",
+			"Uninstall px-backup and restore from the backups", nil, 58048, Aratnam, Q4FY24)
+
+		k8sStorage = storage.Instance()
+		params = make(map[string]string)
+		backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
+		restoreName = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
+		backupLocationMap = make(map[string]string)
+		providers = GetBackupProviders()
+
+		namespace = "central"
+		scName = fmt.Sprintf("portworx-sc-%s", RandomString(10))
+		releaseName = "central"
+		ctx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin context")
+
+		// Switch to destination cluster context
+		log.InfoD("Switching context to destination cluster")
+		err = SetDestinationKubeConfig()
+		log.FailOnError(err, "Switching context to destination cluster")
+
+		// Switch back to source cluster if any error occurs
+		defer func() {
+			err = SetSourceKubeConfig()
+			log.FailOnError(err, "Unable to switch context to source cluster [%s]", SourceClusterName)
+		}()
+
+		destinationKubeConfigPath, err = GetDestinationClusterConfigPath()
+		log.FailOnError(err, "Fetching destination kubeconfig path")
+
+		// Create a new storage class
+		params["repl"] = "2"
+		reclaimPolicyDelete := v1.PersistentVolumeReclaimDelete
+		bindMode := storageApi.VolumeBindingImmediate
+		scObj := storageApi.StorageClass{
+			ObjectMeta: metaV1.ObjectMeta{
+				Name: scName,
+			},
+			Provisioner:       k8s.CsiProvisioner,
+			Parameters:        params,
+			ReclaimPolicy:     &reclaimPolicyDelete,
+			VolumeBindingMode: &bindMode,
+		}
+
+		_, err = k8sStorage.GetStorageClass(scName)
+		if err != nil { // Storage class doesn't exist, create it
+			_, err = k8sStorage.CreateStorageClass(&scObj)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating new storage class %v on %s", scName, DestinationClusterName))
+		} else {
+			log.InfoD("Storage class %s already exists", scName)
+		}
+
+		// Skipping Install PX-Backup as per the ticket
+		err = InstallPxBackup(destinationKubeConfigPath, namespace, scName, releaseName)
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Installing PX-Backup with release %s on %s", releaseName, DestinationClusterName))
+	})
+
+	It("Uninstall PX-Backup and restore from the backup", func() {
+		Step("Creating backup location and cloud credentials", func() {
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("cred-%s-%v", provider, time.Now().Unix())
+				bkpLocationName = fmt.Sprintf("%s-%s-bl", provider, getGlobalBucketName(provider))
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = bkpLocationName
+
+				err = CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating cloud credential %s", cloudCredName))
+
+				err = CreateBackupLocation(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", bkpLocationName))
+			}
+		})
+
+		Step("Registering clusters for backup", func() {
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Registering source and destination clusters for backup")
+
+			sourceClusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
+			log.FailOnError(err, "Fetching source cluster status")
+			dash.VerifyFatal(sourceClusterStatus, api.ClusterInfo_StatusInfo_Online, "Source cluster is online")
+
+			destClusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, ctx)
+			log.FailOnError(err, "Fetching destination cluster status")
+			dash.VerifyFatal(destClusterStatus, api.ClusterInfo_StatusInfo_Online, "Destination cluster is online")
+
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, "Fetching destination cluster UID")
+		})
+
+		Step("Creating a backup of PX-Backup namespace", func() {
+			pxBackupNamespace, err = backup.GetPxBackupNamespace()
+			log.FailOnError(err, "Unable to fetch px-backup namespace")
+			log.InfoD("px backup namespace from destination cluster: %s", pxBackupNamespace)
+			if pxBackupNamespace == "" {
+				dash.VerifyFatal(fmt.Errorf("PX-Backup namespace is empty"), nil, "Namespace validation failed")
+			}
+			if backupLocationUID == "" {
+				dash.VerifyFatal(fmt.Errorf("Backup location UID is empty"), nil, "Backup location validation failed")
+			}
+
+			log.InfoD("Switching context to destination cluster for backup")
+			err := SetDestinationKubeConfig()
+			dash.VerifyFatal(err, nil, "Switching to destination cluster context")
+
+			err = CreateBackup(backupName, DestinationClusterName, bkpLocationName, backupLocationUID, []string{pxBackupNamespace}, nil, BackupOrgID, destClusterUid, "", "", "", "", ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Created backup [%s] of namespace [%s]", backupName, pxBackupNamespace))
+		})
+
+		Step("Uninstalling PX-Backup", func() {
+			err = UninstallPxBackup(destinationKubeConfigPath)
+			if err != nil {
+				log.InfoD("PX-Backup is already uninstalled for [%s]", destinationKubeConfigPath)
+			} else {
+				dash.VerifyFatal(err, nil, "PX-Backup uninstalled successfully")
+			}
+		})
+		Step("Restoring PX-Backup from the backup", func() {
+			log.Infof("Starting restore process for backup [%s] into cluster [%s]", backupName, DestinationClusterName)
+
+			err = CreateRestore(restoreName, backupName, nil, DestinationClusterName, destClusterUid, BackupOrgID, ctx, make(map[string]string))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Restored PX-Backup [%s] from backup [%s]", restoreName, backupName))
+			log.Infof("Restore [%s] created successfully", restoreName)
+		})
+
+		Step("Validating PX-Backup restoration", func() {
+			err = ValidateAllPodsInPxBackupNamespace()
+			dash.VerifyFatal(err, nil, "PX-Backup restoration validation successful. All pods in the PX-Backup namespace are up and running.")
+		})
+
+	})
+	JustAfterEach(func() {
+		defer func() {
+			err := SetSourceKubeConfig()
+			log.FailOnError(err, "Switching back to source cluster context")
+		}()
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		err = k8sStorage.DeleteStorageClass(scName)
+		log.Warnf("Deleting storage class %s returned: %v", scName, err)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+
 	})
 })

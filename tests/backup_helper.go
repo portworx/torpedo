@@ -27,6 +27,7 @@ import (
 	optest "github.com/pure-px/px-operator/pkg/util/test"
 	"k8s.io/apimachinery/pkg/watch"
 
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -76,6 +77,13 @@ import (
 	tektoncdv1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
 	storageapi "k8s.io/api/storage/v1"
 	kubevirtv1 "kubevirt.io/api/core/v1"
+
+	"helm.sh/helm/v3/pkg/action"
+	"helm.sh/helm/v3/pkg/chart/loader"
+	"helm.sh/helm/v3/pkg/cli"
+	"helm.sh/helm/v3/pkg/getter"
+	"helm.sh/helm/v3/pkg/kube"
+	"helm.sh/helm/v3/pkg/repo"
 )
 
 // TestcaseAuthor List
@@ -100,6 +108,7 @@ const (
 	Pingle         TestcaseAuthor = "pingle-px"
 	ABadgujar      TestcaseAuthor = "abadgujar-px"
 	MMurdanar      TestcaseAuthor = "mmurdanar-px"
+	Aratnam        TestcaseAuthor = "abhishek-r"
 )
 
 // TestcaseQuarter List
@@ -218,6 +227,10 @@ const (
 	DynamicPvcGenerationRetryTime         = 30
 	NfsJobName                            = "backupfilemissing"
 	PxBackupDeleteJobPrifix               = "delete-"
+	NameSpaceDeletionTimeout              = 5 * time.Minute
+	PodReadinessTimeout                   = 5 * time.Minute
+	HelmRepoUrl                           = "PX_BACKUP_UPGRADE_HELM_VERSION"
+	DefaultHelmRepoUrl                    = "http://charts.portworx.io/"
 )
 
 var (
@@ -6117,49 +6130,56 @@ func ValidatePodByLabel(label map[string]string, namespace string, timeout time.
 	return nil
 }
 
-// IsMongoDBReady validates if the mongo db pods in Px-Backup namespace are healthy enough for Px-Backup to function
+// IsMongoDBReady validates if the MongoDB pods in the Px-Backup namespace are healthy enough for Px-Backup to function
 func IsMongoDBReady() error {
-	log.Infof("Verify that at least 1 mongodb pods is in Ready state at the end of the testcase")
+	log.Infof("Verify that at least 1 MongoDB pods are in the Ready state at the end of the test case")
 	errorString := "mongodb pods are not ready yet"
 	pxbNamespace, err := backup.GetPxBackupNamespace()
 	if err != nil {
 		return err
 	}
+
 	mongoDBPodStatus := func() (interface{}, bool, error) {
 		statefulSet, err := apps.Instance().GetStatefulSet(MongodbStatefulset, pxbNamespace)
 		if err != nil {
 			return "", true, err
 		}
 
-		// Check if all 3 mongo pods have come up
-		if statefulSet.Status.ReadyReplicas < 3 {
-			return "", true, fmt.Errorf("%s. expected ready pods - %d, actual ready pods - %d",
-				errorString, 3, statefulSet.Status.ReadyReplicas)
-
+		// Check if the number of ready pods is greater than 1
+		if statefulSet.Status.ReadyReplicas <= 1 {
+			return "", true, fmt.Errorf("%s. expected ready pods > 1, actual ready pods - %d",
+				errorString, statefulSet.Status.ReadyReplicas)
 		}
 		return "", false, nil
 	}
+
 	_, err = DoRetryWithTimeoutWithGinkgoRecover(mongoDBPodStatus, 30*time.Minute, 30*time.Second)
 	if err != nil {
 		if strings.Contains(err.Error(), errorString) {
 			statefulSet, err := apps.Instance().GetStatefulSet(MongodbStatefulset, pxbNamespace)
+			if err != nil {
+				return err
+			}
 
 			// Check atleast 1 mongo pods are up if 3 mongo pods have not come up even after waiting for 30 min
 			// Ideally we would expect all 3 pods to be ready but because of intermittent issues, we are limiting to 1
 			// Px-Backup would function with just 1 mongo DB pods in healthy state.
 			// TODO: Remove the limit to check for only 1 out of 3 pods once fixed
 			// Tracking JIRAs: https://portworx.atlassian.net/browse/PB-3105, https://portworx.atlassian.net/browse/PB-3481
-			log.Infof("Validating atleast 1 mongodb pod is ready")
+			log.Infof("Fallback: Validating at least 1 MongoDB pod is ready")
 			if statefulSet.Status.ReadyReplicas < 1 {
-				return err
+				return fmt.Errorf("%s. At least 1 pod is required, but actual ready pods - %d",
+					errorString, statefulSet.Status.ReadyReplicas)
 			}
 		}
 	}
+
+	// Final check to log the number of ready pods
 	statefulSet, err := apps.Instance().GetStatefulSet(MongodbStatefulset, pxbNamespace)
 	if err != nil {
 		return err
 	}
-	log.Infof("Number of mongodb pods in Ready state are %v", statefulSet.Status.ReadyReplicas)
+	log.Infof("Number of MongoDB pods in Ready state: %v", statefulSet.Status.ReadyReplicas)
 	return nil
 }
 
@@ -12833,6 +12853,120 @@ func GetAllCustomRoles() ([]string, error) {
 	return roles, nil
 }
 
+// Install px-backup
+func InstallPxBackup(kubeConfigPath, namespace, scName, releaseName string) error {
+	// Initialize Helm configuration
+	cfg := new(action.Configuration)
+	if err := cfg.Init(kube.GetConfig(kubeConfigPath, "", namespace), namespace, os.Getenv("HELM_DRIVER"), func(format string, v ...interface{}) {
+		fmt.Printf(format, v...)
+	}); err != nil {
+		return fmt.Errorf("error initializing Helm action configuration: %w", err)
+	}
+	settings := cli.New()
+	if err := addAndUpdateRepo(settings); err != nil {
+		return fmt.Errorf("failed to add and update Portworx repository: %w", err)
+	}
+	// Check if the release already exists
+	list := action.NewList(cfg)
+	list.AllNamespaces = false // Only list releases in the current namespace
+	list.SetStateMask()        // Set to fetch all release states
+
+	listNamespaceReleases, err := list.Run()
+	if err != nil {
+		return fmt.Errorf("failed to list Helm releases: %w", err)
+	}
+
+	for _, rel := range listNamespaceReleases {
+		if rel.Name == releaseName && rel.Info != nil && rel.Info.Status == "deployed" {
+			log.InfoD("Release %s already exists and is deployed. Skipping installation.\n", releaseName)
+			return nil
+		}
+	}
+	helmBranchVersion := GetEnv("PX_BACKUP_HELM_REPO_BRANCH", defaultPxBackupHelmBranch)
+
+	// Create a new Helm install client
+	install := action.NewInstall(cfg)
+	install.ReleaseName = releaseName
+	install.Namespace = namespace
+	install.CreateNamespace = true
+	install.Version = helmBranchVersion
+
+	// Define the chart name and repository location
+	chartName := "portworx/px-central"
+	// Set custom values equivalent to --set options
+	vals := map[string]interface{}{
+		"persistentStorage": map[string]interface{}{
+			"enabled":          true,
+			"storageClassName": scName,
+		},
+		"pxbackup": map[string]interface{}{
+			"enabled": true,
+		},
+	}
+	// Locate and load the Helm chart
+	chartPath, err := install.ChartPathOptions.LocateChart(chartName, settings)
+	if err != nil {
+		return fmt.Errorf("failed to locate chart: %w", err)
+	}
+	chart, err := loader.Load(chartPath)
+	if err != nil {
+		return fmt.Errorf("failed to load chart: %w", err)
+	}
+	// Run the Helm install action
+	release, err := install.Run(chart, vals)
+	if err != nil {
+		return fmt.Errorf("failed to install chart: %w", err)
+	}
+	log.InfoD("Successfully installed release: %s\n", release.Name)
+	// Function to wait for the namespace to be created
+	waitForNamespaceToBeCreated := func() (interface{}, bool, error) {
+		ns, err := core.Instance().GetNamespace(namespace)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				return nil, false, nil // Namespace not found, keep waiting
+			}
+			return nil, true, fmt.Errorf("error checking namespace status: %v", err) // Unexpected error
+		}
+
+		log.InfoD("Namespace %s status: %s", namespace, ns.Status.Phase)
+
+		// Check if the namespace is active
+		if ns.Status.Phase == "Active" {
+			return nil, true, nil // Namespace created and ready
+		}
+
+		return nil, false, fmt.Errorf("waiting for namespace %s to be created", namespace) // Keep waiting
+	}
+	_, err = task.DoRetryWithTimeout(waitForNamespaceToBeCreated, NameSpaceDeletionTimeout, 10*time.Second)
+	if err != nil {
+		return err
+	}
+	// Function to wait for all pods in the namespace to be ready
+	waitForPodsToBeReady := func() (interface{}, bool, error) {
+		pods, err := core.Instance().GetPods(namespace, nil)
+		if err != nil {
+			return nil, true, fmt.Errorf("error fetching pods in namespace %s: %v", namespace, err)
+		}
+		for _, pod := range pods.Items {
+			if pod.Status.Phase != corev1.PodRunning {
+				log.Warnf("Pod %s in namespace %s is not Running. Current phase: %s", pod.Name, namespace, pod.Status.Phase)
+				return nil, false, nil // Pod is not running, keep waiting
+			}
+		}
+
+		log.InfoD("All pods in namespace %s are up and running", namespace)
+		return nil, true, nil // All pods are ready
+	}
+
+	_, err = task.DoRetryWithTimeout(waitForPodsToBeReady, PodReadinessTimeout, 10*time.Second)
+	if err != nil {
+		return err
+	}
+
+	log.InfoD("Successfully installed release: %s\n", release.Name)
+	return nil
+}
+
 // RestoreFailCheck inspects restore task to check for status being "fail". NOTE: If the status is different, it retries every `retryInterval` for `retryDuration` before returning `err`
 func RestoreFailCheck(restoreName string, orgID string, retryDuration time.Duration, retryInterval time.Duration, ctx context1.Context) error {
 	log.InfoD("RestoreFailCheck started:")
@@ -13271,4 +13405,110 @@ func VerifyLicenseCount(ctx context1.Context, expected int) error {
 	}
 
 	return err
+}
+
+// initializeHelmConfig ensures Helm's config directory and files exist
+func initializeHelmConfig(settings *cli.EnvSettings) error {
+	configDir := filepath.Dir(settings.RepositoryConfig)
+	if _, err := os.Stat(configDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			return fmt.Errorf("failed to create Helm config directory: %w", err)
+		}
+	}
+
+	// Create repositories.yaml if it doesn’t exist
+	if _, err := os.Stat(settings.RepositoryConfig); os.IsNotExist(err) {
+		file, err := os.Create(settings.RepositoryConfig)
+		if err != nil {
+			return fmt.Errorf("failed to create repositories file: %w", err)
+		}
+		defer file.Close()
+	}
+	return nil
+}
+
+// addAndUpdateRepo adds the Portworx repository and updates it
+func addAndUpdateRepo(settings *cli.EnvSettings) error {
+	if err := initializeHelmConfig(settings); err != nil {
+		return fmt.Errorf("failed to initialize Helm configuration: %w", err)
+	}
+	helmURLRepo := GetEnv(HelmRepoUrl, DefaultHelmRepoUrl)
+	entry := &repo.Entry{
+		Name: "portworx",
+		URL:  helmURLRepo,
+	}
+	repository, err := repo.NewChartRepository(entry, getter.All(settings))
+	if err != nil {
+		return fmt.Errorf("failed to create repository: %w", err)
+	}
+	_, err = repository.DownloadIndexFile()
+	if err != nil {
+		return fmt.Errorf("failed to download index file for repository: %w", err)
+	}
+	repoFile := settings.RepositoryConfig
+	file, err := repo.LoadFile(repoFile)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to load repository file: %w", err)
+	}
+	if file == nil || !file.Has(entry.Name) {
+		file.Update(entry)
+		if err := file.WriteFile(repoFile, 0644); err != nil {
+			return fmt.Errorf("failed to write repository file: %w", err)
+		}
+	}
+	log.InfoD("Successfully added or updated Portworx repository")
+	return nil
+}
+
+// Uninstall px-backup
+func UninstallPxBackup(kubeConfigPath string) error {
+	pxBackupNamespace, err := backup.GetPxBackupNamespace()
+	if err != nil {
+		return err
+	}
+	log.InfoD("px backup namespace from %s: %s", destinationClusterName, pxBackupNamespace)
+
+	cfg := new(action.Configuration)
+	if err := cfg.Init(kube.GetConfig(kubeConfigPath, "", ""), pxBackupNamespace, os.Getenv("HELM_DRIVER"), func(format string, v ...interface{}) {
+		fmt.Sprintf(format, v)
+	}); err != nil {
+		return fmt.Errorf("error initializing Helm action configuration: %w", err)
+	}
+
+	// Create a new uninstall action
+	uninstall := action.NewUninstall(cfg)
+
+	// Perform the uninstall action
+	rel, err := uninstall.Run("px-central")
+	if err != nil {
+		return err
+	}
+	log.InfoD("Successfully uninstalled release: %s", rel.Release.Name)
+
+	// kubectl command for delete namespace
+	err = DeleteNamespaces([]string{pxBackupNamespace})
+	if err != nil {
+		return err
+	}
+
+	waitForNamespaceToBeDeleted := func() (interface{}, bool, error) {
+		ns, err := core.Instance().GetNamespace(pxBackupNamespace)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				return nil, false, nil
+			}
+			return nil, true, fmt.Errorf("error checking namespace status: %v", err)
+		}
+
+		log.InfoD("namespace %s status: %s", pxBackupNamespace, ns.Status.Phase)
+		return nil, true, fmt.Errorf("namespace %s not deleted", pxBackupNamespace)
+	}
+
+	_, err = task.DoRetryWithTimeout(waitForNamespaceToBeDeleted, NameSpaceDeletionTimeout, 10*time.Second)
+	if err != nil {
+		return err
+	}
+	// Log the namesapce status as it has been deleted successfully before returning
+	log.InfoD("Successfully deleted the namespace %s", pxBackupNamespace)
+	return nil
 }
