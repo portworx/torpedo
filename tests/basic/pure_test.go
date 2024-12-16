@@ -9093,16 +9093,16 @@ var _ = Describe("{CreatePodsUsingClonewithMT}", func() {
 			log.FailOnError(err, fmt.Sprintf("Failed to get pvc list in namespace [%v] ", nsNormal))
 			pvc := allPvcList.Items[0]
 			//Currently PX-CSI supports upto 64 snapshots per volume
-			go func() {
+			for i := 0; i < 64; i++ {
 				wg.Add(1)
-				defer wg.Done()
-				defer GinkgoRecover()
-				for i := 0; i < 64; i++ {
-					snapName := fmt.Sprintf("snap-pxcsi-%v", i)
+				go func(i int) {
+					defer wg.Done()
+					defer GinkgoRecover()
+					snapName := fmt.Sprintf("snap-%v", i)
 					_, err := Inst().S.CreateCsiSnapshot(snapName, nsNormal, snapShotClassName, pvc.Name)
 					log.FailOnError(err, fmt.Sprintf("Failed to create snapshot [%v] ", snapName))
-				}
-			}()
+				}(i)
+			}
 			wg.Wait()
 		})
 		stepLog = "Destroy FA Pods,namespaces,storageclasses and deployments"
