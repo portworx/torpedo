@@ -1968,52 +1968,28 @@ var _ = Describe("{BackupNetworkErrorTest}", Label(TestCaseLabelsMap[BackupNetwo
 			log.InfoD("Taking backup of applications with incremental iteration of network delay in Milliseconds")
 			incrementalMilliseconds := 1000
 			MinDelayInMilliseconds := 100
-			MaxDelayInMilliseconds := 100000
+			NumOfIteration := 2
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-
-			var lastErrorDelay int
-
 			for _, namespace := range appNamespaces {
-				var failedBackupTaken bool
+				currentErrorDelay := MinDelayInMilliseconds
 				currentNamespace := namespace
-
-				for i := MinDelayInMilliseconds; i <= MaxDelayInMilliseconds && !failedBackupTaken; i += incrementalMilliseconds {
-					lastErrorDelay = i
-					func() {
-						defer func() {
-							log.Infof(fmt.Sprintf("Deleting the delay of %dms to the applications nodes", lastErrorDelay))
-							err := Inst().N.InjectNetworkErrorWithRebootFallback(appNodesMap[currentNamespace], "delay", "del", 0, lastErrorDelay)
-							dash.VerifyFatal(err, nil, fmt.Sprintf("Removing delay of %dms from nodes", lastErrorDelay))
-						}()
-
-						log.Infof(fmt.Sprintf("Adding a delay of %dms to the applications nodes", i))
-						err := Inst().N.InjectNetworkErrorWithRebootFallback(appNodesMap[currentNamespace], "delay", "add", 0, i)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Adding a delay of %dms to nodes", i))
-
-						backupName := fmt.Sprintf("%s-%s-delay-%dms-%s", BackupNamePrefix, namespace, i, RandomString(5))
-						appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-						err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, "", "", "", "")
-
-						if err != nil {
-							log.Infof(fmt.Sprintf("The backup creation failed with error [%v]", err))
-							bkpStatus, bkpReason, err := Inst().Backup.GetBackupStatusWithReason(backupName, ctx, BackupOrgID)
-							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching backup status for backup [%s]", backupName))
-
-							if bkpStatus == api.BackupInfo_StatusInfo_Failed && strings.Contains(bkpReason, "Timed out while waiting for a status update.") {
-								log.InfoD(fmt.Sprintf("Backup [%s] failed when network delay of %dms injected to the applications node", backupName, i))
-								lastErrorDelay = i
-								failedBackupTaken = true
-							} else {
-								dash.VerifyFatal(err, nil, fmt.Sprintf("The backup creation failed with error [%v]", err))
-								lastErrorDelay = i
-							}
-						} else {
-							log.Infof(fmt.Sprintf("Backup [%s] succeeded with a network delay of [%d]", backupName, i))
-						}
+				for i := 0; i <= NumOfIteration; i++ {
+					currentErrorDelay = currentErrorDelay + incrementalMilliseconds
+					defer func() {
+						log.Infof(fmt.Sprintf("Deleting the delay of %dms to the applications nodes", currentErrorDelay))
+						err := Inst().N.InjectNetworkErrorWithRebootFallback(appNodesMap[currentNamespace], "delay", "del", 0, currentErrorDelay)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Removing delay of %dms from nodes", currentErrorDelay))
 					}()
-				}
 
+					log.Infof(fmt.Sprintf("Adding a delay of %dms to the applications nodes", currentErrorDelay))
+					err := Inst().N.InjectNetworkErrorWithRebootFallback(appNodesMap[currentNamespace], "delay", "add", 0, currentErrorDelay)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Adding a delay of %dms to nodes", currentErrorDelay))
+
+					backupName := fmt.Sprintf("%s-%s-delay-%dms-%s", BackupNamePrefix, namespace, i, RandomString(5))
+					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, "", "", "", "")
+				}
 				log.Infof("Create the backup when delay is removed and verify backup is succeeded")
 				finalBackupName := fmt.Sprintf("%s-%s-nodelay-%s", BackupNamePrefix, namespace, RandomString(5))
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})

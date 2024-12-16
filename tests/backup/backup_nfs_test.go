@@ -77,6 +77,11 @@ var _ = Describe("{DeleteNfsExecutorPodWhileBackupAndRestoreInProgress}", Label(
 			log.InfoD("Validating applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
 			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			log.InfoD("Disk dumping data into the application pods")
+			for _, namespace := range appNamespaces {
+				err := PopulateDataInNamespacePods(namespace, 1024)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Writing data to the pods in namespace [%s]", namespace))
+			}
 		})
 
 		Step("Creating NFS backup location", func() {
