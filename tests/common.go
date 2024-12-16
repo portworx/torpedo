@@ -16101,3 +16101,39 @@ func CheckFSTrimRunningOnNode(selectedNode node.Node, vol *opsapi.Volume, fsTrim
 	_, err := task.DoRetryWithTimeout(checkFSTrimRunning, fsTrimTimeout, fsTrimRetryInterval)
 	return fsTrimStatuses, err
 }
+
+// ValidateNumberOfParallelScheduledBackups ensures that the specified number of backups (ordinalCount) are initiated at the configured intervals
+func ValidateNumberOfParallelScheduledBackups(backupScheduleName string, orgId string, interval time.Duration, ctx context1.Context, ordinalCount int) error {
+	for i := 1; i <= ordinalCount; i++ {
+		if i > 1 {
+			time.Sleep(interval * time.Minute)
+		}
+		backupDriver := Inst().Backup
+		var backupName string
+		t := func() (interface{}, bool, error) {
+			backupName, err := GetOrdinalScheduleBackupName(ctx, backupScheduleName, i, orgId)
+			if err != nil {
+				return nil, true, err
+			}
+			log.InfoD("Inspecting backup")
+			bkpInspectRequest := &api.BackupInspectRequest{
+				OrgId: orgId,
+				Name:  backupName,
+			}
+			bkpInspectResponse, err := backupDriver.InspectBackup(ctx, bkpInspectRequest)
+			if err != nil {
+				return nil, true, err
+			}
+			if bkpInspectResponse.GetBackup().GetStatus().GetStatus() != api.BackupInfo_StatusInfo_InProgress {
+				return nil, true, fmt.Errorf("backup %s is not in progress, currentState %v", backupName, bkpInspectResponse.GetBackup().GetStatus().GetStatus())
+			}
+			return nil, true, nil
+		}
+		_, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
+		if err != nil {
+			return err
+		}
+		log.InfoD("Validated scheduled backup %s is in progress", backupName)
+	}
+	return nil
+}
