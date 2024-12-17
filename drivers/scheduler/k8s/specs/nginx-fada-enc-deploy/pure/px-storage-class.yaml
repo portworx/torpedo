@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: volume-secrets
+data:
+  encryption-key: "RW5DcllwVGlPbjRFdjNyCg=="
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: nginx-vol-encryption
+data:
+  SECRET_NAME: "dm9sdW1lLXNlY3JldHM="
+  SECRET_KEY: "ZW5jcnlwdGlvbi1rZXk="
+  SECRET_CONTEXT: "_NAMESPACE_" # this will be replaced with app namespace in base64
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: mount-fa-enc-sc
+parameters:
+  backend: "pure_block"
+  csi.storage.k8s.io/controller-expand-secret-name: nginx-vol-encryption
+  csi.storage.k8s.io/controller-expand-secret-namespace: "_NAMESPACE_"
+  csi.storage.k8s.io/node-publish-secret-name: nginx-vol-encryption
+  csi.storage.k8s.io/node-publish-secret-namespace: "_NAMESPACE_"
+  csi.storage.k8s.io/provisioner-secret-name: nginx-vol-encryption
+  csi.storage.k8s.io/provisioner-secret-namespace: "_NAMESPACE_"
+  secure: "true"
+  {{ if .PureFaPodName }}
+  pure_fa_pod_name: "{{ .PureFaPodName }}"
+  {{ end }}
+provisioner: pxd.portworx.com
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+allowVolumeExpansion: true

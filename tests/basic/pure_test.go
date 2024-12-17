@@ -2384,19 +2384,83 @@ var _ = Describe("{PVCLUNValidation}", Label("p0", "positive", "px_vol_ops", "pu
 
 		stepLog = "Create PVCs and restart PX"
 		scName := "pure-blockfamgmt"
+		encScName := "pure-blockfamgmt-enc"
 		nsName := "pvc-lun-ns"
 		pvcPrefix := "falun-test"
-		numPVCs := 501
+		numNormPVCs := 250
+		numEncPVCs := 250
 		var createdPVCS []string
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			log.InfoD("creating storage class %s", scName)
+
 			createSC := func(scName string) {
 				params := make(map[string]string)
 				params["repl"] = "1"
 				params["priority_io"] = "high"
 				params["io_profile"] = "auto"
 				params["backend"] = "pure_block"
+
+				v1obj := metav1.ObjectMeta{
+					Name: scName,
+				}
+				reclaimPolicyDelete := v1.PersistentVolumeReclaimDelete
+				bindMode := storageApi.VolumeBindingImmediate
+				scObj := storageApi.StorageClass{
+					ObjectMeta:        v1obj,
+					Provisioner:       k8s.CsiProvisioner,
+					Parameters:        params,
+					ReclaimPolicy:     &reclaimPolicyDelete,
+					VolumeBindingMode: &bindMode,
+				}
+
+				k8sStorage := storage.Instance()
+				_, err = k8sStorage.CreateStorageClass(&scObj)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("verify sc [%s] creation", scName))
+			}
+
+			createSecrets := func(appNs string) {
+				volSecObj := v1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "lun-secret",
+						Namespace: appNs,
+					},
+					Type: corev1.SecretTypeOpaque,
+					Data: map[string][]byte{
+						"lun-key": []byte("LUN 3NCRYPT10N"),
+					},
+				}
+				volEncObj := v1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "lun-encryption",
+						Namespace: appNs,
+					},
+					Type: corev1.SecretTypeOpaque,
+					Data: map[string][]byte{
+						"SECRET_NAME":    []byte("lun-secret"),
+						"SECRET_KEY":     []byte("lun-key"),
+						"SECRET_CONTEXT": []byte(appNs),
+					},
+				}
+				_, err := k8sCore.CreateSecret(&volSecObj)
+				dash.VerifyFatal(err, nil, "verify vol secret [lun-secret] creation")
+				_, err = k8sCore.CreateSecret(&volEncObj)
+				dash.VerifyFatal(err, nil, "verify vol enc secret [lun-encryption] creation")
+			}
+
+			createEncSC := func(scName, appNs string) {
+				params := make(map[string]string)
+				params["repl"] = "1"
+				params["priority_io"] = "high"
+				params["io_profile"] = "auto"
+				params["backend"] = "pure_block"
+				params[k8s.CsiProvisionerSecretName] = "lun-encryption"
+				params[k8s.CsiProvisionerSecretNamespace] = appNs
+				params[k8s.CsiNodePublishSecretName] = "lun-encryption"
+				params[k8s.CsiNodePublishSecretNamespace] = appNs
+				params[k8s.CsiControllerExpandSecretName] = "lun-encryption"
+				params[k8s.CsiControllerExpandSecretNamespace] = appNs
+				params["secure"] = "true"
 
 				v1obj := metav1.ObjectMeta{
 					Name: scName,
@@ -2462,11 +2526,18 @@ var _ = Describe("{PVCLUNValidation}", Label("p0", "positive", "px_vol_ops", "pu
 
 			createSC(scName)
 			createNs(nsName)
+			createSecrets(nsName)
+			createEncSC(encScName, nsName)
 			stNodes := node.GetStorageDriverNodes()
 			var wg sync.WaitGroup
-			errCh := make(chan error, numPVCs+len(stNodes)) // creating a buffered channel with length for worst case scenario failures
-			for i := 1; i <= numPVCs; i++ {
+			errCh := make(chan error, numNormPVCs+numEncPVCs+len(stNodes)) // creating a buffered channel with length for worst case scenario failures
+			for i := 1; i <= numNormPVCs; i++ {
 				pvcName := fmt.Sprintf("%s-%d", pvcPrefix, i)
+				wg.Add(1)
+				go createPVC(pvcName, scName, nsName, errCh, &wg)
+			}
+			for i := 1; i <= numEncPVCs; i++ {
+				pvcName := fmt.Sprintf("%s-enc-%d", pvcPrefix, i)
 				wg.Add(1)
 				go createPVC(pvcName, scName, nsName, errCh, &wg)
 			}

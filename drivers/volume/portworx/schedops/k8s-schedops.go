@@ -16,9 +16,9 @@ import (
 	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/sched-ops/k8s/core"
 	k8serrors "github.com/portworx/sched-ops/k8s/errors"
-	"github.com/pure-px/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/k8s/rbac"
 	"github.com/portworx/sched-ops/task"
+	"github.com/pure-px/sched-ops/k8s/operator"
 	"github.com/pure-px/torpedo/drivers/node"
 	k8sdriver "github.com/pure-px/torpedo/drivers/scheduler/k8s"
 	"github.com/pure-px/torpedo/drivers/volume"
@@ -371,6 +371,7 @@ func (k *k8sSchedOps) validateMountsInPods(
 	validatedMountPods := make([]string, 0)
 	nodes := node.GetNodesByName()
 	isNvme := false
+	isEnc := false
 PodLoop:
 	for _, p := range pods {
 		pod, err := k8sCore.GetPodByName(p.Name, p.Namespace)
@@ -428,11 +429,15 @@ PodLoop:
 				pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+|/dev/mapper/pxd-enc.+|%s.+|/dev/loop.+|\\d+\\.\\d+\\.\\d+\\.\\d+:/var/lib/osd/pxns.+|(.[A-Fa-f0-9]{1,4}::?){1,7}[A-Fa-f0-9]{1,4}]:/var/lib/osd/pxns.+|\\d+.\\d+.\\d+.\\d+:/px_[0-9A-Za-z]{8}-pvc.+|[a-zA-Z0-9.-]+.[a-zA-Z]{2,}:(?:/px_[0-9A-Za-z]{8}-pvc.+|px_[0-9A-Za-z]{8}-pvc.+)) %s",
 					PureMapperRegex, path))
 				pxMountNvmeRegex := regexp.MustCompile(`\/dev\/mapper\/eui\.00.*24a937.*`)
+				pxMountEncRegex := regexp.MustCompile(`/dev/mapper/pxd-enc\d+`)
 				pxMountFound := false
 				for _, line := range mounts {
 					pxMounts := pxMountCheckRegex.FindStringSubmatch(line)
 					if pxMountNvmeRegex.MatchString(line) {
 						isNvme = true
+					}
+					if pxMountEncRegex.MatchString(line) {
+						isEnc = true
 					}
 
 					if len(pxMounts) > 0 {
@@ -473,9 +478,18 @@ PodLoop:
 
 		grepPattern := pvName // For normal PX vols, and for FBDA, we can grep for the filesystem name
 		if pureType, ok := vol.Labels[k8sdriver.PureDAVolumeLabel]; ok && pureType == k8sdriver.PureDAVolumeLabelValueFA {
+			log.Debugf("Executing command [pxctl volume list | grep %s | awk '{print $1}']", pvName)
+			pxVolID, err := d.RunCommand(currentNode, fmt.Sprintf("pxctl volume list | grep %s | awk '{print $1}'", pvName), connOpts)
+			if err != nil {
+				return validatedMountPods, fmt.Errorf("failed to get volume ID for volume [%s]. Err: %v", pvName, err)
+			}
+
 			grepPattern = strings.ToLower(vol.Labels[k8sdriver.FADAVolumeSerialLabel]) // FADA we need to grep by volume serial
 			if isNvme {
 				grepPattern = fmt.Sprintf("%s | grep %s", grepPattern[:14], grepPattern[14:])
+			}
+			if isEnc {
+				grepPattern = fmt.Sprintf("pxd-enc%s", strings.TrimSpace(pxVolID))
 			}
 		}
 		log.Debugf("Executing command [%s] on node [%s]", fmt.Sprintf("cat /proc/mounts | grep -E '(pxd|pxfs|pxns|pxd-enc|loop|px_|/dev/mapper)' | grep %s", grepPattern), currentNode.Name)

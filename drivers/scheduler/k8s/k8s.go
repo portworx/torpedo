@@ -7659,7 +7659,7 @@ func (k *K8s) CSISnapshotTest(ctx *scheduler.Context, request scheduler.CSISnaps
 		return fmt.Errorf("failed to retrieve storage class for PVC %s in namespace: %s : %s", request.OriginalPVCName, request.Namespace, err)
 	}
 	//PWX-32475:- Creating a clone of the original SC so that we can change the VolumeBindingMode to Immediate without changing the original storageclass spec
-	storageClassName, err := createClonedStorageClassIfRequired(originalStorageClass)
+	storageClassName, err := CreateClonedStorageClassIfRequired(originalStorageClass)
 	if err != nil {
 		return fmt.Errorf("failed to create cloned storage class with the name %s : %s", originalStorageClass.Name+"-clone", err)
 	}
@@ -7717,7 +7717,7 @@ func (k *K8s) CSICloneTest(ctx *scheduler.Context, request scheduler.CSICloneReq
 	}
 
 	//PWX-32475:- Creating a clone of the original SC so that we can change the VolumeBindingMode to Immediate without changing the original storageclass spec
-	storageClassName, err := createClonedStorageClassIfRequired(originalStorageClass)
+	storageClassName, err := CreateClonedStorageClassIfRequired(originalStorageClass)
 	if err != nil {
 		return fmt.Errorf("failed to create cloned storage class with the name %s : %s", originalStorageClass.Name+"-clone", err)
 	}
@@ -9137,7 +9137,7 @@ func ClusterVersion() (string, error) {
 	return strings.TrimLeft(ver.String(), "v"), nil
 }
 
-func createClonedStorageClassIfRequired(originalStorageClass *storageapi.StorageClass) (string, error) {
+func CreateClonedStorageClassIfRequired(originalStorageClass *storageapi.StorageClass) (string, error) {
 	cloneStorageClass := originalStorageClass.DeepCopy()
 	clonedSCName := cloneStorageClass.Name + "-clone"
 	clonedSCNotFound := false

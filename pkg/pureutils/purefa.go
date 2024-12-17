@@ -27,20 +27,20 @@ func GetAppDataDir(namespace string) (string, int) {
 	if strings.HasPrefix(namespace, "mysql-without-enc") {
 		return "/var/lib/mysql", units.GiB
 	}
-	if strings.HasPrefix(namespace, "nginx-fa-davol") {
+	if strings.HasPrefix(namespace, "nginx-fa-davol") || strings.HasPrefix(namespace, "nginx-fa-da-encvol") || strings.HasPrefix(namespace, "nginx-fada-repl-vps-enc") {
 		return "/data", units.GiB
 	}
-	if strings.HasPrefix(namespace, "fio-fa-davol") {
+	if strings.HasPrefix(namespace, "fio-fa-davol") || strings.HasPrefix(namespace, "fio-fa-da-encvol") {
 		return "/scratch", units.GiB
 	}
 	if strings.HasPrefix(namespace, "nginx-fa-darawvol") {
 		return "/dev/xvda", units.GiB
 	}
+	if strings.HasPrefix(namespace, "nginx-fada-enc-deploy") || strings.HasPrefix(namespace, "nginx-fada-deploy"){
+		return "/testvol", units.GiB
+	}
 	if strings.HasPrefix(namespace, "postgres-fada") {
 		return "/var/lib/postgresql/data", units.GiB
-	}
-	if strings.HasPrefix(namespace, "nginx-fada-deploy") {
-		return "/testvol", units.GiB
 	}
 
 	return "", 0

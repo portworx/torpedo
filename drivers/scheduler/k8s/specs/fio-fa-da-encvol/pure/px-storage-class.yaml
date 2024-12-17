@@ -1,0 +1,63 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: volume-secrets
+data:
+  encryption-key: "RW5DcllwVGlPbjRFdjNyCg=="
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: fio-vol-encryption
+data:
+  SECRET_NAME: "dm9sdW1lLXNlY3JldHM="
+  SECRET_KEY: "ZW5jcnlwdGlvbi1rZXk="
+  SECRET_CONTEXT: "_NAMESPACE_" # this will be replaced with app namespace in base64
+---
+##### FA direct access storage class
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: fio-fa-da-enc-sc
+provisioner: pxd.portworx.com
+parameters:
+  backend: "pure_block"
+  max_iops: "1000"
+  max_bandwidth: "1G"
+  csi.storage.k8s.io/controller-expand-secret-name: fio-vol-encryption
+  csi.storage.k8s.io/controller-expand-secret-namespace: "_NAMESPACE_"
+  csi.storage.k8s.io/fstype: ext4
+  csi.storage.k8s.io/node-publish-secret-name: fio-vol-encryption
+  csi.storage.k8s.io/node-publish-secret-namespace: "_NAMESPACE_"
+  csi.storage.k8s.io/provisioner-secret-name: fio-vol-encryption
+  csi.storage.k8s.io/provisioner-secret-namespace: "_NAMESPACE_"
+  {{ if .PureFaPodName }}
+  pure_fa_pod_name: "{{ .PureFaPodName }}"
+  {{ end }}
+  secure: "true"
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+---
+##### FA direct access storage class
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: fio-log-fa-da-enc-sc
+provisioner: pxd.portworx.com
+parameters:
+  backend: "pure_block"
+  max_iops: "1000"
+  max_bandwidth: "1G"
+  csi.storage.k8s.io/controller-expand-secret-name: fio-vol-encryption
+  csi.storage.k8s.io/controller-expand-secret-namespace: "_NAMESPACE_"
+  csi.storage.k8s.io/fstype: ext4
+  csi.storage.k8s.io/node-publish-secret-name: fio-vol-encryption
+  csi.storage.k8s.io/node-publish-secret-namespace: "_NAMESPACE_"
+  csi.storage.k8s.io/provisioner-secret-name: fio-vol-encryption
+  csi.storage.k8s.io/provisioner-secret-namespace: "_NAMESPACE_"
+  {{ if .PureFaPodName }}
+  pure_fa_pod_name: "{{ .PureFaPodName }}"
+  {{ end }}
+  secure: "true"
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true

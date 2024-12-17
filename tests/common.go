@@ -11,6 +11,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	csisnapshot "github.com/portworx/sched-ops/k8s/externalsnapshotter"
 	"io/ioutil"
 	"maps"
 	"math"
@@ -248,6 +249,7 @@ var (
 	ParallelUpgradeMinOpVersion, _ = version.NewVersion("24.2.0-")
 	// ParallelUpgradePxVersion specifies minimum portworx version that supports parallel upgrade
 	ParallelUpgradeMinPxVersion, _ = version.NewVersion("3.1.2")
+	FARestoreStatMinPxVersion, _   = version.NewVersion("3.2.2")
 )
 
 type OwnershipAccessType int32
@@ -611,6 +613,8 @@ var (
 	beTrue        = gomega.BeTrue
 	beNumerically = gomega.BeNumerically
 	k8sCore       = core.Instance()
+	// k8sExternalsnap is a instance of csisnapshot instance
+	k8sExternalsnap = csisnapshot.Instance()
 )
 
 // Backup vars
@@ -1380,6 +1384,9 @@ func ValidateContextForPureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan
 			}
 		})
 
+		log.Debugf("Wait 2 minutes for volume to be ready")
+		time.Sleep(2 * time.Minute)
+
 		if !Inst().V.IsPxLiteCluster() {
 			Step(fmt.Sprintf("validate %s app's snapshots for pxctl", ctx.App.Key), func() {
 				if !ctx.SkipVolumeValidation {
@@ -1564,6 +1571,10 @@ func ValidatePureSnapshotsSDK(ctx *scheduler.Context, errChan ...*chan error) {
 				err = Inst().V.ValidateCreateVolume(vol, params)
 				processError(err, errChan...)
 			})
+
+			log.Debugf("Wait 2 minutes for volume to be ready")
+			time.Sleep(2 * time.Minute)
+
 			Step(fmt.Sprintf("get %s app's volume: %s then create local snapshot", ctx.App.Key, vol), func() {
 				snapshotVolName, err := Inst().V.ValidateCreateSnapshot(vol, params)
 				if params["backend"] == k8s.PureBlock {
@@ -1816,6 +1827,33 @@ func ValidateCSISnapshotAndRestore(ctx *scheduler.Context, errChan ...*chan erro
 			}
 
 		}
+
+		pxVersionString, err := Inst().V.GetDriverVersion()
+		processError(err, errChan...)
+		pxVersion, err := version.NewVersion(pxVersionString)
+		processError(err, errChan...)
+		if pxVersion.GreaterThanOrEqual(FARestoreStatMinPxVersion) {
+			restoreVolumeInfo, snapName, err := SnapshotRestoreAndInspectPVC(vols[0].Name, vols[0].Namespace, snapShotClassName)
+			processError(err, errChan...)
+
+			if restoreVolumeInfo == nil {
+				err = fmt.Errorf("failed to clone and inspect PVC")
+				processError(err, errChan...)
+			} else {
+				if restoreVolumeInfo.Usage == 0 || restoreVolumeInfo.Error != "" {
+					err = fmt.Errorf("failed to clone and inspect PVC. Usage: %d, Error: %s", restoreVolumeInfo.Usage, restoreVolumeInfo.Error)
+					processError(err, errChan...)
+				}
+			}
+
+			log.InfoD("Deleting restored PVC after inspect")
+			err = k8sCore.DeletePersistentVolumeClaim(restoreVolumeInfo.Locator.VolumeLabels["pvc"], restoreVolumeInfo.Locator.VolumeLabels["namespace"])
+			processError(err, errChan...)
+			log.InfoD("Deleting snapshot after inspect")
+			err = k8sExternalsnap.DeleteSnapshot(snapName, vols[0].Namespace)
+			processError(err, errChan...)
+		}
+
 		if err = Inst().S.DeleteCsiSnapshotClass(snapShotClassName); err != nil {
 			log.Errorf("Delete volume snapshot class failed with error: [%v]", err)
 			expect(err).NotTo(haveOccurred(), "failed to delete snapshot class")
@@ -1847,6 +1885,29 @@ func ValidateCSIVolumeClone(ctx *scheduler.Context, errChan ...*chan error) {
 
 			err = Inst().S.CSICloneTest(ctx, request)
 			processError(err, errChan...)
+
+			pxVersionString, err := Inst().V.GetDriverVersion()
+			processError(err, errChan...)
+			pxVersion, err := version.NewVersion(pxVersionString)
+			processError(err, errChan...)
+			if pxVersion.GreaterThanOrEqual(FARestoreStatMinPxVersion) {
+				cloneVolumeInfo, err := CloneAndInspectPVC(vols[0].Name, vols[0].Namespace)
+				processError(err, errChan...)
+
+				if cloneVolumeInfo == nil {
+					err = fmt.Errorf("failed to clone and inspect PVC")
+					processError(err, errChan...)
+				} else {
+					if cloneVolumeInfo.Usage == 0 || cloneVolumeInfo.Error != "" {
+						err = fmt.Errorf("failed to clone and inspect PVC. Usage: %d, Error: %s", cloneVolumeInfo.Usage, cloneVolumeInfo.Error)
+						processError(err, errChan...)
+					}
+				}
+
+				log.InfoD("Deleting cloned PVC after inspect")
+				err = k8sCore.DeletePersistentVolumeClaim(cloneVolumeInfo.Locator.VolumeLabels["pvc"], cloneVolumeInfo.Locator.VolumeLabels["namespace"])
+				processError(err, errChan...)
+			}
 
 			// PWX-37645: Disabled while fixing partition edge cases
 			// err = Inst().V.ValidatePureLocalVolumePaths()
@@ -15718,6 +15779,126 @@ func CreateNginxWorkload(pvcName string, replicas int32, deploymentName string, 
 	}
 
 	return deployment, nil
+}
+
+func CloneAndInspectPVC(pvcName, namespace string) (*opsapi.Volume, error) {
+	pvcObj, err := k8sCore.GetPersistentVolumeClaim(pvcName, namespace)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve PVC %s in namespace: %s : %s", pvcName, namespace, err)
+	}
+	size := pvcObj.Spec.Resources.Requests[corev1.ResourceStorage]
+	log.Infof("Size of original PVC in clone test is %v", size)
+	storageClass, err := k8sCore.GetStorageClassForPVC(pvcObj)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve storage class for PVC %s in namespace: %s : %s", pvcName, namespace, err)
+	}
+
+	clonedPvcName := "clone-" + pvcName
+	clonedPvcDeployment := "clone-inspect-test"
+	storageClassName := storageClass.Name
+
+	clonedPVCSpec, err := k8s.GeneratePVCCloneSpec(size, namespace, clonedPvcName, pvcName, storageClassName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build cloned PVC Spec: %s", err)
+	}
+	log.Infof("Size of restored PVC in clone test is %v", clonedPVCSpec.Spec.Resources.Requests[corev1.ResourceStorage])
+	clonedPVC, err := k8sCore.CreatePersistentVolumeClaim(clonedPVCSpec)
+	if err != nil {
+		return nil, fmt.Errorf("failed to clone PVC from source PVC %s: %s", pvcName, err)
+	}
+
+	log.Infof("Successfully created cloned PVC %s, proceed to mount to a new pod", clonedPVC.Name)
+	_, err = CreateNginxWorkload(clonedPvcName, 1, clonedPvcDeployment, namespace, storageClassName)
+	if err != nil {
+		log.Errorf("Failed to create deployment [%v]: %v", clonedPvcDeployment, err)
+		return nil, err
+	}
+
+	// Wait for PVC to be bound
+	err = Inst().S.WaitForSinglePVCToBound(clonedPvcName, namespace, 60)
+	if err != nil {
+		return nil, fmt.Errorf("failed to wait for cloned PVC %s to bind: %v", "clone-"+pvcName, err)
+	}
+
+	// Inspect the cloned PVC
+	clonedPVC, err = k8sCore.GetPersistentVolumeClaim(clonedPvcName, namespace)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve cloned PVC %s in namespace: %s : %s", clonedPvcName, namespace, err)
+	}
+	clonedVolumeInfo, err := Inst().V.InspectVolume(clonedPVC.Spec.VolumeName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to inspect volume %s: %s", clonedPVC.Spec.VolumeName, err)
+	}
+
+	err = k8sApps.Instance().DeleteDeployment(clonedPvcDeployment, namespace)
+	if err != nil {
+		return nil, fmt.Errorf("failed to delete deployment %s in namespace: %s : %s", clonedPvcDeployment, namespace, err)
+	}
+
+	return clonedVolumeInfo, err
+}
+
+// SnapshotRestoreAndInspectPVC takes snapshot of PersistentVolumeClaims (PVCs) and it is then restored to a pvc and given to Nginx workloads, then returns inpect output.
+func SnapshotRestoreAndInspectPVC(pvcName, namespace, snapClass string) (*opsapi.Volume, string, error) {
+	pvcObj, err := k8sCore.GetPersistentVolumeClaim(pvcName, namespace)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to retrieve PVC %s in namespace: %s : %s", pvcName, namespace, err)
+	}
+	size := pvcObj.Spec.Resources.Requests[corev1.ResourceStorage]
+	log.Infof("Size of original PVC in snap-restore test is %v", size)
+
+	storageClass, err := k8sCore.GetStorageClassForPVC(pvcObj)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to retrieve storage class for PVC %s in namespace: %s : %s", pvcName, namespace, err)
+	}
+
+	restoredPvcName := "restore-" + pvcName
+	restoredPvcDeployment := "restore-" + pvcName + "inspect-test"
+	storageClassName := storageClass.Name
+	snapName := "snap-" + pvcName
+	_, err = Inst().S.CreateCsiSnapshot(snapName, namespace, snapClass, pvcName, true)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to create snapshot %s for volume %s", snapName, pvcName)
+	}
+	restoredPVCSpec, err := k8s.GeneratePVCRestoreSpec(size, namespace, restoredPvcName, snapName, storageClassName)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to build restore PVC Spec: %s", err)
+	}
+	log.Infof("Size of restored PVC in snap-restore test is %v", restoredPVCSpec.Spec.Resources.Requests[corev1.ResourceStorage])
+	restoredPVC, err := k8sCore.CreatePersistentVolumeClaim(restoredPVCSpec)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to restore PVC %s from snapshot: %s", pvcName, err)
+	}
+
+	log.Infof("Successfully restored PVC %s, proceed to mount to a new pod", restoredPVC.Name)
+	_, err = CreateNginxWorkload(restoredPvcName, 1, restoredPvcDeployment, namespace, storageClassName)
+	if err != nil {
+		log.Errorf("Failed to create deployment [%v]: %v", restoredPvcDeployment, err)
+		return nil, "", err
+	}
+
+	// Wait for PVC to be bound
+	err = Inst().S.WaitForSinglePVCToBound(restoredPvcName, namespace, 60)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to wait for restored PVC %s to bind: %v", restoredPvcName, err)
+	}
+
+	// Inspect the cloned PVC
+	restoredPVC, err = k8sCore.GetPersistentVolumeClaim(restoredPvcName, namespace)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to retrieve restored PVC %s in namespace: %s : %s", restoredPvcName, namespace, err)
+	}
+	restoredVolumeInfo, err := Inst().V.InspectVolume(restoredPVC.Spec.VolumeName)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to inspect volume %s: %s", restoredPVC.Spec.VolumeName, err)
+	}
+
+	err = k8sApps.Instance().DeleteDeployment(restoredPvcDeployment, namespace)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to delete deployment %s in namespace: %s : %s", restoredPvcDeployment, namespace, err)
+	}
+
+	return restoredVolumeInfo, snapName, err
 }
 
 // CloneAndDeployPVCs clones PersistentVolumeClaims (PVCs) from a given namespace and deploys them with Nginx workloads.

@@ -1,0 +1,24 @@
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: nginx-fa-xfs-enc-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: mount-fa-enc-sc
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: nginx-fa-ext4-enc-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+  storageClassName: createoption-fa-ext4-enc-sc
