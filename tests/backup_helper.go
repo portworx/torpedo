@@ -3046,10 +3046,12 @@ func DeletePodWithWithoutLabelInNamespace(namespace string, label map[string]str
 		log.Infof("Deleting pod %s with label %v", pod.GetName(), label)
 		err = core.Instance().DeletePod(pod.GetName(), namespace, false)
 		if err != nil {
+			log.InfoD("Pod name which is to be deleted is- %v", pod.GetName())
 			return err
 		}
 		err = core.Instance().WaitForPodDeletion(pod.GetUID(), namespace, 5*time.Minute)
 		if err != nil {
+			log.InfoD("Waiting for pod name - %v deletion in namespace- %v", pod.GetName(), namespace)
 			return err
 		}
 	}
@@ -6118,6 +6120,11 @@ func RemoveLabelFromNodesIfPresent(node node.Node, expectedKey string) error {
 func ValidatePodByLabel(label map[string]string, namespace string, timeout time.Duration, retryInterval time.Duration) error {
 	log.Infof("Checking if pods with label %v are running in namespace %s", label, namespace)
 	pods, err := core.Instance().GetPods(namespace, label)
+	//Added for logging purpose
+	for _, pod := range pods.Items {
+		log.InfoD("List of pods is %v\n", pod.GetName())
+	}
+	//Added for logging purpose
 	if err != nil {
 		return err
 	}
