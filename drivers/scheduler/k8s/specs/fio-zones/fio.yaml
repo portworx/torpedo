@@ -29,7 +29,6 @@ spec:
                     operator: In
                     values:
                       - region-0
-      schedulerName: stork
       containers:
         - name: fio
           image: portworx/fio_drv
