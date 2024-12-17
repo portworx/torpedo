@@ -2536,6 +2536,7 @@ var _ = Describe("{ClusterBackupShareWithExistingBackupsWithViewRestorableAndFul
 		bl2                  string
 		blUID1               string
 		blUID2               string
+		restoreNames         []string
 	)
 	bkpNamespaces = make([]string, 0)
 	labelSelectors := make(map[string]string)
@@ -2677,11 +2678,14 @@ var _ = Describe("{ClusterBackupShareWithExistingBackupsWithViewRestorableAndFul
 				for _, backupName = range backupNames {
 					if strings.Contains(backupName, "notowncc") == true {
 						restoreName := fmt.Sprintf("%s-%s-%v-notowncc", firstUserName, RestoreNamePrefix, RandomString(5))
+						restoreNames = append(restoreNames, restoreName)
 						ValidateSharedBackupWithUsers(firstUserName, ViewOnlyAccess, backupName, restoreName)
 					} else {
 						restoreName := fmt.Sprintf("%s-%s-%v", firstUserName, RestoreNamePrefix, RandomString(5))
+						restoreNames = append(restoreNames, restoreName)
 						ValidateSharedBackupWithUsers(firstUserName, FullAccess, backupName, restoreName)
 					}
+
 				}
 				log.InfoD("Finished verifying access level - ViewOnly and FullAccess")
 			})
@@ -2722,6 +2726,10 @@ var _ = Describe("{ClusterBackupShareWithExistingBackupsWithViewRestorableAndFul
 		// Clean up the cluster
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
+		for _, restoreNameIteration := range restoreNames {
+			err = DeleteRestore(restoreNameIteration, BackupOrgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreNameIteration))
+		}
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
