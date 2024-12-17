@@ -1380,11 +1380,13 @@ func ValidateContextForPureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan
 			}
 		})
 
-		Step(fmt.Sprintf("validate %s app's snapshots for pxctl", ctx.App.Key), func() {
-			if !ctx.SkipVolumeValidation {
-				ValidatePureSnapshotsPXCTL(ctx, errChan...)
-			}
-		})
+		if !Inst().V.IsPxLiteCluster() {
+			Step(fmt.Sprintf("validate %s app's snapshots for pxctl", ctx.App.Key), func() {
+				if !ctx.SkipVolumeValidation {
+					ValidatePureSnapshotsPXCTL(ctx, errChan...)
+				}
+			})
+		}
 
 		Step(fmt.Sprintf("validate %s app's volumes resizing ", ctx.App.Key), func() {
 			if !ctx.SkipVolumeValidation {
