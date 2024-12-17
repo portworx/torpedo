@@ -830,6 +830,9 @@ spec:
       value: "${GOOGLE_APPLICATION_CREDENTIALS}"
     - name: TOGGLE_PURE_MGMT_IP
       value: "${TOGGLE_PURE_MGMT_IP}"
+    - name: PURE_SECRET_FBS3
+      value: "${PURE_SECRET_FBS3}"
+
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
