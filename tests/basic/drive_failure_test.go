@@ -141,25 +141,25 @@ var _ = Describe("{DriveFailure}", Label("p1", "negative", "error_injection", "p
 	})
 })
 
-var _ = Describe("{YankJournalWithPxRestart}", func() {
+var _ = Describe("{YankJournalWithPxRestart}", Label("p1", "hal_ops_disruption", "px_restart", "drive_failure", "YankJournalDrive", "functional"), func() {
 	testName = "yank-journal-px-restart"
 	testDescription = "Yank journal drive and restart PX"
 	YankJournalTest(testName, testDescription)
 })
 
-var _ = Describe("{YankJournalWithNodeReboot}", func() {
+var _ = Describe("{YankJournalWithNodeReboot}", Label("p1", "hal_ops_disruption", "node_reboot", "drive_failure", "YankJournalDrive", "functional"), func() {
 	testName = "yank-journal-node-reboot"
 	testDescription = "Yank journal drive and reboot node"
 	YankJournalTest(testName, testDescription)
 })
 
-var _ = Describe("{YankJournalWithNodeMaintenanceCycle}", func() {
+var _ = Describe("{YankJournalWithNodeMaintenanceCycle}", Label("p1", "hal_ops_disruption", "NodeMaintenance", "drive_failure", "YankJournalDrive", "functional"), func() {
 	testName := "yank-journal-node-maintenance-cycle"
 	testDescription = "Yank journal drive and do node maintenance"
 	YankJournalTest(testName, testDescription)
 })
 
-var _ = Describe("{YankJournalWithIOsRunning}", func() {
+var _ = Describe("{YankJournalWithIOsRunning}", Label("p1", "hal_ops_disruption", "px_restart", "drive_failure", "YankJournalDrive", "functional"), func() {
 	testName := "yank-journal-io"
 	testDescription = "Yank journal drive with IOs running"
 	YankJournalTest(testName, testDescription)
@@ -385,37 +385,49 @@ func YankJournalTest(testName, testDesc string) {
 	})
 }
 
-var _ = Describe("{YankPoolDriveWithPxRestart}", func() {
+var _ = Describe("{YankPoolDriveWithPxRestart}", Label("p1", "hal_ops_disruption", "px_restart", "drive_failure", "YankPoolDrive", "functional"), func() {
 	testName = "yank-pool-drive-px-restart"
 	testDescription = "Yank pool drive and restart px"
 	YankPoolDriveTest(testName, testDescription)
 })
 
-var _ = Describe("{YankPoolDriveWithNodeReboot}", func() {
+var _ = Describe("{YankPoolDriveWithNodeReboot}", Label("p1", "hal_ops_disruption", "node_reboot", "drive_failure", "YankPoolDrive", "functional"), func() {
 	testName = "yank-pool-drive-node-reboot"
 	testDescription = "Yank pool drive and reboot node"
 	YankPoolDriveTest(testName, testDescription)
 })
 
-var _ = Describe("{YankPoolDriveWithIOs}", func() {
+var _ = Describe("{YankPoolDriveWithNodeMaintenanceCycle}", Label("p1", "hal_ops_disruption", "NodeMaintenance", "drive_failure", "YankPoolDrive", "functional"), func() {
+	testName = "yank-pool-drive-node-maintenance-cycle"
+	testDescription = "Yank pool drive with node maintenance cycle"
+	YankPoolDriveTest(testName, testDescription)
+})
+
+var _ = Describe("{YankPoolDriveWithIOs}", Label("p1", "hal_ops_disruption", "drive_failure", "YankPoolDrive", "functional"), func() {
 	testName = "yank-pool-drive-IO"
 	testDescription = "Yank pool drive with IOs running"
 	YankPoolDriveTest(testName, testDescription)
 })
 
-var _ = Describe("{YankMetadataWithPxRestart}", Label("p1", "YankMetadataDrive", "px_restart"), func() {
+var _ = Describe("{YankMetadataWithPxRestart}", Label("p1", "hal_ops_disruption", "px_restart", "drive_failure", "YankMetadataDrive", "functional"), func() {
 	testName = "YankMetadataWithPxRestart"
 	testDescription = "Yank metadata drive with restart PX"
 	YankMetadataTest(testName, testDescription)
 })
-var _ = Describe("{YankMetadataWithNodeReboot}", Label("p1", "YankMetadataDrive", "node_reboot"), func() {
+var _ = Describe("{YankMetadataWithNodeReboot}", Label("p1", "hal_ops_disruption", "node_reboot", "drive_failure", "YankMetadataDrive", "functional"), func() {
 	testName = "YankMetadataWithNodeReboot"
 	testDescription = "Yank metadata drive and reboot node"
 	YankMetadataTest(testName, testDescription)
 })
-var _ = Describe("{YankMetadataWithNodeMaintenanceCycle}", Label("p1", "YankMetadataDrive", "NodeMaintenance"), func() {
+var _ = Describe("{YankMetadataWithNodeMaintenanceCycle}", Label("p1", "hal_ops_disruption", "NodeMaintenance", "drive_failure", "YankMetadataDrive", "functional"), func() {
 	testName = "YankMetadataWithNodeMaintenanceCycle"
 	testDescription = "Yank metadata drive and node maintenance cycle"
+	YankMetadataTest(testName, testDescription)
+})
+
+var _ = Describe("{YankMetadataWithIOs}", func() {
+	testName = "YankMetadataWithIOs"
+	testDescription = "Yank metadata drive with IOs"
 	YankMetadataTest(testName, testDescription)
 })
 
@@ -662,12 +674,6 @@ func YankMetadataTest(testName, testDesc string) {
 	})
 }
 
-var _ = Describe("{YankMetadataWithIOs}", func() {
-	testName = "YankMetadataWithIOs"
-	testDescription = "Yank metadata drive with IOs"
-	YankMetadataTest(testName, testDescription)
-})
-
 func YankPoolDriveTest(testName, testDesc string) {
 	var nodeSelected *node.Node
 	var busID, poolDrive string
@@ -878,182 +884,42 @@ var _ = Describe("{ExpandPoolResizeDriveAfterYankingDrive}", Label("p1", "PoolEx
 	testDescription = "Yank pool drive with expand pool resize drive"
 	PoolResize(testName, testDescription)
 })
-var _ = Describe("{YankPoolDriveWithNodeMaintenanceCycle}", Label("p1", "YankPoolDrive", "NodeMaintenance"), func() {
-	testName = "yank-pool-drive-node-maintenance-cycle"
-	testDescription = "Yank pool drive with node maintenance cycle"
-	YankPoolDriveTest(testName, testDescription)
-})
-var _ = Describe("{YankMetadataWithNodeMaintenanceCycle}", Label("p1", "YankMetadataDrive", "NodeMaintenance"), func() {
-	testName = "YankMetadataWithNodeMaintenanceCycle"
-	testDescription = "Yank metadata drive and node maintenance cycle"
-	YankMetadataTest(testName, testDescription)
-})
-var _ = Describe("{DeletePoolAfterYankDriveWithPXRestart}", func() {
-	testName = "delete-yank-drive-px-restart"
+
+var _ = Describe("{DeletePoolAfterYankDriveWithPXRestart}", Label("p1", "hal_ops_disruption", "px_restart", "PoolDelete", "drive_failure", "YankPoolDrive", "functional"), func() {
+	testName = "yank-drive-pool-delete-px-restart"
 	testDescription = "Delete pool after yanking drive and restart PX"
-	DeletePoolAfterYankDrive(testName, testDescription)
+	PoolDeleteWithTimeInterval(testName, testDescription, "px_restart")
 })
 
-var _ = Describe("{DeletePoolAfterYankDriveWithNodeReboot}", func() {
-	testName = "delete-yank-drive-node-reboot"
+var _ = Describe("{DeletePoolAfterYankDriveWithNodeReboot}", Label("p1", "hal_ops_disruption", "node_reboot", "PoolDelete", "drive_failure", "YankPoolDrive", "functional"), func() {
+	testName = "yank-drive-pool-delete-node-reboot"
 	testDescription = "Delete pool after yanking drive and reboot node"
-	DeletePoolAfterYankDrive(testName, testDescription)
+	PoolDeleteWithTimeInterval(testName, testDescription, "node_reboot")
 })
 
-var _ = Describe("{DeletePoolAfterYankDriveWithNodeMaintenanceCycle}", func() {
-	testName := "delete-yank-drive-node-maintenance-cycle"
+var _ = Describe("{DeletePoolAfterYankDriveWithNodeMaintenanceCycle}", Label("p1", "hal_ops_disruption", "NodeMaintenance", "PoolDelete", "drive_failure", "YankPoolDrive", "functional"), func() {
+	testName := "yank-drive-pool-delete-node-maintenance-cycle"
 	testDescription = "Delete pool after yanking drive and do node maintenance"
-	DeletePoolAfterYankDrive(testName, testDescription)
+	PoolDeleteWithTimeInterval(testName, testDescription, "node_maintenance_cycle")
 })
 
-func DeletePoolAfterYankDrive(testName, testDesc string) {
+var _ = Describe("{DeletePoolAndYankDriveWithPXRestart}", Label("p1", "hal_ops_disruption", "px_restart", "PoolDelete", "drive_failure", "YankPoolDrive", "functional"), func() {
+	testName = "delete-pool-yank-drive-px-restart"
+	testDescription = "Delete pool and yank drive with PX restart"
+	PoolDeleteWithTimeInterval(testName, testDescription, "px_restart")
+})
 
-	var nodeSelected node.Node
-	var busID, poolDrive string
-	var poolIDSelected int
+var _ = Describe("{DeletePoolAndYankDriveWithNodeReboot}", Label("p1", "hal_ops_disruption", "node_reboot", "PoolDelete", "drive_failure", "YankPoolDrive", "functional"), func() {
+	testName = "delete-pool-yank-drive-node-reboot"
+	testDescription = "Delete pool and yank drive with node reboot"
+	PoolDeleteWithTimeInterval(testName, testDescription, "node_reboot")
+})
 
-	JustBeforeEach(func() {
-		StartTorpedoTest(testName, testDesc, nil, 0)
-	})
-
-	itLog := "Delete pool after yanking drive"
-	It(itLog, func() {
-		log.InfoD(itLog)
-
-		stepLog = "Select pool to yank drive and delete"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			//select a storage node
-			storageNodes := node.GetStorageNodes()
-			index := rand.Intn(len(storageNodes))
-			nodeSelected = storageNodes[index]
-			log.Info("selected Node ID - %s , Name - %s", nodeSelected.Id, nodeSelected.Name)
-
-			jDev, err := Inst().V.GetJournalDevicePath(&nodeSelected)
-			log.FailOnError(err, fmt.Sprintf("error getting journal device path from node %s", nodeSelected.Name))
-			log.InfoD("Journal device path - %s", jDev)
-
-			cmd := fmt.Sprintf("lsblk -no pkname %s", jDev)
-			journalParentDevPath, err := Inst().N.RunCommandWithNoRetry(nodeSelected, cmd, node.ConnectionOpts{
-				Timeout:         2 * time.Minute,
-				TimeBeforeRetry: 10 * time.Second,
-			})
-			log.FailOnError(err, "error occured running the command to identify the parent device path of the journal partition %s", jDev)
-			journalParentDevPath = strings.TrimRight(journalParentDevPath, "\n")
-			log.InfoD("Parent device path of the journal device is %s", journalParentDevPath)
-
-			driveMap, err := Inst().V.GetPoolDrives(&nodeSelected)
-			log.FailOnError(err, fmt.Sprintf("error getting pool drive details for the node %s", nodeSelected))
-
-			for poolID, drives := range driveMap {
-				if poolDrive == "" {
-					for _, drive := range drives {
-						if strings.Contains(drive.Device, journalParentDevPath) || drive.Device == "" {
-							break
-						}
-						poolIDSelected, _ = strconv.Atoi(poolID)
-						log.InfoD("Pool selected to delete is %d", int(poolIDSelected))
-						poolDrive = drive.Device
-						log.InfoD("Pool drive selected - %s", poolDrive)
-						break
-					}
-				}
-			}
-		})
-
-		poolDrive = strings.Trim(poolDrive, "/")
-		poolDriveArr := strings.Split(poolDrive, "/")
-		poolDrive = poolDriveArr[len(poolDriveArr)-1]
-		stepLog = "Yank journal drive"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			busID, err = Inst().N.YankDrive(nodeSelected, poolDrive, node.ConnectionOpts{
-				Timeout:         dfDefaultTimeout,
-				TimeBeforeRetry: dfDefaultRetryInterval,
-			})
-			log.FailOnError(err, fmt.Sprintf("failed to yank journal drive on node [%s]", nodeSelected.Name))
-			log.InfoD("Bus id - %s", busID)
-		})
-
-		time.Sleep(2 * time.Minute)
-
-		stepLog = "Recover yank drive"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			err = Inst().N.RecoverDrive(nodeSelected, poolDrive, busID, node.ConnectionOpts{
-				Timeout:         driveFailTimeout,
-				TimeBeforeRetry: dfDefaultRetryInterval,
-			})
-			log.FailOnError(err, fmt.Sprintf("failed to recover yank journal drive on node [%s]", nodeSelected.Name))
-			log.InfoD("Verified recover yank drive")
-		})
-
-		nodePoolMapBeforePoolDelete, err := Inst().V.GetNodePools(nodeSelected)
-		log.FailOnError(err, fmt.Sprintf("Get Node pools failed on node %s", nodeSelected.Name))
-
-		stepLog = "Delete the selected pool"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			err = DeletePoolAndValidate(nodeSelected, strconv.Itoa(int(poolIDSelected)))
-			log.FailOnError(err, fmt.Sprintf("Error occured while Validating the deleted pool %d in the node %s", int(poolIDSelected), nodeSelected.Name))
-		})
-
-		if testName == "delete-yank-drive-px-restart" {
-			stepLog = "Restart portworx and wait for it to come up"
-			Step(stepLog, func() {
-				log.Info(stepLog)
-				Step(fmt.Sprintf("node with Px restart is: %s", nodeSelected.Name), func() {
-					err := Inst().V.RestartDriver(nodeSelected, nil)
-					log.FailOnError(err, fmt.Sprintf("Error occured while Restart PX on node:%v", nodeSelected.Name))
-				})
-
-				Step(fmt.Sprintf("wait for volume driver to restart on node: %v", nodeSelected.Name), func() {
-					err := Inst().V.WaitForPxPodsToBeUp(nodeSelected)
-					log.FailOnError(err, fmt.Sprintf("Error occured while Validating PX restart is done on node:%v", nodeSelected.Name))
-				})
-			})
-
-		} else if testName == "delete-yank-drive-node-reboot" {
-			stepLog = "Reboot the node"
-			Step(stepLog, func() {
-				log.Info(stepLog)
-				err = RebootNodeAndWaitForPxUp(nodeSelected)
-				log.FailOnError(err, "Failed to reboot node and wait till it is up")
-			})
-		} else if testName == "delete-yank-drive-node-maintenance-cycle" {
-			stepLog := "start node maintenance cycle"
-			Step(stepLog, func() {
-				log.InfoD(stepLog)
-				log.InfoD(fmt.Sprintf("Performing node maintenance cycle on node %s", nodeSelected.Name))
-				err = Inst().V.RecoverDriver(nodeSelected)
-				log.FailOnError(err, fmt.Sprintf("error performing maintenance cycle on node %s", nodeSelected.Name))
-
-				err = Inst().V.WaitDriverUpOnNode(nodeSelected, 5*time.Minute)
-				log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", nodeSelected.Name))
-				dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after maintenance cycle on node %s", nodeSelected.Name))
-			})
-		}
-
-		stepLog = "Verify Px Status"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			err := Inst().V.WaitForPxPodsToBeUp(nodeSelected)
-			log.FailOnError(err, fmt.Sprintf("Error occured while Validating PX restart is done on node:%v", nodeSelected.Name))
-		})
-
-		stepLog = "Verify pool is deleted"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			nodePoolMapAftrPoolDelete, err := Inst().V.GetNodePools(nodeSelected)
-			log.FailOnError(err, fmt.Sprintf("Get Node pools failed on node %s", nodeSelected.Name))
-			dash.VerifyFatal(len(nodePoolMapAftrPoolDelete) < len(nodePoolMapBeforePoolDelete), true, fmt.Sprintf("Verify pool is deleted"))
-		})
-	})
-
-	JustAfterEach(func() {
-		defer EndTorpedoTest()
-	})
-}
+var _ = Describe("{DeletePoolAndYankDriveWithNodeMaintenanceCycle}", Label("p1", "hal_ops_disruption", "NodeMaintenance", "PoolDelete", "drive_failure", "YankPoolDrive", "functional"), func() {
+	testName := "delete-pool-yank-drive-node-maintenance-cycle"
+	testDescription = "Delete pool and yank drive with node maintenance"
+	PoolDeleteWithTimeInterval(testName, testDescription, "node_maintenance_cycle")
+})
 
 func PoolResize(testName, description string) {
 

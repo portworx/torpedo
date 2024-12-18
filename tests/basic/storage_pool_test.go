@@ -11996,32 +11996,20 @@ var _ = Describe("{AddingDrivesBeyondSupportedLimit}", Label("p1", "pool_ops", "
 	})
 })
 
-var _ = Describe("{PoolDeleteWithNodeRebootWithTimeInterval}", func() {
-	/*
-		1.	Create volume and do IOs / deploy apps to do IOs
-		2.	Validate and destroy app
-		3.	Enter maintenance mode
-		4.	Selecting pool to delete
-		5.  Validate volumes are deleted or not on the selected pool
-		6.  Delete the selected pool
-		7.  Reboot Node
-		8.  Exit pool maintenance mode
-		9.  Check px status
-		10. Verify selected pool is deleted or not
-		11. Create the pool back
-		12. Verify Pool created or not
-	*/
+func PoolDeleteWithTimeInterval(testName, testDesc, testType string) {
 	var contexts []*scheduler.Context
 	var poolsMap map[string][]volume.DiskResource
 	var poolToDelete node.StoragePool
 	var jrnlPartPoolID string
 	var poolIDToDelete string
+	var busID string
+	var jPath string
 
 	BeforeEach(func() {
-		StartTorpedoTest("PoolDeleteWithNodeRebootWithTimeInterval", "Pool delete with node reboot with random time interval", nil, 0)
+		StartTorpedoTest(testName, testDesc, nil, 0)
 	})
 
-	ItLog := "PoolDeleteWithNodeRebootWithTimeInterval"
+	ItLog := testDesc
 
 	It(ItLog, func() {
 		stepLog = "Schedule Apps"
@@ -12066,7 +12054,8 @@ var _ = Describe("{PoolDeleteWithNodeRebootWithTimeInterval}", func() {
 					log.FailOnError(fmt.Errorf("no journal device path found"), "error getting journal device path from storage spec")
 				}
 				drivesMap, err := Inst().V.GetPoolDrives(&selectedNode)
-				jPath := jDev[:len(jDev)-1]
+				jPath = jDev[:len(jDev)-1]
+				log.Infof("JournalDev path: %s", jPath)
 			outer:
 				for k, v := range drivesMap {
 					for _, dv := range v {
@@ -12101,6 +12090,46 @@ var _ = Describe("{PoolDeleteWithNodeRebootWithTimeInterval}", func() {
 			log.Info("validate volumes succeed")
 		})
 
+		driveMap, err := Inst().V.GetPoolDrives(&selectedNode)
+		log.FailOnError(err, fmt.Sprintf("error getting pool drive details for the node %s", selectedNode))
+
+		if testName == "yank-drive-pool-delete-px-restart" || testName == "yank-drive-pool-delete-node-reboot" || testName == "yank-drive-pool-delete-node-maintenance-cycle" {
+			poolDrive := ""
+			for _, drive := range driveMap[poolIDToDelete] {
+				if drive.Device != "" {
+					poolDrive = drive.Device
+					break
+				}
+			}
+			poolDrive = strings.Trim(poolDrive, "/")
+			poolDriveArr := strings.Split(poolDrive, "/")
+			poolDrive = poolDriveArr[len(poolDriveArr)-1]
+
+			stepLog = "Yank journal drive"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				busID, err = Inst().N.YankDrive(selectedNode, poolDrive, node.ConnectionOpts{
+					Timeout:         dfDefaultTimeout,
+					TimeBeforeRetry: dfDefaultRetryInterval,
+				})
+				log.FailOnError(err, fmt.Sprintf("failed to yank journal drive on node [%s]", selectedNode.Name))
+				log.InfoD("Bus id - %s", busID)
+			})
+
+			time.Sleep(2 * time.Minute)
+
+			stepLog = "Recover yank drive"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				err = Inst().N.RecoverDrive(selectedNode, poolDrive, busID, node.ConnectionOpts{
+					Timeout:         driveFailTimeout,
+					TimeBeforeRetry: dfDefaultRetryInterval,
+				})
+				log.FailOnError(err, fmt.Sprintf("failed to recover yank journal drive on node [%s]", selectedNode.Name))
+				log.InfoD("Verified recover yank drive")
+			})
+		}
+
 		stepLog = fmt.Sprintf("Delete the  pool [%v] on node [%v]", poolIDToDelete, selectedNode.Name)
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -12108,17 +12137,99 @@ var _ = Describe("{PoolDeleteWithNodeRebootWithTimeInterval}", func() {
 			log.FailOnError(err, fmt.Sprintf("Failed to delete pool [%v]", poolIDToDelete))
 			log.Infof("pool deleted succeed")
 		})
+
+		if testName == "delete-pool-yank-drive-px-restart" || testName == "delete-pool-yank-drive-node-reboot" || testName == "delete-pool-yank-drive-node-maintenance-cycle" {
+			poolDrive := ""
+			stepLog = "Select drive to yank"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				driveMap, err := Inst().V.GetPoolDrives(&selectedNode)
+				log.FailOnError(err, fmt.Sprintf("error getting pool drive details for the node %s", selectedNode))
+
+				for poolID, drives := range driveMap {
+					if poolDrive == "" {
+						for _, drive := range drives {
+							if drive.Device == "" {
+								log.InfoD("device path is empty for pool %s ", poolID)
+								break
+							}
+							if !strings.Contains(drive.Device, jPath) {
+								poolDrive = drive.Device
+								break
+							}
+						}
+					} else {
+						break
+					}
+				}
+			})
+
+			poolDrive = strings.Trim(poolDrive, "/")
+			poolDriveArr := strings.Split(poolDrive, "/")
+			poolDrive = poolDriveArr[len(poolDriveArr)-1]
+			stepLog = "Yank journal drive"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				busID, err = Inst().N.YankDrive(selectedNode, poolDrive, node.ConnectionOpts{
+					Timeout:         dfDefaultTimeout,
+					TimeBeforeRetry: dfDefaultRetryInterval,
+				})
+				log.FailOnError(err, fmt.Sprintf("failed to yank journal drive on node [%s]", selectedNode.Name))
+				log.InfoD("Bus id - %s", busID)
+			})
+
+			time.Sleep(10 * time.Second)
+
+			stepLog = "Recover yank drive"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				err = Inst().N.RecoverDrive(selectedNode, poolDrive, busID, node.ConnectionOpts{
+					Timeout:         driveFailTimeout,
+					TimeBeforeRetry: dfDefaultRetryInterval,
+				})
+				log.FailOnError(err, fmt.Sprintf("failed to recover yank journal drive on node [%s]", selectedNode.Name))
+				log.InfoD("Verified recover yank drive")
+			})
+		}
+
 		sleepTime := rand.Intn(100) + 1
 		time.Sleep(time.Second * (time.Duration(sleepTime)))
-		//node restart
-		stepLog = fmt.Sprintf("Verify reboot after [%d] seconds", sleepTime)
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			err = Inst().N.RebootNodeAndWait(*testNode)
-			log.FailOnError(err, "Failed to reboot node and wait till it is up")
-			log.Info("Verify reboot succeed")
-			time.Sleep(time.Minute * 1)
-		})
+
+		if testType == "node_reboot" {
+			//node restart
+			stepLog = fmt.Sprintf("Verify reboot after [%d] seconds", sleepTime)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				err = Inst().N.RebootNodeAndWait(*testNode)
+				log.FailOnError(err, "Failed to reboot node and wait till it is up")
+				log.Info("Verify reboot succeed")
+				time.Sleep(time.Minute * 1)
+			})
+		} else if testType == "px_restart" {
+			//Restart Portworx
+			stepLog = "Restart Portworx"
+			Step(stepLog, func() {
+				err := Inst().N.Systemctl(selectedNode, "portworx.service", node.SystemctlOpts{
+					Action: "restart",
+					ConnectionOpts: node.ConnectionOpts{
+						Timeout:         5 * time.Minute,
+						TimeBeforeRetry: 10 * time.Second,
+					}})
+				log.FailOnError(err, fmt.Sprintf("restart portworx failed on node [%v]", selectedNode.Name))
+				log.Info("portworx restart succeed")
+				time.Sleep(2 * time.Minute)
+			})
+		} else if testType == "node_maintenance_cycle" {
+			stepLog = fmt.Sprintf("Performing node maintenance cycle on node [%s] after [%d] seconds", selectedNode.Name, sleepTime)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				err = Inst().V.RecoverDriver(selectedNode)
+				log.FailOnError(err, fmt.Sprintf("error performing maintenance cycle on node %s", selectedNode.Name))
+				err = Inst().V.WaitDriverUpOnNode(selectedNode, 5*time.Minute)
+				log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", selectedNode.Name))
+				dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after maintenance cycle on node %s", selectedNode.Name))
+			})
+		}
 
 		stepLog = "Exit pool maintenance mode"
 		Step(stepLog, func() {
@@ -12207,6 +12318,12 @@ var _ = Describe("{PoolDeleteWithNodeRebootWithTimeInterval}", func() {
 		AfterEachTest(contexts)
 
 	})
+}
+
+var _ = Describe("{PoolDeleteWithNodeRebootWithTimeInterval}", Label("p1", "hal_ops_disruption", "node_reboot", "PoolDelete", "functional"), func() {
+	testName = "delete-pool-node-reboot"
+	testDescription = "Pool delete with node reboot with random time interval"
+	PoolDeleteWithTimeInterval(testName, testDescription, "node_reboot")
 })
 
 var _ = Describe("{PXInstallWithNodeReboot}", Label("p1", "negative", "pool_ops", "px_ops", "error_injection", "node_reboot"), func() {
@@ -12744,220 +12861,10 @@ var _ = Describe("{PoolExpandAddDriveWithNodeReboot}", func() {
 
 })
 
-var _ = Describe("{PoolDeleteWithPXRestart}", func() {
-	/*
-		1. Create volume and do IOs / deploy apps to do IOs
-		2. Destroy Apps
-		3. Delete pool
-		4. After some random delay restart Portworx
-		4. Wait for node to comeup and check PX status
-		5. Verify if pool deleted successfully
-	*/
-	var contexts []*scheduler.Context
-	var poolsMap map[string][]volume.DiskResource
-	var poolToDelete node.StoragePool
-	var jrnlPartPoolID string
-	var poolIDToDelete string
-
-	BeforeEach(func() {
-		StartTorpedoTest("PoolDeleteWithPXRestart", "Pool Delete With PXRestart", nil, 0)
-	})
-
-	ItLog := "PoolDeleteWithPXRestart"
-
-	It(ItLog, func() {
-		stepLog = "Schedule Apps"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			contexts = scheduleApps()
-			log.Info("schedule app succeed")
-			time.Sleep(1 * time.Minute)
-		})
-		stepLog = "Validate and destroy app"
-		// appsValidateAndDestroy this will delete all the app including the app we install while setting-up the job
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			appsValidateAndDestroy(contexts)
-			time.Sleep(time.Minute)
-			log.Info("app validate and destroy succeed")
-		})
-
-		testNode := selectPoolDeletableNode()
-		dash.VerifyFatal(testNode != nil, true, "verify if select test node ok")
-		selectedNode := *testNode
-		nodePools := selectedNode.StoragePools
-
-		stepLog := "Enter maintenance mode"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			err = EnterPoolMaintenance(selectedNode)
-			log.FailOnError(err, "Failed to enter in maintenance mode")
-			log.Info("enter pool maintenance mode succeed")
-		})
-
-		stepLog = "Selecting pool to delete"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			isjournal, err := IsJournalEnabled()
-			log.FailOnError(err, "Failed to check if Journal enabled")
-			if isjournal && len(nodePools) > 1 {
-				jDev, err := Inst().V.GetJournalDevicePath(&selectedNode)
-				log.FailOnError(err, fmt.Sprintf("error getting journal device path from node %s", selectedNode.Name))
-				log.Infof("JournalDev: %s", jDev)
-				if jDev == "" {
-					log.FailOnError(fmt.Errorf("no journal device path found"), "error getting journal device path from storage spec")
-				}
-				drivesMap, err := Inst().V.GetPoolDrives(&selectedNode)
-				jPath := jDev[:len(jDev)-1]
-			outer:
-				for k, v := range drivesMap {
-					for _, dv := range v {
-						if strings.Contains(dv.Device, jPath) {
-							jrnlPartPoolID = k
-							break outer
-						}
-					}
-				}
-				for _, nodePool := range nodePools {
-					if strconv.Itoa(int(nodePool.ID)) != jrnlPartPoolID {
-						poolToDelete = nodePool
-						break
-					}
-				}
-			} else {
-				poolToDelete = nodePools[rand.Intn(len(nodePools))]
-			}
-			poolIDToDelete = strconv.Itoa(int(poolToDelete.GetID()))
-			log.Infof("pool selected for deletion [%s]", poolIDToDelete)
-		})
-
-		metadataPoolUuids, err := GetPoolUUIDWithMetadataDisk(selectedNode)
-		if err != nil && !strings.Contains(err.Error(), "no pool with metadata in node") {
-			log.FailOnError(err, fmt.Sprintf("unable to fetch metadata pool on node: [%v]", selectedNode.Name))
-		}
-
-		stepLog = fmt.Sprintf("Validate volumes are deleted or not")
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			volume, err := runPxctlCommand(fmt.Sprintf(" volume list --node %v | awk 'NR > 1 {print $1}'", poolToDelete.GetUuid()), selectedNode, nil)
-			log.FailOnError(err, fmt.Sprintf("unable to fetch volume on pool [%v] volumes: [%v]", poolToDelete.GetUuid(), volume))
-			dash.VerifyFatal(len(volume) == 0, true, fmt.Sprintf("all volumes are delete on pool [%v] volumes: [%v]", poolToDelete.GetUuid(), volume))
-			log.Info("validate volumes succeed")
-		})
-
-		stepLog = fmt.Sprintf("Delete the  pool [%v] on node [%v]", poolIDToDelete, selectedNode.Name)
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			err := Inst().V.DeletePool(selectedNode, poolIDToDelete, true)
-			log.FailOnError(err, fmt.Sprintf("Failed to delete pool [%v]", poolIDToDelete))
-			log.Infof("pool deleted succeed")
-		})
-		sleepTime := rand.Intn(100) + 1
-		time.Sleep(time.Second * (time.Duration(sleepTime)))
-
-		//Restart Portworx
-		stepLog = "Restart Portworx"
-		Step(stepLog, func() {
-			err := Inst().N.Systemctl(selectedNode, "portworx.service", node.SystemctlOpts{
-				Action: "restart",
-				ConnectionOpts: node.ConnectionOpts{
-					Timeout:         5 * time.Minute,
-					TimeBeforeRetry: 10 * time.Second,
-				}})
-			log.FailOnError(err, fmt.Sprintf("restart portworx failed on node [%v]", selectedNode.Name))
-			log.Info("portworx restart succeed")
-			time.Sleep(2 * time.Minute)
-		})
-
-		stepLog = "Exit pool maintenance mode"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			err = ExitPoolMaintenance(selectedNode)
-			log.FailOnError(err, "Failed to exit maintenance mode")
-			log.Info("exit pool maintenance mode succeed")
-		})
-
-		// portworx status
-		stepLog = "Check px status"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			status, err := Inst().V.GetPxctlStatus(selectedNode)
-			log.FailOnError(err, fmt.Sprintf("failed to get pxctl status on node [%s]", selectedNode.Name))
-			dash.VerifyFatal(status == api.Status_STATUS_OK.String(), true, fmt.Sprintf("node [%s] status is up but PX cluster is not ok. Expected: %v Actual: %v",
-				selectedNode.Name, api.Status_STATUS_OK, status))
-			log.InfoD("px status %v", status)
-		})
-		// Verify pool delete
-		stepLog = "Verify pool delete"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			poolsMap, err = Inst().V.GetPoolDrives(&selectedNode)
-			if err != nil {
-				log.FailOnError(err, fmt.Sprintf("error getting pool drive from the node [%s] after pool deletion,Err: %v", selectedNode.Name, err))
-			}
-			if _, ok := poolsMap[poolToDelete.GetUuid()]; ok {
-				log.FailOnError(fmt.Errorf("pool [%s] still exists on the node [%s]", poolToDelete.GetUuid(), selectedNode.Name), fmt.Sprintf("pool [%s] still exists on the node [%s]", poolToDelete, selectedNode.Name))
-			}
-			log.InfoD("verify pool delete succeed")
-		})
-
-		if metadataPoolUuids == poolToDelete.GetUuid() && len(nodePools) > 1 {
-			stepLog = "check metadata transfered to other pool"
-			Step(stepLog, func() {
-				log.InfoD(stepLog)
-				metadataPoolUuids, err := GetPoolUUIDWithMetadataDisk(selectedNode)
-				log.FailOnError(err, fmt.Sprintf("failed to fetch metadata pool on node [%s]", selectedNode.Name))
-				log.InfoD("metadata transfered to pool:[%s]", metadataPoolUuids)
-			})
-		}
-
-		newSpecSize := (poolToDelete.TotalSize / units.GiB) / 2
-		///creating a spec to perform add  drive
-		driveSpecs, err := GetCloudDriveDeviceSpecs()
-		log.FailOnError(err, "Error getting cloud drive specs")
-		deviceSpec := driveSpecs[0]
-		deviceSpecParams := strings.Split(deviceSpec, ",")
-		paramsArr := make([]string, 0)
-		for _, param := range deviceSpecParams {
-			if strings.Contains(param, "size") {
-				paramsArr = append(paramsArr, fmt.Sprintf("size=%d,", newSpecSize))
-			} else {
-				paramsArr = append(paramsArr, param)
-			}
-		}
-
-		newSpec := strings.Join(paramsArr, ",")
-		stepLog = fmt.Sprintf("Adding cloud drive to node %s with size %s", selectedNode.Name, newSpec)
-
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			err = Inst().V.AddCloudDrive(&selectedNode, newSpec, -1)
-			log.FailOnError(err, "error adding new drive to node %s", selectedNode.Name)
-			err = Inst().V.RefreshDriverEndpoints()
-			log.FailOnError(err, "error refreshing driver end points")
-			log.InfoD("Validate pool rebalance after drive add to the node %s", selectedNode.Name)
-			err = ValidateDriveRebalance(selectedNode)
-			log.FailOnError(err, "pool re-balance failed on node %s", selectedNode.Name)
-			err = Inst().V.WaitDriverUpOnNode(selectedNode, addDriveUpTimeOut)
-			log.FailOnError(err, "volume drive down on node %s", selectedNode.Name)
-			log.InfoD("pool created succeed")
-		})
-
-		stepLog = "Verify pool created"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			poolsMapAfr, err := Inst().V.GetPoolDrives(&selectedNode)
-
-			log.FailOnError(err, "Failed to list storage pools")
-			dash.VerifyFatal((len(poolsMap)+1) == len(poolsMapAfr), true, "verify new pool is created")
-			log.InfoD("verify new pool created succeed")
-		})
-	})
-	JustAfterEach(func() {
-		defer EndTorpedoTest()
-		AfterEachTest(contexts)
-
-	})
+var _ = Describe("{PoolDeleteWithPXRestart}", Label("p1", "hal_ops_disruption", "px_restart", "PoolDelete", "functional"), func() {
+	testName = "delete-pool-px-restart"
+	testDescription = "Pool delete with px restart with random time interval"
+	PoolDeleteWithTimeInterval(testName, testDescription, "px_restart")
 })
 
 var _ = Describe("{AddDriveWithNodeMaintenance}", func() {
@@ -13096,228 +13003,9 @@ var _ = Describe("{PoolResizeWithNodeMaintenanceCycleWithTimeInterval}", func() 
 })
 
 var _ = Describe("{PoolDeleteWithNodeMaintenanceCycleWithTimeInterval}", Label("p1", "hal_ops_disruption", "NodeMaintenance", "PoolDelete", "functional"), func() {
-	/*
-	   1.  Create volume and do IOs / deploy apps to do IOs
-	   2.  Validate and destroy app
-	   3.  Enter maintenance mode
-	   4.  Selecting pool to delete
-	   5.  Validate volumes are deleted or not on the selected pool
-	   6.  Delete the selected pool
-	   7.  Performing node maintenance cycle on selected node with some random delay
-	   8.  Exit pool maintenance mode
-	   9.  Check px status
-	   10. Verify selected pool is deleted or not
-	   11. Create the pool back
-	   12. Verify Pool created or not
-	*/
-	var contexts []*scheduler.Context
-	var poolsMap map[string][]volume.DiskResource
-	var poolToDelete node.StoragePool
-	var jrnlPartPoolID string
-	var poolIDToDelete string
-
-	BeforeEach(func() {
-		StartTorpedoTest("PoolDeleteWithNodeMaintenanceCycleWithTimeInterval", "Pool delete with node maintenance cycle with random time interval", nil, 0)
-	})
-
-	ItLog := "PoolDeleteWithNodeMaintenanceCycleWithTimeInterval"
-
-	It(ItLog, func() {
-		stepLog = "Schedule Apps"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			contexts = scheduleApps()
-			log.Info("schedule app succeed")
-			time.Sleep(1 * time.Minute)
-		})
-		stepLog = "Validate and destroy app"
-		// appsValidateAndDestroy this will delete all the app including the app we install while setting-up the job
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			appsValidateAndDestroy(contexts)
-			time.Sleep(time.Minute)
-			log.Info("app validate and destroy succeed")
-		})
-
-		testNode := selectPoolDeletableNode()
-		dash.VerifyFatal(testNode != nil, true, "verify if select test node ok")
-		selectedNode := *testNode
-		nodePools := selectedNode.StoragePools
-		log.Infof("selected node [%s]", selectedNode.Name)
-
-		stepLog := "Enter maintenance mode"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			err = EnterPoolMaintenance(selectedNode)
-			log.FailOnError(err, "Failed to enter in maintenance mode")
-			log.Info("enter pool maintenance mode succeed")
-		})
-
-		stepLog = "Selecting pool to delete"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			isjournal, err := IsJournalEnabled()
-			log.FailOnError(err, "Failed to check if Journal enabled")
-			if isjournal && len(nodePools) > 1 {
-				jDev, err := Inst().V.GetJournalDevicePath(&selectedNode)
-				log.FailOnError(err, fmt.Sprintf("error getting journal device path from node %s", selectedNode.Name))
-				log.Infof("JournalDev: %s", jDev)
-				if jDev == "" {
-					log.FailOnError(fmt.Errorf("no journal device path found"), "error getting journal device path from storage spec")
-				}
-				drivesMap, err := Inst().V.GetPoolDrives(&selectedNode)
-				jPath := jDev[:len(jDev)-1]
-			outer:
-				for k, v := range drivesMap {
-					for _, dv := range v {
-						if strings.Contains(dv.Device, jPath) {
-							jrnlPartPoolID = k
-							break outer
-						}
-					}
-				}
-				for _, nodePool := range nodePools {
-					if strconv.Itoa(int(nodePool.ID)) != jrnlPartPoolID {
-						poolToDelete = nodePool
-						break
-					}
-				}
-			} else {
-				poolToDelete = nodePools[rand.Intn(len(nodePools))]
-			}
-			poolIDToDelete = strconv.Itoa(int(poolToDelete.GetID()))
-			log.Infof("pool selected for deletion [%s] on node [%s]", poolIDToDelete, selectedNode.Name)
-		})
-
-		stepLog = fmt.Sprintf("Validate volumes are deleted or not")
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			volume, err := runPxctlCommand(fmt.Sprintf(" volume list --node %v | awk 'NR > 1 {print $1}'", poolToDelete.GetUuid()), selectedNode, nil)
-			log.FailOnError(err, fmt.Sprintf("unable to fetch volume on pool [%v] volumes: [%v]", poolToDelete.GetUuid(), volume))
-			dash.VerifyFatal(len(volume) == 0, true, fmt.Sprintf("all volumes are delete on pool [%v] volumes: [%v]", poolToDelete.GetUuid(), volume))
-			log.Info("validate volumes succeed")
-		})
-		metadataPoolUuids, err := GetPoolUUIDWithMetadataDisk(selectedNode)
-		if err != nil && !strings.Contains(err.Error(), "no pool with metadata in node") {
-			log.FailOnError(err, fmt.Sprintf("unable to fetch metadata pool on node: [%v]", selectedNode.Name))
-		}
-		log.Infof("metadata pool [%s] on node [%s]", metadataPoolUuids, selectedNode.Name)
-
-		stepLog = fmt.Sprintf("Delete the  pool [%v] on node [%v]", poolIDToDelete, selectedNode.Name)
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			err := Inst().V.DeletePool(selectedNode, poolIDToDelete, true)
-			log.FailOnError(err, fmt.Sprintf("Failed to delete pool [%v]", poolIDToDelete))
-			log.Infof("pool deleted succeed")
-		})
-		sleepTime := rand.Intn(100) + 1
-		time.Sleep(time.Second * (time.Duration(sleepTime)))
-		stepLog = fmt.Sprintf("Performing node maintenance cycle on node [%s] after [%d] seconds", selectedNode.Name, sleepTime)
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			err = Inst().V.RecoverDriver(selectedNode)
-			log.FailOnError(err, fmt.Sprintf("error performing maintenance cycle on node %s", selectedNode.Name))
-			err = Inst().V.WaitDriverUpOnNode(selectedNode, 5*time.Minute)
-			log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", selectedNode.Name))
-			dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after maintenance cycle on node %s", selectedNode.Name))
-		})
-
-		stepLog = "Exit pool maintenance mode"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			err = ExitPoolMaintenance(selectedNode)
-			log.FailOnError(err, "Failed to exit maintenance mode")
-			log.Info("exit pool maintenance mode succeed")
-		})
-
-		stepLog = fmt.Sprintf("Wait for driver to up")
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			err = Inst().V.WaitDriverUpOnNode(selectedNode, Inst().DriverStartTimeout)
-			log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", selectedNode.Name))
-			log.Info("Driver is up")
-
-		})
-
-		// portworx status
-		stepLog = "Check px status"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			status, err := Inst().V.GetPxctlStatus(selectedNode)
-			log.FailOnError(err, fmt.Sprintf("failed to get pxctl status on node [%s]", selectedNode.Name))
-			dash.VerifyFatal(status == api.Status_STATUS_OK.String(), true, fmt.Sprintf("node [%s] status is up but PX cluster is not ok. Expected: %v Actual: %v",
-				selectedNode.Name, api.Status_STATUS_OK, status))
-			log.InfoD("px status %v", status)
-		})
-
-		// Verify pool delete
-		stepLog = "Verify pool delete"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			poolsMap, err = Inst().V.GetPoolDrives(&selectedNode)
-			if err != nil {
-				log.FailOnError(err, fmt.Sprintf("error getting pool drive from the node [%s] after pool deletion,Err: %v", selectedNode.Name, err))
-			}
-			if _, ok := poolsMap[poolToDelete.GetUuid()]; ok {
-				log.FailOnError(fmt.Errorf("pool [%s] still exists on the node [%s]", poolToDelete.GetUuid(), selectedNode.Name), fmt.Sprintf("pool [%s] still exists on the node [%s]", poolToDelete, selectedNode.Name))
-			}
-			log.InfoD("verify pool delete succeed")
-		})
-
-		if metadataPoolUuids == poolToDelete.Uuid && len(nodePools) > 1 {
-			stepLog = "check metadata transfered to other pool"
-			log.InfoD(stepLog)
-			metadataPoolUuids, err := GetPoolUUIDWithMetadataDisk(selectedNode)
-			log.FailOnError(err, fmt.Sprintf("failed to fetch metadata pool on node [%s]", selectedNode.Name))
-			log.InfoD("metadata transfered to pool:[%s]", metadataPoolUuids)
-		}
-
-		newSpecSize := (poolToDelete.TotalSize / units.GiB) / 2
-		///creating a spec to perform add  drive
-		driveSpecs, err := GetCloudDriveDeviceSpecs()
-		log.FailOnError(err, "Error getting cloud drive specs")
-		deviceSpec := driveSpecs[0]
-		deviceSpecParams := strings.Split(deviceSpec, ",")
-		paramsArr := make([]string, 0)
-		for _, param := range deviceSpecParams {
-			if strings.Contains(param, "size") {
-				paramsArr = append(paramsArr, fmt.Sprintf("size=%d,", newSpecSize))
-			} else {
-				paramsArr = append(paramsArr, param)
-			}
-		}
-		newSpec := strings.Join(paramsArr, ",")
-		stepLog = fmt.Sprintf("Adding cloud drive to node %s with size %s", selectedNode.Name, newSpec)
-
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			err = Inst().V.AddCloudDrive(&selectedNode, newSpec, -1)
-			log.FailOnError(err, "error adding new drive to node %s", selectedNode.Name)
-			err = Inst().V.RefreshDriverEndpoints()
-			log.FailOnError(err, "error refreshing driver end points")
-			log.InfoD("Validate pool rebalance after drive add to the node %s", selectedNode.Name)
-			err = ValidateDriveRebalance(selectedNode)
-			log.FailOnError(err, "pool re-balance failed on node %s", selectedNode.Name)
-			err = Inst().V.WaitDriverUpOnNode(selectedNode, addDriveUpTimeOut)
-			log.FailOnError(err, "volume drive down on node %s", selectedNode.Name)
-			log.InfoD("pool created succeed")
-		})
-
-		stepLog = "Verify pool created"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			poolsMapAfr, err := Inst().V.GetPoolDrives(&selectedNode)
-
-			log.FailOnError(err, "Failed to list storage pools")
-			dash.VerifyFatal((len(poolsMap)+1) == len(poolsMapAfr), true, "verify new pool is created")
-			log.InfoD("verify new pool created succeed")
-		})
-	})
-	JustAfterEach(func() {
-		defer EndTorpedoTest()
-		AfterEachTest(contexts)
-
-	})
+	testName = "delete-pool-node-maintenance-cycle"
+	testDescription = "Pool delete with node maintenance cycle with random time interval"
+	PoolDeleteWithTimeInterval(testName, testDescription, "node_maintenance_cycle")
 })
 
 var _ = Describe("{PXInstallWithPXRestart}", Label("p1", "px_install", "hal_init", "hal_ops_disruption", "px_restart", "functional"), func() {
