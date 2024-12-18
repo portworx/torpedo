@@ -728,6 +728,9 @@ const (
 
 	// FadaSimultaneousSnapshots create 1K snapshots in 20 nodes px-csi cluster
 	FadaSimultaneousSnapshots = "fadaSimultaneousSnapshots"
+
+	// PowerOffNBy2PlusOneNodes power off N/2 + 1 in px-csi cluster
+	PowerOffNBy2PlusOneNodes = "powerOffNBy2PlusOneNodes"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -14962,4 +14965,215 @@ func deleteFADALabelsToNode() error {
 		}
 	}
 	return nil
+}
+
+// TriggerPowerOffNBy2PlusOneNodes power off N/2 + 1 nodes at same time for px-lite
+func TriggerPowerOffNBy2PlusOneNodes(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	var fadaScName string
+	var appContexts []*scheduler.Context
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(PowerOffNBy2PlusOneNodes)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: PowerOffNBy2PlusOneNodes,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+	stepLog := "Trigger Power off N/2 + 1  nodes in a cluster excluding KVDB nodes "
+	Step(stepLog, func() {
+		log.Infof(stepLog)
+		kvdbNodes, err := GetAllKvdbNodes()
+		if err != nil {
+			log.Error(err.Error())
+			UpdateOutcome(event, err)
+		}
+
+		kvdbMap := make(map[string]KvdbNode, 0)
+		for _, kNode := range kvdbNodes {
+			kvdbMap[kNode.ID] = kNode
+		}
+		workerNodes := node.GetWorkerNodes()
+		// Checking enough number of worker nodes available to perform this test
+		if len(workerNodes) < 7 {
+			log.Errorf("enough number of worker nodes [%d] not available. At least 7 nodes are need to perform this test", len(workerNodes))
+			UpdateOutcome(event, fmt.Errorf("enough number of worker nodes count: [%d] not available to perform test", len(workerNodes)))
+		}
+		numberOfThread := 10
+		NodesToBePowerOff := len(workerNodes)/2 + 1
+		if NodesToBePowerOff <= numberOfThread {
+			numberOfThread = NodesToBePowerOff
+		}
+		nodesPerThread := NodesToBePowerOff / numberOfThread
+
+		// Assign vms to every thread
+		nodesInThread := make([][]node.Node, numberOfThread)
+		startNode := 0
+		for t := 0; t < numberOfThread; t++ {
+			nodesInThread[t] = make([]node.Node, nodesPerThread)
+
+			for x := 0; x < nodesPerThread; x++ {
+				_, ok := kvdbMap[workerNodes[startNode].Id]
+				for ok {
+					log.Infof("Node [%s] is a KVDB node. Skipping this node", workerNodes[startNode+x].Name)
+					startNode += 1
+					_, ok = kvdbMap[workerNodes[startNode].Id]
+
+				}
+				nodesInThread[t][x] = workerNodes[startNode+x]
+			}
+			startNode += nodesPerThread
+			// For odd numbers of nodes, adding most of the nodes to the last thread
+			if t == (numberOfThread-2) && (nodesPerThread*(t+1)) < (NodesToBePowerOff-nodesPerThread) {
+				nodesPerThread = NodesToBePowerOff - (nodesPerThread * (t + 1))
+			}
+		}
+		log.Info("Successfully assigned VMs to threads")
+		stepLog = "Powering off N/2+1 KVDB nodes"
+		Step(stepLog, func() {
+			log.Infof(stepLog)
+			var poweroffwg sync.WaitGroup
+			updateVMPowerStatus(numberOfThread, &poweroffwg, nodesInThread, event, "poweroff", PowerOffNBy2PlusOneNodes)
+			poweroffwg.Wait()
+			log.Infof("Completed power off on N/2 + 1 nodes")
+
+			log.Infof("Wait for 5 minutes before deploying apps when N/2 +1 nodes are down")
+			time.Sleep(5 * time.Minute)
+
+			fadaScName = PureBlockStorageClass + time.Now().Format("01-02-15h04m05s")
+			log.Infof("Creating pure_block storage class class: %s", fadaScName)
+			param := make(map[string]string, 0)
+			param[PureBackend] = k8s.PureBlock
+			// Setting FA Pod name for FA Multi-Tenancy
+			if FAPodName != "" {
+				param[PureFAPodName] = FAPodName
+			}
+			_, err := createPureStorageClass(fadaScName, param, []string{})
+			if err != nil {
+				log.Errorf("StorageClass creation failed for SC: %s", fadaScName)
+				UpdateOutcome(event, err)
+			}
+			sem := make(chan struct{}, 10)
+			var wg sync.WaitGroup
+			deployAppInLoop(5, fadaScName, &wg, sem, map[string]string{}, &appContexts, event, PowerOffNBy2PlusOneNodes)
+			validateContexts(event, &appContexts)
+
+		})
+		stepLog = "Power on N/2 + 1 nodes now"
+		Step(stepLog, func() {
+			log.Infof(stepLog)
+			var poweronwg sync.WaitGroup
+			log.Infof("Power on threads started")
+			updateVMPowerStatus(numberOfThread, &poweronwg, nodesInThread, event, "poweron", PowerOffNBy2PlusOneNodes)
+			poweronwg.Wait()
+			log.Infof("Completed power on of Nodes")
+			newKvdbNodes, err := GetAllKvdbNodes()
+			if err != nil {
+				log.Error(err.Error())
+				UpdateOutcome(event, err)
+			}
+			if !reflect.DeepEqual(kvdbNodes, newKvdbNodes) {
+				log.Error(fmt.Errorf("new nodes become KVDB node after powering off N/2 +1 nodes"))
+				UpdateOutcome(event, fmt.Errorf("new nodes become KVDB node after powering off N/2 +1 nodes"))
+			}
+		})
+		stepLog = "Cleaning up the FADA deployments"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			var wg sync.WaitGroup
+			sem := make(chan struct{}, 10)
+			for x := 0; x < len(appContexts); x++ {
+				sem <- struct{}{}
+				wg.Add(1)
+				go func(ctx *scheduler.Context, wg *sync.WaitGroup, event *EventRecord, sem chan struct{}) {
+					cleanupDeployment(ctx, wg, event)
+					<-sem
+				}(appContexts[x], &wg, event, sem)
+			}
+			wg.Wait()
+			close(sem)
+			log.InfoD("Successfully cleaned up the FADA deployments")
+		})
+		if !isSSIERun() {
+			stepLog = "Verify App and volume staus"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, ctx := range *contexts {
+					log.Infof("Validating context: %v", ctx.App.Key)
+					ctx.SkipVolumeValidation = false
+					errorChan := make(chan error, errorChannelSize)
+					ValidateContext(ctx, &errorChan)
+					for err := range errorChan {
+						UpdateOutcome(event, err)
+					}
+				}
+			})
+		} else {
+			log.Infof("[PowerOffNBy2PlusOneNodes] is running in SSIE")
+		}
+		deleteStorageClass(fadaScName, event)
+		log.Infof("[PowerOffNBy2PlusOneNodes] test completed successfully")
+		updateMetrics(*event)
+	})
+}
+
+// deployAppInLoop deploy counter number of FADA apps simultanesouly
+func deployAppInLoop(counter int, fadaScName string, wg *sync.WaitGroup, sem chan struct{}, affLabel map[string]string, appContexts *[]*scheduler.Context, event *EventRecord, testName string) {
+	log.Info("Deploying apps in a cluster")
+	for x := 0; x < counter; x++ {
+		pvcName := fmt.Sprintf("%s-%d", pvcNamePrefix, x)
+		namespace := fmt.Sprintf("%s-%d", fadaNamespacePrefix, x)
+		deploymentName := fmt.Sprintf("%s-%d", fadaScName, x)
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(scName string, pvcName string, ns string, depName string, wg *sync.WaitGroup, ctx *[]*scheduler.Context, event *EventRecord, sem chan struct{}) {
+			log.SetTestName(testName)
+			deployPureApp(fadaScName, pvcName, namespace, deploymentName, affLabel, wg, ctx, event)
+			<-sem
+		}(fadaScName, pvcName, namespace, deploymentName, wg, appContexts, event, sem)
+	}
+
+}
+
+// updateVMPowerStatus update VM power status for  provided threads
+func updateVMPowerStatus(numberOfThread int, wg *sync.WaitGroup, nodesInThread [][]node.Node, event *EventRecord, vmState string, testName string) {
+	log.Infof("Updating power status of a node: [%v]", nodesInThread)
+	var err error
+	for i := 0; i < numberOfThread; i++ {
+		wg.Add(1)
+		go func(nodeList []node.Node) {
+			defer wg.Done()
+			log.SetTestName(testName)
+			for _, nodeInfo := range nodeList {
+				log.Infof("Update VM status to: [%s] in a node: [%s]", vmState, nodeInfo.Name)
+				if strings.Contains(vmState, "poweroff") {
+					err = Inst().N.PowerOffVM(nodeInfo)
+				} else {
+					err = Inst().N.PowerOnVM(nodeInfo)
+				}
+				time.Sleep(15 * time.Second)
+				if err != nil {
+					log.Errorf("Failed to update status: [%s] for a node: %s. Error: %v", vmState, nodeInfo.Name, err)
+					UpdateOutcome(event, err)
+				}
+				UpdateOutcome(event, err)
+			}
+		}(nodesInThread[i])
+	}
+
+}
+
+// deleteStorageClass delete given storage class
+func deleteStorageClass(scName string, event *EventRecord) {
+	if err := storage.Instance().DeleteStorageClass(scName); err != nil {
+		log.Errorf("Failed to delete storage class: %s. Error: %v", scName, err)
+		UpdateOutcome(event, err)
+	}
 }

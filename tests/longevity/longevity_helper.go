@@ -400,6 +400,7 @@ func populateTriggerFuncs() {
 		RunFlatPxCSI:                      TriggerRunFlat,
 		FadaSimultaneousSnapshots:         TriggerFadaSimultaneousSnapshots,
 		TestPxCSIFadaAttachLimit:          TriggerPxCSIFadaAttachLimit,
+		PowerOffNBy2PlusOneNodes:          TriggerPowerOffNBy2PlusOneNodes,
 	}
 
 	//Creating a distinct trigger to make sure email triggers at regular intervals
@@ -932,6 +933,7 @@ func populateIntervals() {
 	triggerInterval[RunFlatPxCSI] = make(map[int]time.Duration)
 	triggerInterval[TestPxCSIFadaAttachLimit] = make(map[int]time.Duration)
 	triggerInterval[FadaSimultaneousSnapshots] = make(map[int]time.Duration)
+	triggerInterval[PowerOffNBy2PlusOneNodes] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -1931,6 +1933,17 @@ func populateIntervals() {
 	triggerInterval[FadaSimultaneousSnapshots][2] = 24 * baseInterval
 	triggerInterval[FadaSimultaneousSnapshots][1] = 27 * baseInterval
 
+	triggerInterval[PowerOffNBy2PlusOneNodes][10] = 1 * baseInterval
+	triggerInterval[PowerOffNBy2PlusOneNodes][9] = 3 * baseInterval
+	triggerInterval[PowerOffNBy2PlusOneNodes][8] = 6 * baseInterval
+	triggerInterval[PowerOffNBy2PlusOneNodes][7] = 9 * baseInterval
+	triggerInterval[PowerOffNBy2PlusOneNodes][6] = 12 * baseInterval
+	triggerInterval[PowerOffNBy2PlusOneNodes][5] = 15 * baseInterval
+	triggerInterval[PowerOffNBy2PlusOneNodes][4] = 18 * baseInterval
+	triggerInterval[PowerOffNBy2PlusOneNodes][3] = 21 * baseInterval
+	triggerInterval[PowerOffNBy2PlusOneNodes][2] = 24 * baseInterval
+	triggerInterval[PowerOffNBy2PlusOneNodes][1] = 27 * baseInterval
+
 	baseInterval = 300 * time.Minute
 
 	triggerInterval[SVMotionMultipleNodes][10] = 1 * baseInterval
@@ -2294,6 +2307,7 @@ func populateIntervals() {
 	triggerInterval[RunFlatPxCSI][0] = 0
 	triggerInterval[TestPxCSIFadaAttachLimit][0] = 0
 	triggerInterval[FadaSimultaneousSnapshots][0] = 0
+	triggerInterval[PowerOffNBy2PlusOneNodes][0] = 0
 
 }
 
