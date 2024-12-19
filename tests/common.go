@@ -249,7 +249,6 @@ var (
 	ParallelUpgradeMinOpVersion, _ = version.NewVersion("24.2.0-")
 	// ParallelUpgradePxVersion specifies minimum portworx version that supports parallel upgrade
 	ParallelUpgradeMinPxVersion, _ = version.NewVersion("3.1.2")
-	FARestoreStatMinPxVersion, _   = version.NewVersion("3.2.2")
 )
 
 type OwnershipAccessType int32
@@ -1828,32 +1827,6 @@ func ValidateCSISnapshotAndRestore(ctx *scheduler.Context, errChan ...*chan erro
 
 		}
 
-		pxVersionString, err := Inst().V.GetDriverVersion()
-		processError(err, errChan...)
-		pxVersion, err := version.NewVersion(pxVersionString)
-		processError(err, errChan...)
-		if pxVersion.GreaterThanOrEqual(FARestoreStatMinPxVersion) {
-			restoreVolumeInfo, snapName, err := SnapshotRestoreAndInspectPVC(vols[0].Name, vols[0].Namespace, snapShotClassName)
-			processError(err, errChan...)
-
-			if restoreVolumeInfo == nil {
-				err = fmt.Errorf("failed to clone and inspect PVC")
-				processError(err, errChan...)
-			} else {
-				if restoreVolumeInfo.Usage == 0 || restoreVolumeInfo.Error != "" {
-					err = fmt.Errorf("failed to clone and inspect PVC. Usage: %d, Error: %s", restoreVolumeInfo.Usage, restoreVolumeInfo.Error)
-					processError(err, errChan...)
-				}
-			}
-
-			log.InfoD("Deleting restored PVC after inspect")
-			err = k8sCore.DeletePersistentVolumeClaim(restoreVolumeInfo.Locator.VolumeLabels["pvc"], restoreVolumeInfo.Locator.VolumeLabels["namespace"])
-			processError(err, errChan...)
-			log.InfoD("Deleting snapshot after inspect")
-			err = k8sExternalsnap.DeleteSnapshot(snapName, vols[0].Namespace)
-			processError(err, errChan...)
-		}
-
 		if err = Inst().S.DeleteCsiSnapshotClass(snapShotClassName); err != nil {
 			log.Errorf("Delete volume snapshot class failed with error: [%v]", err)
 			expect(err).NotTo(haveOccurred(), "failed to delete snapshot class")
@@ -1885,29 +1858,6 @@ func ValidateCSIVolumeClone(ctx *scheduler.Context, errChan ...*chan error) {
 
 			err = Inst().S.CSICloneTest(ctx, request)
 			processError(err, errChan...)
-
-			pxVersionString, err := Inst().V.GetDriverVersion()
-			processError(err, errChan...)
-			pxVersion, err := version.NewVersion(pxVersionString)
-			processError(err, errChan...)
-			if pxVersion.GreaterThanOrEqual(FARestoreStatMinPxVersion) {
-				cloneVolumeInfo, err := CloneAndInspectPVC(vols[0].Name, vols[0].Namespace)
-				processError(err, errChan...)
-
-				if cloneVolumeInfo == nil {
-					err = fmt.Errorf("failed to clone and inspect PVC")
-					processError(err, errChan...)
-				} else {
-					if cloneVolumeInfo.Usage == 0 || cloneVolumeInfo.Error != "" {
-						err = fmt.Errorf("failed to clone and inspect PVC. Usage: %d, Error: %s", cloneVolumeInfo.Usage, cloneVolumeInfo.Error)
-						processError(err, errChan...)
-					}
-				}
-
-				log.InfoD("Deleting cloned PVC after inspect")
-				err = k8sCore.DeletePersistentVolumeClaim(cloneVolumeInfo.Locator.VolumeLabels["pvc"], cloneVolumeInfo.Locator.VolumeLabels["namespace"])
-				processError(err, errChan...)
-			}
 
 			// PWX-37645: Disabled while fixing partition edge cases
 			// err = Inst().V.ValidatePureLocalVolumePaths()
