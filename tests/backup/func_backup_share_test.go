@@ -1939,6 +1939,7 @@ var _ = Describe("{ClusterBackupShareWithExistingBackupsWithViewRestorableAndFul
 		bl2                  string
 		blUID1               string
 		blUID2               string
+		restoreNames         []string
 	)
 	bkpNamespaces = make([]string, 0)
 	labelSelectors := make(map[string]string)
@@ -2096,7 +2097,7 @@ var _ = Describe("{ClusterBackupShareWithExistingBackupsWithViewRestorableAndFul
 			//Validate the access of Shared Backup
 			log.Infof("Validating the shared backups with ViewOnlyAccess from one of the user")
 			userCtx, err := backup.GetNonAdminCtx(firstUserName, CommonPassword)
-			log.FailOnError(err, "Fetching user [%s] ctx", thirdUserName)
+			log.FailOnError(err, "Fetching user [%s] ctx", firstUserName)
 			bkVar := 0
 			// Start Restore and confirm that user cannot restore
 			for _, backupName = range backupNames {
@@ -2110,6 +2111,7 @@ var _ = Describe("{ClusterBackupShareWithExistingBackupsWithViewRestorableAndFul
 				Inst().Dash.VerifyFatal(err, nil, "Getting destination cluster UID")
 				backupDriver := Inst().Backup
 				restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
+				restoreNames = append(restoreNames, restoreName)
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
 				Inst().Dash.VerifyFatal(err, nil, "Getting destination cluster UID")
 				log.InfoD("Validating if user [%s] with access [%v] can restore and delete backup %s or not", thirdUserName, BackupAccessKeyValue[1], backupName)
@@ -2159,6 +2161,7 @@ var _ = Describe("{ClusterBackupShareWithExistingBackupsWithViewRestorableAndFul
 				Inst().Dash.VerifyFatal(err, nil, "Getting destination cluster UID")
 				backupDriver := Inst().Backup
 				restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
+				restoreNames = append(restoreNames, restoreName)
 				err = CreateRestoreWithValidation(userCtx, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, appContextsToBackup)
 				Inst().Dash.VerifyFatal(err, nil, "Verifying that restore is possible")
 				// Try to delete the backup with user having RestoreAccess, and it should not pass
@@ -2186,6 +2189,7 @@ var _ = Describe("{ClusterBackupShareWithExistingBackupsWithViewRestorableAndFul
 			log.Infof("Validating the shared backups with FullAccess from one of the user")
 			for _, backupName = range backupNames {
 				restoreName := fmt.Sprintf("%s-%s-%v", thirdUserName, RestoreNamePrefix, RandomString(5))
+				restoreNames = append(restoreNames, restoreName)
 				ValidateSharedBackupWithUsers(thirdUserName, FullAccess, backupName, restoreName)
 			}
 			log.InfoD("Finished verifying access level - FullAccess")
@@ -2230,6 +2234,10 @@ var _ = Describe("{ClusterBackupShareWithExistingBackupsWithViewRestorableAndFul
 		// Clean up the cluster
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
+		for _, restoreNameIteration := range restoreNames {
+			err = DeleteRestore(restoreNameIteration, BackupOrgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreNameIteration))
+		}
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 
 	})
