@@ -278,6 +278,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 		partialBackupLocationMap           map[string]string
 		failedVolumes                      []*corev1.PersistentVolumeClaim
 		cancelFunc                         context1.CancelFunc
+		enablePartialBackupValidation      bool
 		// ClusterShare testcase variables
 		clusterShareScheduledAppContexts    []*scheduler.Context
 		clusterShareAdminCloudCredName      string
@@ -406,6 +407,8 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 				srcClusterAppNamespaces[appName] = append(srcClusterAppNamespaces[appName], namespace)
 			}
 		}
+		enablePartialBackupValidation, err = CompareCurrentStorkVersion(StorkVersionForPartialBackup, (*version.Version).LessThan)
+		log.FailOnError(err, "Error comparing current Stork version")
 	})
 	It("PX-Backup End-to-End Backup and Restore with Upgrade", func() {
 
@@ -744,9 +747,15 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 				firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, partialScheduledBackupName, BackupOrgID)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching name of the first scheduled backup with schedule [%s]", firstScheduleBackupName))
 				time.Sleep(30 * time.Second)
-				log.Infof("Validating if the first scheduled backup [%s] of schedule [%s] is Failed", partialScheduledBackupName, firstScheduleBackupName)
-				err = BackupFailedCheck(firstScheduleBackupName, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the backup [%s] of schedule [%s] is in failed state", firstScheduleBackupName, partialScheduledBackupName))
+				if enablePartialBackupValidation {
+					log.Infof("Validating if the first scheduled backup [%s] of schedule [%s] is Failed", partialScheduledBackupName, firstScheduleBackupName)
+					err = BackupFailedCheck(firstScheduleBackupName, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the backup [%s] of schedule [%s] is in failed state", firstScheduleBackupName, partialScheduledBackupName))
+				} else {
+					log.Infof("Validating if the first scheduled backup [%s] of schedule [%s] is of Partial Success", partialScheduledBackupName, firstScheduleBackupName)
+					err = BackupWithPartialSuccessCheck(firstScheduleBackupName, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the backup [%s] of schedule [%s] is in partial success state", firstScheduleBackupName, partialScheduledBackupName))
+				}
 			} else {
 				log.InfoD("Skipping this step as it is a Non-PX cluster")
 			}

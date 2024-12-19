@@ -231,6 +231,7 @@ const (
 	PodReadinessTimeout                   = 5 * time.Minute
 	HelmRepoUrl                           = "PX_BACKUP_UPGRADE_HELM_VERSION"
 	DefaultHelmRepoUrl                    = "http://charts.portworx.io/"
+	StorkVersionForPartialBackup          = "24.3.0"
 )
 
 var (
@@ -4782,6 +4783,23 @@ func CompareCurrentPxBackupVersion(targetVersionStr string, comparisonMethod fun
 		return false, err
 	}
 
+	targetVersion, err := version.NewVersion(targetVersionStr)
+	if err != nil {
+		return false, err
+	}
+	return comparisonMethod(currentVersion, targetVersion), nil
+}
+
+// CompareCurrentStorkVersion compares the current stork version against a specified target version using a comparison method provided as a parameter.
+func CompareCurrentStorkVersion(targetVersionStr string, comparisonMethod func(v1, v2 *version.Version) bool) (bool, error) {
+	currentVersionStr, err := GetStorkImageVersion()
+	if err != nil {
+		return false, err
+	}
+	currentVersion, err := version.NewVersion(currentVersionStr)
+	if err != nil {
+		return false, err
+	}
 	targetVersion, err := version.NewVersion(targetVersionStr)
 	if err != nil {
 		return false, err
