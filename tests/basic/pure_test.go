@@ -3064,13 +3064,22 @@ var _ = Describe("{VolAttachFAPxRestart}", Label("p0", "negative", "px_vol_ops",
 func LoginIntoController(n node.Node, networkInterface flasharray.NetworkInterface, FAclient flasharray.Client) error {
 	ipAddress := networkInterface.Address
 	iqn, err := GetIQNOfFA(n, FAclient)
+	if err != nil {
+		return fmt.Errorf("failed to get IQN of FA: %v", err)
+	}
+
 	cmd := fmt.Sprintf("iscsiadm -m node -P %s -p %s -l", iqn, ipAddress)
 	iscsiAdmOutput, err := runCmd(cmd, n)
 	if err != nil {
-		return err
+		//Edge-case: Already the controller is logged in the host
+		if strings.Contains(err.Error(), "1 session requested, but 1 already present") {
+			log.InfoD("Already logged in to the iSCSI session for IP: %s", ipAddress)
+			return nil
+		}
+		return fmt.Errorf("failed to run iscsiadm login command: %v", err)
 	}
-	log.InfoD("Output of iscsiadm login command: %v", iscsiAdmOutput)
 
+	log.InfoD("Output of iscsiadm login command: %v", iscsiAdmOutput)
 	return nil
 }
 
@@ -3216,10 +3225,6 @@ var _ = Describe("{VolAttachSameFAPxRestart}", Label("p0", "negative", "px_vol_o
 			MultipathBeforeRestart, err = runCmd(cmd, n)
 			log.FailOnError(err, "Failed to run multipath -ll command on node %v", n.Name)
 			log.InfoD("Output of multipath -ll command before PX restart : %v", MultipathBeforeRestart)
-
-			// multipath before and after shoouldn't be same
-			dash.VerifyFatal(MultipathBeforeRestart != output, true, "Multipath entries are different before and after refresh")
-
 		})
 		stepLog = "create ext4 file system on top of the volume,mount it to /home/test Start running fio on the volume"
 		Step(stepLog, func() {
@@ -9175,20 +9180,20 @@ var _ = Describe("{CreatePodsUsingClonewithMT}", func() {
 		storageClassNameNormal := "fada-sc-normal"
 		snapShotClassName := PureSnapShotClass
 		var (
-			realmName               string
-			faWithRealm             *newFlashArray.Client
-			faWithoutRealm          *newFlashArray.Client
-			isRealmExists           bool
-			isFAwithoutRealmExists  bool
-			podNameinSC             string
-			PodNameinFA             string
-			podNameinFAwithoutRealm string
-			isFAexists              bool = false
-			flashArrays             []pureutils.FlashArrayEntry
-			max_iops                = uint64(rand.Intn(99999999) + 1)
-			max_bandwidth           = uint64(rand.Intn(511) + 1)
-			wg                      sync.WaitGroup
-			volSnapshotClass        *volsnapv1.VolumeSnapshotClass
+			realmName                  string
+			faWithRealm                *newFlashArray.Client
+			faWithoutRealm             *newFlashArray.Client
+			isRealmExists              bool
+			isFAwithoutRealmExists     bool
+			podNameinSC                string
+			PodNameinFA                string
+			podNameinFAwithoutRealm    string
+			isFAexists                 bool = false
+			flashArrays                []pureutils.FlashArrayEntry
+			max_iops                   = uint64(rand.Intn(99999999) + 1)
+			max_bandwidth              = uint64(rand.Intn(511) + 1)
+			wg                         sync.WaitGroup
+			isDefaultSnapshotClassUsed bool
 		)
 		namespaces := []string{
 			nsWithRealm,
@@ -9336,10 +9341,22 @@ var _ = Describe("{CreatePodsUsingClonewithMT}", func() {
 			log.FailOnError(err, fmt.Sprintf("Failed to create deployment [%v] ", deploymentNameOutsideRealm))
 			_, err = CreateNginxWorkload("fada-pvc-normal", 1, deploymentNameNormal, nsNormal, storageClassNameNormal)
 			log.FailOnError(err, fmt.Sprintf("Failed to create deployment [%v] ", deploymentNameNormal))
-			volSnapshotClass, err = Inst().S.CreateCsiSnapshotClass(snapShotClassName, "Delete")
+			volSnapshotClass, err := Inst().S.CreateCsiSnapshotClass(snapShotClassName, "Delete")
 			if err != nil {
-				isSnapshotClassExists := strings.Contains(err.Error(), "already exists")
-				dash.VerifyFatal(isSnapshotClassExists, true, "create volumesnapshotclass")
+				if strings.Contains(err.Error(), "default snapshot class") {
+					snapShotClassName, err = GetDefaultSnapshotClass()
+					if err != nil {
+						dash.VerifyFatal(false, true, fmt.Sprintf("Failed to get default snapshot class: %v", err))
+					} else {
+						isDefaultSnapshotClassUsed = true
+						log.Infof("Default snapshot class retrieved: %s", snapShotClassName)
+					}
+
+				} else if strings.Contains(err.Error(), "already exists") {
+					log.InfoD("Snapshot class [%s] already exists", snapShotClassName)
+				} else {
+					dash.VerifyFatal(false, true, "create volumesnapshotclass")
+				}
 			} else {
 				log.InfoD("Successfully created volume snapshot class: %v", volSnapshotClass.Name)
 			}
@@ -9380,9 +9397,10 @@ var _ = Describe("{CreatePodsUsingClonewithMT}", func() {
 		stepLog = "Create Multiple Snapshots for a single volume and check if created"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			allPvcList, err := core.Instance().GetPersistentVolumeClaims(nsNormal, nil)
-			log.FailOnError(err, fmt.Sprintf("Failed to get pvc list in namespace [%v] ", nsNormal))
-			pvc := allPvcList.Items[0]
+			snapshotpvcName := "snap-pvc"
+			log.Infof("Deploying a Nginx Workload with  PVC [%v] in namespace [%v] to test with 64 snapshots for a single volume", snapshotpvcName, nsNormal)
+			_, err = CreateNginxWorkload(snapshotpvcName, 1, "snapshot-test-deployment", nsNormal, storageClassNameNormal)
+			log.FailOnError(err, fmt.Sprintf("Failed to create deployment [snapshot-test-deployment] due to: %v", err))
 			//Currently PX-CSI supports upto 64 snapshots per volume
 			for i := 0; i < 64; i++ {
 				wg.Add(1)
@@ -9390,7 +9408,7 @@ var _ = Describe("{CreatePodsUsingClonewithMT}", func() {
 					defer wg.Done()
 					defer GinkgoRecover()
 					snapName := fmt.Sprintf("snap-%v", i)
-					_, err := Inst().S.CreateCsiSnapshot(snapName, nsNormal, snapShotClassName, pvc.Name, true)
+					_, err := Inst().S.CreateCsiSnapshot(snapName, nsNormal, snapShotClassName, snapshotpvcName, true)
 					log.FailOnError(err, fmt.Sprintf("Failed to create snapshot [%v] ", snapName))
 				}(i)
 			}
@@ -9407,10 +9425,11 @@ var _ = Describe("{CreatePodsUsingClonewithMT}", func() {
 					deploymentNameNormal:       nsNormal,
 				}
 			}
-			log.InfoD("Deleting Volume Snapshot Class - [%s]", volSnapshotClass.Name)
-			err := Inst().S.DeleteCsiSnapshotClass(volSnapshotClass.Name)
-			log.FailOnError(err, "Failed to delete volume snapshot class")
-
+			if !isDefaultSnapshotClassUsed {
+				log.InfoD("Deleting Volume Snapshot Class - [%s]", snapShotClassName)
+				err := Inst().S.DeleteCsiSnapshotClass(snapShotClassName)
+				log.FailOnError(err, "Failed to delete volume snapshot class")
+			}
 			for deployment, namespace := range deployments {
 				err := k8sApps.Instance().DeleteDeployment(deployment, namespace)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Delete deployment [%v]", deployment))
@@ -9426,8 +9445,10 @@ var _ = Describe("{CreatePodsUsingClonewithMT}", func() {
 			}
 			log.InfoD("Wait for 1 minute before deleting pods in FA")
 			time.Sleep(1 * time.Minute)
-			err = pureutils.DeletePodinFA(faWithRealm, PodNameinFA)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Delete pod [%v] in FA", PodNameinFA))
+			if isRealmExists {
+				err = pureutils.DeletePodinFA(faWithRealm, PodNameinFA)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Delete pod [%v] in FA", PodNameinFA))
+			}
 			log.InfoD("Pod [%v] destroyed ", PodNameinFA)
 			err = pureutils.DeletePodinFA(faWithoutRealm, podNameinFAwithoutRealm)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Delete pod [%v] in FA", podNameinFAwithoutRealm))

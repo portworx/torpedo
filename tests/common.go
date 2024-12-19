@@ -16270,3 +16270,22 @@ func ValidateNumberOfParallelScheduledBackups(backupScheduleName string, orgId s
 	}
 	return nil
 }
+
+// GetDefaultSnapshotClass retrieves the default snapshot class name from the available snapshot classes in the cluster.
+func GetDefaultSnapshotClass() (string, error) {
+	snapShotClasses, err := Inst().S.GetAllSnapshotClasses()
+	if err != nil {
+		log.Errorf("Failed to get snapshot classes: %v", err)
+		return "", err
+	}
+	for _, snapshotClass := range snapShotClasses.Items {
+		if snapshotClass.Driver == "pxd.portworx.com" {
+			if val, ok := snapshotClass.Annotations["snapshot.storage.kubernetes.io/is-default-class"]; ok && val == "true" {
+				snapShotClassName := snapshotClass.Name
+				log.InfoD("Using the existing default snapshot class: %s", snapShotClassName)
+				return snapShotClassName, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("default snapshot class not found")
+}
