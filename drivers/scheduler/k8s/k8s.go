@@ -2002,6 +2002,13 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 					} else {
 						obj.Provisioner = volume.GetStorageProvisioner()
 					}
+
+					_, present := os.LookupEnv("KUBEVIRT_VOL_TYPE")
+					if !present {
+						obj.Provisioner = volume.GetStorageProvisioner()
+					} else {
+						obj.Provisioner = CsiProvisioner
+					}
 				}
 			}
 		}

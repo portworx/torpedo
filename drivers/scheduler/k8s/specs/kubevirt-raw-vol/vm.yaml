@@ -92,14 +92,14 @@ spec:
       spec:
         source:
           pvc:
-            name: fio-data-validation-template-pvc
+            name: fio-data-validation-raw-template-pvc
             namespace: openshift-virtualization-os-images
         pvc:
           accessModes:
             - ReadWriteMany
           resources:
             requests:
-              storage: 10Gi
+              storage: 50Gi
           storageClassName: raw-vol-sc
           volumeMode: Block
 ---

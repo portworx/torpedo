@@ -11,7 +11,7 @@ volumeBindingMode: Immediate
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: fio-data-validation-template-pvc
+  name: fio-data-validation-fada-raw-template-pvc
   namespace: openshift-virtualization-os-images
   labels:
     app: containerized-data-importer
@@ -25,4 +25,4 @@ spec:
     - ReadWriteMany
   resources:
     requests:
-      storage: 10Gi
+      storage: 20Gi
