@@ -2013,7 +2013,7 @@ var _ = Describe("{RestartPXAndDeleteStorkLeaderDuringAsyncMigration}", Label("s
 
 		taskNamePrefix := "asyncdr-restartpx"
 		defaultNs := "kube-system"
-		migrationNamespaces, contexts := initialSetupApps(taskNamePrefix, false)
+		migrationNamespaces, contexts := initialSetupApps(taskNamePrefix, false, false)
 		// Get the replica nodes from the context
 		replicaNodeMap := make(map[string]node.Node)
 		for _, ctx := range contexts {
