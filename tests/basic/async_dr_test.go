@@ -1989,3 +1989,281 @@ func extractActionName(output, action string) string {
 	getStatusCmdArgs := strings.Split(getStatusCommand, " ")
 	return getStatusCmdArgs[3]
 }
+
+var _ = Describe("{RestartPXAndDeleteStorkLeaderDuringAsyncMigration}", Label("staging", "p1", "negative", "AsyncDR"), func() {
+	testrailID := 0
+	BeforeEach(func() {
+		if !kubeConfigWritten {
+			// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+			WriteKubeconfigToFiles()
+			kubeConfigWritten = true
+		}
+		wantAllAfterSuiteActions = false
+	})
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("RestartPXAndDeleteStorkLeaderDuringAsyncMigration", "Migration of application to destination cluster with driver down", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+
+	stepLog := "Restart PX driver during migration and ensure migration completed successfully"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+
+		taskNamePrefix := "asyncdr-restartpx"
+		defaultNs := "kube-system"
+		migrationNamespaces, contexts := initialSetupApps(taskNamePrefix, false)
+		// Get the replica nodes from the context
+		replicaNodeMap := make(map[string]node.Node)
+		for _, ctx := range contexts {
+			log.Infof("Get replicas nodes from the context")
+			vols, err := Inst().S.GetVolumes(ctx)
+			log.FailOnError(err, "Failed to get volumes for the app %v", ctx.App.Key)
+			for _, appVol := range vols {
+				apiVol, err := Inst().V.InspectVolume(appVol.ID)
+				log.FailOnError(err, "Failed to inspect volume details")
+
+				log.Infof("Get replicas from the volume")
+				replicaSets := apiVol.ReplicaSets
+				log.Infof("Replica details for the volume: %v, %v", appVol.Name, replicaSets)
+
+				for _, rel := range replicaSets {
+					for _, nodeName := range rel.Nodes {
+						if _, ok := replicaNodeMap[nodeName]; !ok {
+							replicaNodeMap[nodeName], err = node.GetNodeDetailsByNodeID(nodeName)
+							log.FailOnError(err, "Failed to get node details for node: %v", nodeName)
+						}
+					}
+				}
+			}
+		}
+		migNamespaces := strings.Join(migrationNamespaces, ",")
+		kubeConfigPath := map[int]string{}
+		for _, cluster := range []int{asyncdr.FirstCluster, asyncdr.SecondCluster} {
+			kubeConfigPath[cluster], err = GetCustomClusterConfigPath(cluster)
+			log.FailOnError(err, "Getting error while fetching path for %v cluster, error is %v", cluster, err)
+		}
+
+		var migrationSchedName string
+		var schdPol *storkapi.SchedulePolicy
+		cpName := defaultClusterPairName + time.Now().Format("15h03m05s")
+		scpolName := "async-policy"
+		migrationInterval := 5
+		Step("Create Schedule Policy", func() {
+			schdPol, err = asyncdr.CreateSchedulePolicy(scpolName, migrationInterval)
+			log.FailOnError(err, "Failed to create schedule policy")
+		})
+
+		extraArgs := map[string]string{
+			"namespaces":           migNamespaces,
+			"kubeconfig":           kubeConfigPath[asyncdr.FirstCluster],
+			"schedule-policy-name": schdPol.Name,
+		}
+
+		stepLog = "create clusterpair and start migration"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = ScheduleBidirectionalClusterPair(cpName, defaultNs, "", storkapi.BackupLocationType(defaultBackupLocation), defaultSecret, "async-dr", asyncdr.FirstCluster, asyncdr.SecondCluster, nil)
+			log.FailOnError(err, "Failed creating bidirectional cluster pair")
+
+			log.InfoD("Start migration schedule and perform failover")
+			migrationSchedName = migrationSchedKey + time.Now().Format("15h03m05s")
+
+			// create migration schedule
+			// once the migration created restart driver on above collected nodes
+			err = storkctlcli.ScheduleStorkctlMigrationSched(migrationSchedName, cpName, defaultNs, extraArgs)
+			log.FailOnError(err, "Error creating migrationschedule: %v", err)
+
+			stepLog = "Restart the volume driver while migration is in progress"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+
+				restartPX := func() (interface{}, bool, error) {
+					migSchedule, err := storkops.Instance().GetMigrationSchedule(migrationSchedName, defaultNs)
+					if err != nil {
+						return nil, false, err
+					}
+					migrations := migSchedule.Status.Items["Interval"]
+					isRestarted := false
+					for _, mig := range migrations {
+						log.Infof("Validating migration status for: %v", mig.Name)
+						migration, err := storkops.Instance().GetMigration(mig.Name, defaultNs)
+						if err != nil {
+							return nil, false, err
+						}
+						if migration.Status.Status == storkapi.MigrationStatusInProgress {
+							log.Infof("Migration %s is %v. Restarting PX on replica nodes.", mig.Name, migration.Status.Status)
+
+							for _, selectedNode := range replicaNodeMap {
+								log.Infof("Restarting Px on the node: %s", selectedNode)
+								err = Inst().V.RestartDriver(selectedNode, nil)
+								if err != nil {
+									return nil, false, err
+								}
+								log.Infof("PX restarted successfully on node %v", selectedNode)
+							}
+							isRestarted = true
+							break
+						}
+					}
+
+					if !isRestarted {
+						return nil, true, fmt.Errorf("Migration not in progress. Retrying..")
+					}
+					return nil, false, nil
+				}
+				_, err = task.DoRetryWithTimeout(restartPX, migrationRetryTimeout, migrationRetryInterval)
+				log.FailOnError(err, "Error occured when restarting px while migration in progress")
+			})
+
+			for _, selectedNode := range replicaNodeMap {
+				err = Inst().V.WaitDriverUpOnNode(selectedNode, Inst().DriverStartTimeout)
+				log.FailOnError(err, "failed to wait for px up on node: %v", selectedNode.Name)
+			}
+
+			_, err = storkops.Instance().ValidateMigrationSchedule(migrationSchedName, defaultNs, migrationRetryTimeout, migrationRetryInterval)
+			log.FailOnError(err, "Error occured while validating migration schedule %v in the namespace %v", migrationSchedName, defaultNs)
+		})
+
+		stNodeClusterMap := make(map[int][]node.Node)
+
+		for cluster, path := range kubeConfigPath {
+			if cluster == asyncdr.SecondCluster {
+				err = hardSetConfig(path)
+				log.FailOnError(err, "Switching context to %v cluster failed", cluster)
+				err = SetCustomKubeConfig(asyncdr.SecondCluster)
+				log.FailOnError(err, "Switching context to %v cluster failed", cluster)
+				err = Inst().S.RefreshNodeRegistry()
+				log.FailOnError(err, "Node registry refresh failed")
+				err = Inst().V.RefreshDriverEndpoints()
+				log.FailOnError(err, "Refresh Driver end points failed")
+				stNodeClusterMap[cluster] = node.GetStorageNodes()
+				Step("Create Schedule Policy", func() {
+					schdPol, err = asyncdr.CreateSchedulePolicy(scpolName, migrationInterval)
+					log.FailOnError(err, "Failed to create schedule policy")
+				})
+			} else {
+				stNodeClusterMap[cluster] = node.GetStorageNodes()
+			}
+		}
+
+		stepLog = "Get stork leader pod and delete"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			err = hardSetConfig(kubeConfigPath[asyncdr.FirstCluster])
+			log.FailOnError(err, "Error setting source config: %v", err)
+			time.Sleep(time.Second * 30)
+
+			pxNamespace, err := Inst().V.GetVolumeDriverNamespace()
+			log.FailOnError(err, "Error occurred while retrieving portworx namespace")
+			holderIdentity, err := GetStorkLeaderPodName()
+			log.FailOnError(err, "Error occurred while retrieving stork leader pod for configmap")
+
+			stepLog = "Delete stork leader pod"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				err := k8sCore.DeletePod(holderIdentity, pxNamespace, false)
+				log.FailOnError(err, "Error occurred while deleting the stork leader pod: %v", holderIdentity)
+			})
+			log.Infof("Stork leader pod: %v deleted successfully", holderIdentity)
+
+			podList, err := core.Instance().GetPods(pxNamespace, nil)
+			log.FailOnError(err, "Error occurred while getting pod list for the namespace: %v", pxNamespace)
+			var podListNew = &v1.PodList{}
+			for _, pod := range podList.Items {
+				if strings.Contains(pod.Name, "stork") {
+					podListNew.Items = append(podListNew.Items, pod)
+				}
+			}
+			err = asyncdr.WaitForPodToBeRunning(podListNew)
+			log.FailOnError(err, "Error occurred while waiting for pod to be running on the namespace: %v", pxNamespace)
+		})
+
+		Step("Perform failover", func() {
+			time.Sleep(2 * time.Duration(migrationInterval) * time.Minute)
+
+			log.Infof("Validate migration before failover")
+			_, err = storkops.Instance().ValidateMigrationSchedule(migrationSchedName, defaultNs, migrationRetryTimeout, migrationRetryInterval)
+			log.FailOnError(err, "Error occured while validating migration schedule")
+			log.Infof("Validate migration before failover completed for the migration schedule: %v", migrationSchedName)
+
+			extraArgsFailoverFailback := map[string]string{
+				"kubeconfig": kubeConfigPath[asyncdr.SecondCluster],
+			}
+			failoverParam := failoverFailbackParam{
+				action:                    "failover",
+				failoverOrFailbackNs:      defaultNs,
+				migrationSchedName:        migrationSchedName,
+				configPath:                kubeConfigPath[asyncdr.SecondCluster],
+				single:                    false,
+				skipSourceOp:              false,
+				includeNs:                 false,
+				excludeNs:                 false,
+				extraArgsFailoverFailback: extraArgsFailoverFailback,
+				contexts:                  contexts,
+			}
+
+			performFailoverFailback(failoverParam)
+
+			err = hardSetConfig(kubeConfigPath[asyncdr.SecondCluster])
+			log.FailOnError(err, "Error setting destination config: %v", err)
+			extraArgs["kubeconfig"] = kubeConfigPath[asyncdr.SecondCluster]
+			newMigSched := migrationSchedName + "-rev"
+			createMigSchdAndValidateMigration(newMigSched, cpName, defaultNs, kubeConfigPath[asyncdr.SecondCluster], extraArgs)
+		})
+
+		err = SetCustomKubeConfig(asyncdr.FirstCluster)
+		log.FailOnError(err, "Switching context to source cluster failed")
+		err = Inst().S.RefreshNodeRegistry()
+		log.FailOnError(err, "Node registry refresh failed")
+		err = Inst().V.RefreshDriverEndpoints()
+		log.FailOnError(err, "Refresh Driver end points failed")
+
+		Step("Destroy apps", func() {
+			log.InfoD("Destroy apps")
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+func GetStorkLeaderPodName() (string, error) {
+	log.Infof("Get stork leader pod name")
+	pxNamespace, err := Inst().V.GetVolumeDriverNamespace()
+	if err != nil {
+		return "", err
+	}
+	configMap, err := k8sCore.GetConfigMap("stork", pxNamespace)
+	if err != nil {
+		return "", err
+	}
+	log.FailOnError(err, "Error occurred while retrieving ConfigMap for stork")
+	storkLeaderData, exists := configMap.Annotations["control-plane.alpha.kubernetes.io/leader"]
+	if !exists {
+		return "", fmt.Errorf("leader annotation not found in config map")
+	}
+	log.Infof("Stork leader data: %v", storkLeaderData)
+
+	var leaderInfo map[string]interface{}
+	if err := json.Unmarshal([]byte(storkLeaderData), &leaderInfo); err != nil {
+		return "", fmt.Errorf("failed to unmarshal leader data: %v", err)
+	}
+	log.Infof("Stork leader info: %v", leaderInfo)
+
+	holderIdentity, ok := leaderInfo["holderIdentity"].(string)
+	if !ok {
+		return "", fmt.Errorf("holderIdentity not found or is not a string in leader info")
+	}
+	log.Infof("Stork leader pod name: %v", holderIdentity)
+	return holderIdentity, nil
+}
