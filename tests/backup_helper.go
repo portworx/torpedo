@@ -13537,3 +13537,261 @@ func UninstallPxBackup(kubeConfigPath string) error {
 	log.InfoD("Successfully deleted the namespace %s", pxBackupNamespace)
 	return nil
 }
+
+// PXSnapshotStatus encapsulates the overall snapshot metadata and state in Portworx.
+type PXSnapshotStatus struct {
+	ID               string           `json:"id"`
+	Source           PxSource         `json:"source"`
+	Readonly         bool             `json:"readonly"`
+	Locator          PxLocator        `json:"locator"`
+	Ctime            string           `json:"ctime"`
+	Spec             PxSpec           `json:"spec"`
+	Usage            string           `json:"usage"`
+	Format           string           `json:"format"`
+	Status           string           `json:"status"`
+	State            string           `json:"state"`
+	AttachedOn       string           `json:"attached_on"`
+	AttachedState    string           `json:"attached_state"`
+	DevicePath       string           `json:"device_path"`
+	SecureDevicePath string           `json:"secure_device_path"`
+	ReplicaSets      []PxReplicaSet   `json:"replica_sets"`
+	RuntimeState     []PxRuntimeState `json:"runtime_state"`
+	Error            string           `json:"error"`
+	FsResizeRequired bool             `json:"fs_resize_required"`
+	DetachTime       string           `json:"detach_time"`
+	FpConfig         PxFastPathConfig `json:"fpConfig"`
+	LastScanStatus   string           `json:"last_scan_status"`
+	DerivedIOProfile string           `json:"derived_io_profile"`
+	InTrashcan       bool             `json:"in_trashcan"`
+}
+
+// PxSource contains the origin information for a snapshot, detailing its parent volume and seed.
+type PxSource struct {
+	Parent string `json:"parent"`
+	Seed   string `json:"seed"`
+}
+
+// PxLocator defines the locator details for a snapshot, including its name and volume labels.
+type PxLocator struct {
+	Name         string            `json:"name"`
+	VolumeLabels map[string]string `json:"volume_labels"`
+}
+
+// PxSpec outlines the configuration, replication, and policies of the snapshot.
+type PxSpec struct {
+	Ephemeral                   bool                  `json:"ephemeral"`
+	Size                        string                `json:"size"`
+	Format                      string                `json:"format"`
+	BlockSize                   string                `json:"block_size"`
+	HALevel                     string                `json:"ha_level"`
+	COS                         string                `json:"cos"`
+	IOProfile                   string                `json:"io_profile"`
+	Dedupe                      bool                  `json:"dedupe"`
+	SnapshotInterval            int64                 `json:"snapshot_interval"`
+	VolumeLabels                map[string]string     `json:"volume_labels"`
+	Shared                      bool                  `json:"shared"`
+	AggregationLevel            int                   `json:"aggregation_level"`
+	Encrypted                   bool                  `json:"encrypted"`
+	Passphrase                  string                `json:"passphrase"`
+	SnapshotSchedule            string                `json:"snapshot_schedule"`
+	Scale                       int                   `json:"scale"`
+	Sticky                      bool                  `json:"sticky"`
+	GroupEnforced               bool                  `json:"group_enforced"`
+	Compressed                  bool                  `json:"compressed"`
+	Cascaded                    bool                  `json:"cascaded"`
+	Journal                     bool                  `json:"journal"`
+	Sharedv4                    bool                  `json:"sharedv4"`
+	QueueDepth                  int                   `json:"queue_depth"`
+	ForceUnsupportedFsType      bool                  `json:"force_unsupported_fs_type"`
+	NdDiscard                   bool                  `json:"nodiscard"`
+	StoragePolicy               string                `json:"storage_policy"`
+	ExportSpec                  PxExportSpec          `json:"export_spec"`
+	FpPreference                bool                  `json:"fp_preference"`
+	XAttr                       string                `json:"xattr"`
+	MountOptions                PxMountOptions        `json:"mount_options"`
+	ProxyWrite                  bool                  `json:"proxy_write"`
+	Sharedv4ServiceSpec         PxSharedv4ServiceSpec `json:"sharedv4_service_spec"`
+	AutoFsTrim                  bool                  `json:"auto_fstrim"`
+	IOThrottle                  PxIOThrottle          `json:"io_throttle"`
+	FACreateOptions             string                `json:"fa_create_options"`
+	NearSync                    bool                  `json:"near_sync"`
+	NearSyncReplicationStrategy string                `json:"near_sync_replication_strategy"`
+}
+
+// PxReplicaSet lists the nodes and storage pools involved in the snapshot's replication.
+type PxReplicaSet struct {
+	Nodes     []string `json:"nodes"`
+	PoolUUIDs []string `json:"pool_uuids"`
+}
+
+// PxRuntimeState captures the active state of the snapshot during runtime.
+type PxRuntimeState struct {
+	RuntimeState PxRuntimeStateDetails `json:"runtime_state"`
+}
+
+// PxRuntimeStateDetails gives granular runtime configuration and replication information.
+type PxRuntimeStateDetails struct {
+	ID                  string `json:"ID"`
+	PXReplReAddNodeMid  string `json:"PXReplReAddNodeMid"`
+	PXReplReAddPools    string `json:"PXReplReAddPools"`
+	ReplNodePools       string `json:"ReplNodePools"`
+	ReplRemoveMids      string `json:"ReplRemoveMids"`
+	ReplicaSetCreateMid string `json:"ReplicaSetCreateMid"`
+	ReplicaSetCurr      string `json:"ReplicaSetCurr"`
+	ReplicaSetCurrMid   string `json:"ReplicaSetCurrMid"`
+	RuntimeState        string `json:"RuntimeState"`
+}
+
+// PxExportSpec specifies export configuration details for snapshot sharing.
+type PxExportSpec struct {
+	ExportProtocol string `json:"export_protocol"`
+	ExportOptions  string `json:"export_options"`
+}
+
+// PxMountOptions contains key-value mappings for snapshot mounting preferences.
+type PxMountOptions struct {
+	Options map[string]string `json:"options"`
+}
+
+// PxSharedv4ServiceSpec specifies NFS v4 service configuration details for the snapshot.
+type PxSharedv4ServiceSpec struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
+// PxIOThrottle provides settings for limiting IO operations on the snapshot.
+type PxIOThrottle struct {
+	ReadIOPS      int `json:"read_iops"`
+	WriteIOPS     int `json:"write_iops"`
+	ReadBwMBytes  int `json:"read_bw_mbytes"`
+	WriteBwMBytes int `json:"write_bw_mbytes"`
+}
+
+// PxFastPathConfig contains performance-related configuration details for fast-path access.
+type PxFastPathConfig struct {
+	SetupOn       int64  `json:"setup_on"`
+	Promote       bool   `json:"promote"`
+	Status        string `json:"status"`
+	Dirty         bool   `json:"dirty"`
+	CoordUUID     string `json:"coord_uuid"`
+	ForceFailover bool   `json:"force_failover"`
+}
+
+// VolumeLocator contains information about a volume's name and associated labels.
+type VolumeLocator struct {
+	Name         string            `json:"name"`
+	VolumeLabels map[string]string `json:"volume_labels"`
+}
+
+// PxVolume represents a Portworx volume, including its metadata and current state.
+type PxVolume struct {
+	ID       string        `json:"id"`
+	Locator  VolumeLocator `json:"locator"`
+	Readonly bool          `json:"readonly"`
+	Status   string        `json:"status"`
+	State    string        `json:"state"`
+	Usage    string        `json:"usage"`
+	Attached string        `json:"attached_on"`
+}
+
+// GetVolumeIDForGivenPVC retrieves the volume ID for a given PVC name
+func GetVolumeIDForGivenPVC(pvcName string) (string, error) {
+	var volumes []PxVolume
+
+	// Get a worker node (assuming a similar helper function exists to get storage nodes)
+	workerNode := node.GetStorageNodes()[0]
+
+	// Command to fetch volume status in JSON format
+	cmd := "pxctl v l -j"
+
+	// Run the command on the worker node
+	output, err := runCmdGetOutput(cmd, workerNode)
+	if err != nil {
+		return "", fmt.Errorf("failed to run command %s on %s: %s", cmd, workerNode.Name, err.Error())
+	}
+
+	// Unmarshal the JSON output into the PxVolume slice
+	err = json.Unmarshal([]byte(output), &volumes)
+	if err != nil {
+		return "", fmt.Errorf("failed to unmarshal the output of the command %s on %s: %s", cmd, workerNode.Name, err.Error())
+	}
+
+	// Search for the PVC name in the volumes
+	for _, volume := range volumes {
+		if volume.Locator.VolumeLabels["pvc"] == pvcName {
+			return volume.ID, nil
+		}
+	}
+
+	return "", fmt.Errorf("volume for PVC %s not found", pvcName)
+}
+
+// GetAllLocalSnapshotStatus retrieves the snapshot status for a given PVC name in the current cluster
+func GetAllLocalSnapshotStatus(pvcName string) ([]PXSnapshotStatus, error) {
+	var volumeStatuses []PXSnapshotStatus
+
+	// Get the volume ID for the given PVC name
+	volumeID, err := GetVolumeIDForGivenPVC(pvcName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get volume ID for PVC %s: %s", pvcName, err.Error())
+	}
+
+	// Get a worker node (assuming a similar helper function exists to get storage nodes)
+	workerNode := node.GetStorageNodes()[0]
+
+	// Command to fetch snapshot status for the volume
+	cmd := fmt.Sprintf("pxctl v l -s -j -p %s", volumeID)
+
+	// Run the command on the worker node
+	output, err := runCmdGetOutput(cmd, workerNode)
+	if err != nil {
+		return nil, fmt.Errorf("failed to run command %s on %s: %s", cmd, workerNode.Name, err.Error())
+	}
+
+	// Unmarshal the JSON output into the PXSnapshotStatus slice
+	err = json.Unmarshal([]byte(output), &volumeStatuses)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal the output of the command %s on %s: %s", cmd, workerNode.Name, err.Error())
+	}
+
+	return volumeStatuses, nil
+}
+
+// CheckLocalSnapshotCount checks if the number of Local snapshots matches the expected count
+func CheckLocalSnapshotCount(pvcName string, expectedCount int) error {
+	// Call GetLocalSnapshotStatus to retrieve the snapshot statuses
+	snapshots, err := GetAllLocalSnapshotStatus(pvcName)
+	if err != nil {
+		return fmt.Errorf("failed to get snapshot status for PVC %s: %s", pvcName, err)
+	}
+
+	// Compare the count of snapshots with the expected count
+	if len(snapshots) != expectedCount {
+		return fmt.Errorf("snapshot count mismatch: expected %d, found %d", expectedCount, len(snapshots))
+	}
+
+	log.InfoD("Snapshot count for PVC %s is as expected: %d.", pvcName, expectedCount)
+	return nil
+}
+
+// ValidateLocalSnapshotCompleted Check if a fixed number of local Snapshots are completed or not
+func ValidateLocalSnapshotCompleted(backupName string, orgID string, localSnapshotCount int, ctx context1.Context) error {
+	backupDriver := Inst().Backup
+	backupUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   backupUid,
+		OrgId: orgID,
+	}
+	resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
+	if err != nil {
+		return err
+	}
+	for _, bkpVolume := range resp.GetBackup().GetVolumes() {
+		err = CheckLocalSnapshotCount(bkpVolume.Name, localSnapshotCount)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
