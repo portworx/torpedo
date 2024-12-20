@@ -1988,6 +1988,43 @@
         ]
       }
     },
+    "/v1/resourceType/{org_id}": {
+      "get": {
+        "summary": "ResourceTypes api will return the list of ResourceTypes are support by px-backup for backup.",
+        "operationId": "ResourceTypes",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/ResourceTypeResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "cluster_ref.name",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "cluster_ref.uid",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "ResourceCollector"
+        ]
+      }
+    },
     "/v1/restore": {
       "post": {
         "summary": "Creates new restore object in datastore\nIt will also trigger a restore operation on the target cluster",
@@ -3165,6 +3202,12 @@
           "type": "boolean",
           "format": "boolean",
           "title": "option to take backup as direct kdmp"
+        },
+        "exclude_resource_types": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "title": "Request message structure for backup create"
@@ -3197,6 +3240,11 @@
     },
     "BackupCreateResponse": {
       "type": "object",
+      "properties": {
+        "backup": {
+          "$ref": "#/definitions/BackupObject"
+        }
+      },
       "title": "Response message structure for backup create"
     },
     "BackupDeleteResponse": {
@@ -3394,6 +3442,17 @@
         "completion_time_info": {
           "$ref": "#/definitions/completionTimeInfo",
           "title": "this will store the completion time of the volumes, resources and total backup"
+        },
+        "exclude_resource_types": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "parallel_backup": {
+          "type": "boolean",
+          "format": "boolean",
+          "title": "this will be set when the backup has been created by a parallel backup enabled scheduled"
         }
       }
     },
@@ -3567,6 +3626,11 @@
     },
     "BackupLocationCreateResponse": {
       "type": "object",
+      "properties": {
+        "backup_location": {
+          "$ref": "#/definitions/BackupLocationObject"
+        }
+      },
       "title": "Define BackupLocationCreateResponse struct"
     },
     "BackupLocationDeleteResponse": {
@@ -3855,6 +3919,17 @@
           "type": "boolean",
           "format": "boolean",
           "title": "option to take backup as direct kdmp"
+        },
+        "exclude_resource_types": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "parallel_backup": {
+          "type": "boolean",
+          "format": "boolean",
+          "description": "option to enable parallel schedule backups."
         }
       },
       "title": "Define BackupScheduleCreateRequest struct"
@@ -3887,6 +3962,11 @@
     },
     "BackupScheduleCreateResponse": {
       "type": "object",
+      "properties": {
+        "backup_schedule": {
+          "$ref": "#/definitions/BackupScheduleObject"
+        }
+      },
       "title": "Define BackupScheduleCreateResponse struct"
     },
     "BackupScheduleDeleteResponse": {
@@ -4038,6 +4118,17 @@
           "type": "boolean",
           "format": "boolean",
           "title": "option to take backup as direct kdmp"
+        },
+        "exclude_resource_types": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "parallel_backup": {
+          "type": "boolean",
+          "format": "boolean",
+          "description": "option to enable parallel schedule backups."
         }
       }
     },
@@ -4242,6 +4333,11 @@
           "type": "boolean",
           "format": "boolean",
           "title": "Skip auto rules for VirtualMachine Backup Object type"
+        },
+        "parallel_backup": {
+          "type": "boolean",
+          "format": "boolean",
+          "description": "option to enable parallel schedule backups."
         }
       },
       "title": "Define BackupScheduleUpdateRequest struct"
@@ -4543,6 +4639,11 @@
     },
     "ClusterCreateResponse": {
       "type": "object",
+      "properties": {
+        "cluster": {
+          "$ref": "#/definitions/ClusterObject"
+        }
+      },
       "title": "Define ClusterCreateResponse struct"
     },
     "ClusterDeleteResponse": {
@@ -5734,7 +5835,12 @@
       }
     },
     "RecipientCreateResponse": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "recipient": {
+          "$ref": "#/definitions/RecipientObject"
+        }
+      }
     },
     "RecipientDeleteResponse": {
       "type": "object"
@@ -5871,6 +5977,17 @@
         }
       }
     },
+    "ResourceTypeResponse": {
+      "type": "object",
+      "properties": {
+        "resource_types": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
     "RestoreCreateRequest": {
       "type": "object",
       "properties": {
@@ -5964,6 +6081,11 @@
     },
     "RestoreCreateResponse": {
       "type": "object",
+      "properties": {
+        "restore": {
+          "$ref": "#/definitions/RestoreObject"
+        }
+      },
       "title": "Define RestoreCreateResponse struct"
     },
     "RestoreDeleteResponse": {
@@ -6311,7 +6433,12 @@
       "title": "RoleCreateRequest defines roleobject create structure\nMetadata with each role object\nRoleConfig set of rules over api services for given role object"
     },
     "RoleCreateResponse": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "role": {
+          "$ref": "#/definitions/RoleObject"
+        }
+      }
     },
     "RoleDeleteResponse": {
       "type": "object",
@@ -6407,7 +6534,12 @@
       "title": "Request message for creating rules"
     },
     "RuleCreateResponse": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "rule": {
+          "$ref": "#/definitions/RuleObject"
+        }
+      }
     },
     "RuleDeleteResponse": {
       "type": "object",
@@ -6607,6 +6739,11 @@
     },
     "SchedulePolicyCreateResponse": {
       "type": "object",
+      "properties": {
+        "schedule_policy": {
+          "$ref": "#/definitions/SchedulePolicyObject"
+        }
+      },
       "title": "Define SchedulePolicyCreateResponse struct"
     },
     "SchedulePolicyDeleteResponse": {

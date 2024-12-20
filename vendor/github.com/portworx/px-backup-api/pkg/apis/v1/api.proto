@@ -382,6 +382,9 @@ message BackupScheduleInfo {
     map<string, string> volume_snapshot_class_mapping = 28;
     // option to take backup as direct kdmp 
     bool direct_kdmp = 29;
+    repeated string exclude_resource_types = 30;
+    // option to enable parallel schedule backups.
+    bool parallel_backup = 31;
 
 
     message BackupType {
@@ -582,6 +585,9 @@ message BackupInfo {
     google.protobuf.Timestamp retention_time = 39;
     // this will store the completion time of the volumes, resources and total backup
     completionTimeInfo completion_time_info = 40;
+    repeated string exclude_resource_types = 41;
+    // this will be set when the backup has been created by a parallel backup enabled scheduled
+    bool parallel_backup = 42;
 
     message BackupType {
         Type type = 1;
@@ -927,7 +933,9 @@ message SchedulePolicyCreateRequest {
 }
 
 // Define SchedulePolicyCreateResponse struct
-message SchedulePolicyCreateResponse {}
+message SchedulePolicyCreateResponse {
+    SchedulePolicyObject schedule_policy = 1;
+}
 
 // Define SchedulePolicyUpdateRequest struct
 message SchedulePolicyUpdateRequest {
@@ -1065,7 +1073,10 @@ message BackupScheduleCreateRequest {
     map<string, string> volume_snapshot_class_mapping = 22;
     // option to take backup as direct kdmp 
     bool direct_kdmp = 23;
+    repeated string exclude_resource_types = 24;
 
+    // option to enable parallel schedule backups.
+    bool parallel_backup = 25;
 
     enum BackupType {
         Invalid = 0;
@@ -1083,7 +1094,9 @@ message BackupScheduleCreateRequest {
 }
 
 // Define BackupScheduleCreateResponse struct
-message BackupScheduleCreateResponse {}
+message BackupScheduleCreateResponse {
+    BackupScheduleObject backup_schedule = 1;
+}
 
 // Define BackupScheduleUpdateRequest struct
 message BackupScheduleUpdateRequest {
@@ -1116,6 +1129,8 @@ message BackupScheduleUpdateRequest {
     map<string, string> volume_snapshot_class_mapping = 17;
     // Skip auto rules for VirtualMachine Backup Object type
     bool skip_vm_auto_exec_rules = 18;
+    // option to enable parallel schedule backups.
+    bool parallel_backup = 19;
 }
 
 // Define BackupScheduleUpdateResponse struct
@@ -1281,7 +1296,9 @@ message ClusterCreateRequest {
 }
 
 // Define ClusterCreateResponse struct
-message ClusterCreateResponse {}
+message ClusterCreateResponse {
+    ClusterObject cluster = 1;
+}
 
 // Define ClusterUpdateRequest struct
 message ClusterUpdateRequest {
@@ -1717,7 +1734,10 @@ message RecipientCreateRequest {
     RecipientInfo recipient_info = 2;
 }
 
-message RecipientCreateResponse {}
+message RecipientCreateResponse {
+    RecipientObject recipient = 1;
+}
+
 
 message RecipientEnumerateRequest {
     string org_id = 1;
@@ -1829,7 +1849,9 @@ message BackupLocationCreateRequest {
 }
 
 // Define BackupLocationCreateResponse struct
-message BackupLocationCreateResponse {}
+message BackupLocationCreateResponse {
+    BackupLocationObject backup_location = 1;
+}
 
 // Define BackupLocationUpdateRequest struct
 message BackupLocationUpdateRequest {
@@ -2060,6 +2082,8 @@ message BackupCreateRequest {
     map<string, string> volume_snapshot_class_mapping = 19;
     // option to take backup as direct kdmp 
     bool direct_kdmp = 20;
+    repeated string exclude_resource_types = 21;
+
 
     enum BackupType {
         Invalid = 0;
@@ -2077,7 +2101,9 @@ message BackupCreateRequest {
 }
 
 // Response message structure for backup create
-message BackupCreateResponse {}
+message BackupCreateResponse {
+    BackupObject backup = 1;
+}
 
 // Define BackupUpdateRequest struct
 message BackupUpdateRequest {
@@ -2220,7 +2246,9 @@ message RestoreCreateRequest {
 }
 
 // Define RestoreCreateResponse struct
-message RestoreCreateResponse {}
+message RestoreCreateResponse {
+    RestoreObject restore = 1;
+}
 
 // Define RestoreUpdateRequest struct
 message RestoreUpdateRequest {
@@ -2336,7 +2364,9 @@ message RuleCreateRequest {
     RulesInfo rules_info = 2;
 }
 
-message RuleCreateResponse {}
+message RuleCreateResponse {
+    RuleObject rule = 1;
+}
 
 message RuleUpdateRequest {
     CreateMetadata metadata = 1 [ (gogoproto.embed) = true ];
@@ -2893,7 +2923,9 @@ message RoleCreateRequest {
     string role_id = 3;
 }
 
-message RoleCreateResponse {}
+message RoleCreateResponse {
+    RoleObject role = 1;
+}
 // RoleUpdateRequest defines roleobject update structure
 message RoleUpdateRequest {
     CreateMetadata metadata = 1 [ (gogoproto.embed) = true ];
@@ -2972,3 +3004,20 @@ message ActivityDataObject {
         Deleted = 5;
     }
 }
+// ResourceCollector service to expose the APIs related to the k8s resources on the cluster.
+service ResourceCollector {
+    // ResourceTypes api will return the list of ResourceTypes are support by px-backup for backup.
+    rpc ResourceTypes(ResourceTypeRequest) returns (ResourceTypeResponse) {
+        option (google.api.http) = {
+            get : "/v1/resourceType/{org_id}"
+        };
+    }
+}
+message ResourceTypeRequest {
+	string org_id = 1;
+	ObjectRef cluster_ref = 2;
+}
+message ResourceTypeResponse {
+	repeated string resource_types = 1;
+}
+
