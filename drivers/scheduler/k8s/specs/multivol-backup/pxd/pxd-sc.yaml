@@ -1,0 +1,8 @@
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: pxd-sc
+provisioner: pxd.portworx.com
+parameters:
+  repl: "1"
+allowVolumeExpansion: true
