@@ -11,7 +11,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	csisnapshot "github.com/portworx/sched-ops/k8s/externalsnapshotter"
 	"io/ioutil"
 	"maps"
 	"math"
@@ -29,6 +28,8 @@ import (
 	"sync"
 	"text/template"
 	"time"
+
+	csisnapshot "github.com/portworx/sched-ops/k8s/externalsnapshotter"
 
 	"k8s.io/apimachinery/pkg/util/intstr"
 
@@ -632,9 +633,11 @@ var (
 	SchedulePolicyScaleUID               string
 	ScheduledBackupScaleInterval         time.Duration
 	contextsCreated                      []*scheduler.Context
-	CurrentClusterConfigPath             = ""
-	clusterProvider                      = "aws"
-	ClusterSuffix                        = "default"
+	CurrentClusterConfigPath                           = ""
+	clusterProvider                                    = "aws"
+	ClusterSuffix                                      = "default"
+	BackupCompletionWaitTime                           = 60 * time.Minute
+	defaultWaitInterval                  time.Duration = 20 * time.Second
 )
 
 var (
@@ -970,7 +973,7 @@ func IsKvdbRunningOnStorageLessNode() bool {
 // ValidateContext is the ginkgo spec for validating a scheduled context
 func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 	// Apps for which we have to skip volume validation due to various limitations
-	excludeAppContextList := []string{"tektoncd", "pxb-singleapp-multivol", "pg-mysql-multiprov-ocp", "pg-mysql-multiprov-iks", "pg-mysql-multiprov-aks", "pg-mysql-multiprov-gke", "kubevirt-fada-raw-fio"}
+	excludeAppContextList := []string{"tektoncd", "pxb-singleapp-multivol", "pg-mysql-multiprov-ocp", "pg-mysql-multiprov-iks", "pg-mysql-multiprov-aks", "pg-mysql-multiprov-gke", "kubevirt-fada-raw-fio", "busybox-pxd"}
 	defer func() {
 		if len(errChan) > 0 {
 			close(*errChan[0])
@@ -16288,4 +16291,41 @@ func GetDefaultSnapshotClass() (string, error) {
 		}
 	}
 	return "", fmt.Errorf("default snapshot class not found")
+}
+
+// ValidateParallelBackupScheduleNonPxdVolume ensures that next scheduled backup is triggered at the next scheduled time after the completion of the first backup
+// for non pxd and multi provisioner volumes with parallel backup enabled backup schedule
+func ValidateParallelBackupScheduleNonPxdVolume(backupScheduleName string, orgId string, interval time.Duration, ctx context1.Context) error {
+	backupName, err := GetOrdinalScheduleBackupName(ctx, backupScheduleName, 1, orgId)
+	if err != nil {
+		return err
+	}
+	err = Inst().Backup.WaitForBackupCompletion(ctx, backupName, orgId, BackupCompletionWaitTime, RetrySeconds*time.Second)
+	if err != nil {
+		return err
+	}
+	t := func() (interface{}, bool, error) {
+		nextBackupName, err := GetOrdinalScheduleBackupName(ctx, backupScheduleName, 2, orgId)
+		if err != nil {
+			return nil, true, err
+		}
+		log.InfoD("Inspecting backup")
+		bkpInspectRequest := &api.BackupInspectRequest{
+			OrgId: orgId,
+			Name:  nextBackupName,
+		}
+		bkpInspectResponse, err := Inst().Backup.InspectBackup(ctx, bkpInspectRequest)
+		if err != nil {
+			return nil, true, err
+		}
+		if bkpInspectResponse.GetBackup().GetStatus().GetStatus() != api.BackupInfo_StatusInfo_InProgress {
+			return nil, true, fmt.Errorf("next backup %s is not in progress, currentState %v", nextBackupName, bkpInspectResponse.GetBackup().GetStatus().GetStatus())
+		}
+		return nil, true, nil
+	}
+	_, err = task.DoRetryWithTimeout(t, (interval+2)*time.Minute, defaultRetryInterval)
+	if err != nil {
+		return err
+	}
+	return nil
 }

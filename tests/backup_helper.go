@@ -109,6 +109,7 @@ const (
 	ABadgujar      TestcaseAuthor = "abadgujar-px"
 	MMurdanar      TestcaseAuthor = "mmurdanar-px"
 	Aratnam        TestcaseAuthor = "abhishek-r"
+	Shkumari       TestcaseAuthor = "shkumari-px"
 )
 
 // TestcaseQuarter List
@@ -1261,7 +1262,7 @@ func TakeMultipleBackupsPerDeploymentWithoutCheck(ctx context1.Context, backupOr
 func CreateScheduleBackup(scheduleName string, clusterName string, clusterUid string, bLocation string, bLocationUID string,
 	namespaces []string, labelSelectors map[string]string, orgID string, preRuleName string,
 	preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, ctx context1.Context) error {
-	_, err := CreateScheduleBackupWithoutCheck(scheduleName, clusterName, clusterUid, bLocation, bLocationUID, namespaces, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, ctx)
+	_, err := CreateScheduleBackupWithoutCheck(scheduleName, clusterName, clusterUid, bLocation, bLocationUID, namespaces, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, ctx, false)
 	if err != nil {
 		return err
 	}
@@ -1309,7 +1310,7 @@ func CreateScheduleBackupWithValidation(ctx context1.Context, scheduleName strin
 			namespaces = append(namespaces, namespace)
 		}
 	}
-	_, err := CreateScheduleBackupWithoutCheck(scheduleName, clusterName, clusterUid, bLocation, bLocationUID, namespaces, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, ctx, resourceTypes...)
+	_, err := CreateScheduleBackupWithoutCheck(scheduleName, clusterName, clusterUid, bLocation, bLocationUID, namespaces, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, ctx, false, resourceTypes...)
 	if err != nil {
 		return "", err
 	}
@@ -1365,7 +1366,7 @@ func CreateScheduleBackupWithCRValidation(ctx context1.Context, scheduleName str
 			namespaces = append(namespaces, namespace)
 		}
 	}
-	backupScheduleInspectReponse, err := CreateScheduleBackupWithoutCheck(scheduleName, clusterName, clusterUid, bLocation, bLocationUID, namespaces, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, ctx)
+	backupScheduleInspectReponse, err := CreateScheduleBackupWithoutCheck(scheduleName, clusterName, clusterUid, bLocation, bLocationUID, namespaces, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, ctx, false)
 	if err != nil {
 		return "", err
 	}
@@ -1658,7 +1659,7 @@ func CreateBackupWithoutCheck(ctx context1.Context, backupName string, clusterNa
 // CreateScheduleBackupWithoutCheck creates a schedule backup without waiting for success
 func CreateScheduleBackupWithoutCheck(scheduleName string, clusterName string, clusterUid string, bLocation string, bLocationUID string,
 	namespaces []string, labelSelectors map[string]string, orgID string, preRuleName string,
-	preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, ctx context1.Context, resourceTypes ...string) (*api.BackupScheduleInspectResponse, error) {
+	preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, ctx context1.Context, parallelBkp bool, resourceTypes ...string) (*api.BackupScheduleInspectResponse, error) {
 
 	if GlobalRuleFlag {
 		preRuleName = GlobalPreRuleName
@@ -1703,6 +1704,7 @@ func CreateScheduleBackupWithoutCheck(scheduleName string, clusterName string, c
 			Name: clusterName,
 			Uid:  clusterUid,
 		},
+		ParallelBackup: parallelBkp,
 	}
 
 	err := AdditionalScheduledBackupRequestParams(bkpSchCreateRequest)
@@ -5335,7 +5337,7 @@ func CreateBackupWithNamespaceLabelWithValidation(ctx context1.Context, backupNa
 
 // CreateScheduleBackupWithNamespaceLabel creates a schedule backup with namespace label and checks for success
 func CreateScheduleBackupWithNamespaceLabel(scheduleName string, clusterName string, clusterUid string, bkpLocation string, bkpLocationUID string, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, namespaceLabel, schPolicyName string, schPolicyUID string, ctx context1.Context) error {
-	_, err := CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName, clusterName, clusterUid, bkpLocation, bkpLocationUID, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, namespaceLabel, ctx)
+	_, err := CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName, clusterName, clusterUid, bkpLocation, bkpLocationUID, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, namespaceLabel, ctx, false)
 	if err != nil {
 		return err
 	}
@@ -5422,7 +5424,7 @@ func CreateBackupWithNamespaceLabelWithoutCheck(backupName string, clusterName s
 }
 
 // CreateScheduleBackupWithNamespaceLabelWithoutCheck creates a schedule backup with namespace label filter without waiting for success
-func CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName string, clusterName string, clusterUid string, bkpLocation string, bkpLocationUID string, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, namespaceLabel string, ctx context1.Context) (*api.BackupScheduleInspectResponse, error) {
+func CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName string, clusterName string, clusterUid string, bkpLocation string, bkpLocationUID string, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, namespaceLabel string, ctx context1.Context, parallelBackups bool) (*api.BackupScheduleInspectResponse, error) {
 
 	if GlobalRuleFlag {
 		preRuleName = GlobalPreRuleName
@@ -5466,6 +5468,7 @@ func CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName string, clu
 			Name: clusterName,
 			Uid:  clusterUid,
 		},
+		ParallelBackup: parallelBackups,
 	}
 
 	err := AdditionalScheduledBackupRequestParams(bkpSchCreateRequest)
@@ -5556,7 +5559,7 @@ func CreateVMScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName string, v
 
 // CreateScheduleBackupWithNamespaceLabelWithValidation creates a schedule backup with namespace label, checks for success of first (immediately triggered) backup, validates that backup and returns the name of that first scheduled backup
 func CreateScheduleBackupWithNamespaceLabelWithValidation(ctx context1.Context, scheduleName string, clusterName string, clusterUid string, bkpLocation string, bkpLocationUID string, scheduledAppContextsExpectedInBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, namespaceLabel string, schPolicyName string, schPolicyUID string) (string, error) {
-	_, err := CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName, clusterName, clusterUid, bkpLocation, bkpLocationUID, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, namespaceLabel, ctx)
+	_, err := CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName, clusterName, clusterUid, bkpLocation, bkpLocationUID, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, namespaceLabel, ctx, false)
 	if err != nil {
 		return "", err
 	}

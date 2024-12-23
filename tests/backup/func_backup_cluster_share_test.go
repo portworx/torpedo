@@ -293,7 +293,7 @@ var _ = Describe("{ClusterShareWithRestoreGroupAndMultipleUserTestcases}", Label
 			// Take Backup Schedule
 			log.InfoD("Taking schedule backup of multiple namespaces")
 			scheduleName = fmt.Sprintf("schedule-bkp-%v", RandomString(5))
-			_, err = CreateScheduleBackupWithoutCheck(scheduleName, SourceClusterName, clusterUid, bkpLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, pxbUsers[2].ctx)
+			_, err = CreateScheduleBackupWithoutCheck(scheduleName, SourceClusterName, clusterUid, bkpLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, pxbUsers[2].ctx, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s]", scheduleName))
 		})
 
@@ -601,7 +601,7 @@ var _ = Describe("{ClusterShareWithRestoreGroupAndMultipleUserTestcases}", Label
 
 			// Take Backup Schedule
 			log.InfoD("Taking schedule backup of multiple namespaces")
-			_, err = CreateScheduleBackupWithoutCheck(scheduleName, SourceClusterName, clusterUid, bkpLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, pxbUsers[2].ctx)
+			_, err = CreateScheduleBackupWithoutCheck(scheduleName, SourceClusterName, clusterUid, bkpLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, pxbUsers[2].ctx, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s] using [%s] ctx", scheduleName, pxbUsers[2].name))
 		})
 		Step("Revoke the cluster share from User2", func() {

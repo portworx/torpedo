@@ -1,0 +1,39 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 40G # Updated to ensure sufficient space for 15GB of data
+  storageClassName: px-csi-db
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: busybox-dd-job
+spec:
+  template:
+    spec:
+      containers:
+      - name: busybox
+        image: busybox:latest
+        command:
+        - sh
+        - -c
+        - |
+          echo "Writing 15GB of primary data to /mnt/pvc/datafile";
+          dd if=/dev/urandom of=/mnt/pvc/datafile bs=1M count=15360 conv=fsync;
+          echo "Primary data write complete.";
+        volumeMounts:
+        - name: pvc-storage
+          mountPath: /mnt/pvc
+      volumes:
+      - name: pvc-storage
+        persistentVolumeClaim:
+          claimName: pvc
+      restartPolicy: Never
+  backoffLimit: 0

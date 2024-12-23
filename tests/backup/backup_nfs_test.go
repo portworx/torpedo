@@ -138,7 +138,7 @@ var _ = Describe("{DeleteNfsExecutorPodWhileBackupAndRestoreInProgress}", Label(
 				case "scheduleBackup":
 					log.InfoD("Taking schedule backup of multiple namespaces")
 					scheduleName = fmt.Sprintf("schedule-bkp-%v", RandomString(5))
-					_, err = CreateScheduleBackupWithoutCheck(scheduleName, SourceClusterName, clusterUid, bkpLocationName, backupLocationUID, appNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, ctx)
+					_, err = CreateScheduleBackupWithoutCheck(scheduleName, SourceClusterName, clusterUid, bkpLocationName, backupLocationUID, appNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, ctx, false)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s]", schedulePolicyName))
 					firstSchBackupName, err = GetFirstScheduleBackupName(ctx, scheduleName, BackupOrgID)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup"))

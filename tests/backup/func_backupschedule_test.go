@@ -86,7 +86,7 @@ var _ = Describe("{BackupScheduleEnumerate}", Ordered, Label(TestCaseLabelsMap[B
 		numberOfSchedules = 5
 		for i := 0; i < int(numberOfSchedules); i++ {
 			scheduleName := fmt.Sprintf("schedule-bkp-%v", RandomString(5))
-			_, err := CreateScheduleBackupWithoutCheck(scheduleName, SourceClusterName, sourceClusterUID, bkpLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUid, adminContext)
+			_, err := CreateScheduleBackupWithoutCheck(scheduleName, SourceClusterName, sourceClusterUID, bkpLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUid, adminContext, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of scheduled backup with schedule name [%s]", scheduleName))
 			backupScheduleList = append(backupScheduleList, scheduleName)
 		}
@@ -201,7 +201,7 @@ var _ = Describe("{BackupScheduleEnumerate}", Ordered, Label(TestCaseLabelsMap[B
 			newBackupScheduleList = make([]string, 0)
 			for i := 0; i < 5; i++ {
 				scheduleName := fmt.Sprintf("new-schedule-bkp-%v", RandomString(5))
-				_, err := CreateScheduleBackupWithoutCheck(scheduleName, SourceClusterName, sourceClusterUID, bkpLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUid, adminContext)
+				_, err := CreateScheduleBackupWithoutCheck(scheduleName, SourceClusterName, sourceClusterUID, bkpLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUid, adminContext, false)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of scheduled backup with schedule name [%s]", scheduleName))
 				newBackupScheduleList = append(newBackupScheduleList, scheduleName)
 			}

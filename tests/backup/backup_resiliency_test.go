@@ -2202,7 +2202,7 @@ var _ = Describe("{RestartPXBackupDuringLargeResourceScheduledBackup}", Label(Te
 		Step("Creating schedule backup", func() {
 			log.InfoD("Creating schedule backup")
 			scheduleBackupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
-			_, err = CreateScheduleBackupWithoutCheck(scheduleBackupName, SourceClusterName, sourceClusterUid, backupLocationName, backupLocationUID, []string{namespace}, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchPolicyName, periodicSchPolicyUid, ctx)
+			_, err = CreateScheduleBackupWithoutCheck(scheduleBackupName, SourceClusterName, sourceClusterUid, backupLocationName, backupLocationUID, []string{namespace}, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchPolicyName, periodicSchPolicyUid, ctx, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule name [%s]", scheduleBackupName))
 			firstBackupName, err = GetFirstScheduleBackupName(ctx, scheduleBackupName, BackupOrgID)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching first scheduled backup name with schedule name [%s]", scheduleBackupName))
@@ -2472,7 +2472,7 @@ var _ = Describe("{RestartStorkDuringLargeResourceScheduledBackup}", Label(TestC
 		Step("Creating schedule backup", func() {
 			log.InfoD("Creating schedule backup")
 			scheduleBackupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
-			_, err = CreateScheduleBackupWithoutCheck(scheduleBackupName, SourceClusterName, sourceClusterUid, backupLocationName, backupLocationUID, []string{namespace}, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchPolicyName, periodicSchPolicyUid, ctx)
+			_, err = CreateScheduleBackupWithoutCheck(scheduleBackupName, SourceClusterName, sourceClusterUid, backupLocationName, backupLocationUID, []string{namespace}, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchPolicyName, periodicSchPolicyUid, ctx, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule name [%s]", scheduleBackupName))
 			firstBackupName, err = GetFirstScheduleBackupName(ctx, scheduleBackupName, BackupOrgID)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching first scheduled backup name with schedule name [%s]", scheduleBackupName))
@@ -2781,7 +2781,7 @@ var _ = Describe("{RebootNodesDuringLargeResourceScheduledBackup}", Label(TestCa
 		Step("Creating schedule backup", func() {
 			log.InfoD("Creating schedule backup")
 			scheduleBackupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
-			_, err = CreateScheduleBackupWithoutCheck(scheduleBackupName, SourceClusterName, sourceClusterUid, backupLocationName, backupLocationUID, []string{namespace}, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchPolicyName, periodicSchPolicyUid, ctx)
+			_, err = CreateScheduleBackupWithoutCheck(scheduleBackupName, SourceClusterName, sourceClusterUid, backupLocationName, backupLocationUID, []string{namespace}, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchPolicyName, periodicSchPolicyUid, ctx, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule name [%s]", scheduleBackupName))
 			firstBackupName, err = GetFirstScheduleBackupName(ctx, scheduleBackupName, BackupOrgID)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching first scheduled backup name with schedule name [%s]", scheduleBackupName))

@@ -732,7 +732,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 				log.FailOnError(err, "Fetching uid of schedule policy [%s]", partialScheduleName)
 				log.InfoD("Taking scheduled backup of namespaces [%s] before upgrade", partialAppNamespaces)
 				partialScheduledBackupName = fmt.Sprintf("partial-scheduled-backup-%v", RandomString(6))
-				_, err = CreateScheduleBackupWithoutCheck(partialScheduledBackupName, SourceClusterName, srcClusterUid, partialBackupLocationName, partialBackupLocationUid, partialAppNamespaces, nil, BackupOrgID, "", "", "", "", partialScheduleName, partialSchedulePolicyUid, ctx)
+				_, err = CreateScheduleBackupWithoutCheck(partialScheduledBackupName, SourceClusterName, srcClusterUid, partialBackupLocationName, partialBackupLocationUid, partialAppNamespaces, nil, BackupOrgID, "", "", "", "", partialScheduleName, partialSchedulePolicyUid, ctx, false)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule [%s]", partialScheduleName))
 			} else {
 				log.InfoD("Skipping this step as it is a Non-PX cluster")
