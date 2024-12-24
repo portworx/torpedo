@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -354,6 +355,250 @@ var _ = Describe("{AddMultipleNFSBackupLocationAndTakeMultipleBackupAsPartOfEach
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for i, backupName := range backupNames {
 				if i%2 == 1 {
+					restoreName := fmt.Sprintf("%s-%s", RestoreNamePrefix, backupName)
+					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+					err = CreateRestoreWithValidation(ctx, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, appContextsToBackup)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
+				}
+			}
+		})
+	})
+	JustAfterEach(func() {
+
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		log.InfoD("Deleting the deployed apps after the testcase")
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		DestroyApps(scheduledAppContexts, opts)
+		providers := GetBackupProviders()
+
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		log.InfoD("Delete the local bucket created")
+		for _, provider := range providers {
+			DeleteBucket(provider, globalBucket)
+			log.Infof("bucket deleted - %s", globalBucket)
+		}
+	})
+})
+
+// This test case verifies if we can Add two NFS BL and Add a S3 BL, create two backup as part of each BL, delete one backup content from each BL and verify
+var _ = Describe("{AddTwoNFSBLAndAddAS3BLCreateTwoBackupAsPartOfEachBLDeleteOneBackupContentFromEachBLAndVerify}", Label(TestCaseLabelsMap[RemoveJSONFilesFromNFSBackupLocation]...), func() {
+	var (
+		backupName           string
+		scheduledAppContexts []*scheduler.Context
+		sourceClusterUid     string
+		destClusterUid       string
+		clusterStatus        api.ClusterInfo_StatusInfo_Status
+		cloudCredName        string
+		cloudCredUID         string
+		backupLocationUID    string
+		bkpLocationName      string
+		globalBucket         string
+		bkpNamespaces        []string
+		s3CloudCredName      string
+		s3BackupLocationName string
+		s3CloudCredUID       string
+		s3BackupLocationUID  string
+		s3BucketName         string
+		providers            []string
+	)
+	bkpNamespaces = make([]string, 0)
+	labelSelectors := make(map[string]string)
+	backupLocationMap := make(map[string]string)
+	backupNames := make([]string, 0)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("VerifyAAddTwoNFSBLAndAddAS3BLCreateTwoBackupAsPartOfEachBLDeleteOneBackupContentFromEachBLAndVerify",
+			"Add two NFS BL and Add a S3 BL, create two backup as part of each BL, delete one backup content from each BL and verify", nil, 300403, ABadgujar, Q2FY24)
+		//1.Step-Deploy Applications in the Cluster
+		log.InfoD("Deploy applications")
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
+			appContexts := ScheduleApplications(taskName)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = AppReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
+			}
+		}
+		providers = GetBackupProviders()
+	})
+	It("Add two NFS BL and Add a S3 BL, create two backup as part of each BL, delete one backup content from each BL and verify", func() {
+		//2.Step-Validate Deployed Applications
+		Step("Validate applications", func() {
+			log.InfoD("Validating apps")
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		//3.Step-Create 2 NFS Backup Locations
+		Step("Create 2 NFS Backup Locations", func() {
+			for _, provider := range providers {
+				globalBucket = getGlobalBucketName(drivers.ProviderNfs)
+				log.InfoD("Creating NFS backup location-1")
+				bkpLocationName = fmt.Sprintf("%s-%s-%v-1", "nfs", globalBucket, RandomString(6))
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = bkpLocationName
+				err := CreateNFSBackupLocation(bkpLocationName, backupLocationUID, BackupOrgID, " ", getGlobalBucketName(provider), true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating NFS backup location %s", bkpLocationName))
+
+				log.InfoD("Creating NFS backup location-2")
+				bkpLocationName = fmt.Sprintf("%s-%s-%v-2", "nfs", globalBucket, RandomString(6))
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = bkpLocationName
+				err = CreateNFSBackupLocation(bkpLocationName, backupLocationUID, BackupOrgID, " ", getGlobalBucketName(provider), true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating NFS backup location %s", bkpLocationName))
+			}
+		})
+
+		//4.Step-Creating cloud setting for aws and backup location for S3
+		Step("Creating cloud setting for aws and backup location for S3", func() {
+			log.InfoD("Creating cloud setting for aws and backup location for S3")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, provider := range providers {
+				s3CloudCredName = fmt.Sprintf("%s-%s-%v", "cred", "s3", RandomString(4))
+				s3BackupLocationName = fmt.Sprintf("%s-%s-%v", getGlobalBucketName(provider), RandomString(4), "aws-s3")
+				s3CloudCredUID = uuid.New()
+				s3BackupLocationUID = uuid.New()
+				s3BucketName = getGlobalBucketName(provider)
+				backupLocationMap[s3BackupLocationUID] = s3BackupLocationName
+				if provider == drivers.ProviderNfs {
+					err = CreateCloudCredential("aws", s3CloudCredName, s3CloudCredUID, BackupOrgID, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", s3CloudCredName, BackupOrgID, "AWS"))
+				} else {
+					err = CreateCloudCredential(provider, s3CloudCredName, s3CloudCredUID, BackupOrgID, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", s3CloudCredName, BackupOrgID, "AWS"))
+				}
+				err = CreateS3BackupLocation(s3BackupLocationName, s3BackupLocationUID, s3CloudCredName, s3CloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of S3 backup location [%s]", s3BackupLocationName))
+			}
+
+		})
+
+		//5.Step-Registering Cluster for Backup Admin Context
+		Step("Register cluster for backup", func() {
+			adminContext, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching admin user ctx")
+			err = CreateApplicationClusters(BackupOrgID, "", "", adminContext)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, adminContext)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			sourceClusterUid, err = Inst().Backup.GetClusterUID(adminContext, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			destClusterUid, err = Inst().Backup.GetClusterUID(adminContext, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
+		})
+
+		//6.Step-Create 2 Backups per backup location in all backup locations in Admin Context
+		Step("Taking backup of applications", func() {
+			log.InfoD("Taking backup of applications")
+			//Common Steps for all backups
+			adminContext, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching admin user ctx")
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+
+			for backupLocationUIDIteration, bkplocationNameIteration := range backupLocationMap {
+				if strings.Contains(bkplocationNameIteration, "nfs") == true && strings.Contains(bkplocationNameIteration, "aws") == false {
+					for noOfBackups := 1; noOfBackups <= 2; noOfBackups++ {
+						backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, bkplocationNameIteration, noOfBackups)
+						err = CreateBackupWithValidation(adminContext, backupName, SourceClusterName, bkplocationNameIteration, backupLocationUIDIteration, appContextsToBackup, labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "")
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", backupName))
+						backupNames = append(backupNames, backupName)
+					}
+				} else if strings.Contains(bkplocationNameIteration, "aws-s3") == true {
+					//Make 1st S3 Backup
+					backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, bkplocationNameIteration, 1)
+					err = CreateBackupWithValidation(adminContext, backupName, SourceClusterName, bkplocationNameIteration, backupLocationUIDIteration, appContextsToBackup, labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "")
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", backupName))
+					backupNames = append(backupNames, backupName)
+					//Delete backup file from S3 bucket
+					err = DeleteFilesFromS3Bucket(s3BucketName, "metadata.json")
+					log.FailOnError(err, fmt.Sprintf("Faced error while deleting the s3 backup files from bucket [%s] and backup [%s]", s3BucketName, backupName))
+					log.InfoD("Deletion of backup files successful for backup - %s", backupName)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Deletion of backup files successful for backup [%s]", backupName))
+					//Make 2nd S3 Backup
+					backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, bkplocationNameIteration, 2)
+					err = CreateBackupWithValidation(adminContext, backupName, SourceClusterName, bkplocationNameIteration, backupLocationUIDIteration, appContextsToBackup, labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "")
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", backupName))
+					backupNames = append(backupNames, backupName)
+				}
+			}
+		})
+
+		//7.Remove the JSON files from the NFS backup location for all of the backups
+		Step("Remove the JSON files from the NFS backup location for all of the backups", func() {
+			log.InfoD("Remove the JSON files from the NFS backup location for all of the backups")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, backupName := range backupNames {
+				if strings.Contains(backupName, "nfs") == true && strings.Contains(backupName, "aws") == false {
+					backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, BackupOrgID)
+					log.FailOnError(err, fmt.Sprintf("Getting UID for backup %v", backupName))
+					backupInspectRequest := &api.BackupInspectRequest{
+						Name:  backupName,
+						Uid:   backupUID,
+						OrgId: BackupOrgID,
+					}
+					resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+					log.FailOnError(err, fmt.Sprintf("error inspecting backup %v", backupName))
+					currentBackupPath := globalBucket + "/" + resp.Backup.BackupPath
+					log.Infof("Deleting the JSON files from the NFS backup location for backup %v", backupName)
+					err = DeleteFilesFromNFSLocation(currentBackupPath, "*.json")
+					log.FailOnError(err, fmt.Sprintf("Faced error while deleting the JSON files from path [%s]", currentBackupPath))
+				}
+			}
+		})
+
+		//8.Step-Verify the backups are in CloudBackupMissing state after bucket deletion
+		Step("Verify the backups are in CloudBackupMissing state after bucket deletion", func() {
+			log.InfoD("Verify the backups are in CloudBackupMissing state after bucket deletion")
+			var wg sync.WaitGroup
+			adminContext, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching admin user ctx")
+			for _, backupName := range backupNames {
+				if strings.Contains(backupName, "aws-s3-2") == false {
+					wg.Add(1)
+					go func(backupName string) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						bkpUid, err := Inst().Backup.GetBackupUID(adminContext, backupName, BackupOrgID)
+						log.FailOnError(err, "Fetching backup uid")
+						backupInspectRequest := &api.BackupInspectRequest{
+							Name:  backupName,
+							Uid:   bkpUid,
+							OrgId: BackupOrgID,
+						}
+						requiredStatus := api.BackupInfo_StatusInfo_CloudBackupMissing
+						backupCloudBackupMissingCheckFunc := func() (interface{}, bool, error) {
+							resp, err := Inst().Backup.InspectBackup(adminContext, backupInspectRequest)
+							if err != nil {
+								return "", false, err
+							}
+							actual := resp.GetBackup().GetStatus().Status
+							if actual == requiredStatus {
+								return "", false, nil
+							}
+							return "", true, fmt.Errorf("backup status for [%s] expected was [%v] but got [%s]", backupName, requiredStatus, actual)
+						}
+						_, err = DoRetryWithTimeoutWithGinkgoRecover(backupCloudBackupMissingCheckFunc, 20*time.Minute, 30*time.Second)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Verfiying backup %s is in CloudBackup missing state", backupName))
+					}(backupName)
+				}
+			}
+			wg.Wait()
+		})
+		//9.Step-Verify if the restores for the other aws backup is possible , so that we know cloudbackup objects are not missing for it
+		Step("Verify if the restores for the other aws backup is possible , so that we know cloudbackup objects are not missing for it", func() {
+			log.InfoD("Verify if the restores for the other aws backup is possible , so that we know cloudbackup objects are not missing for it")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, backupName := range backupNames {
+				if strings.Contains(backupName, "aws-s3-2") == true {
 					restoreName := fmt.Sprintf("%s-%s", RestoreNamePrefix, backupName)
 					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
 					err = CreateRestoreWithValidation(ctx, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, appContextsToBackup)
