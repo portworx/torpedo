@@ -656,6 +656,8 @@ spec:
       value: "${AWS_MINIO_REGION}"
     - name: AWS_MINIO_ENDPOINT
       value: "${AWS_MINIO_ENDPOINT}"
+    - name: KUBEVIRT_VOL_TYPE
+      value: "${KUBEVIRT_VOL_TYPE}"
     - name: KUBECONFIGS
       value: "${CLUSTER_CONFIGS}"
     - name: S3_ENDPOINT
