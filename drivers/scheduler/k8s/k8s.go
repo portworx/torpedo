@@ -1999,15 +1999,10 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 					// app.IsCSI is true if the app is in CSI_APP_LIST.
 					if app.IsCSI {
 						obj.Provisioner = CsiProvisioner
-					} else {
-						obj.Provisioner = volume.GetStorageProvisioner()
-					}
-
-					_, present := os.LookupEnv("KUBEVIRT_VOL_TYPE")
-					if !present {
-						obj.Provisioner = volume.GetStorageProvisioner()
-					} else {
+					} else if kubevirtVolType := os.Getenv("KUBEVIRT_VOL_TYPE"); kubevirtVolType == "pxe-raw" || kubevirtVolType == "fada-raw" {
 						obj.Provisioner = CsiProvisioner
+					} else {
+						obj.Provisioner = volume.GetStorageProvisioner()
 					}
 				}
 			}
