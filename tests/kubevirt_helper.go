@@ -2,8 +2,10 @@ package tests
 
 import (
 	context1 "context"
+	"encoding/hex"
 	"fmt"
 	"k8s.io/apimachinery/pkg/api/resource"
+	cdiv1 "kubevirt.io/containerized-data-importer-api/pkg/apis/core/v1beta1"
 	"math/rand"
 	"os"
 	"regexp"
@@ -1031,7 +1033,7 @@ func GetNumberOfDrivesInVM(vm kubevirtv1.VirtualMachine) (int, error) {
 			return nil, true, err
 		}
 
-		cmd := "lsblk | grep vd | grep disk | wc -l"
+		cmd := "lsblk | grep -E '^(vd|sd)' | grep disk | wc -l"
 		output, err := RunCommandInVM(ipAddress, cmd)
 		if err != nil {
 			log.Warnf("Failed to execute command in VM [%s]: %v", vm.Name, err)
@@ -1278,4 +1280,203 @@ func GetVMUptime(vm kubevirtv1.VirtualMachine) (time.Duration, error) {
 func GetPVCsAttachedToVM(vm kubevirtv1.VirtualMachine) []string {
 	pvcNames := k8sKubevirt.GetVMPersistentVolumeClaims(&vm)
 	return pvcNames
+}
+
+// CreateBlankDataVolume creates a blank data volume with a given storageclass
+func CreateBlankDataVolume(namespace string, dvName string, storageClassName string, size string, volumeMode string) (*cdiv1.DataVolume, error) {
+	kvClient := k8sKubevirt.GetKubevirtClient()
+	var VolumeMode *corev1.PersistentVolumeMode
+	if volumeMode == "Block" {
+		VolumeMode = &[]corev1.PersistentVolumeMode{corev1.PersistentVolumeBlock}[0]
+	} else {
+		VolumeMode = &[]corev1.PersistentVolumeMode{corev1.PersistentVolumeFilesystem}[0]
+	}
+	dv := &cdiv1.DataVolume{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "DataVolume",
+			APIVersion: "cdi.kubevirt.io/v1beta1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      dvName,
+			Namespace: namespace,
+		},
+		Spec: cdiv1.DataVolumeSpec{
+			Source: &cdiv1.DataVolumeSource{
+				Blank: &cdiv1.DataVolumeBlankImage{},
+			},
+			Storage: &cdiv1.StorageSpec{
+				StorageClassName: &storageClassName,
+				AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteMany},
+				VolumeMode:       VolumeMode,
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceStorage: resource.MustParse(size),
+					},
+				},
+			},
+		},
+	}
+
+	createdDV, err := kvClient.
+		CdiClient().
+		CdiV1beta1().
+		DataVolumes(namespace).
+		Create(context1.TODO(), dv, metav1.CreateOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create DataVolume [%s/%s]: %w", namespace, dvName, err)
+	}
+
+	log.Infof("Created DataVolume [%s/%s], waiting for it to become Ready", namespace, dvName)
+
+	return createdDV, nil
+}
+
+// HotPlugDataVolumesToKubevirtVM main trigger to hot plug volumes to a running VM
+func HotPlugDataVolumesToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDVs int, size string, volumeMode string) (bool, error) {
+	log.InfoD("Beginning hot-plug of [%d] DataVolume(s) to each VM (size=%s, volumeMode=%s)",
+		numberOfDVs, size, volumeMode)
+
+	for _, appCtx := range virtualMachines {
+		vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+		if err != nil {
+			return false, fmt.Errorf("failed to get VMs from scheduled contexts: %v", err)
+		}
+
+		for _, vm := range vms {
+			storageClass, err := GetStorageClassOfVmPVC(appCtx)
+			if err != nil {
+				return false, fmt.Errorf("failed to get storage class for VM [%s/%s]: %v", vm.Namespace, vm.Name, err)
+			}
+			log.Infof("Using storageClass=[%s] for new DataVolumes for VM [%s/%s]", storageClass, vm.Namespace, vm.Name)
+
+			err = WaitForVMToBeReady(vm.Name, vm.Namespace)
+			if err != nil {
+				return false, fmt.Errorf("VM [%s/%s] not ready: %v", vm.Namespace, vm.Name, err)
+			}
+
+			initialDiskCount, err := GetNumberOfDrivesInVM(vm)
+			if err != nil {
+				return false, fmt.Errorf("failed to get initial number of disks in VM [%s]: %v", vm.Name, err)
+			}
+			log.Infof("Initial number of disks in VM [%s]: %d", vm.Name, initialDiskCount)
+
+			for i := 0; i < numberOfDVs; i++ {
+				dvName := fmt.Sprintf("hotplug-dv-%s-%d", vm.Name, i)
+				log.Infof("Creating blank DataVolume [%s/%s] with size=[%s]", vm.Namespace, dvName, size)
+
+				dv, err := CreateBlankDataVolume(vm.Namespace, dvName, storageClass, size, volumeMode)
+				if err != nil {
+					return false, fmt.Errorf("failed to create DV [%s/%s]: %v", vm.Namespace, dvName, err)
+				}
+				log.Infof("Data Volum Created. Hard Sleep for 30 seconds for DV to settle down")
+				time.Sleep(30 * time.Second)
+				err = HotPlugDVToVM(vm.Name, vm.Namespace, dv.Name)
+				if err != nil {
+					return false, fmt.Errorf("failed to hotplug DV [%s/%s] into VM [%s/%s]: %v",
+						dv.Namespace, dv.Name, vm.Namespace, vm.Name, err)
+				}
+				err = WaitForHotplugVolumeReady(vm.Namespace, vm.Name, dv.Name, 5*time.Minute, 10*time.Second)
+				if err != nil {
+					return false, fmt.Errorf(
+						"failed waiting for DV [%s/%s] to become Ready in VM [%s/%s]: %v",
+						vm.Namespace, dv.Name, vm.Namespace, vm.Name, err,
+					)
+				}
+				log.Infof("Successfully hot-plugged DV [%s/%s] into VM [%s/%s]", dv.Namespace, dv.Name, vm.Namespace, vm.Name)
+			}
+
+			t := func() (interface{}, bool, error) {
+				newDiskCount, err := GetNumberOfDrivesInVM(vm)
+				if err != nil {
+					return nil, true, err
+				}
+				if newDiskCount < initialDiskCount+numberOfDVs {
+					return nil, true, fmt.Errorf(
+						"Expected at least [%d] disks, found only [%d]",
+						initialDiskCount+numberOfDVs, newDiskCount)
+				}
+				return newDiskCount, false, nil
+			}
+			_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 20*time.Second)
+			if err != nil {
+				return false, fmt.Errorf("failed to confirm new disks in VM [%s/%s]: %v", vm.Namespace, vm.Name, err)
+			}
+		}
+	}
+	return true, nil
+}
+
+// WaitForHotplugVolumeReady waits for hp-volume pod to become ready
+func WaitForHotplugVolumeReady(namespace, vmName, dvName string, timeout, retryInterval time.Duration) error {
+	f := func() (interface{}, bool, error) {
+		kvClient := k8sKubevirt.GetKubevirtClient()
+		vmi, err := kvClient.VirtualMachineInstance(namespace).Get(context1.TODO(), vmName, &metav1.GetOptions{})
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to get VMI [%s/%s]: %w", namespace, vmName, err)
+		}
+
+		var (
+			attachPodName string
+			found         bool
+		)
+
+		for _, vs := range vmi.Status.VolumeStatus {
+			if vs.Name == dvName {
+				found = true
+				if vs.HotplugVolume != nil {
+					attachPodName = vs.HotplugVolume.AttachPodName
+				}
+				if vs.Phase == kubevirtv1.VolumeReady {
+					log.Infof("Volume [%s] is VolumeReady in VMI [%s/%s]", dvName, namespace, vmName)
+					if attachPodName != "" {
+						pod, err := k8sCore.GetPodByName(attachPodName, namespace)
+						if err != nil {
+							return nil, true, fmt.Errorf("failed to get hotplug pod [%s]: %w", attachPodName, err)
+						}
+						if k8sCore.IsPodRunning(*pod) {
+							return nil, false, nil
+						}
+						return nil, true, fmt.Errorf("hotplug pod [%s] is not running yet", attachPodName)
+					}
+					return nil, true, fmt.Errorf("volume is Ready but attachPodName is empty")
+				}
+			}
+		}
+
+		if !found {
+			log.Infof("Volume [%s] not yet in VMI status for VMI [%s/%s]. Retrying...", dvName, namespace, vmName)
+			return nil, true, fmt.Errorf("volume [%s] not found in volumeStatus", dvName)
+		}
+
+		return nil, true, fmt.Errorf("volume [%s] found but not Ready yet in VMI [%s/%s]", dvName, namespace, vmName)
+	}
+
+	_, err := task.DoRetryWithTimeout(f, timeout, retryInterval)
+	if err != nil {
+		return fmt.Errorf("volume [%s] didn't become Ready in VMI [%s/%s] within %v: %v",
+			dvName, namespace, vmName, timeout, err)
+	}
+	return nil
+}
+
+// HotPlugDVToVM method triggers hot pluging of given datavolume to given VM
+func HotPlugDVToVM(vmName, namespace, dvName string) error {
+	kvClient := k8sKubevirt.GetKubevirtClient()
+	bytes := make([]byte, 10)
+	serial := hex.EncodeToString(bytes)
+	addVolumeOptions := &kubevirtv1.AddVolumeOptions{
+		Name: dvName,
+		Disk: &kubevirtv1.Disk{
+			DiskDevice: kubevirtv1.DiskDevice{
+				Disk: &kubevirtv1.DiskTarget{Bus: kubevirtv1.DiskBusSCSI},
+			},
+			Serial: serial,
+		},
+		VolumeSource: &kubevirtv1.HotplugVolumeSource{
+			DataVolume: &kubevirtv1.DataVolumeSource{Name: dvName},
+		},
+	}
+	return kvClient.
+		VirtualMachineInstance(namespace).
+		AddVolume(context1.TODO(), vmName, addVolumeOptions)
 }
