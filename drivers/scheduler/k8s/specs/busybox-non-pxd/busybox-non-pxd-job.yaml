@@ -1,0 +1,39 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-ocp-cephfs
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Gi # Keep sufficient space for the test
+  storageClassName: ocs-storagecluster-cephfs
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: busybox-dd-job
+spec:
+  template:
+    spec:
+      containers:
+      - name: busybox
+        image: busybox:latest
+        command:
+        - sh
+        - -c
+        - |
+          echo "Writing 80GB of data to /mnt/pvc-ocp-cephfs/datafile";
+          dd if=/dev/urandom of=/mnt/pvc-ocp-cephfs/datafile bs=1M count=81920 conv=fsync;
+          echo "Data write complete.";
+        volumeMounts:
+        - name: pvc-storage
+          mountPath: /mnt/pvc-ocp-cephfs
+      volumes:
+      - name: pvc-storage
+        persistentVolumeClaim:
+          claimName: pvc-ocp-cephfs
+      restartPolicy: Never
+  backoffLimit: 0

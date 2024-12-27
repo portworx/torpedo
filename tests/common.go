@@ -973,7 +973,7 @@ func IsKvdbRunningOnStorageLessNode() bool {
 // ValidateContext is the ginkgo spec for validating a scheduled context
 func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 	// Apps for which we have to skip volume validation due to various limitations
-	excludeAppContextList := []string{"tektoncd", "pxb-singleapp-multivol", "pg-mysql-multiprov-ocp", "pg-mysql-multiprov-iks", "pg-mysql-multiprov-aks", "pg-mysql-multiprov-gke", "kubevirt-fada-raw-fio", "busybox-pxd"}
+	excludeAppContextList := []string{"tektoncd", "pxb-singleapp-multivol", "pg-mysql-multiprov-ocp", "pg-mysql-multiprov-iks", "pg-mysql-multiprov-aks", "pg-mysql-multiprov-gke", "kubevirt-fada-raw-fio", "busybox-pxd", "busybox-non-pxd"}
 	defer func() {
 		if len(errChan) > 0 {
 			close(*errChan[0])
@@ -16300,7 +16300,7 @@ func ValidateParallelBackupScheduleNonPxdVolume(backupScheduleName string, orgId
 	if err != nil {
 		return err
 	}
-	err = Inst().Backup.WaitForBackupCompletion(ctx, backupName, orgId, BackupCompletionWaitTime, RetrySeconds*time.Second)
+	err = Inst().Backup.WaitForBackupCompletion(ctx, backupName, orgId, 2*BackupCompletionWaitTime, RetrySeconds*time.Second)
 	if err != nil {
 		return err
 	}

@@ -38,7 +38,6 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 		pxNamespace                                          = "portworx"
 	)
 	BeforeAll(func() {
-		backupLocationMap = make(map[string]string)
 		// Schedule a pxd Volume Application
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		pipelineAppList := Inst().AppList
@@ -82,6 +81,7 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 		// Get Admin User Context
 		adminContext, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching admin user ctx")
+		backupLocationMap = make(map[string]string)
 		cloudCredName, cloudCredUID = "", uuid.New()
 		for _, provider := range providers {
 			// Create Cloud Credential
@@ -114,7 +114,7 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 
 	// Testrail id - T90054302 verify ParallelBackupSchedule for Pxd volumes
 	It("VerifyPxdVolumeParallelScheduledBackups", func() {
-		StartPxBackupTorpedoTest("VerifyPxdVolumeParallelScheduledBackups", "verify ParallelBackupSchedule for Pxd volumes", nil, 90054302, Shkumari, Q4FY25)
+		StartPxBackupTorpedoTest("VerifyPxdVolumeParallelScheduledBackups", "verify ParallelBackupSchedule for Pxd volumes", nil, 304414, Shkumari, Q4FY25)
 		var (
 			scheduleName = fmt.Sprintf("schedule-bkp-%v", RandomString(5))
 		)
@@ -172,7 +172,7 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 
 	// Testrail id - T90054303 verify BackupSchedule for Pxd volume with parallel-backup flag disabled
 	It("VerifyScheduledBackupsParallelBackupsDisabled", func() {
-		StartPxBackupTorpedoTest("VerifyScheduledBackupsParallelBackupsDisabled", "verify ParallelBackupSchedule for Pxd volumes with parallel-backup flag disabled", nil, 90054303, Shkumari, Q4FY25)
+		StartPxBackupTorpedoTest("VerifyScheduledBackupsParallelBackupsDisabled", "verify ParallelBackupSchedule for Pxd volumes with parallel-backup flag disabled", nil, 304415, Shkumari, Q4FY25)
 		var (
 			scheduleName = fmt.Sprintf("schedule-bkp-%v", RandomString(5))
 		)
@@ -250,7 +250,7 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 
 	// Testrail id - T90054307 verify ParallelBackupSchedule for Pxd volumes with NameSpace Label
 	It("VerifyNumberOfParallelScheduledBackupsCreatedNSLabel", func() {
-		StartPxBackupTorpedoTest("VerifyNumberOfParallelScheduledBackupsCreatedNSLabel", "verify ParallelBackupSchedule for Pxd volumes with NameSpace Label", nil, 90054307, Shkumari, Q4FY25)
+		StartPxBackupTorpedoTest("VerifyNumberOfParallelScheduledBackupsCreatedNSLabel", "verify ParallelBackupSchedule for Pxd volumes with NameSpace Label", nil, 304419, Shkumari, Q4FY25)
 		var (
 			scheduleName = fmt.Sprintf("schedule-bkp-%v", RandomString(5))
 		)
@@ -321,7 +321,7 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 
 	// Testrail id - 90054312 Restart the portworx pods/ nodes and verify the parallel scheduled backups
 	It("VerifyPxdVolumeParallelScheduledBackupsPXPodRestart", func() {
-		StartPxBackupTorpedoTest("VerifyPxdVolumeParallelScheduledBackupsPXPodRestart", "Restart the portworx pods/ nodes and verify the parallel scheduled backups", nil, 90054312, Shkumari, Q4FY25)
+		StartPxBackupTorpedoTest("VerifyPxdVolumeParallelScheduledBackupsPXPodRestart", "Restart the portworx pods/ nodes and verify the parallel scheduled backups", nil, 304424, Shkumari, Q4FY25)
 		var (
 			scheduleName = fmt.Sprintf("schedule-bkp-%v", RandomString(5))
 		)
@@ -368,6 +368,319 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 			}
 			_, err = Inst().Backup.DeleteSchedulePolicy(adminContext, schedulePolicyDeleteRequest)
 			log.FailOnError(err, "failed to delete schedule policy [%s]", schedulePolicyName)
+			// Delete the backups
+			backupEnumerateRequest := &api.BackupEnumerateRequest{
+				OrgId: BackupOrgID,
+			}
+			backupList, err := Inst().Backup.EnumerateBackup(adminContext, backupEnumerateRequest)
+			log.FailOnError(err, "failed to enumerate backups")
+			for _, backup := range backupList.Backups {
+				err = DeleteBackupAndWaitForCompletion(backup.Name, backup.Uid, BackupOrgID, adminContext)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s]", backup))
+			}
+			CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, adminContext)
+		})
+	})
+
+	AfterAll(func() {
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		log.InfoD("Deleting deployed applications")
+		DestroyApps(scheduledAppContexts, opts)
+		err := DeleteNamespaces(bkpNamespaces)
+		log.FailOnError(err, "failed to delete namespaces")
+		err = ThrottleNetworkSpeed(0)
+		if err != nil {
+			log.FailOnError(err, "Unable to update the network bandwidth usage")
+		}
+		log.InfoD("All test cases completed successfully")
+	})
+})
+
+// Paralle Scheduled Backup Test Suite for Non Pxd Volume Applications
+var _ = Describe("{ParallelBackupScheduleNonPxdTestSuite}", Ordered, Label(TestCaseLabelsMap[ParallelBackupScheduleNonPxdTestSuite]...), func() {
+	var (
+		scheduledAppContexts                    []*scheduler.Context
+		providers                               []string = GetBackupProviders()
+		bkpNamespaces                           []string
+		schedulePolicyName, schedulePolicyUid   string
+		cloudCredName, cloudCredUID             string
+		backupLocationMap                       map[string]string
+		sourceClusterUID                        string
+		backupLocationUID                       string
+		bkpLocationName                         string
+		randomStringLength                                    = 10
+		parallelScheduledBackupNamespacePrefix                = "parallel-scheduled-backup"
+		defaultWaitInterval                     time.Duration = 20 * time.Second
+		namespaceNonPxd                         string
+		scheduledAppContextsForNonPxdAppSinleNs []*scheduler.Context
+	)
+	BeforeAll(func() {
+		// Schedule a pxd Volume Application
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		pipelineAppList := Inst().AppList
+		Inst().AppList = []string{"busybox-pxd"}
+		originalAppList := Inst().AppList
+		//Resetting the pipeline app list
+		defer func() {
+			Inst().AppList = pipelineAppList
+		}()
+		namespace := fmt.Sprintf("%s-%s", parallelScheduledBackupNamespacePrefix, RandomString(10))
+		log.InfoD("Creating namespace %v", namespace)
+		_, err := core.Instance().CreateNamespace(&corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: namespace,
+			},
+		})
+		if err != nil && !k8serrors.IsAlreadyExists(err) {
+			log.FailOnError(err, fmt.Sprintf("Failed to create namespace %s on source cluster", namespace))
+		}
+
+		for i := 0; i < len(originalAppList); i++ {
+			taskName := fmt.Sprintf("%s-%s", TaskNamePrefix, RandomString(randomStringLength))
+			appContexts := ScheduleApplicationsOnNamespace(namespace, taskName)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = AppReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
+			}
+		}
+		// Validate the application
+		ValidateApplications(scheduledAppContexts)
+
+		err = ThrottleNetworkSpeed(10)
+		if err != nil {
+			log.FailOnError(err, "Unable to update the network bandwidth usage")
+		}
+	})
+
+	JustBeforeEach(func() {
+		// Deploy non-pxd Volume Application
+		pipelineAppList := Inst().AppList
+		Inst().AppList = []string{"busybox-non-pxd"}
+		originalAppList := Inst().AppList
+		//Resetting the pipeline app list
+		defer func() {
+			Inst().AppList = pipelineAppList
+		}()
+		// Create a namespace for non pxd app
+		namespaceNonPxd = fmt.Sprintf("%s-%s", parallelScheduledBackupNamespacePrefix, RandomString(10))
+		log.InfoD("Creating namespace %v", namespaceNonPxd)
+		_, err := core.Instance().CreateNamespace(&corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: namespaceNonPxd,
+			},
+		})
+		if err != nil && !k8serrors.IsAlreadyExists(err) {
+			log.FailOnError(err, fmt.Sprintf("Failed to create namespace %s on source cluster", namespaceNonPxd))
+		}
+		for i := 0; i < len(originalAppList); i++ {
+			taskName := fmt.Sprintf("%s-%s", TaskNamePrefix, RandomString(randomStringLength))
+			appContexts := ScheduleApplicationsOnNamespace(namespaceNonPxd, taskName)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = 2 * AppReadinessTimeout
+				scheduledAppContextsForNonPxdAppSinleNs = append(scheduledAppContextsForNonPxdAppSinleNs, ctx)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
+			}
+		}
+		ValidateApplications(scheduledAppContextsForNonPxdAppSinleNs)
+
+		// Get Admin User Context
+		adminContext, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching admin user ctx")
+		cloudCredName, cloudCredUID = "", uuid.New()
+		backupLocationMap = make(map[string]string)
+		for _, provider := range providers {
+			// Create Cloud Credential
+			cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
+			err = CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, adminContext)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+
+			// Create BackupLocation
+			bkpLocationName = fmt.Sprintf("autogenerated-backup-location-%v", time.Now().Unix())
+			backupLocationUID = uuid.New()
+			backupLocationMap[backupLocationUID] = bkpLocationName
+			err = CreateBackupLocationWithContext(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", adminContext, true)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", bkpLocationName))
+		}
+		// Create a cluster
+		err = AddSourceCluster(adminContext)
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] cluster with admin ctx", SourceClusterName))
+		sourceClusterUID, err = Inst().Backup.GetClusterUID(adminContext, BackupOrgID, SourceClusterName)
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+
+		// Create Schedule Policy
+		log.InfoD("Creating backup interval schedule policy")
+		schedulePolicyUid = uuid.New()
+		schedulePolicyName = fmt.Sprintf("%s-%s", "periodic", RandomString(6))
+		periodicSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(10, 15, 2)
+		periodicPolicyStatus := Inst().Backup.BackupSchedulePolicy(schedulePolicyName, schedulePolicyUid, BackupOrgID, periodicSchedulePolicyInfo)
+		dash.VerifyFatal(periodicPolicyStatus, nil, fmt.Sprintf("Creation of periodic schedule policy - %s", schedulePolicyName))
+		log.Infof("Schedule policy status, name, uid: %v, %v, %v", periodicPolicyStatus, schedulePolicyName, schedulePolicyUid)
+	})
+
+	// Testrail id - T90054304 verify ParallelBackupSchedule for non-Pxd volumes
+	It("VerifyParallelScheduledBackupsNonPxdVolume", func() {
+		StartPxBackupTorpedoTest("VerifyParallelScheduledBackupsNonPxdVolume", "verify ParallelBackupSchedule for non-Pxd volumes", nil, 304416, Shkumari, Q4FY25)
+		var (
+			scheduleName = fmt.Sprintf("schedule-bkp-%v", RandomString(5))
+		)
+		Step("create parallel backup schedule for non-Pxd volumes and Verify", func() {
+			// Get Admin User Context
+			adminContext, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching admin user ctx")
+
+			// Create periodic backup schedule objects
+			_, err = CreateScheduleBackupWithoutCheck(scheduleName, SourceClusterName, sourceClusterUID, bkpLocationName, backupLocationUID, []string{namespaceNonPxd}, make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUid, adminContext, true)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of scheduled backup with schedule name [%s]", scheduleName))
+
+			// Validated Parallel Backup Schedule with non portworx provisioner is not triggering parallel backups
+			err = ValidateNumberOfParallelScheduledBackups(scheduleName, BackupOrgID, 15, adminContext, 2)
+			log.FailOnNoError(err, "VerifyParallelScheduledBackupsNonPxdVolume")
+			if !strings.Contains(err.Error(), "not been created up to the provided ordinal value") {
+				log.FailOnError(err, "next scheduled backup has been created before first was successful")
+			}
+			log.InfoD("Validated Parallel Backup Schedule with non portworx provisioner is not triggering parallel backups")
+
+			// Validate next scheduled backup is in progress after the first backup is completed, at next interval
+			err = ValidateParallelBackupScheduleNonPxdVolume(scheduleName, BackupOrgID, 15, adminContext)
+			if err != nil {
+				log.FailOnError(err, "VerifyParallelScheduledBackupsNonPxdVolume")
+			}
+			log.InfoD("Validated next scheduled backup is in progress after the first backup is completed, at next interval")
+		})
+
+		Step("cleanup- delete the created resources", func() {
+			// Get Admin User Context
+			adminContext, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching admin user ctx")
+
+			// Suspend the backup schedule so that no new backup is created while we are deleting the schedule
+			err = SuspendBackupSchedule(scheduleName, schedulePolicyName, BackupOrgID, adminContext)
+			log.FailOnError(err, "failed to suspend backup schedule")
+			backupScheduleUID, err := GetScheduleUID(scheduleName, BackupOrgID, adminContext)
+			log.FailOnError(err, "failed to get schedule uid")
+
+			// Validate that the next backup is completed
+			err = Inst().Backup.BackupScheduleWaitForNBackupsCompletion(
+				adminContext,
+				scheduleName,
+				BackupOrgID,
+				2,
+				BackupCompletionWaitTime,
+				defaultWaitInterval,
+			)
+			log.FailOnError(err, "failed to wait for next backup completion")
+			err = DeleteScheduleWithUIDAndWait(scheduleName, backupScheduleUID, SourceClusterName, sourceClusterUID, BackupOrgID, adminContext)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of backup schedule [%s]", scheduleName))
+
+			// Delete the backup schedules
+			scheduleEnumerateRequest := &api.BackupScheduleEnumerateRequest{
+				OrgId: BackupOrgID,
+			}
+			scheduleList, err := Inst().Backup.EnumerateBackupSchedule(adminContext, scheduleEnumerateRequest)
+			log.FailOnError(err, "failed to enumerate backup schedules")
+			log.InfoD("Number of backupschedules to delete [%d]", len(scheduleList.BackupSchedules))
+			for _, schedule := range scheduleList.BackupSchedules {
+				err = DeleteScheduleWithUIDAndWait(schedule.Name, schedule.Uid, SourceClusterName, sourceClusterUID, BackupOrgID, adminContext)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of backup schedule [%s]", schedule))
+			}
+
+			// Delete the schedule policy
+			log.InfoD("Deleting schedule policy [%s]", schedulePolicyName)
+			schedulePolicyDeleteRequest := &api.SchedulePolicyDeleteRequest{
+				Name:  schedulePolicyName,
+				Uid:   schedulePolicyUid,
+				OrgId: BackupOrgID,
+			}
+			_, err = Inst().Backup.DeleteSchedulePolicy(adminContext, schedulePolicyDeleteRequest)
+			log.FailOnError(err, "failed to delete schedule policy [%s]", schedulePolicyName)
+
+			// Delete the backups
+			backupEnumerateRequest := &api.BackupEnumerateRequest{
+				OrgId: BackupOrgID,
+			}
+			backupList, err := Inst().Backup.EnumerateBackup(adminContext, backupEnumerateRequest)
+			log.FailOnError(err, "failed to enumerate backups")
+			for _, backup := range backupList.Backups {
+				err = DeleteBackupAndWaitForCompletion(backup.Name, backup.Uid, BackupOrgID, adminContext)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s]", backup))
+			}
+			CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, adminContext)
+			// Delete the namespace for non pxd app
+			err = DeleteNamespaces([]string{namespaceNonPxd})
+			log.FailOnError(err, "failed to delete namespaces")
+		})
+	})
+
+	// Testrail id - T90054305 verify ParallelBackupSchedule for Pxd & non-PXD volumes
+	It("VerifyNumberOfParallelScheduledBackupsCreatedMultiProvisioner", func() {
+		StartPxBackupTorpedoTest("VerifyNumberOfParallelScheduledBackupsCreatedMultiProvisioner", "verify ParallelBackupSchedule for Pxd & non-PXD volumes", nil, 304417, Shkumari, Q4FY25)
+		var (
+			scheduleName = fmt.Sprintf("schedule-bkp-%v", RandomString(5))
+		)
+
+		Step("create parallel backup schedule for Pxd & non-PXD volumes and Verify", func() {
+			// Get Admin User Context
+			adminContext, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching admin user ctx")
+
+			bkpNamespaces = append(bkpNamespaces, namespaceNonPxd)
+			// Create periodic backup schedule objects
+			_, err = CreateScheduleBackupWithoutCheck(scheduleName, SourceClusterName, sourceClusterUID, bkpLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUid, adminContext, true)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of scheduled backup with schedule name [%s]", scheduleName))
+
+			// Validate Parallel Backup Schedule with multiple provisioners not triggering parallel backups
+			err = ValidateNumberOfParallelScheduledBackups(scheduleName, BackupOrgID, 15, adminContext, 2)
+			log.FailOnNoError(err, "VerifyNumberOfParallelScheduledBackupsCreatedMultiProvisioner")
+			if !strings.Contains(err.Error(), "not been created up to the provided ordinal value") {
+				log.FailOnError(err, "next scheduled backup has been created before first was successful")
+			}
+			log.InfoD("Validated Parallel Backup Schedule with multiple provisioners not triggering parallel backups")
+
+			// Validate next scheduled backup is in progress after the first backup is completed, at next interval
+			err = ValidateParallelBackupScheduleNonPxdVolume(scheduleName, BackupOrgID, 15, adminContext)
+			if err != nil {
+				log.FailOnError(err, "VerifyNumberOfParallelScheduledBackupsCreatedMultiProvisioner")
+			}
+			log.InfoD("Validated next scheduled backup is in progress after the first backup is completed, at next interval")
+		})
+
+		Step("cleanup- delete the created resources", func() {
+			// Get Admin User Context
+			adminContext, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching admin user ctx")
+
+			// Suspend the backup schedule so that no new backup is created while we are deleting the schedule
+			err = SuspendBackupSchedule(scheduleName, schedulePolicyName, BackupOrgID, adminContext)
+			log.FailOnError(err, "failed to suspend backup schedule")
+			backupScheduleUID, err := GetScheduleUID(scheduleName, BackupOrgID, adminContext)
+			log.FailOnError(err, "failed to get schedule uid")
+
+			// Validate that the next backup is completed
+			err = Inst().Backup.BackupScheduleWaitForNBackupsCompletion(
+				adminContext,
+				scheduleName,
+				BackupOrgID,
+				2,
+				BackupCompletionWaitTime,
+				defaultWaitInterval,
+			)
+			log.FailOnError(err, "failed to wait for next backup completion")
+			err = DeleteScheduleWithUIDAndWait(scheduleName, backupScheduleUID, SourceClusterName, sourceClusterUID, BackupOrgID, adminContext)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of backup schedule [%s]", scheduleName))
+
+			// Delete the schedule policy
+			log.InfoD("Deleting schedule policy [%s]", schedulePolicyName)
+			schedulePolicyDeleteRequest := &api.SchedulePolicyDeleteRequest{
+				Name:  schedulePolicyName,
+				Uid:   schedulePolicyUid,
+				OrgId: BackupOrgID,
+			}
+			_, err = Inst().Backup.DeleteSchedulePolicy(adminContext, schedulePolicyDeleteRequest)
+			log.FailOnError(err, "failed to delete schedule policy [%s]", schedulePolicyName)
+
 			// Delete the backups
 			backupEnumerateRequest := &api.BackupEnumerateRequest{
 				OrgId: BackupOrgID,

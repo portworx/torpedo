@@ -171,6 +171,7 @@ const (
 	RebootNodesWhileCRRestoreIsInProgress                                              TestCaseName = "RebootNodesWhileCRRestoreIsInProgress"
 	VerifyRBACForLargeUserSet                                                          TestCaseName = "VerifyRBACForLargeUserSet"
 	ParallelBackupScheduleTestSuite                                                    TestCaseName = "ParallelBackupScheduleTestSuite"
+	ParallelBackupScheduleNonPxdTestSuite                                              TestCaseName = "ParallelBackupScheduleNonPxdTestSuite"
 	CrashKopiaToolWhenBackUpRestoreInProgress                                          TestCaseName = "CrashKopiaToolWhenBackUpRestoreInProgress"
 	NamespaceBackupRestoreWithHugeConfigMap                                            TestCaseName = "NamespaceBackupRestoreWithHugeConfigMap"
 	CheckLicensePageIntegrity                                                          TestCaseName = "LicensePageIntegrity"
@@ -350,6 +351,7 @@ const (
 	VerifySoftLicensingPeriodInDeploymentSpecLabel                                          TestCaseLabel = "VerifySoftLicensingPeriodInDeploymentSpec"
 	PxUpgradeWithBackupAndRestoreLabel                                                      TestCaseLabel = "PxUpgradeWithBackupAndRestore"
 	ParallelBackupScheduleTestSuiteLabel                                                    TestCaseLabel = "ParallelBackupScheduleTestSuite"
+	ParallelBackupScheduleNonPxdTestSuiteLabel                                              TestCaseLabel = "ParallelBackupScheduleNonPxdTestSuite"
 )
 
 // Common Labels
