@@ -48,29 +48,35 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 			Inst().AppList = pipelineAppList
 		}()
 
-		namespace := fmt.Sprintf("%s-%s", parallelScheduledBackupNamespacePrefix, RandomString(10))
-		log.InfoD("Creating namespace %v", namespace)
-		_, err := core.Instance().CreateNamespace(&corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: namespace,
-			},
-		})
-		if err != nil && !k8serrors.IsAlreadyExists(err) {
-			log.FailOnError(err, fmt.Sprintf("Failed to create namespace %s on source cluster", namespace))
-		}
+		namespaceCount := 2
+		for range namespaceCount {
+			namespace := fmt.Sprintf("%s-%s", parallelScheduledBackupNamespacePrefix, RandomString(10))
+			log.InfoD("Creating namespace %v", namespace)
+			_, err := core.Instance().CreateNamespace(&corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: namespace,
+				},
+			})
+			if err != nil && !k8serrors.IsAlreadyExists(err) {
+				log.FailOnError(err, fmt.Sprintf("Failed to create namespace %s on source cluster", namespace))
+			}
 
-		for i := 0; i < len(originalAppList); i++ {
-			taskName := fmt.Sprintf("%s-%s", TaskNamePrefix, RandomString(randomStringLength))
-			appContexts := ScheduleApplicationsOnNamespace(namespace, taskName)
-			for _, ctx := range appContexts {
-				ctx.ReadinessTimeout = AppReadinessTimeout
-				namespace := GetAppNamespace(ctx, taskName)
-				bkpNamespaces = append(bkpNamespaces, namespace)
-				scheduledAppContexts = append(scheduledAppContexts, ctx)
+			for i := 0; i < len(originalAppList); i++ {
+				taskName := fmt.Sprintf("%s-%s", TaskNamePrefix, RandomString(randomStringLength))
+				appContexts := ScheduleApplicationsOnNamespace(namespace, taskName)
+				for _, ctx := range appContexts {
+					ctx.ReadinessTimeout = AppReadinessTimeout
+					namespace := GetAppNamespace(ctx, taskName)
+					bkpNamespaces = append(bkpNamespaces, namespace)
+					scheduledAppContexts = append(scheduledAppContexts, ctx)
+				}
 			}
 		}
 
-		err = ThrottleNetworkSpeed(10)
+		// Validate the application
+		ValidateApplications(scheduledAppContexts)
+
+		err := ThrottleNetworkSpeed(10)
 		if err != nil {
 			log.FailOnError(err, "Unable to update the network bandwidth usage")
 		}
@@ -123,7 +129,7 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 			adminContext, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching admin user ctx")
 			// Create periodic backup schedule objects
-			_, err = CreateScheduleBackupWithoutCheck(scheduleName, SourceClusterName, sourceClusterUID, bkpLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUid, adminContext, true)
+			_, err = CreateScheduleBackupWithoutCheck(scheduleName, SourceClusterName, sourceClusterUID, bkpLocationName, backupLocationUID, []string{bkpNamespaces[0]}, make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUid, adminContext, true)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of scheduled backup with schedule name [%s]", scheduleName))
 
 			// Validate Parallel Backup Schedule
@@ -181,7 +187,7 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 			adminContext, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching admin user ctx")
 			// Create periodic backup schedule objects
-			_, err = CreateScheduleBackupWithoutCheck(scheduleName, SourceClusterName, sourceClusterUID, bkpLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUid, adminContext, false)
+			_, err = CreateScheduleBackupWithoutCheck(scheduleName, SourceClusterName, sourceClusterUID, bkpLocationName, backupLocationUID, []string{bkpNamespaces[0]}, make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUid, adminContext, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of scheduled backup with schedule name [%s]", scheduleName))
 
 			// Validate parallel backups disabled scheduled backups
@@ -261,8 +267,8 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 			log.FailOnError(err, "Fetching admin user ctx")
 			log.InfoD("Adding labels to namespaces")
 			nsLabelsMap = GenerateRandomLabels(20)
-			err = AddLabelsToMultipleNamespaces(nsLabelsMap, bkpNamespaces)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels [%v] to namespaces [%v]", nsLabelsMap, bkpNamespaces))
+			err = AddLabelsToMultipleNamespaces(nsLabelsMap, []string{bkpNamespaces[0]})
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels [%v] to namespaces [%v]", nsLabelsMap, []string{bkpNamespaces[0]}))
 
 			log.InfoD("Generating namespace label string from label map for namespaces")
 			nsLabelString := MapToKeyValueString(nsLabelsMap)
@@ -283,6 +289,9 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 			// Get Admin User Context
 			adminContext, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching admin user ctx")
+			// Suspend the backup schedule so that no new backup is created while we are deleting the schedule
+			err = SuspendBackupSchedule(scheduleName, schedulePolicyName, BackupOrgID, adminContext)
+			log.FailOnError(err, "failed to suspend backup schedule")
 			// Delete the backup schedules
 			scheduleEnumerateRequest := &api.BackupScheduleEnumerateRequest{
 				OrgId: BackupOrgID,
@@ -315,6 +324,11 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 				err = DeleteBackupAndWaitForCompletion(backup.Name, backup.Uid, BackupOrgID, adminContext)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s]", backup))
 			}
+
+			// Remove the Labels on namespaces
+			err = DeleteLabelsFromMultipleNamespaces(nsLabelsMap, []string{bkpNamespaces[0]})
+			log.FailOnError(err, "failed to remove labels[%v] on namespaces[%v]", nsLabelsMap, bkpNamespaces[0])
+
 			CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, adminContext)
 		})
 	})
@@ -330,7 +344,7 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 			adminContext, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching admin user ctx")
 			// Create periodic backup schedule objects
-			_, err = CreateScheduleBackupWithoutCheck(scheduleName, SourceClusterName, sourceClusterUID, bkpLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUid, adminContext, true)
+			_, err = CreateScheduleBackupWithoutCheck(scheduleName, SourceClusterName, sourceClusterUID, bkpLocationName, backupLocationUID, []string{bkpNamespaces[0]}, make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUid, adminContext, true)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of scheduled backup with schedule name [%s]", scheduleName))
 			// Wait for 5 mins for the local snapshot to complete
 			log.FailOnError(err, "failed to get portworx namespace")
@@ -382,6 +396,269 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 		})
 	})
 
+	// Testrail id - T90054308 verify ParallelBackupSchedule for Pxd volumes with NameSpace Label Post Enabling
+	It("VerifyPxdVolumeParallelScheduledBackupsPostEnabling", func() {
+		StartPxBackupTorpedoTest("VerifyPxdVolumeParallelScheduledBackupsPostEnabling", "verify ParallelBackupSchedule for Pxd volumes with NameSpace Label Post Enabling", nil, 304420, Sgajawada, Q4FY25)
+		var (
+			scheduleName = fmt.Sprintf("schedule-bkp-%v", RandomString(5))
+		)
+		Step("create backup schedule for Pxd volumes with NameSpace Label and Verify", func() {
+			err := ThrottleNetworkSpeed(20)
+			if err != nil {
+				log.FailOnError(err, "Unable to update the network bandwidth usage")
+			}
+			// Get Admin User Context
+			adminContext, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching admin user ctx")
+			log.InfoD("Adding labels to namespaces")
+			nsLabelsMap = GenerateRandomLabels(20)
+			err = AddLabelsToMultipleNamespaces(nsLabelsMap, []string{bkpNamespaces[0]})
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels [%v] to namespaces [%v]", nsLabelsMap, []string{bkpNamespaces[0]}))
+
+			log.InfoD("Generating namespace label string from label map for namespaces")
+			nsLabelString := MapToKeyValueString(nsLabelsMap)
+			log.Infof("label string for namespaces %s", nsLabelString)
+			labelSelectors := make(map[string]string)
+
+			// Create periodic backup schedule objects with namespace label
+			_, err = CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName, SourceClusterName, sourceClusterUID, bkpLocationName, backupLocationUID, labelSelectors, BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUid, nsLabelString, adminContext, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule name [%s]", scheduleName))
+			time.Sleep(1 * time.Minute)
+			schedulebackup1name, err := GetFirstScheduleBackupName(adminContext, scheduleName, BackupOrgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Get first schedule backup name of backup schedule[%s]", scheduleName))
+			log.InfoD("first schedule backup for schedule name [%s] is [%s]", scheduleName, schedulebackup1name)
+
+			// Add Same Labels to another namespace
+			err = AddLabelsToMultipleNamespaces(nsLabelsMap, []string{bkpNamespaces[1]})
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels [%v] to namespaces [%v]", nsLabelsMap, []string{bkpNamespaces[1]}))
+
+			schedulebackup2name, err := GetNextScheduleBackupName(scheduleName, 15, adminContext)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Get second schedule backup name of backup schedule[%s]", scheduleName))
+			log.InfoD("Second schedule backup for schedule name [%s] is [%s]", scheduleName, schedulebackup2name)
+
+			schedulebackup1InspectRequest := &api.BackupInspectRequest{
+				OrgId: BackupOrgID,
+				Name:  schedulebackup1name,
+			}
+			schedulebackup1, err := Inst().Backup.InspectBackup(adminContext, schedulebackup1InspectRequest)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Get first schedule backup object of backup schedule[%s]", scheduleName))
+			dash.VerifyFatal(schedulebackup1.Backup.GetStatus().Status, api.BackupInfo_StatusInfo_Success, fmt.Sprintf("Verify first schedule backup is successfully completed before second schedule backup is triggered with backup schedule[%s]", scheduleName))
+
+			// Enable the parallel schedule backup.
+			scheduleUID, err := GetScheduleUID(scheduleName, BackupOrgID, adminContext)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Get UID of backup schedule[%s]", scheduleName))
+
+			bkpScheduleUpdateRequest := &api.BackupScheduleUpdateRequest{
+				CreateMetadata: &api.CreateMetadata{Name: scheduleName, OrgId: BackupOrgID, Uid: scheduleUID},
+				ParallelBackup: true,
+				SchedulePolicyRef: &api.ObjectRef{
+					Name: schedulePolicyName,
+					Uid:  schedulePolicyUid,
+				},
+			}
+			_, err = Inst().Backup.UpdateBackupSchedule(adminContext, bkpScheduleUpdateRequest)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of backup schedule[%s]", scheduleName))
+
+			// schedulebackup3
+			schedulebackup3name, err := GetNextScheduleBackupName(scheduleName, 15, adminContext)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Get third schedule backup name of backup schedule[%s]", scheduleName))
+			log.InfoD("Third schedule backup for schedule name [%s] is [%s]", scheduleName, schedulebackup3name)
+
+			schedulebackup2InspectRequest := &api.BackupInspectRequest{
+				OrgId: BackupOrgID,
+				Name:  schedulebackup2name,
+			}
+			schedulebackup2, err := Inst().Backup.InspectBackup(adminContext, schedulebackup2InspectRequest)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Get second schedule backup object of backup schedule[%s]", scheduleName))
+			if schedulebackup2.Backup.GetStatus().Status == api.BackupInfo_StatusInfo_Success {
+				dash.Fatal(fmt.Sprintf("Verify second schedule backup is not completed before third schedule backup is triggered with backup schedule[%s]", scheduleName))
+			}
+		})
+
+		Step("cleanup- delete the created resources", func() {
+			err := ThrottleNetworkSpeed(10)
+			if err != nil {
+				log.FailOnError(err, "Unable to update the network bandwidth usage")
+			}
+			// Get Admin User Context
+			adminContext, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching admin user ctx")
+			// Suspend the backup schedule so that no new backup is created while we are deleting the schedule
+			err = SuspendBackupSchedule(scheduleName, schedulePolicyName, BackupOrgID, adminContext)
+			log.FailOnError(err, "failed to suspend backup schedule")
+			// Delete the backup schedules
+			scheduleEnumerateRequest := &api.BackupScheduleEnumerateRequest{
+				OrgId: BackupOrgID,
+			}
+			scheduleList, err := Inst().Backup.EnumerateBackupSchedule(adminContext, scheduleEnumerateRequest)
+			log.FailOnError(err, "failed to enumerate backup schedules")
+			log.InfoD("Number of backupschedules to delete [%d]", len(scheduleList.BackupSchedules))
+			for _, schedule := range scheduleList.BackupSchedules {
+				err = DeleteScheduleWithUIDAndWait(schedule.Name, schedule.Uid, SourceClusterName, sourceClusterUID, BackupOrgID, adminContext)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of backup schedule [%s]", schedule))
+			}
+
+			// Delete the schedule policy
+			log.InfoD("Deleting schedule policy [%s]", schedulePolicyName)
+			schedulePolicyDeleteRequest := &api.SchedulePolicyDeleteRequest{
+				Name:  schedulePolicyName,
+				Uid:   schedulePolicyUid,
+				OrgId: BackupOrgID,
+			}
+			_, err = Inst().Backup.DeleteSchedulePolicy(adminContext, schedulePolicyDeleteRequest)
+			log.FailOnError(err, "failed to delete schedule policy [%s]", schedulePolicyName)
+
+			// Delete the backups
+			backupEnumerateRequest := &api.BackupEnumerateRequest{
+				OrgId: BackupOrgID,
+			}
+			backupList, err := Inst().Backup.EnumerateBackup(adminContext, backupEnumerateRequest)
+			log.FailOnError(err, "failed to enumerate backups")
+			for _, backup := range backupList.Backups {
+				err = DeleteBackupAndWaitForCompletion(backup.Name, backup.Uid, BackupOrgID, adminContext)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s]", backup))
+			}
+
+			// Remove the Labels on namespaces
+			err = DeleteLabelsFromMultipleNamespaces(nsLabelsMap, []string{bkpNamespaces[0]})
+			log.FailOnError(err, "failed to remove labels[%v] on namespaces[%v]", nsLabelsMap, bkpNamespaces[0])
+
+			CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, adminContext)
+		})
+	})
+
+	// Testrail id - T90054309 verify ParallelBackupSchedule for Pxd volumes with NameSpace Label Post Disabling
+	It("VerifyPxdVolumeParallelScheduledBackupsPostDisabling", func() {
+		StartPxBackupTorpedoTest("VerifyPxdVolumeParallelScheduledBackupsPostDisabling", "verify ParallelBackupSchedule for Pxd volumes with NameSpace Label Post Disabling", nil, 304421, Sgajawada, Q4FY25)
+		var (
+			scheduleName = fmt.Sprintf("schedule-bkp-%v", RandomString(5))
+		)
+		Step("create backup schedule for Pxd volumes with NameSpace Label and Verify", func() {
+			err := ThrottleNetworkSpeed(20)
+			if err != nil {
+				log.FailOnError(err, "Unable to update the network bandwidth usage")
+			}
+			// Get Admin User Context
+			adminContext, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching admin user ctx")
+			log.InfoD("Adding labels to namespaces")
+			nsLabelsMap = GenerateRandomLabels(20)
+			err = AddLabelsToMultipleNamespaces(nsLabelsMap, []string{bkpNamespaces[0]})
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels [%v] to namespaces [%v]", nsLabelsMap, []string{bkpNamespaces[0]}))
+
+			log.InfoD("Generating namespace label string from label map for namespaces")
+			nsLabelString := MapToKeyValueString(nsLabelsMap)
+			log.Infof("label string for namespaces %s", nsLabelString)
+			labelSelectors := make(map[string]string)
+
+			// Create periodic backup schedule objects with namespace label
+			_, err = CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName, SourceClusterName, sourceClusterUID, bkpLocationName, backupLocationUID, labelSelectors, BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUid, nsLabelString, adminContext, true)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule name [%s]", scheduleName))
+			time.Sleep(1 * time.Minute)
+			schedulebackup1name, err := GetFirstScheduleBackupName(adminContext, scheduleName, BackupOrgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Get first schedule backup name of backup schedule[%s]", scheduleName))
+			log.InfoD("first schedule backup for schedule name [%s] is [%s]", scheduleName, schedulebackup1name)
+
+			// Add Same Labels to another namespace
+			err = AddLabelsToMultipleNamespaces(nsLabelsMap, []string{bkpNamespaces[1]})
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels [%v] to namespaces [%v]", nsLabelsMap, []string{bkpNamespaces[1]}))
+
+			schedulebackup2name, err := GetNextScheduleBackupName(scheduleName, 15, adminContext)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Get second schedule backup name of backup schedule[%s]", scheduleName))
+			log.InfoD("Second schedule backup for schedule name [%s] is [%s]", scheduleName, schedulebackup2name)
+
+			schedulebackup1InspectRequest := &api.BackupInspectRequest{
+				OrgId: BackupOrgID,
+				Name:  schedulebackup1name,
+			}
+			schedulebackup1, err := Inst().Backup.InspectBackup(adminContext, schedulebackup1InspectRequest)
+			log.InfoD("Inspect schedulebackup1 obj %s", schedulebackup1)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Get first schedule backup object of backup schedule[%s]", scheduleName))
+			dash.VerifyFatal(schedulebackup1.Backup.GetStatus().Status, api.BackupInfo_StatusInfo_InProgress, fmt.Sprintf("Verify first schedule backup is in-progress even after second schedule backup is triggered with backup schedule[%s]", scheduleName))
+
+			// Disable the parallel schedule backup.
+			scheduleUID, err := GetScheduleUID(scheduleName, BackupOrgID, adminContext)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Get UID of backup schedule[%s]", scheduleName))
+
+			bkpScheduleUpdateRequest := &api.BackupScheduleUpdateRequest{
+				CreateMetadata: &api.CreateMetadata{Name: scheduleName, OrgId: BackupOrgID, Uid: scheduleUID},
+				ParallelBackup: false,
+				SchedulePolicyRef: &api.ObjectRef{
+					Name: schedulePolicyName,
+					Uid:  schedulePolicyUid,
+				},
+			}
+			_, err = Inst().Backup.UpdateBackupSchedule(adminContext, bkpScheduleUpdateRequest)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of backup schedule[%s]", scheduleName))
+
+			// schedulebackup3
+			schedulebackup3name, err := GetNextScheduleBackupName(scheduleName, 15, adminContext)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Get third schedule backup name of backup schedule[%s]", scheduleName))
+			log.InfoD("Third schedule backup for schedule name [%s] is [%s]", scheduleName, schedulebackup3name)
+
+			schedulebackup2InspectRequest := &api.BackupInspectRequest{
+				OrgId: BackupOrgID,
+				Name:  schedulebackup2name,
+			}
+			schedulebackup2, err := Inst().Backup.InspectBackup(adminContext, schedulebackup2InspectRequest)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Get second schedule backup object of backup schedule[%s]", scheduleName))
+			if schedulebackup2.Backup.GetStatus().Status != api.BackupInfo_StatusInfo_Success {
+				dash.Fatal(fmt.Sprintf("Verify second schedule backup is completed before third schedule backup is triggered with backup schedule[%s]", scheduleName))
+			}
+		})
+
+		Step("cleanup- delete the created resources", func() {
+			err := ThrottleNetworkSpeed(10)
+			if err != nil {
+				log.FailOnError(err, "Unable to update the network bandwidth usage")
+			}
+			// Get Admin User Context
+			adminContext, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching admin user ctx")
+			// Suspend the backup schedule so that no new backup is created while we are deleting the schedule
+			err = SuspendBackupSchedule(scheduleName, schedulePolicyName, BackupOrgID, adminContext)
+			log.FailOnError(err, "failed to suspend backup schedule")
+			// Delete the backup schedules
+			scheduleEnumerateRequest := &api.BackupScheduleEnumerateRequest{
+				OrgId: BackupOrgID,
+			}
+			scheduleList, err := Inst().Backup.EnumerateBackupSchedule(adminContext, scheduleEnumerateRequest)
+			log.FailOnError(err, "failed to enumerate backup schedules")
+			log.InfoD("Number of backupschedules to delete [%d]", len(scheduleList.BackupSchedules))
+			for _, schedule := range scheduleList.BackupSchedules {
+				err = DeleteScheduleWithUIDAndWait(schedule.Name, schedule.Uid, SourceClusterName, sourceClusterUID, BackupOrgID, adminContext)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of backup schedule [%s]", schedule))
+			}
+
+			// Delete the schedule policy
+			log.InfoD("Deleting schedule policy [%s]", schedulePolicyName)
+			schedulePolicyDeleteRequest := &api.SchedulePolicyDeleteRequest{
+				Name:  schedulePolicyName,
+				Uid:   schedulePolicyUid,
+				OrgId: BackupOrgID,
+			}
+			_, err = Inst().Backup.DeleteSchedulePolicy(adminContext, schedulePolicyDeleteRequest)
+			log.FailOnError(err, "failed to delete schedule policy [%s]", schedulePolicyName)
+
+			// Delete the backups
+			backupEnumerateRequest := &api.BackupEnumerateRequest{
+				OrgId: BackupOrgID,
+			}
+			backupList, err := Inst().Backup.EnumerateBackup(adminContext, backupEnumerateRequest)
+			log.FailOnError(err, "failed to enumerate backups")
+			for _, backup := range backupList.Backups {
+				err = DeleteBackupAndWaitForCompletion(backup.Name, backup.Uid, BackupOrgID, adminContext)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s]", backup))
+			}
+
+			// Remove the Labels on namespaces
+			err = DeleteLabelsFromMultipleNamespaces(nsLabelsMap, []string{bkpNamespaces[0]})
+			log.FailOnError(err, "failed to remove labels[%v] on namespaces[%v]", nsLabelsMap, bkpNamespaces[0])
+
+			CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, adminContext)
+		})
+	})
+
 	AfterAll(func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
@@ -414,6 +691,7 @@ var _ = Describe("{ParallelBackupScheduleNonPxdTestSuite}", Ordered, Label(TestC
 		defaultWaitInterval                     time.Duration = 20 * time.Second
 		namespaceNonPxd                         string
 		scheduledAppContextsForNonPxdAppSinleNs []*scheduler.Context
+		nsLabelsMap                             map[string]string
 	)
 	BeforeAll(func() {
 		// Schedule a pxd Volume Application
@@ -691,6 +969,115 @@ var _ = Describe("{ParallelBackupScheduleNonPxdTestSuite}", Ordered, Label(TestC
 				err = DeleteBackupAndWaitForCompletion(backup.Name, backup.Uid, BackupOrgID, adminContext)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s]", backup))
 			}
+			CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, adminContext)
+		})
+	})
+
+	// Testrail id - T90054310 verify ParallelBackupSchedule for Pxd volumes with NameSpace Label Post Adding Non-Pxd volumes
+	It("VerifyPxdVolumeParallelScheduledBackupsPostAddingNonPXDvolumes", func() {
+		StartPxBackupTorpedoTest("VerifyPxdVolumeParallelScheduledBackupsPostAddingNonPXDvolumes", "verify ParallelBackupSchedule for Pxd volumes with NameSpace Label Post Adding Non-Pxd volumes", nil, 304422, Sgajawada, Q4FY25)
+		var (
+			scheduleName = fmt.Sprintf("schedule-bkp-%v", RandomString(5))
+		)
+		Step("create backup schedule with NameSpace Label and Verify", func() {
+			// Get Admin User Context
+			adminContext, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching admin user ctx")
+			log.InfoD("Adding labels to namespaces")
+			nsLabelsMap = GenerateRandomLabels(20)
+			err = AddLabelsToMultipleNamespaces(nsLabelsMap, []string{bkpNamespaces[0]})
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels [%v] to namespaces [%v]", nsLabelsMap, []string{bkpNamespaces[0]}))
+
+			log.InfoD("Generating namespace label string from label map for namespaces")
+			nsLabelString := MapToKeyValueString(nsLabelsMap)
+			log.Infof("label string for namespaces %s", nsLabelString)
+			labelSelectors := make(map[string]string)
+
+			// Create periodic backup schedule objects with namespace label
+			_, err = CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName, SourceClusterName, sourceClusterUID, bkpLocationName, backupLocationUID, labelSelectors, BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUid, nsLabelString, adminContext, true)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule name [%s]", scheduleName))
+			time.Sleep(1 * time.Minute)
+			schedulebackup1name, err := GetFirstScheduleBackupName(adminContext, scheduleName, BackupOrgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Get first schedule backup name of backup schedule[%s]", scheduleName))
+			log.InfoD("first schedule backup for schedule name [%s] is [%s]", scheduleName, schedulebackup1name)
+
+			// Add Same Labels to non-pxd volume namespace
+			err = AddLabelsToMultipleNamespaces(nsLabelsMap, []string{namespaceNonPxd})
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels [%v] to namespaces [%v]", nsLabelsMap, []string{namespaceNonPxd}))
+
+			schedulebackup2name, err := GetNextScheduleBackupName(scheduleName, 15, adminContext)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Get second schedule backup name of backup schedule[%s]", scheduleName))
+			log.InfoD("Second schedule backup for schedule name [%s] is [%s]", scheduleName, schedulebackup2name)
+
+			schedulebackup1InspectRequest := &api.BackupInspectRequest{
+				OrgId: BackupOrgID,
+				Name:  schedulebackup1name,
+			}
+			schedulebackup1, err := Inst().Backup.InspectBackup(adminContext, schedulebackup1InspectRequest)
+			log.InfoD("Inspect schedulebackup1 obj %s", schedulebackup1)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Get first schedule backup object of backup schedule[%s]", scheduleName))
+			dash.VerifyFatal(schedulebackup1.Backup.GetStatus().Status, api.BackupInfo_StatusInfo_InProgress, fmt.Sprintf("Verify first schedule backup is in-progress even after second schedule backup is triggered with backup schedule[%s]", scheduleName))
+
+			// schedulebackup3
+			schedulebackup3name, err := GetNextScheduleBackupName(scheduleName, 15, adminContext)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Get third schedule backup name of backup schedule[%s]", scheduleName))
+			log.InfoD("Third schedule backup for schedule name [%s] is [%s]", scheduleName, schedulebackup3name)
+
+			schedulebackup2InspectRequest := &api.BackupInspectRequest{
+				OrgId: BackupOrgID,
+				Name:  schedulebackup2name,
+			}
+			schedulebackup2, err := Inst().Backup.InspectBackup(adminContext, schedulebackup2InspectRequest)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Get second schedule backup object of backup schedule[%s]", scheduleName))
+			if schedulebackup2.Backup.GetStatus().Status != api.BackupInfo_StatusInfo_Success {
+				dash.Fatal(fmt.Sprintf("Verify second schedule backup is completed before third schedule backup is triggered with backup schedule[%s]", scheduleName))
+			}
+		})
+
+		Step("cleanup- delete the created resources", func() {
+			// Get Admin User Context
+			adminContext, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching admin user ctx")
+			// Suspend the backup schedule so that no new backup is created while we are deleting the schedule
+			err = SuspendBackupSchedule(scheduleName, schedulePolicyName, BackupOrgID, adminContext)
+			log.FailOnError(err, "failed to suspend backup schedule")
+			// Delete the backup schedules
+			scheduleEnumerateRequest := &api.BackupScheduleEnumerateRequest{
+				OrgId: BackupOrgID,
+			}
+			scheduleList, err := Inst().Backup.EnumerateBackupSchedule(adminContext, scheduleEnumerateRequest)
+			log.FailOnError(err, "failed to enumerate backup schedules")
+			log.InfoD("Number of backupschedules to delete [%d]", len(scheduleList.BackupSchedules))
+			for _, schedule := range scheduleList.BackupSchedules {
+				err = DeleteScheduleWithUIDAndWait(schedule.Name, schedule.Uid, SourceClusterName, sourceClusterUID, BackupOrgID, adminContext)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of backup schedule [%s]", schedule))
+			}
+
+			// Delete the schedule policy
+			log.InfoD("Deleting schedule policy [%s]", schedulePolicyName)
+			schedulePolicyDeleteRequest := &api.SchedulePolicyDeleteRequest{
+				Name:  schedulePolicyName,
+				Uid:   schedulePolicyUid,
+				OrgId: BackupOrgID,
+			}
+			_, err = Inst().Backup.DeleteSchedulePolicy(adminContext, schedulePolicyDeleteRequest)
+			log.FailOnError(err, "failed to delete schedule policy [%s]", schedulePolicyName)
+
+			// Delete the backups
+			backupEnumerateRequest := &api.BackupEnumerateRequest{
+				OrgId: BackupOrgID,
+			}
+			backupList, err := Inst().Backup.EnumerateBackup(adminContext, backupEnumerateRequest)
+			log.FailOnError(err, "failed to enumerate backups")
+			for _, backup := range backupList.Backups {
+				err = DeleteBackupAndWaitForCompletion(backup.Name, backup.Uid, BackupOrgID, adminContext)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s]", backup))
+			}
+
+			// Remove the Labels on namespaces
+			err = DeleteLabelsFromMultipleNamespaces(nsLabelsMap, []string{bkpNamespaces[0], namespaceNonPxd})
+			log.FailOnError(err, "failed to remove labels[%v] on namespaces[%v]", nsLabelsMap, bkpNamespaces[0])
+
 			CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, adminContext)
 		})
 	})
