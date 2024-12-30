@@ -1333,6 +1333,10 @@ func CreateBlankDataVolume(namespace string, dvName string, storageClassName str
 
 // HotPlugDataVolumesToKubevirtVM main trigger to hot plug volumes to a running VM
 func HotPlugDataVolumesToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDVs int, size string, volumeMode string) (bool, error) {
+	var(
+		newDiskCount int
+		initialDiskCount int
+		) 
 	log.InfoD("Beginning hot-plug of [%d] DataVolume(s) to each VM (size=%s, volumeMode=%s)",
 		numberOfDVs, size, volumeMode)
 
@@ -1354,7 +1358,7 @@ func HotPlugDataVolumesToKubevirtVM(virtualMachines []*scheduler.Context, number
 				return false, fmt.Errorf("VM [%s/%s] not ready: %v", vm.Namespace, vm.Name, err)
 			}
 
-			initialDiskCount, err := GetNumberOfDrivesInVM(vm)
+			initialDiskCount, err = GetNumberOfDrivesInVM(vm)
 			if err != nil {
 				return false, fmt.Errorf("failed to get initial number of disks in VM [%s]: %v", vm.Name, err)
 			}
@@ -1386,7 +1390,7 @@ func HotPlugDataVolumesToKubevirtVM(virtualMachines []*scheduler.Context, number
 			}
 
 			t := func() (interface{}, bool, error) {
-				newDiskCount, err := GetNumberOfDrivesInVM(vm)
+				newDiskCount, err = GetNumberOfDrivesInVM(vm)
 				if err != nil {
 					return nil, true, err
 				}
@@ -1397,12 +1401,14 @@ func HotPlugDataVolumesToKubevirtVM(virtualMachines []*scheduler.Context, number
 				}
 				return newDiskCount, false, nil
 			}
+			log.Infof("Number of disks after adding Hot Pluggable disk [%v] vs initial disks before adding disk [%v]",newDiskCount,initialDiskCount)
 			_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 20*time.Second)
 			if err != nil {
 				return false, fmt.Errorf("failed to confirm new disks in VM [%s/%s]: %v", vm.Namespace, vm.Name, err)
 			}
 		}
 	}
+	log.Infof("Total number of disks after adding Hot Pluggable disk [%v] and total number of disks before adding Hot pluggable disk [%v] ",newDiskCount,initialDiskCount)
 	return true, nil
 }
 

@@ -15174,6 +15174,6 @@ func updateVMPowerStatus(numberOfThread int, wg *sync.WaitGroup, nodesInThread [
 func deleteStorageClass(scName string, event *EventRecord) {
 	if err := storage.Instance().DeleteStorageClass(scName); err != nil {
 		log.Errorf("Failed to delete storage class: %s. Error: %v", scName, err)
-		UpdateOutcome(event, err)
+		UpdateOutcome(event, err) 
 	}
 }
