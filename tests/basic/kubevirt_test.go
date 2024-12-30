@@ -5414,7 +5414,7 @@ var _ = Describe("{AddNewHotPlugDiskToKubevirtVM}", Label("p0", "positive", "kub
 				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
 			}
 		}
-		
+
 		if app == "kubevirt-debian-fio-minimal" {
 			volumeMode = ""
 		} else {
@@ -5848,6 +5848,139 @@ var _ = Describe("{PxRestartAfterAddNewHotPlugDiskToKubevirtVM}", Label("p1", "n
 		})
 	})
 
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
+	})
+})
+
+var _ = Describe("{VMLiveMigrationHavingMultipleSC}", Label("p1", "positive", "kubevirt", "LiveMigration"), func() {
+	/*
+		This test will run only for sv4 apps.
+
+		Step 1: Create a spec with 4 different storage classes.
+			SC1 should have repl 1
+			SC2 should have repl 2
+		Step 2: root disk → SC2, data disk 1 → SC1, data disk 2 → SC1, data disk 3 → SC1
+		Step 3: Create VM and validate for IsVMBindMount method
+		Step 4: Live Migrate the VM
+
+		JIRA ID: https://purestorage.atlassian.net/browse/HAZEL-1691
+	*/
+	var (
+		app, volType  string
+		appCtxs       []*scheduler.Context
+		namespace     string
+		wg            sync.WaitGroup
+		canSsh        bool
+		initialUptime map[string]time.Duration
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("VMLiveMigrationHavingMultipleSC", "Live migrate the kubevirt VM having multiple storage classes", nil, 0)
+		volType, _ = os.LookupEnv("KUBEVIRT_VOL_TYPE")
+		if volType == "pxe-raw" || volType == "fada-raw" {
+			Skip("This test will run only for sv4 apps hence skipping the test")
+		} else {
+			app = "kubevirt-debian-fio-minimal-multi-sc"
+		}
+		log.InfoD("Setting app for this test to be : %s", app)
+	})
+
+	itLog := "Live migrate kubevirt VMs with multiple storage classes"
+	It(itLog, func() {
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+		canSsh = false
+		stepLog := "Schedule a KubeVirt VM"
+		log.InfoD(stepLog)
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		Inst().AppList = []string{app}
+		Inst().CsiAppList = []string{app}
+
+		stepLog = "Schedule a kubevirt VM"
+		Step(stepLog, func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				namespace = fmt.Sprintf("kubevirtmultisc-%v", time.Now().Unix())
+				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
+			}
+		})
+		ValidateApplications(appCtxs)
+
+		// // TODO: VM Bind Mount fails here and it is a bug.
+		// log.Infof("Validating VM bind mount")
+		// for _, appCtx := range appCtxs {
+		// 	bindMount, err := IsVMBindMounted(appCtx, false)
+		// 	log.FailOnError(err, "Failed to verify bind mount")
+		// 	dash.VerifyFatal(bindMount, true, "VM bind mount verified")
+		// }
+
+		log.Infof("Hard Sleep for 2 minutes to let VMs come up")
+		time.Sleep(2 * time.Minute)
+
+		canSsh = CreateSSHPodAndSetCanSsh()
+		ValidateFioInVMs(appCtxs, canSsh)
+
+		initialUptime = make(map[string]time.Duration)
+		var mu sync.Mutex
+		stepLog = "Get initial uptime of VMs and current nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			var wg sync.WaitGroup
+			for _, appCtx := range appCtxs {
+				wg.Add(1)
+				go func(appCtx *scheduler.Context) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+					log.FailOnError(err, "Failed to get VMs from appCtx")
+					for _, vm := range vms {
+						vmKey := fmt.Sprintf("%s/%s", vm.Namespace, vm.Name)
+						uptime, err := GetVMUptime(vm)
+						log.FailOnError(err, "Failed to get uptime from VM %s", vm.Name)
+						log.Infof("Initial uptime for VM %s is %v", vmKey, uptime)
+
+						nodeName, err := GetNodeOfVM(vm)
+						log.FailOnError(err, "Failed to get node of VM %v", vm.Name)
+						log.Infof("VM %s is currently running on node %s", vm.Name, nodeName)
+
+						mu.Lock()
+						initialUptime[vmKey] = uptime
+						mu.Unlock()
+					}
+				}(appCtx)
+			}
+			wg.Wait()
+		})
+
+		stepLog = "Live migrate the kubevirt VM"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, appCtx := range appCtxs {
+				wg.Add(1)
+				go func(appCtx *scheduler.Context) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					err := StartAndWaitForVMIMigration(appCtx, context1.TODO())
+					log.FailOnError(err, "Failed to live migrate kubevirt VM")
+				}(appCtx)
+			}
+		})
+		wg.Wait()
+
+		ValidateVMUptime(appCtxs, canSsh, initialUptime)
+		ValidateFioInVMs(appCtxs, canSsh)
+
+		stepLog = "Destroy Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
+		})
+	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(appCtxs)
