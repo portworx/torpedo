@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -869,4 +870,43 @@ func IsCloud(stc *opcorev1.StorageCluster) (bool, string) {
 		return true, "gke"
 	}
 	return false, ""
+}
+
+func PatchStorageClusterStorkImage(stcName, stcNs, configPath, image string) error {
+	storkVersionBeforeUpgrade, err := GetStorkVersion()
+	if err != nil {
+		return err
+	}
+	log.InfoD("Stork version before upgrade: %s", storkVersionBeforeUpgrade)
+	patch := fmt.Sprintf(`[{"op": "replace", "path": "/spec/stork/image", "value": "%s"}]`, image)
+	cmd := fmt.Sprintf(`kubectl patch storagecluster %v -n %v --type='json' -p='%s'`, stcName, stcNs, patch)
+	if configPath != "" {
+		cmd = fmt.Sprintf(`kubectl --kubeconfig %v patch storagecluster %v -n %v --type='json' -p='%s'`, configPath, stcName, stcNs, patch)
+	}
+	log.Infof("Running command: %v", cmd)
+	_, err = exec.Command("sh", "-c", cmd).CombinedOutput()
+	if err != nil {
+		// Try to add the field if it doesn't exist
+		log.Warnf("Replace operation failed. Attempting to add the field instead.")
+		patch = fmt.Sprintf(`[{"op": "add", "path": "/spec/stork/image", "value": "%s"}]`, image)
+		cmd = fmt.Sprintf(`kubectl patch storagecluster %v -n %v --type='json' -p='%s'`, stcName, stcNs, patch)
+		if configPath != "" {
+			cmd = fmt.Sprintf(`kubectl --kubeconfig %v patch storagecluster %v -n %v --type='json' -p='%s'`, configPath, stcName, stcNs, patch)
+		}
+		log.Infof("Running command: %v", cmd)
+		output, err := exec.Command("sh", "-c", cmd).CombinedOutput()
+		if err != nil {
+			log.Errorf("Error running command: %v, output: %s, error: %v", cmd, string(output), err)
+			return err
+		}
+		log.Infof("Command succeeded with output: %s", string(output))
+	}
+	// Wait for the stork pods to be running
+	time.Sleep(2 * time.Minute)
+	storkVersionAfterUpgrade, err := GetStorkVersion()
+	if err != nil {
+		return err
+	}
+	log.InfoD("Upgraded Stork from %s to %s version", storkVersionBeforeUpgrade, storkVersionAfterUpgrade)
+	return nil
 }

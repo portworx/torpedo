@@ -1135,6 +1135,154 @@ var _ = Describe("{UpgradeVolumeDriverDuringAsyncDrMigration}", Label("p2", "pos
 	})
 })
 
+var _ = Describe("{UpgradeStorkDuringAsyncDrMigration}", Label("p2", "positive", "AsyncDR", "Upgrade"), func() {
+	BeforeEach(func() {
+		if !kubeConfigWritten {
+			// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+			WriteKubeconfigToFiles()
+			kubeConfigWritten = true
+		}
+		wantAllAfterSuiteActions = false
+	})
+
+	JustBeforeEach(func() {
+		upgradeHopsList := make(map[string]string)
+		upgradeHopsList["upgradeHops"] = Inst().UpgradeStorkVersionList
+		upgradeHopsList["UpgradeStorkDuringAsyncDrMigration"] = "true"
+		StartTorpedoTest("UpgradeStorkDuringAsyncDrMigration", "Validating asyncdr migration with stork upgrade", upgradeHopsList, 0)
+		log.InfoD("Stork upgrade hops list [%s]", upgradeHopsList)
+	})
+	var contexts []*scheduler.Context
+
+	It("upgrade stork during migration and ensure everything is running fine", func() {
+		log.InfoD("upgrade stork during migration and ensure everything is running fine")
+
+		taskNamePrefix := "asyncdr-upgradestork"
+		defaultNs := "kube-system"
+		migrationNamespaces, contexts := initialSetupApps(taskNamePrefix, false, false)
+		migNamespaces := strings.Join(migrationNamespaces, ",")
+		kubeConfigPath := map[int]string{}
+		for _, cluster := range []int{asyncdr.FirstCluster, asyncdr.SecondCluster} {
+			kubeConfigPath[cluster], err = GetCustomClusterConfigPath(cluster)
+			log.FailOnError(err, "Getting error while fetching path for %v cluster, error is %v", cluster, err)
+		}
+
+		var migrationSchedName string
+		var schdPol *storkapi.SchedulePolicy
+		cpName := defaultClusterPairName + time.Now().Format("15h03m05s")
+		scpolName := "async-policy"
+		migrationInterval := 5
+		Step("Create Schedule Policy", func() {
+			schdPol, err = asyncdr.CreateSchedulePolicy(scpolName, migrationInterval)
+			log.FailOnError(err, "Failed to create schedule policy")
+		})
+
+		extraArgs := map[string]string{
+			"namespaces":           migNamespaces,
+			"kubeconfig":           kubeConfigPath[asyncdr.FirstCluster],
+			"schedule-policy-name": schdPol.Name,
+		}
+
+		Step("create clusterpair and start migration", func() {
+			log.InfoD("Creating clusterpair between first and second cluster")
+			err = ScheduleBidirectionalClusterPair(cpName, defaultNs, "", storkapi.BackupLocationType(defaultBackupLocation), defaultSecret, "async-dr", asyncdr.FirstCluster, asyncdr.SecondCluster, nil)
+			log.FailOnError(err, "Failed creating bidirectional cluster pair")
+
+			log.InfoD("Start migration schedule and perform failover")
+			migrationSchedName = migrationSchedKey + time.Now().Format("15h03m05s")
+			createMigSchdAndValidateMigration(migrationSchedName, cpName, defaultNs, kubeConfigPath[asyncdr.FirstCluster], extraArgs)
+		})
+
+		Step("start the upgrade of stork", func() {
+			log.InfoD("start the upgrade of stork")
+
+			if len(Inst().UpgradeStorkVersionList) == 0 {
+				log.Fatalf("Unable to perform stork upgrade hops, none were given")
+			}
+			stc, err := Inst().V.GetDriver()
+			log.FailOnError(err, "Failed to get storage cluster")
+			// Perform upgrade hops of stork based on a given list of stork versions passed
+			for _, upgradeHop := range strings.Split(Inst().UpgradeStorkVersionList, ",") {
+				for _, cluster := range []int{asyncdr.FirstCluster, asyncdr.SecondCluster} {
+					err = SetCustomKubeConfig(cluster)
+					log.FailOnError(err, "Switching context to %v cluster failed", cluster)
+					err = Inst().S.RefreshNodeRegistry()
+					log.FailOnError(err, "Node registry refresh failed")
+					err = Inst().V.RefreshDriverEndpoints()
+					log.FailOnError(err, "Refresh Driver end points failed")
+					err = asyncdr.PatchStorageClusterStorkImage(stc.Name, stc.Namespace, kubeConfigPath[cluster], upgradeHop)
+					log.FailOnError(err, "Failed to upgrade stork on [%v] cluster with [%v] image", cluster, upgradeHop)
+					if cluster == asyncdr.SecondCluster {
+						schdPol, err = asyncdr.CreateSchedulePolicy(scpolName, migrationInterval)
+						log.FailOnError(err, "Failed to create schedule policy")
+					}
+				}
+			}
+		})
+
+		Step("Perform failover and failback", func() {
+			time.Sleep(2 * time.Duration(migrationInterval) * time.Minute)
+			extraArgsFailoverFailback := map[string]string{
+				"kubeconfig": kubeConfigPath[asyncdr.SecondCluster],
+			}
+			failoverParam := failoverFailbackParam{
+				action:                    "failover",
+				failoverOrFailbackNs:      defaultNs,
+				migrationSchedName:        migrationSchedName,
+				configPath:                kubeConfigPath[asyncdr.SecondCluster],
+				single:                    false,
+				skipSourceOp:              false,
+				includeNs:                 false,
+				excludeNs:                 false,
+				extraArgsFailoverFailback: extraArgsFailoverFailback,
+				contexts:                  contexts,
+			}
+
+			performFailoverFailback(failoverParam)
+
+			err = hardSetConfig(kubeConfigPath[asyncdr.SecondCluster])
+			log.FailOnError(err, "Error setting destination config: %v", err)
+			extraArgs["kubeconfig"] = kubeConfigPath[asyncdr.SecondCluster]
+			newMigSched := migrationSchedName + "-rev"
+			createMigSchdAndValidateMigration(newMigSched, cpName, defaultNs, kubeConfigPath[asyncdr.SecondCluster], extraArgs)
+			failback := failoverFailbackParam{
+				action:                    "failback",
+				failoverOrFailbackNs:      defaultNs,
+				migrationSchedName:        newMigSched,
+				configPath:                kubeConfigPath[asyncdr.SecondCluster],
+				single:                    false,
+				skipSourceOp:              false,
+				includeNs:                 false,
+				excludeNs:                 false,
+				extraArgsFailoverFailback: extraArgsFailoverFailback,
+				contexts:                  contexts,
+			}
+			performFailoverFailback(failback)
+		})
+
+		err = SetCustomKubeConfig(asyncdr.FirstCluster)
+		log.FailOnError(err, "Switching context to source cluster failed")
+		err = Inst().S.RefreshNodeRegistry()
+		log.FailOnError(err, "Node registry refresh failed")
+		err = Inst().V.RefreshDriverEndpoints()
+		log.FailOnError(err, "Refresh Driver end points failed")
+
+		Step("Destroy apps", func() {
+			log.InfoD("Destroy apps")
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
 var _ = Describe("{AutoVolumeSnapshot}", Label("p1", "positive", "VolumeSnapshot"), func() {
 	testrailID = 302510
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/302510

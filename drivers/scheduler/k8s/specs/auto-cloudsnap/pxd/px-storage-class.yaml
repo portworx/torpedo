@@ -5,9 +5,6 @@ metadata:
   name: nginx-sc-auth-cloud
 provisioner: kubernetes.io/portworx-volume
 parameters:
-  openstorage.io/auth-secret-name: px-user-token
-  # This will be fixed to have non hard code value for namespace - PTX-27677
-  openstorage.io/auth-secret-namespace: kube-system
   repl: "2"
   snapshotschedule.stork.libopenstorage.org/test-schedule: |
     schedulePolicyName: auto-schedule-policy

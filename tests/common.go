@@ -287,6 +287,7 @@ const (
 	storageUpgradeEndpointURLCliFlag     = "storage-upgrade-endpoint-url"
 	storageUpgradeEndpointVersionCliFlag = "storage-upgrade-endpoint-version"
 	upgradeStorageDriverEndpointListFlag = "upgrade-storage-driver-endpoint-list"
+	upgradeStorkVersionListFlag          = "upgrade-stork-version-list"
 	provisionerFlag                      = "provisioner"
 	storageNodesPerAZFlag                = "max-storage-nodes-per-az"
 	configMapFlag                        = "config-map"
@@ -7858,6 +7859,7 @@ type Torpedo struct {
 	StorageDriverUpgradeEndpointURL     string
 	StorageDriverUpgradeEndpointVersion string
 	UpgradeStorageDriverEndpointList    string
+	UpgradeStorkVersionList             string
 	EnableStorkUpgrade                  bool
 	MinRunTimeMins                      int
 	ChaosLevel                          int
@@ -7914,6 +7916,7 @@ func ParseFlags() {
 	var volUpgradeEndpointURL string
 	var volUpgradeEndpointVersion string
 	var upgradeStorageDriverEndpointList string
+	var upgradeStorkVersionList string
 	var minRunTimeMins int
 	var chaosLevel int
 	var storageNodesPerAZ int
@@ -7978,6 +7981,7 @@ func ParseFlags() {
 	flag.StringVar(&volUpgradeEndpointVersion, storageUpgradeEndpointVersionCliFlag, defaultStorageUpgradeEndpointVersion,
 		"Endpoint version which will be used for checking version after upgrade storage driver")
 	flag.StringVar(&upgradeStorageDriverEndpointList, upgradeStorageDriverEndpointListFlag, "", "Comma separated list of Spec Generator URLs for performing upgrade hops for StorageCluster")
+	flag.StringVar(&upgradeStorkVersionList, upgradeStorkVersionListFlag, "", "Comma separated list of Spec Generator URLs for performing upgrade hops for Stork")
 	flag.BoolVar(&enableStorkUpgrade, enableStorkUpgradeFlag, false, "Enable stork upgrade during storage driver upgrade")
 	flag.StringVar(&appListCSV, appListCliFlag, "", "Comma-separated list of apps to run as part of test. The names should match directories in the spec dir.")
 	flag.StringVar(&secureAppsCSV, secureAppsCliFlag, "", "Comma-separated list of apps to deploy with secure volumes using storage class. The names should match directories in the spec dir.")
@@ -8234,6 +8238,7 @@ func ParseFlags() {
 				StorageDriverUpgradeEndpointURL:     volUpgradeEndpointURL,
 				StorageDriverUpgradeEndpointVersion: volUpgradeEndpointVersion,
 				UpgradeStorageDriverEndpointList:    upgradeStorageDriverEndpointList,
+				UpgradeStorkVersionList:             upgradeStorkVersionList,
 				EnableStorkUpgrade:                  enableStorkUpgrade,
 				AppList:                             appList,
 				SecureAppList:                       secureAppList,

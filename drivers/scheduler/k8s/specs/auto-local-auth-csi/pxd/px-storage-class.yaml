@@ -2,17 +2,21 @@
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
-  name: nginx-sc-cloud
+  name: nginx-sc-auth-csi
   annotations:
     openstorage.io/auth-secret-name: px-user-token
     # This will be fixed to have non hard code value for namespace - PTX-27677
     openstorage.io/auth-secret-namespace: kube-system
 provisioner: kubernetes.io/portworx-volume
 parameters:
+  csi.storage.k8s.io/node-publish-secret-name: px-user-token
+  csi.storage.k8s.io/node-publish-secret-namespace: portworx
+  csi.storage.k8s.io/provisioner-secret-name: px-user-token
+  csi.storage.k8s.io/provisioner-secret-namespace: portworx
   repl: "2"
   snapshotschedule.stork.libopenstorage.org/test-schedule: |
     schedulePolicyName: auto-schedule-policy
     reclaimPolicy: Delete
     annotations:
-      portworx/snapshot-type: cloud
+      portworx/snapshot-type: local
 allowVolumeExpansion: true

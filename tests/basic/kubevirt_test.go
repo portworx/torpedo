@@ -3,6 +3,12 @@ package tests
 import (
 	context1 "context"
 	"fmt"
+	"net/url"
+	"os"
+	"strings"
+	"sync"
+	"time"
+
 	kubevirtdy "github.com/portworx/sched-ops/k8s/kubevirt-dynamic"
 	"github.com/portworx/sched-ops/task"
 	v1 "k8s.io/api/core/v1"
@@ -12,11 +18,6 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	kubevirtv1 "kubevirt.io/api/core/v1"
-	"net/url"
-	"os"
-	"strings"
-	"sync"
-	"time"
 
 	"github.com/portworx/sched-ops/k8s/core"
 
@@ -27,6 +28,7 @@ import (
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/scheduler"
 	"github.com/pure-px/torpedo/drivers/volume"
+	"github.com/pure-px/torpedo/pkg/asyncdr"
 	"github.com/pure-px/torpedo/pkg/aututils"
 	"github.com/pure-px/torpedo/pkg/log"
 	"github.com/pure-px/torpedo/pkg/units"
@@ -2295,6 +2297,156 @@ var _ = Describe("{SingleVMLiveMigration}", Label("p0", "positive", "kubevirt", 
 				log.FailOnError(fmt.Errorf("VM did not migrate to a different node"), "VM is still on node %s after migration", vmNodeName)
 			} else {
 				log.Infof("VM successfully migrated from node %s to node %s", vmNodeName, newNodeName)
+			}
+		})
+
+		ValidateVMUptime(appCtxs, canSsh, initialUptime)
+
+		ValidateFioInVMs(appCtxs, canSsh)
+
+		stepLog = "Destroy Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
+	})
+})
+
+var _ = Describe("{SingleVMLiveMigrationStorkUpgrade}", Label("p0", "positive", "kubevirt", "MiniScale", "LiveMigration"), func() {
+	var app, volType string
+	var present bool
+	JustBeforeEach(func() {
+		StartTorpedoTest("SingleVMLiveMigrationStorkUpgrade", "Live migrate single kubevirt VM after stork upgrade", nil, 0)
+		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
+		if !present {
+			app = "kubevirt-debian-fio-minimal"
+		}
+		if volType == "pxe-raw" {
+			app = "kubevirt-raw-vol"
+		} else if volType == "fada-raw" {
+			app = "kubevirt-fada-raw-fio"
+		} else {
+			app = "kubevirt-debian-fio-minimal"
+		}
+		log.InfoD("Setting app for this test to be : %s", app)
+	})
+	var appCtxs []*scheduler.Context
+	var namespace string
+	var wg sync.WaitGroup
+	var canSsh bool
+	var initialUptime map[string]time.Duration
+	var vm kubevirtv1.VirtualMachine
+	var vmNodeName string
+
+	itLog := "Live migrate single kubevirt VM"
+	It(itLog, func() {
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+		canSsh = false
+		stepLog := "Schedule a KubeVirt VM"
+		log.InfoD(stepLog)
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		Inst().AppList = []string{app}
+		Inst().CsiAppList = []string{app}
+
+		stepLog = "Schedule a kubevirt VM"
+		Step(stepLog, func() {
+			namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
+			appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
+		})
+		ValidateApplications(appCtxs)
+		if !present {
+			for _, appCtx := range appCtxs {
+				bindMount, err := IsVMBindMounted(appCtx, false)
+				log.FailOnError(err, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+			}
+		}
+		log.Infof("Hard Sleep for 2 minutes to let VMs come up")
+		time.Sleep(2 * time.Minute)
+
+		canSsh = CreateSSHPodAndSetCanSsh()
+		ValidateFioInVMs(appCtxs, canSsh)
+
+		initialUptime = make(map[string]time.Duration)
+		stepLog = "Get initial uptime of VMs and current node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			var wg sync.WaitGroup
+			for _, appCtx := range appCtxs {
+				wg.Add(1)
+				go func(appCtx *scheduler.Context) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+					log.FailOnError(err, "Failed to get VMs from appCtx")
+					for _, vm := range vms {
+						uptime, err := GetVMUptime(vm)
+						log.FailOnError(err, "Failed to get uptime from VM %s", vm.Name)
+						vmKey := fmt.Sprintf("%s/%s", vm.Namespace, vm.Name)
+						initialUptime[vmKey] = uptime
+						log.Infof("Initial uptime for VM %s is %v", vmKey, uptime)
+
+						vmNodeName, err = GetNodeOfVM(vm)
+						log.FailOnError(err, "Failed to get node of VM %v", vm.Name)
+						log.Infof("VM %s is currently running on node %s", vm.Name, vmNodeName)
+					}
+				}(appCtx)
+			}
+			wg.Wait()
+		})
+
+		vms, err := GetAllVMsFromScheduledContexts(appCtxs)
+		log.FailOnError(err, "Failed to get VMs from context")
+
+		if len(vms) == 0 {
+			log.FailOnError(fmt.Errorf("No VMs found"), "No VMs found in context")
+		} else {
+			vm = vms[0]
+		}
+
+		stepLog = "UpgradeStork and live migrate the kubevirt VM"
+
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			stc, err := Inst().V.GetDriver()
+			log.FailOnError(err, "Failed to get storage cluster")
+			for _, upgradeHop := range strings.Split(Inst().UpgradeStorkVersionList, ",") {
+				err = asyncdr.PatchStorageClusterStorkImage(stc.Name, stc.Namespace, "", upgradeHop)
+				stepLog = "Live migrate the kubevirt VM"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					for _, appCtx := range appCtxs {
+						wg.Add(1)
+						go func(appCtx *scheduler.Context) {
+							defer GinkgoRecover()
+							defer wg.Done()
+							err := StartAndWaitForVMIMigration(appCtx, context1.TODO())
+							log.FailOnError(err, "Failed to live migrate kubevirt VM")
+						}(appCtx)
+					}
+				})
+				wg.Wait()
+				stepLog = "Get VM node after migration"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					newNodeName, err := GetNodeOfVM(vm)
+					log.FailOnError(err, "Failed to get node of VM %v after migration", vm.Name)
+					log.Infof("VM %s is now running on node %s after migration", vm.Name, newNodeName)
+					if newNodeName == vmNodeName {
+						log.FailOnError(fmt.Errorf("VM did not migrate to a different node"), "VM is still on node %s after migration", vmNodeName)
+					} else {
+						log.Infof("VM successfully migrated from node %s to node %s", vmNodeName, newNodeName)
+					}
+				})
 			}
 		})
 

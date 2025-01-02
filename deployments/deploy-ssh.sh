@@ -100,6 +100,10 @@ if [ -z "${UPGRADE_STORAGE_DRIVER_ENDPOINT_LIST}" ]; then
     UPGRADE_STORAGE_DRIVER_ENDPOINT_LIST=""
 fi
 
+if [ -z "${UPGRADE_STORK_VERSION_LIST}" ]; then
+    UPGRADE_STORK_VERSION_LIST=""
+fi
+
 if [ -z "${SKIP_PX_OPERATOR_UPGRADE}" ]; then
     SKIP_PX_OPERATOR_UPGRADE=false
 fi
@@ -550,6 +554,7 @@ spec:
             "--storage-upgrade-endpoint-url=$UPGRADE_ENDPOINT_URL",
             "--storage-upgrade-endpoint-version=$UPGRADE_ENDPOINT_VERSION",
             "--upgrade-storage-driver-endpoint-list=$UPGRADE_STORAGE_DRIVER_ENDPOINT_LIST",
+            "--upgrade-stork-version-list=$UPGRADE_STORK_VERSION_LIST",
             "--enable-stork-upgrade=$ENABLE_STORK_UPGRADE",
             "--secret-type=$SECRET_TYPE",
             "--pure-volumes=$IS_PURE_VOLUMES",
