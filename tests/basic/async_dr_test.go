@@ -2638,3 +2638,240 @@ var _ = Describe("{StorkPodsDownOnSourceDuringMigrationInProgress}", Label("stag
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
+
+func DeleteStorkPodsDuringMigration(migrationSchedName, namespace string) error {
+	log.Infof("Checking migration schedule [%s] for in-progress migrations.", migrationSchedName)
+
+	migSchedule, err := storkops.Instance().GetMigrationSchedule(migrationSchedName, namespace)
+	if err != nil {
+		return fmt.Errorf("failed to get migration schedule [%s]: %v", migrationSchedName, err)
+	}
+	migrations := migSchedule.Status.Items["Interval"]
+	for _, mig := range migrations {
+		log.Infof("Validating migration status for: %v", mig.Name)
+
+		migration, err := storkops.Instance().GetMigration(mig.Name, namespace)
+		if err != nil {
+			return fmt.Errorf("failed to get migration [%s]: %v", mig.Name, err)
+		}
+		if migration.Status.Status == storkapi.MigrationStatusInProgress {
+			log.Infof("Migration [%s] is in progress. Deleting Stork pods.", mig.Name)
+			storkNamespace, err := k8sutils.GetStorkPodNamespace()
+			if err != nil {
+				return fmt.Errorf("failed to get Stork pod namespace: %v", err)
+			}
+			err = DeletePodWithWithoutLabelInNamespace(storkNamespace, StorkLabel, false)
+			if err != nil {
+				return fmt.Errorf("failed to delete Stork pods in namespace [%s]: %v", storkNamespace, err)
+			}
+			err = ValidatePodByLabel(StorkLabel, storkNamespace, 5*time.Minute, 30*time.Second)
+			if err != nil {
+				return fmt.Errorf("failed to validate Stork pods in namespace [%s]: %v", storkNamespace, err)
+			}
+			log.Infof("Successfully deleted and validated Stork pods in namespace [%s].", storkNamespace)
+			return nil
+		}
+	}
+	return fmt.Errorf("no migrations in progress for schedule [%s]. Retrying...", migrationSchedName)
+}
+
+var _ = Describe("{StorkPodsDownOnDestinationDuringMigrationInProgress}", Label("staging", "p1", "negative", "AsyncDR"), func() {
+	/*
+	   https://purestorage.atlassian.net/browse/HAZEL-1049
+	   1. Deploy application on source cluster
+	   2. Create cluster pair between source and destination cluster
+	   3. Create migration schedule and start migration on all namespace
+	   4. Switch to destination cluster
+	   5. while migration in progress delete all stork pods on destination cluster
+	   6. Validate migration
+	*/
+	var (
+		testrailID          = 0
+		runID               int
+		contexts            []*scheduler.Context
+		taskNamePrefix      = "dr-killstork"
+		defaultNs           = "kube-system"
+		migrationNamespaces []string
+		kubeConfigPath      = map[int]string{}
+		migrationSchedName  string
+		schedulePolicy      *storkapi.SchedulePolicy
+		clusterPairName     string
+		migNamespaces       string
+		schedulePolicyName  = "async-policy"
+		migrationInterval   = 5
+	)
+	BeforeEach(func() {
+		if !kubeConfigWritten {
+			WriteKubeconfigToFiles()
+			kubeConfigWritten = true
+		}
+	})
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("StorkPodsDownOnDestinationDuringMigrationInProgress", "Migration of application to destination cluster with stork pods down on source cluster", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	stepLog := "Kill stork pods during migration on destination cluster and ensure migration completed successfully"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+
+		cleanup := func() {
+			log.Infof("Perform cleanup task")
+			opts := make(map[string]bool)
+			opts[SkipClusterScopedObjects] = true
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			opts[scheduler.OptionsWaitForDestroy] = true
+			if len(contexts) > 0 {
+				for _, ctx := range contexts {
+					ctx.SkipVolumeValidation = true
+					TearDownContext(ctx, opts)
+					ctxNamespace := GetAppNamespace(ctx, "")
+					err = Inst().S.DeletePvcsFromNamespace(ctx, ctxNamespace)
+					log.FailOnError(err, "Failed to delete the pvcs from namespace  %v", ctxNamespace)
+				}
+			}
+			log.Infof("Remove migrations from namespace [%v]", defaultNs)
+			migrationSchedules, err := storkops.Instance().ListMigrationSchedules(defaultNs)
+			log.FailOnError(err, "Failed to get migration schedule list from the namespace %v", defaultNs)
+			for _, migrSched := range migrationSchedules.Items {
+				err := asyncdr.DeleteAndWaitForMigrationSchedDeletion(migrSched.Name, defaultNs)
+				log.FailOnError(err, "Failed to deleting migration schedule on destination cluster")
+			}
+			volList, err := Inst().V.ListAllVolumes()
+			log.FailOnError(err, "Failed to get volume list")
+			if len(volList) > 0 {
+				for _, volName := range volList {
+					err = Inst().V.DeleteVolume(volName)
+					log.FailOnError(err, "Failed to delete volume %v list", volName)
+				}
+			}
+		}
+		defer cleanup()
+
+		stepLog = "Scheduling applications and creating a schedule policy for migration"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			migrationNamespaces, contexts = initialSetupApps(taskNamePrefix, false, false)
+			migNamespaces = strings.Join(migrationNamespaces, ",")
+
+			for _, cluster := range []int{asyncdr.FirstCluster, asyncdr.SecondCluster} {
+				kubeConfigPath[cluster], err = GetCustomClusterConfigPath(cluster)
+				log.FailOnError(err, "Getting error while fetching path for %v cluster", cluster)
+			}
+
+			schedulePolicy, err = asyncdr.CreateSchedulePolicy(schedulePolicyName, migrationInterval)
+			log.FailOnError(err, "Failed to create schedule policy")
+		})
+
+		extraArgs := map[string]string{
+			"namespaces":           migNamespaces,
+			"kubeconfig":           kubeConfigPath[asyncdr.FirstCluster],
+			"schedule-policy-name": schedulePolicy.Name,
+		}
+
+		stepLog = "Creating cluster pair and starting migration schedule"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			clusterPairName = defaultClusterPairName + time.Now().Format("15h03m05s")
+			err = ScheduleBidirectionalClusterPair(clusterPairName, defaultNs, "", storkapi.BackupLocationType(defaultBackupLocation), defaultSecret, "async-dr", asyncdr.FirstCluster, asyncdr.SecondCluster, nil)
+			log.FailOnError(err, "Failed creating bidirectional cluster pair")
+
+			log.InfoD("Start migration schedule")
+			migrationSchedName = migrationSchedKey + time.Now().Format("15h03m05s")
+			createMigSchdAndValidateMigration(migrationSchedName, clusterPairName, defaultNs, kubeConfigPath[asyncdr.FirstCluster], extraArgs)
+		})
+
+		stepLog = "Bring down stork Pods on destination cluster while migration is in progress"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			deleteStorkPods := func() (interface{}, bool, error) {
+				migSchedule, err := storkops.Instance().GetMigrationSchedule(migrationSchedName, defaultNs)
+				if err != nil {
+					return nil, true, err
+				}
+				migrations := migSchedule.Status.Items["Interval"]
+				for _, mig := range migrations {
+					log.Infof("Validating migration status for: %v", mig.Name)
+					migration, err := storkops.Instance().GetMigration(mig.Name, defaultNs)
+					if err != nil {
+						return nil, true, err
+					}
+					if migration.Status.Status == storkapi.MigrationStatusInProgress {
+						log.Infof("Migration [%s] is [%v]. Deleting Stork pods.", mig.Name, migration.Status.Status)
+						err := SwitchCluster(kubeConfigPath[asyncdr.SecondCluster], asyncdr.SecondCluster)
+						if err != nil {
+							return nil, true, err
+						}
+						storkNamespace, err := k8sutils.GetStorkPodNamespace()
+						if err != nil {
+							return nil, true, err
+						}
+						err = DeletePodWithWithoutLabelInNamespace(storkNamespace, StorkLabel, false)
+						if err != nil {
+							return nil, true, err
+						}
+						err = ValidatePodByLabel(StorkLabel, storkNamespace, 5*time.Minute, 30*time.Second)
+						if err != nil {
+							return nil, true, err
+						}
+						log.Infof("Successfully deleted and validated Stork pods in namespace [%s].", storkNamespace)
+						return nil, false, nil
+					}
+				}
+				return nil, true, fmt.Errorf("migration not in progress. Retrying...")
+			}
+			_, err := task.DoRetryWithTimeout(deleteStorkPods, migrationRetryTimeout, migrationRetryInterval)
+			log.FailOnError(err, "Error occurred when deleting Stork pods while migration in progress")
+
+			err = SwitchCluster(kubeConfigPath[asyncdr.FirstCluster], asyncdr.FirstCluster)
+			log.FailOnError(err, "Failed to switch destination to source cluster")
+			_, err = storkops.Instance().ValidateMigrationSchedule(migrationSchedName, defaultNs, migrationRetryTimeout, migrationRetryInterval)
+			log.FailOnError(err, "Failed to validate migration schedule [%v] in the namespace [%v] on the source cluster", migrationSchedName, defaultNs)
+		})
+		stepLog = "Performing failover on the destination cluster"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := SwitchCluster(kubeConfigPath[asyncdr.SecondCluster], asyncdr.SecondCluster)
+			log.FailOnError(err, "Failed to switch source to destination cluster")
+
+			extraArgsFailoverFailback := map[string]string{
+				"kubeconfig": kubeConfigPath[asyncdr.SecondCluster],
+			}
+			failoverParam := failoverFailbackParam{
+				action:                    "failover",
+				failoverOrFailbackNs:      defaultNs,
+				migrationSchedName:        migrationSchedName,
+				configPath:                kubeConfigPath[asyncdr.SecondCluster],
+				single:                    false,
+				skipSourceOp:              false,
+				includeNs:                 false,
+				excludeNs:                 false,
+				extraArgsFailoverFailback: extraArgsFailoverFailback,
+				contexts:                  contexts,
+			}
+
+			performFailoverFailback(failoverParam)
+		})
+
+		stepLog = "Destroy applications on the destination cluster"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			cleanup()
+		})
+
+		stepLog = "Destroy applications on the source cluster"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := SwitchCluster(kubeConfigPath[asyncdr.FirstCluster], asyncdr.FirstCluster)
+			log.FailOnError(err, "Failed to switch destination to source cluster")
+			cleanup()
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
