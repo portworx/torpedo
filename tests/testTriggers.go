@@ -39,6 +39,7 @@ import (
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	opsapi "github.com/libopenstorage/openstorage/api"
 	"github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/ginkgo/v2"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/apps"
@@ -731,6 +732,9 @@ const (
 
 	// PowerOffNBy2PlusOneNodes power off N/2 + 1 in px-csi cluster
 	PowerOffNBy2PlusOneNodes = "powerOffNBy2PlusOneNodes"
+
+	//Add Hot Pluggable Disk to live kubevirt VM
+	AddHotPlugDiskToVMAndLiveMigrate = "addHotPlugDiskToVMAndLiveMigrate"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -15177,3 +15181,170 @@ func deleteStorageClass(scName string, event *EventRecord) {
 		UpdateOutcome(event, err) 
 	}
 }
+
+// TriggerAddHotPlugDiskToVMAndLiveMigrate adds a Hot Pluggable disk and live migrates the KubeVirt VM
+func TriggerAddHotPlugDiskToVMAndLiveMigrate(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(AddHotPlugDiskToVMAndLiveMigrate)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: AddHotPlugDiskToVMAndLiveMigrate,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+
+	var (
+		app, volType  string
+		present       bool
+		canSsh        bool
+		volumeMode    string
+		initialUptime map[string]time.Duration
+		vmNodeName    string
+		vmNamespace   string
+		vmContext     []*scheduler.Context
+		numberOfVMs   int
+	)
+
+	stepLog := "Hot-plug a new disk to a running KubeVirt VM"
+	Step(stepLog, func() {
+		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
+		if !present {
+			app = "kubevirt-debian-fio-minimal"
+		}
+		if volType == "pxe-raw" {
+			app = "kubevirt-raw-vol"
+		} else if volType == "fada-raw" {
+			app = "kubevirt-fada-raw-fio"
+		} else {
+			app = "kubevirt-debian-fio-minimal"
+		}
+		log.InfoD("Setting app for this test to be : %s", app)
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		if err != nil {
+			UpdateOutcome(event, err)
+			log.FailOnError(err, "Failed to get volume driver namespace")
+		}
+		defer ListEvents(pxNs)
+
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+
+		numberOfVolumes := 1
+		Inst().AppList = []string{app}
+		Inst().CsiAppList = []string{app}
+
+		stepLog := "Fetching KubeVirt VMs"
+		Step(stepLog, func() {
+			vms, err := GetAllVMsFromScheduledContexts(*contexts)
+			if err != nil {
+				UpdateOutcome(event, err)
+				log.FailOnError(err, "Failed to get VMs from appCtx")
+				return
+			}
+			if len(vms) == 0 {
+				err = fmt.Errorf("No VMs found")
+				UpdateOutcome(event, err )
+				log.FailOnError(err, "No VMs found")
+				return
+			}
+			randomIndex := rand.Intn(len(vms))
+			selectedVM := vms[randomIndex]
+			log.Infof("VM selected for adding Hot Pluggable disk :[%v]", selectedVM.Name)
+			vmNamespace = selectedVM.Namespace
+
+			for _,vmCtx := range *contexts {
+				if vmCtx.App.NameSpace == vmNamespace {
+					vmContext = append(vmContext, vmCtx)
+				}
+			}
+			if vmContext == nil {
+				UpdateOutcome(event, fmt.Errorf("Failed to get VM context"))
+				log.FailOnError(fmt.Errorf("Failed to get VM context"), "Failed to get VM context")
+			}
+		})
+		ValidateApplications(vmContext)
+
+		if !present {
+			for _, appCtx := range vmContext {
+				bindMount, err := IsVMBindMounted(appCtx, false)
+				log.FailOnError(err, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Successfully verified bind mount ?")
+			}
+		}
+
+		if app == "kubevirt-debian-fio-minimal" {
+			volumeMode = ""
+		} else {
+			volumeMode = "Block"
+		}
+
+		stepLog = "Get VM uptime"
+		Step(stepLog, func() {
+			canSsh = CreateSSHPodAndSetCanSsh()
+			ValidateFioInVMs(vmContext, canSsh)
+			initialUptime = make(map[string]time.Duration)
+			stepLog = "Get initial uptime of VMs and current node"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				var wg sync.WaitGroup
+				for _, appCtx := range vmContext {
+					wg.Add(1)
+					go func(appCtx *scheduler.Context) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						vms, err := GetAllVMsFromScheduledContexts(vmContext)
+						log.FailOnError(err, "Failed to get VMs from appCtx")
+						for _, vm := range vms {
+							uptime, err := GetVMUptime(vm)
+							log.FailOnError(err, "Failed to get uptime from VM %s", vm.Name)
+							vmKey := fmt.Sprintf("%s/%s", vm.Namespace, vm.Name)
+							initialUptime[vmKey] = uptime
+							log.Infof("Initial uptime for VM %s is %v", vmKey, uptime)
+
+							vmNodeName, err = GetNodeOfVM(vm)
+							log.FailOnError(err, "Failed to get node of VM %v", vm.Name)
+							log.Infof("VM %s is currently running on node %s", vm.Name, vmNodeName)
+						}
+					}(appCtx)
+				}
+				wg.Wait()
+			})
+
+			stepLog = "Hot-plug one raw block disk (DataVolume) to the running KubeVirt VM"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				numberOfVMs=1
+				log.Infof("Number of VMs selected to adding Hot Pluggable disk [%v]", numberOfVMs)
+				isHotPlugged, err := HotPlugDataVolumesToKubevirtVM(vmContext, numberOfVolumes, "50Gi", volumeMode,numberOfVMs)
+				log.FailOnError(err, "Failed to hot-plug DataVolume to KubeVirt VM")
+				dash.VerifyFatal(isHotPlugged, true, "Successfully Hot Plugged Data Volume to KubeVirt VM ?")
+			})
+
+			stepLog = "Live migrate the KubeVirt VM"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, appCtx := range vmContext {
+					err := StartAndWaitForVMIMigration(appCtx, ctxt.TODO())
+					log.FailOnError(err, "Failed to live migrate KubeVirt VM")
+				}
+			})
+			ValidateFioInVMs(vmContext, canSsh)
+			ValidateVMUptime(vmContext, canSsh, initialUptime)
+			updateMetrics(*event)
+		})
+		if isSSIERun() {
+			validateContexts(event, contexts)
+		}
+	})
+}
+

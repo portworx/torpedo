@@ -401,6 +401,7 @@ func populateTriggerFuncs() {
 		FadaSimultaneousSnapshots:         TriggerFadaSimultaneousSnapshots,
 		TestPxCSIFadaAttachLimit:          TriggerPxCSIFadaAttachLimit,
 		PowerOffNBy2PlusOneNodes:          TriggerPowerOffNBy2PlusOneNodes,
+		AddHotPlugDiskToVMAndLiveMigrate:   TriggerAddHotPlugDiskToVMAndLiveMigrate,
 	}
 
 	//Creating a distinct trigger to make sure email triggers at regular intervals
@@ -934,6 +935,7 @@ func populateIntervals() {
 	triggerInterval[TestPxCSIFadaAttachLimit] = make(map[int]time.Duration)
 	triggerInterval[FadaSimultaneousSnapshots] = make(map[int]time.Duration)
 	triggerInterval[PowerOffNBy2PlusOneNodes] = make(map[int]time.Duration)
+	triggerInterval[AddHotPlugDiskToVMAndLiveMigrate] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -2198,6 +2200,17 @@ func populateIntervals() {
 	triggerInterval[ScaleFBDAVolumes][2] = 24 * baseInterval
 	triggerInterval[ScaleFBDAVolumes][1] = 27 * baseInterval
 
+	triggerInterval[AddHotPlugDiskToVMAndLiveMigrate][10] = 1 * baseInterval
+	triggerInterval[AddHotPlugDiskToVMAndLiveMigrate][9] = 3 * baseInterval
+	triggerInterval[AddHotPlugDiskToVMAndLiveMigrate][8] = 6 * baseInterval
+	triggerInterval[AddHotPlugDiskToVMAndLiveMigrate][7] = 9 * baseInterval
+	triggerInterval[AddHotPlugDiskToVMAndLiveMigrate][6] = 12 * baseInterval
+	triggerInterval[AddHotPlugDiskToVMAndLiveMigrate][5] = 15 * baseInterval
+	triggerInterval[AddHotPlugDiskToVMAndLiveMigrate][4] = 18 * baseInterval
+	triggerInterval[AddHotPlugDiskToVMAndLiveMigrate][3] = 21 * baseInterval
+	triggerInterval[AddHotPlugDiskToVMAndLiveMigrate][2] = 24 * baseInterval
+	triggerInterval[AddHotPlugDiskToVMAndLiveMigrate][1] = 27 * baseInterval
+
 	// Chaos Level of 0 means disable test trigger
 	triggerInterval[DeployApps][0] = 0
 	triggerInterval[RebootNode][0] = 0
@@ -2308,6 +2321,7 @@ func populateIntervals() {
 	triggerInterval[TestPxCSIFadaAttachLimit][0] = 0
 	triggerInterval[FadaSimultaneousSnapshots][0] = 0
 	triggerInterval[PowerOffNBy2PlusOneNodes][0] = 0
+	triggerInterval[AddHotPlugDiskToVMAndLiveMigrate][0] = 0
 
 }
 

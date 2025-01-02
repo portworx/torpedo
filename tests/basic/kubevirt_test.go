@@ -2106,69 +2106,6 @@ var _ = Describe("{FillVMRootDisk}", Label("p2", "negative", "error_injection", 
 	})
 })
 
-func CreateSSHPodAndSetCanSsh() bool {
-	stepLog := "Create SSH Pod"
-	var canSsh bool = false
-	Step(stepLog, func() {
-		log.InfoD(stepLog)
-		err := CreateSSHPod()
-		if err == nil {
-			canSsh = true
-		} else {
-			canSsh = false
-		}
-	})
-	return canSsh
-}
-
-func ValidateFioInVMs(appCtxs []*scheduler.Context, canSsh bool) {
-	if canSsh {
-		stepLog := "Validate fio is running in the VMs"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			var wg sync.WaitGroup
-			for _, appCtx := range appCtxs {
-				wg.Add(1)
-				go func(appCtx *scheduler.Context) {
-					defer GinkgoRecover()
-					defer wg.Done()
-					vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
-					log.FailOnError(err, "Failed to get VMs from appCtx")
-					for _, vm := range vms {
-						err = CheckFioIsRunningInVM(vm)
-						log.FailOnError(err, "Failed to validate fio in VM %s", vm.Name)
-					}
-				}(appCtx)
-			}
-			wg.Wait()
-		})
-	}
-}
-
-func ValidateVMUptime(appCtxs []*scheduler.Context, canSsh bool, initialUptime map[string]time.Duration) {
-	if canSsh {
-		stepLog := "Validate VMs have not restarted"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			var wg sync.WaitGroup
-			for _, appCtx := range appCtxs {
-				wg.Add(1)
-				go func(appCtx *scheduler.Context) {
-					defer GinkgoRecover()
-					defer wg.Done()
-					vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
-					log.FailOnError(err, "Failed to get VMs from appCtx")
-					for _, vm := range vms {
-						err = CheckVMUptime(vm, initialUptime)
-						log.FailOnError(err, "Failed to validate uptime in VM %s", vm.Name)
-					}
-				}(appCtx)
-			}
-			wg.Wait()
-		})
-	}
-}
-
 func GetDynamicKubeClient() (dynamic.Interface, error) {
 	config, err := rest.InClusterConfig()
 	if err != nil {

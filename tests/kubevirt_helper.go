@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"sync"
 
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -26,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubevirtv1 "kubevirt.io/api/core/v1"
+	. "github.com/onsi/ginkgo/v2"
 )
 
 const (
@@ -1332,13 +1334,19 @@ func CreateBlankDataVolume(namespace string, dvName string, storageClassName str
 }
 
 // HotPlugDataVolumesToKubevirtVM main trigger to hot plug volumes to a running VM
-func HotPlugDataVolumesToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDVs int, size string, volumeMode string) (bool, error) {
+func HotPlugDataVolumesToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDVs int, size string, volumeMode string,opts ...int) (bool, error) {
 	var(
 		newDiskCount int
 		initialDiskCount int
 		) 
 	log.InfoD("Beginning hot-plug of [%d] DataVolume(s) to each VM (size=%s, volumeMode=%s)",
 		numberOfDVs, size, volumeMode)
+
+		numberOfVMs := -1 // Default: no limit
+		if len(opts) > 0 {
+			numberOfVMs = opts[0] // Use the first optional parameter as the number of VMs
+		}
+		vmCount := 0
 
 	for _, appCtx := range virtualMachines {
 		vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
@@ -1347,6 +1355,11 @@ func HotPlugDataVolumesToKubevirtVM(virtualMachines []*scheduler.Context, number
 		}
 
 		for _, vm := range vms {
+			// Check if we've reached the limit of VMs to process
+			if numberOfVMs != -1 && vmCount >= numberOfVMs {
+				log.Infof("Processed the specified number of VMs [%d]. Stopping further processing.", numberOfVMs)
+				return true, nil
+			}
 			storageClass, err := GetStorageClassOfVmPVC(appCtx)
 			if err != nil {
 				return false, fmt.Errorf("failed to get storage class for VM [%s/%s]: %v", vm.Namespace, vm.Name, err)
@@ -1407,6 +1420,7 @@ func HotPlugDataVolumesToKubevirtVM(virtualMachines []*scheduler.Context, number
 				return false, fmt.Errorf("failed to confirm new disks in VM [%s/%s]: %v", vm.Namespace, vm.Name, err)
 			}
 		}
+		vmCount++
 	}
 	log.Infof("Total number of disks after adding Hot Pluggable disk [%v] and total number of disks before adding Hot pluggable disk [%v] ",newDiskCount,initialDiskCount)
 	return true, nil
@@ -1485,4 +1499,67 @@ func HotPlugDVToVM(vmName, namespace, dvName string) error {
 	return kvClient.
 		VirtualMachineInstance(namespace).
 		AddVolume(context1.TODO(), vmName, addVolumeOptions)
+}
+
+func CreateSSHPodAndSetCanSsh() bool {
+	stepLog := "Create SSH Pod"
+	var canSsh bool = false
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		err := CreateSSHPod()
+		if err == nil {
+			canSsh = true
+		} else {
+			canSsh = false
+		}
+	})
+	return canSsh
+}
+
+func ValidateFioInVMs(appCtxs []*scheduler.Context, canSsh bool) {
+	if canSsh {
+		stepLog := "Validate fio is running in the VMs"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			var wg sync.WaitGroup
+			for _, appCtx := range appCtxs {
+				wg.Add(1)
+				go func(appCtx *scheduler.Context) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+					log.FailOnError(err, "Failed to get VMs from appCtx")
+					for _, vm := range vms {
+						err = CheckFioIsRunningInVM(vm)
+						log.FailOnError(err, "Failed to validate fio in VM %s", vm.Name)
+					}
+				}(appCtx)
+			}
+			wg.Wait()
+		})
+	}
+}
+
+func ValidateVMUptime(appCtxs []*scheduler.Context, canSsh bool, initialUptime map[string]time.Duration) {
+	if canSsh {
+		stepLog := "Validate VMs have not restarted"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			var wg sync.WaitGroup
+			for _, appCtx := range appCtxs {
+				wg.Add(1)
+				go func(appCtx *scheduler.Context) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+					log.FailOnError(err, "Failed to get VMs from appCtx")
+					for _, vm := range vms {
+						err = CheckVMUptime(vm, initialUptime)
+						log.FailOnError(err, "Failed to validate uptime in VM %s", vm.Name)
+					}
+				}(appCtx)
+			}
+			wg.Wait()
+		})
+	}
 }
