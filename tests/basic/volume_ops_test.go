@@ -5164,6 +5164,7 @@ var _ = Describe("{OverCommitVolumeTest}", Label("p1", "positive", "px_vol_ops")
 
 	})
 })
+
 var _ = Describe("{RestartPxandRestartNode}", Label("p1", "negative", "px_vol_ops", "error_injection", "node_reboot", "px_restart"), func() {
 	/*
 	   https://purestorage.atlassian.net/browse/PTX-24483
@@ -5242,7 +5243,7 @@ var _ = Describe("{RestartPxandRestartNode}", Label("p1", "negative", "px_vol_op
 })
 
 // Verify volume delete from the new node- Place volumes on the new node and enable trash can features on all volume.
-var _ = Describe("{EnableTrashCanForvolume}", Label("p0", "positive", "px_vol_ops", "staging"), Label("p2", "positive", "px_vol_ops", "trashcan"), func() {
+var _ = Describe("{EnableTrashCanForvolume}", Label("p2", "positive", "px_vol_ops", "trashcan", "staging"), func() {
 	/*
 		Step1: Take storage node from cluster
 		Step3: Create a  few Volumes on the new node.
@@ -5351,7 +5352,7 @@ var _ = Describe("{EnableTrashCanForvolume}", Label("p0", "positive", "px_vol_op
 })
 
 // For each volume, get replica nodes, bring PX down, bring it back up, and ensure PX and pods are running
-var _ = Describe("{BringVolumeoutofQuorum}", Label("p1", "positive", "px_vol_ops"), Label("p0", "negative", "px_ops"), func() {
+var _ = Describe("{BringVolumeoutofQuorum}", Label("p1", "positive", "px_vol_ops"), func() {
 	/*
 		For each volume, get it's replicas
 		Stop PX on all replica nodes
@@ -6902,5 +6903,149 @@ var _ = Describe("{ValidateVolumeResizeInParallelWithPXKill}", Label("p0", "stag
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
 
+	})
+})
+
+// Restore volume from trashcan when one of the replica where volume resides is down.
+var _ = Describe("{RestoreVolumeFromTrashWithReplicaDown}", Label("p0", "positive", "pure_ops", "px_vol_ops", "px_ops", "node_reboot", "trashcan", "staging"), func() {
+	/*
+		1) 	Enable trashcan
+		2)	Create a volume with repl=3
+		3)	Delete this volume
+		4)	validate it went in trashcan
+		5)	reboot one node which was replica of the volume
+		6)	restore volume from trashcan while this node is still rebooting
+		7)	validate volume health / replica status after restore & once node is up.
+	*/
+
+	var (
+		contexts    = make([]*scheduler.Context, 0)
+		volumeNodes = make([]*node.Node, 0)
+		wg          sync.WaitGroup
+		pvcList     []string
+	)
+	JustBeforeEach(func() {
+		StartTorpedoTest("RestoreVolumeFromTrashWithReplicaDown", "Restore volume from trashcan when one of the replica where volume resides is down.", nil, 0)
+	})
+
+	stepLog := "Restore volume from trashcan when one of the replica where volume resides is down."
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		stepLog = "Enable Trashcan"
+		Step(stepLog,
+			func() {
+				log.InfoD(stepLog)
+				currNode := node.GetStorageDriverNodes()[0]
+				err := Inst().V.SetClusterOptsWithConfirmation(currNode, map[string]string{
+					"--volume-expiration-minutes": "10",
+				})
+				log.FailOnError(err, "error while enabling trashcan")
+				log.InfoD("Trashcan is successfully enabled")
+			})
+
+		stepLog = "Scheduling Apps and validate"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("storagenodecreatevolume-%d", 0))...)
+
+			log.InfoD("Applications are scheduled successfully")
+			log.InfoD("Validating Context")
+			for _, ctx := range contexts {
+				ValidateContext(ctx)
+				pvcList, err = GetVolumeNamefromPVC(ctx.App.NameSpace)
+			}
+		})
+
+		getVolumeNodes := func() []*node.Node {
+			volNodes := make([]*node.Node, 0)
+			attachedNode, err := GetNodeForGivenVolumeName(pvcList[0])
+			log.FailOnError(err, fmt.Sprintf("error getting  attached node for volume %s", pvcList[0]))
+			volNodes = append(volNodes, attachedNode)
+			return volNodes
+		}
+		volumeNodes = getVolumeNodes()
+		log.InfoD("Node List where volumes are attached : [%v]", volumeNodes)
+
+		stepLog = "Delete volumes then restore volumes from trashcan and validate"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			for _, ctx := range contexts {
+				stepLog = fmt.Sprintf("Deleting app %s", ctx.App.Key)
+				Step(stepLog, func() {
+					DestroyApps(contexts, nil)
+				})
+
+				var trashcanVols []string
+				stepLog = "validate volumes in trashcan"
+				Step(stepLog, func() {
+					// wait for few seconds for pvc to get deleted and volume to get detached
+					time.Sleep(10 * time.Second)
+					node := node.GetStorageDriverNodes()[0]
+					log.InfoD(stepLog)
+					trashcanVols, err = Inst().V.GetTrashCanVolumeIds(node)
+					log.FailOnError(err, "error While getting trashcan volumes")
+					log.Infof("trashcan len: %d", len(trashcanVols))
+					dash.VerifyFatal(len(trashcanVols) > 0, true, "validate volumes exist in trashcan")
+
+				})
+
+				stepLog = "Rebooting one of the volume node"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					selectedNode := volumeNodes[0]
+					rebootNode := func(n node.Node) {
+						defer wg.Done()
+						defer GinkgoRecover()
+						log.InfoD("Rebooting Node [%v]", n.Name)
+
+						err := Inst().N.RebootNode(n, node.RebootNodeOpts{
+							Force: true,
+							ConnectionOpts: node.ConnectionOpts{
+								Timeout:         1 * time.Minute,
+								TimeBeforeRetry: 5 * time.Second,
+							},
+						})
+						log.FailOnError(err, "failed to reboot Node [%v]", n.Name)
+					}
+					wg.Add(1)
+					go rebootNode(*selectedNode)
+				})
+
+				stepLog = "Validating trashcan restore"
+				Step(stepLog,
+					func() {
+						log.InfoD(stepLog)
+						for _, tID := range trashcanVols {
+							if tID != "" {
+								vol, err := Inst().V.InspectVolume(tID)
+								log.FailOnError(err, fmt.Sprintf("error inspecting volume %s", tID))
+								for _, volName := range pvcList {
+									if strings.Contains(vol.Locator.Name, volName) {
+										err = trashcanRestore(vol.Id, volName)
+										log.FailOnError(err, fmt.Sprintf("error restoring volume %s from trashcan", vol.Id))
+									}
+								}
+							}
+						}
+					})
+				log.Infof("waiting till the node reboot completes")
+				wg.Wait()
+				time.Sleep(2 * time.Minute)
+				log.InfoD("Scheduling Apps ")
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("storagenodecreatevolume-%d", 0))...)
+
+				log.InfoD("Validating Apps")
+				for _, ctx := range contexts {
+					ValidateContext(ctx)
+				}
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		opts := make(map[string]bool)
+		DestroyApps(contexts, opts)
+		AfterEachTest(contexts)
 	})
 })
