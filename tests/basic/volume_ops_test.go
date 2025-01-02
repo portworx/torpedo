@@ -5164,7 +5164,6 @@ var _ = Describe("{OverCommitVolumeTest}", Label("p1", "positive", "px_vol_ops")
 
 	})
 })
-
 var _ = Describe("{RestartPxandRestartNode}", Label("p1", "negative", "px_vol_ops", "error_injection", "node_reboot", "px_restart"), func() {
 	/*
 	   https://purestorage.atlassian.net/browse/PTX-24483
@@ -5243,7 +5242,7 @@ var _ = Describe("{RestartPxandRestartNode}", Label("p1", "negative", "px_vol_op
 })
 
 // Verify volume delete from the new node- Place volumes on the new node and enable trash can features on all volume.
-var _ = Describe("{EnableTrashCanForvolume}", Label("p2", "positive", "px_vol_ops", "trashcan", "staging"), func() {
+var _ = Describe("{EnableTrashCanForvolume}", Label("p0", "positive", "px_vol_ops", "staging"), Label("p2", "positive", "px_vol_ops", "trashcan"), func() {
 	/*
 		Step1: Take storage node from cluster
 		Step3: Create a  few Volumes on the new node.
@@ -5352,7 +5351,7 @@ var _ = Describe("{EnableTrashCanForvolume}", Label("p2", "positive", "px_vol_op
 })
 
 // For each volume, get replica nodes, bring PX down, bring it back up, and ensure PX and pods are running
-var _ = Describe("{BringVolumeoutofQuorum}", Label("p1", "positive", "px_vol_ops"), func() {
+var _ = Describe("{BringVolumeoutofQuorum}", Label("p1", "positive", "px_vol_ops"), Label("p0", "negative", "px_ops"), func() {
 	/*
 		For each volume, get it's replicas
 		Stop PX on all replica nodes
@@ -7047,5 +7046,130 @@ var _ = Describe("{RestoreVolumeFromTrashWithReplicaDown}", Label("p0", "positiv
 		opts := make(map[string]bool)
 		DestroyApps(contexts, opts)
 		AfterEachTest(contexts)
+	})
+})
+
+// Set relaxed reclaim limit to 50 and verify excess deletes don't enter the queue.
+var _ = Describe("{VolumeRelaxedReclaimLimitEnforcement}", Label("p0", "positive", "px_vol_ops", "staging"), func() {
+
+	/*
+		Create 100 volumes with repl 3
+		Change pending relaxed reclaim limit to 50
+		Delete all 100 volumes at once
+		Once deletion is successful, validate all 100 volumes are deleted
+	*/
+
+	var testrailID = 0
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("VolumeRelaxedReclaimLimitEnforcement", "Set relaxed reclaim limit to 50 and verify excess deletes don't enter the queue.", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+
+	stepLog := "Set relaxed reclaim limit to 50 and verify excess deletes don't enter the queue."
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		var (
+			totalVolumesToCreate = 100
+			newVolumeIDs         []string
+			alreadyPresentVolIds []string
+		)
+
+		deleteVolumes := func() {
+			log.Infof(fmt.Sprintf("total number of volumes present in the cluster [%v]", len(newVolumeIDs)))
+			for _, each := range newVolumeIDs {
+				if IsVolumeExits(each) {
+					log.InfoD(fmt.Sprintf("delete volume [%v]", each))
+					err := Inst().V.DetachVolume(each)
+					if err != nil {
+						log.Errorf("Failed to detach volume [%v]", each)
+						return
+					}
+					time.Sleep(500 * time.Millisecond)
+					err = Inst().V.DeleteVolume(each)
+					if err != nil {
+						log.Errorf("Delete volume with ID [%v] failed", each)
+						return
+					}
+				}
+			}
+			newVolumeIDs = make([]string, 0)
+		}
+		defer deleteVolumes()
+
+		stepLog = "creating the volume and attaching those volumes"
+		Step(stepLog, func() {
+			// Get list of all volumes present in the cluster
+			log.InfoD("Listing all the volumes present in the cluster")
+			alreadyPresentVolIds, err = Inst().V.ListAllVolumes()
+			log.FailOnError(err, "Failed to list all volumes present in the cluster")
+			log.Infof(fmt.Sprintf("total number of volumes present in the cluster [%v]", len(alreadyPresentVolIds)))
+
+			// Create volumes in the cluster till it reaches maximum count
+			for initVol := 0; initVol < totalVolumesToCreate; initVol++ {
+				id := uuid.New().String()
+				volName := fmt.Sprintf("volume_%s", id[:8])
+				log.InfoD(fmt.Sprintf("Volume [%v] will be created with name [%v]", initVol, volName))
+
+				// get size of the volume from size 1GiB till 10GiB
+				minSize := 1
+				maxSize := 10
+				randSize := uint64(rand.Intn(maxSize-minSize) + minSize)
+				// Pick HA Update 3
+				haUpdate := int64(3)
+
+				volId, err := Inst().V.CreateVolume(volName, randSize, haUpdate)
+				log.FailOnError(err, "Failed to create volume [%v]", volName)
+				log.InfoD("Volume Created with ID [%v]", volId)
+				_, err = Inst().V.AttachVolume(volId)
+				log.FailOnError(err, "Failed to attach volume [%v]", volId)
+				time.Sleep(2 * time.Second)
+				newVolumeIDs = append(newVolumeIDs, volId)
+			}
+			log.InfoD("Total numbers newly created volumes [%v]", len(newVolumeIDs))
+			// Validate Volume Attached status
+			for _, eachVol := range newVolumeIDs {
+				vol, err := Inst().V.InspectVolume(eachVol)
+				log.FailOnError(err, "Failed to inspect volume [%v]", eachVol)
+
+				if vol.State.String() != "VOLUME_STATE_ATTACHED" {
+					log.Errorf(" volume [%v] state is [%v]", eachVol, vol.State.String())
+				}
+			}
+		})
+
+		stepLog = "Setting maximum pending relaxed reclaim"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			currNode := node.GetStorageDriverNodes()[0]
+			err := Inst().V.SetClusterOptsWithConfirmation(currNode, map[string]string{
+				"--relaxedreclaim-max-pending": "50",
+			})
+			if err != nil {
+				err = fmt.Errorf("error while enabling relaxed reclaim, Error:%v", err)
+				log.Errorf(err.Error())
+			}
+		})
+
+		stepLog = "Deleting the volumes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			deleteVolumes()
+		})
+
+		stepLog = "validate all 100 volumes are deleted"
+		Step(stepLog, func() {
+			log.InfoD("Listing all the volumes present in the cluster ")
+			allVolumeIds, err := Inst().V.ListAllVolumes()
+			log.FailOnError(err, "Failed to list all volumes present in the cluster")
+			log.Infof("Final number of volumes present in the cluster [%v]", len(allVolumeIds))
+			dash.VerifyFatal(len(allVolumeIds), len(alreadyPresentVolIds), "deleted all the volumes from the cluster")
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
