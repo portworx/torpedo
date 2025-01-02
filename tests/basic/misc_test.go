@@ -3236,3 +3236,122 @@ var _ = Describe("{ValidateSecondKVDBFailOverWithOnlyThreeNodeLabel}", Label("st
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
+
+// Restart all the px nodes after killing leader node of etcd in etcd cluster.
+var _ = Describe("{RestartPxNodesAfterKVDBMasterFailure}", Label("p1", "kvdb_ops", "negative", "staging"), func() {
+	/*
+		Create few apps
+		Kill kvdb leader node
+		Do app validation
+		Restart more than half of Px nodes
+		Do app validation
+		Wait for all nodes to come up again
+		Do app validation
+	*/
+
+	var (
+		testrailID   = 36147373
+		runID        int
+		contexts     []*scheduler.Context
+		wg           sync.WaitGroup
+		storageNodes = []node.Node{}
+	)
+	JustBeforeEach(func() {
+		StartTorpedoTest("RestartPxNodesAfterKVDBMasterFailure", "Restart all the px nodes after killing leader node of etcd in etcd cluster", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	stepLog := "Restart all the px nodes after killing leader node of etcd in etcd cluster"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("kvdb-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer DestroyApps(contexts, nil)
+
+		stepLog = "Killing leader node of etcd(kvdb)"
+		Step(stepLog, func() {
+			masterNode, err := GetKvdbMasterNode()
+			log.FailOnError(err, "failed getting details of KVDB master node")
+
+			pid, err := GetKvdbMasterPID(*masterNode)
+			log.FailOnError(err, "failed getting PID of KVDB master node")
+
+			log.InfoD("KVDB Master is [%v] and PID is [%v]", masterNode.Name, pid)
+			err = KillKvdbMemberUsingPid(*masterNode)
+			log.FailOnError(err, "failed to kill KVDB Node")
+			// Wait for KVDB Members to be online
+			log.FailOnError(WaitForKVDBMembers(), "failed waiting for KVDB members to be active")
+		})
+
+		stepLog = "validate applications after killing KVDB Master node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				wg.Add(1)
+				go func(c *scheduler.Context) {
+					defer wg.Done()
+					ValidateContext(c)
+				}(ctx)
+			}
+			wg.Wait()
+		})
+
+		stepLog = "Restart more than half of Px nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			storageNodes = node.GetStorageNodes()
+			nodesToRestartPx := storageNodes[:(len(storageNodes)/2)+1]
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				log.Infof("Stop volume driver [%s] on nodes: [%v]", Inst().V.String(), nodesToRestartPx)
+				StopVolDriverAndWait(nodesToRestartPx)
+				log.Infof("Starting volume driver [%s] on nodes [%v]", Inst().V.String(), nodesToRestartPx)
+				StartVolDriverAndWait(nodesToRestartPx)
+			}()
+			// Wait for both steps to complete
+			wg.Wait()
+		})
+
+		stepLog = "validate applications after restarting px nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				wg.Add(1)
+				go func(c *scheduler.Context) {
+					defer wg.Done()
+					ValidateContext(c)
+				}(ctx)
+			}
+			wg.Wait()
+		})
+
+		stepLog = "Verified that all KVDB nodes are running and in a healthy state."
+		Step(fmt.Sprintf("Get kvdb nodes"), func() {
+			log.InfoD(stepLog)
+			kvdbNodes, err := GetAllKvdbNodes()
+			log.FailOnError(err, "Failed to get list of KVDB nodes from the cluster")
+			for _, kvdbNode := range kvdbNodes {
+				nodeInfo, err := node.GetNodeDetailsByNodeID(kvdbNode.ID)
+				log.FailOnError(err, "Unable to get details for node ID: %s", kvdbNode.ID)
+				nodeStatus, err := Inst().V.GetNodeStatus(nodeInfo)
+				dash.VerifyFatal(*nodeStatus, opsapi.Status_STATUS_OK, fmt.Sprintf("validate PX status on node %s", kvdbNode.ID))
+			}
+			kvdbMembers, err := Inst().V.GetKvdbMembers(storageNodes[0])
+			log.FailOnError(err, "Failed to get kvdb members")
+			err = kvdbutils.ValidateKVDBMembers(kvdbMembers)
+			log.FailOnError(err, "Failed to validate kvdb members")
+			output, err := runCmd("pxctl status", storageNodes[0])
+			log.FailOnError(err, "Failed to run pxctl status on node: %v", storageNodes[0].Name)
+			log.Infof("pxctl status output: %v\n", output)
+			dash.VerifyFatal(!strings.Contains(output, "Warning"), true, "Output contains warnings. Is the cluster healthy?")
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
