@@ -13148,3 +13148,97 @@ var _ = Describe("{PXInstallWithPXRestart}", Label("p1", "px_install", "hal_init
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{StoragePoolMultipleExpandDiskResize}", Label("p0", "negative", "pool_ops", "PoolExpand", "ResizeDisk", "staging"), func() {
+	/*
+		    https://purestorage.atlassian.net/browse/HAZEL-1027
+			Create some apps
+			Pick multiple pools from multiple nodes at once in different threads (atleast 3)
+			Start resize of all those pools at once
+			Once Pools have have been resized, validate apps
+			Kill Px on all the nodes on which pool resize happened one by one
+			Validate apps
+	*/
+	var (
+		contexts            []*scheduler.Context
+		poolIdsToExpand     []string
+		pxStopNodes         []node.Node
+		nodesNotInKvdbNodes []node.Node
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("StoragePoolMultipleExpandDiskResize", "Resize a pool multiple times", nil, 0)
+	})
+
+	itLog := "Resize a pool multiple times"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		nodes := node.GetStorageNodes()
+		if len(nodes) < 7 {
+			Skip("Need atleast 7 nodes in the cluster to proceed with the test")
+		}
+
+		stepLog := "Create some apps"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			contexts = scheduleApps()
+			ValidateApplications(contexts)
+		})
+		defer appsValidateAndDestroy(contexts)
+
+		log.InfoD("Get all KVDB nodes")
+		kvdbNodes, err := GetAllKvdbNodes()
+		log.FailOnError(err, "Unable to retrieve KVDB nodes")
+		log.Infof("Initally kvdb node in the cluster: [%v]", kvdbNodes)
+		stepLog = "Getting non KVDB nodes in the cluster"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			kvdbNodeMap := make(map[string]bool)
+			for _, kvdbNode := range kvdbNodes {
+				kvdbNodeMap[kvdbNode.ID] = true
+			}
+			for _, storageNode := range nodes {
+				if _, exists := kvdbNodeMap[storageNode.Id]; !exists {
+					nodesNotInKvdbNodes = append(nodesNotInKvdbNodes, storageNode)
+				}
+			}
+			log.Infof("List of storage nodes which are not part of KVDB members: [%v]", nodesNotInKvdbNodes)
+		})
+
+		for _, eachNodes := range nodesNotInKvdbNodes {
+			if len(poolIdsToExpand) < 3 {
+				pools, err := GetPoolsDetailsOnNode(&eachNodes)
+				log.FailOnError(err, fmt.Sprintf("error while getting pool details on node %s", eachNodes.Id))
+				randomIndex := rand.Intn(len(pools))
+				poolIdsToExpand = append(poolIdsToExpand, pools[randomIndex].Uuid)
+				pxStopNodes = append(pxStopNodes, eachNodes)
+			}
+		}
+		dash.VerifyFatal(len(poolIdsToExpand) > 1, true, fmt.Sprintf("Pick atleast 2 pools to perform multiple resize"))
+
+		stepLog = "Resize multiple pools at once and validate apps"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			expandType := []api.SdkStoragePool_ResizeOperationType{api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK}
+			wg, err := ExpandMultiplePoolsInParallel(poolIdsToExpand, 100, expandType)
+			dash.VerifyFatal(err, nil, "Pool expansion in parallel failed")
+			wg.Wait()
+			log.Infof("pool resize successful on pools %v", poolIdsToExpand)
+		})
+
+		ValidateApplications(contexts)
+		stepLog = "Kill px on nodes in which pools expanded"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			StopVolDriverAndWait(pxStopNodes)
+			for _, pxStopNode := range pxStopNodes {
+				log.Infof("stopped px on node %s", pxStopNode.Id)
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
