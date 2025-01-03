@@ -2805,6 +2805,133 @@ var _ = Describe("{VerifyFstrimWithFastPathVolumes}", Label("staging", "p0", "ne
 	})
 })
 
+var _ = Describe("{DeleteVolumeWhenClusterInRunFlatState}", Label("staging", "kvdb_ops", "p1", "negative"), func() {
+	/*
+		   Ticket ID: https://purestorage.atlassian.net/browse/HAZEL-1041
+			Create Apps
+			Bring cluster in run flat state
+			Delete apps → Should succeed (Use Tear Down Context method)
+			Bring up kvdb nodes again
+
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("DeleteVolumeWhenClusterInRunFlatState",
+			"Simulate run-flat state, delete the apps validate it should succeed and bring the nodes again", nil, 0)
+	})
+
+	itLog := "Simulate run-flat state, delete the apps validate it should succeed and bring the nodes again"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		var (
+			contexts          []*scheduler.Context
+			selectedKvdbNodes []KvdbNode
+			kvdbNodes         []KvdbNode
+		)
+
+		stepLog = "Schedule application"
+		Step(stepLog, func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("beforerunflat-%d", i))...)
+			}
+		})
+
+		ValidateApplications(contexts)
+
+		cleanup := func() {
+			log.Info("Executing cleanup tasks")
+			if len(selectedKvdbNodes) > 0 {
+				for _, n := range selectedKvdbNodes {
+					nodeDetails, err := node.GetNodeDetailsByNodeID(n.ID)
+					log.FailOnError(err, "Failed to retrieve node details for NodeID [%v]", n.ID)
+
+					err = Inst().V.StartDriver(nodeDetails)
+					log.FailOnError(err, "Failed to start Portworx driver on node %s", nodeDetails.Name)
+					err = Inst().V.WaitDriverUpOnNode(nodeDetails, 10*time.Minute)
+					log.FailOnError(err, "Failed to waiting for Portworx driver to start on node %s", nodeDetails.Name)
+					log.InfoD("Successfully started Portworx on KVDB node: %v", nodeDetails.Name)
+				}
+			}
+			DestroyApps(contexts, nil)
+		}
+		defer cleanup()
+
+		stepLog = "Stopping Portworx service on selected KVDB nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			kvdbNodes, err = GetAllKvdbNodes()
+			log.FailOnError(err, "Failed to retrieve KVDB nodes")
+
+			selectedKvdbNodes = kvdbNodes[1:]
+			log.InfoD("Selected KVDB nodes for PX service stop: %v", selectedKvdbNodes)
+			for _, kvdbNode := range selectedKvdbNodes {
+				nodeDetails, err := node.GetNodeDetailsByNodeID(kvdbNode.ID)
+				log.FailOnError(err, "Unable to retrieve node details for NodeID [%v]", kvdbNode.ID)
+
+				StopVolDriverAndWait([]node.Node{nodeDetails})
+				log.InfoD("PX service successfully stopped on node: %v", nodeDetails)
+			}
+		})
+
+		stepLog = " Verify cluster is in run-flat state"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pxNode, err := node.GetNodeDetailsByNodeID(kvdbNodes[0].ID)
+			output, err := runCmd("pxctl status", pxNode)
+			log.FailOnError(err, "Failed to execute 'pxctl status' on node: %v", pxNode.Name)
+
+			log.Infof("pxctl status output: %v\n", output)
+			expect_out := "Volume and node operations may be unavailable but I/O will continue"
+			dash.VerifyFatal(strings.Contains(output, expect_out), true, "Is cluster in run-flat state?")
+		})
+
+		DestroyApps(contexts, nil)
+		log.Infof("Successfully destroyed the applications in the cluster. Context: %v", contexts)
+
+		stepLog = "Starting Portworx on selected KVDB nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, n := range selectedKvdbNodes {
+				nodeDetails, err := node.GetNodeDetailsByNodeID(n.ID)
+				log.FailOnError(err, "Failed to retrieve node details for NodeID [%v]", n.ID)
+
+				err = Inst().V.StartDriver(nodeDetails)
+				log.FailOnError(err, "Failed to start Portworx driver on node %s", nodeDetails.Name)
+				err = Inst().V.WaitDriverUpOnNode(nodeDetails, 10*time.Minute)
+				log.FailOnError(err, "Failed to waiting for Portworx driver to start on node %s", nodeDetails.Name)
+
+				log.InfoD("Successfully started Portworx on KVDB node: %v", nodeDetails.Name)
+			}
+		})
+
+		stepLog = "Verify all KVDB nodes are running and in a healthy state"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, kvdbNode := range kvdbNodes {
+				nodeInfo, err := node.GetNodeDetailsByNodeID(kvdbNode.ID)
+				log.FailOnError(err, "Failed to get details for KVDB node ID: %s", kvdbNode.ID)
+				nodeStatus, err := Inst().V.GetNodeStatus(nodeInfo)
+				dash.VerifyFatal(*nodeStatus, opsapi.Status_STATUS_OK, fmt.Sprintf("validate PX status on node %s", kvdbNode.ID))
+			}
+
+			storagenode := node.GetStorageNodes()
+			kvdbMembers, err := Inst().V.GetKvdbMembers(storagenode[0])
+			log.FailOnError(err, "Failed to retrieve KVDB members list")
+
+			err = kvdbutils.ValidateKVDBMembers(kvdbMembers)
+			log.FailOnError(err, "Failed to validate KVDB members")
+
+			output, err := runCmd("pxctl status", storagenode[0])
+			log.FailOnError(err, "Failed to execute pxctl status on node: %v", storagenode[0].Name)
+			dash.VerifyFatal(!strings.Contains(output, "Warning"), true, "Output contains warnings. Is the cluster healthy?")
+		})
+	})
+
+	JustAfterEach(func() {
+		EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
 var _ = Describe("{ValidateKVDBFailOver}", Label("staging", "kvdb_ops", "p1", "negative"), func() {
 	/*
 		https://purestorage.atlassian.net/browse/HAZEL-1031
@@ -3684,4 +3811,3 @@ var _ = Describe("{ValidateSecondKVDBFailOver}", Label("staging", "kvdb_ops", "p
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
-
