@@ -2417,31 +2417,6 @@ func GetStorkLeaderPodName() (string, error) {
 	return holderIdentity, nil
 }
 
-func SwitchCluster(configPath string, cluster int) error {
-	err := hardSetConfig(configPath)
-	if err != nil {
-		return fmt.Errorf("error setting cluster %v config: %w", cluster, err)
-	}
-
-	err = SetCustomKubeConfig(cluster)
-	if err != nil {
-		return fmt.Errorf("switching context to cluster %v failed: %w", cluster, err)
-	}
-
-	err = Inst().S.RefreshNodeRegistry()
-	if err != nil {
-		return fmt.Errorf("node registry refresh failed: %w", err)
-	}
-
-	err = Inst().V.RefreshDriverEndpoints()
-	if err != nil {
-		return fmt.Errorf("refreshing driver endpoints failed: %w", err)
-	}
-
-	log.Infof("Successfully switched to cluster %v", cluster)
-	return nil
-}
-
 var _ = Describe("{StorkPodsDownOnSourceDuringMigrationInProgress}", Label("staging", "p1", "negative", "AsyncDR"), func() {
 	/*
 	   https://purestorage.atlassian.net/browse/HAZEL-1050
@@ -2875,3 +2850,321 @@ var _ = Describe("{StorkPodsDownOnDestinationDuringMigrationInProgress}", Label(
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
+
+var _ = Describe("{PXPodsDownOnSourceAndDestinationDuringMigrationInProgress}", Label("staging", "p1", "negative", "AsyncDR"), func() {
+	/*
+	   https://purestorage.atlassian.net/browse/HAZEL-1052
+	   1. Deploy application on source cluster
+	   2. Create cluster pair between source and destination cluster
+	   3. Create migration schedule and start migration on all namespace
+	   4. while migration is in progress delete px pods on source cluster
+	   5. wait for px pods to be up and validate migration schedule.
+	   6. Switch to destination cluster and do 4 and 5.
+	*/
+	/*
+			**Do not execute this case in the production pipeline.**
+		    This issue is currently being investigated. For more details, please refer to the ongoing issue:
+		    [PWX-40878](https://purestorage.atlassian.net/browse/PWX-40878).
+
+	*/
+	var (
+		testrailID             = 0
+		runID                  int
+		contexts               []*scheduler.Context
+		taskNamePrefix         = "dr-pxdown"
+		defaultNs              = "kube-system"
+		migrationNamespaces    []string
+		kubeConfigPath         = map[int]string{}
+		migrationSchedName     string
+		destMigrationSchedName string
+		schedulePolicy         *storkapi.SchedulePolicy
+		clusterPairName        string
+		migNamespaces          string
+		schedulePolicyName     = "async-policy"
+		migrationInterval      = 5
+	)
+	BeforeEach(func() {
+		if !kubeConfigWritten {
+			WriteKubeconfigToFiles()
+			kubeConfigWritten = true
+		}
+	})
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("PXPodsDownOnSourceAndDestinationDuringMigrationInProgress", "Migration of application to destination cluster with px pods down on source and destination cluster", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	stepLog := "Bring down PX pods during migration on source and destination cluster and ensure migration completed successfully"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+
+		cleanup := func() {
+			log.Infof("Performing cleanup task")
+			opts := make(map[string]bool)
+			opts[SkipClusterScopedObjects] = true
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			opts[scheduler.OptionsWaitForDestroy] = true
+			if len(contexts) > 0 {
+				for _, ctx := range contexts {
+					ctx.SkipVolumeValidation = true
+					TearDownContext(ctx, opts)
+					ctxNamespace := GetAppNamespace(ctx, "")
+					err = Inst().S.DeletePvcsFromNamespace(ctx, ctxNamespace)
+					log.FailOnError(err, "Failed to delete the pvcs from namespace  %v", ctxNamespace)
+				}
+			}
+			volList, err := Inst().V.ListAllVolumes()
+			log.FailOnError(err, "Failed to get volume list")
+			if len(volList) > 0 {
+				for _, volName := range volList {
+					err = Inst().V.DeleteVolume(volName)
+					log.FailOnError(err, "Failed to delete volume %v list", volName)
+				}
+			}
+		}
+		defer cleanup()
+
+		stepLog = "Scheduling applications and creating a schedule policy for migration"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			migrationNamespaces, contexts = initialSetupApps(taskNamePrefix, false, false)
+			migNamespaces = strings.Join(migrationNamespaces, ",")
+
+			for _, cluster := range []int{asyncdr.FirstCluster, asyncdr.SecondCluster} {
+				kubeConfigPath[cluster], err = GetCustomClusterConfigPath(cluster)
+				log.FailOnError(err, "Getting error while fetching path for %v cluster", cluster)
+			}
+
+			schedulePolicy, err = asyncdr.CreateSchedulePolicy(schedulePolicyName, migrationInterval)
+			log.FailOnError(err, "Failed to create schedule policy")
+		})
+
+		extraArgs := map[string]string{
+			"namespaces":           migNamespaces,
+			"kubeconfig":           kubeConfigPath[asyncdr.FirstCluster],
+			"schedule-policy-name": schedulePolicy.Name,
+		}
+
+		stepLog = "Creating cluster pair and starting migration schedule"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			clusterPairName = defaultClusterPairName + time.Now().Format("15h03m05s")
+			err = ScheduleBidirectionalClusterPair(clusterPairName, defaultNs, "", storkapi.BackupLocationType(defaultBackupLocation), defaultSecret, "async-dr", asyncdr.FirstCluster, asyncdr.SecondCluster, nil)
+			log.FailOnError(err, "Failed creating bidirectional cluster pair")
+
+			log.InfoD("Start migration schedule")
+			migrationSchedName = migrationSchedKey + time.Now().Format("15h03m05s")
+			err = storkctlcli.ScheduleStorkctlMigrationSched(migrationSchedName, clusterPairName, defaultNs, extraArgs)
+			log.FailOnError(err, "Error creating migrationschedule: %v", err)
+		})
+
+		stepLog = "Bring down PX Pods on source and destination clusters while migration is in progress"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			isMigrationInProgress := func() (interface{}, bool, error) {
+				isInprogress, err := IsMigrationInProgress(migrationSchedName, defaultNs)
+				if err != nil {
+					return nil, true, err
+				}
+				if isInprogress {
+					return nil, false, nil
+				}
+				return nil, true, fmt.Errorf("retrying: no migration is in progress")
+			}
+			_, err = task.DoRetryWithTimeout(isMigrationInProgress, migrationRetryTimeout, migrationRetryInterval)
+			log.FailOnError(err, "Failed to deleting px pods while migration in progress on source cluster")
+
+			err = DeletePXOnSourceAndDestination(kubeConfigPath[asyncdr.SecondCluster], asyncdr.SecondCluster)
+
+			err = SwitchCluster(kubeConfigPath[asyncdr.FirstCluster], asyncdr.FirstCluster)
+			log.FailOnError(err, "Failed to switch cluster")
+
+			_, err = storkops.Instance().ValidateMigrationSchedule(migrationSchedName, defaultNs, migrationRetryTimeout, migrationRetryInterval)
+			log.FailOnError(err, "Failed to validate migration schedule [%v] in the namespace [%v] on the source cluster", migrationSchedName, defaultNs)
+		})
+
+		stepLog = "Performing failover"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = SwitchCluster(kubeConfigPath[asyncdr.SecondCluster], asyncdr.SecondCluster)
+			log.FailOnError(err, "Failed to switch cluster")
+			extraArgsFailoverFailback := map[string]string{
+				"kubeconfig": kubeConfigPath[asyncdr.SecondCluster],
+			}
+			failoverParam := failoverFailbackParam{
+				action:                    "failover",
+				failoverOrFailbackNs:      defaultNs,
+				migrationSchedName:        migrationSchedName,
+				configPath:                kubeConfigPath[asyncdr.SecondCluster],
+				single:                    false,
+				skipSourceOp:              true,
+				includeNs:                 false,
+				excludeNs:                 false,
+				extraArgsFailoverFailback: extraArgsFailoverFailback,
+				contexts:                  contexts,
+			}
+
+			performFailoverFailback(failoverParam)
+			extraArgs["kubeconfig"] = kubeConfigPath[asyncdr.SecondCluster]
+			destMigrationSchedName = migrationSchedName + "-rev"
+			err = storkctlcli.ScheduleStorkctlMigrationSched(destMigrationSchedName, clusterPairName, defaultNs, extraArgs)
+			log.FailOnError(err, "Error creating migrationschedule: [%v] on destination cluster", destMigrationSchedName)
+		})
+
+		stepLog = "Bring down PX Pods on source and destination cluster while migration is in progress"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			isMigrationInProgress := func() (interface{}, bool, error) {
+				isInprogress, err := IsMigrationInProgress(destMigrationSchedName, defaultNs)
+				if err != nil {
+					return nil, true, err
+				}
+				if isInprogress {
+					return nil, false, nil
+				}
+				return nil, true, fmt.Errorf("retrying: no migration is in progress")
+			}
+			_, err = task.DoRetryWithTimeout(isMigrationInProgress, migrationRetryTimeout, migrationRetryInterval)
+			log.FailOnError(err, "Failed to deleting px pods while migration in progress on source cluster")
+
+			err = SwitchCluster(kubeConfigPath[asyncdr.FirstCluster], asyncdr.FirstCluster)
+			log.FailOnError(err, "Failed to switch cluster")
+
+			err = DeletePXOnSourceAndDestination(kubeConfigPath[asyncdr.SecondCluster], asyncdr.SecondCluster)
+
+			_, err = storkops.Instance().ValidateMigrationSchedule(destMigrationSchedName, defaultNs, migrationRetryTimeout, migrationRetryInterval)
+			log.FailOnError(err, "Failed to validate migration schedule [%v] in the namespace [%v] on the source cluster", destMigrationSchedName, defaultNs)
+		})
+
+		stepLog = "Performing failback"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			extraArgsFailback := map[string]string{
+				"kubeconfig": kubeConfigPath[asyncdr.SecondCluster],
+			}
+
+			failback := failoverFailbackParam{
+				action:                    "failback",
+				failoverOrFailbackNs:      defaultNs,
+				migrationSchedName:        destMigrationSchedName,
+				configPath:                kubeConfigPath[asyncdr.SecondCluster],
+				single:                    false,
+				skipSourceOp:              false,
+				includeNs:                 false,
+				excludeNs:                 false,
+				extraArgsFailoverFailback: extraArgsFailback,
+				contexts:                  contexts,
+			}
+			performFailoverFailback(failback)
+		})
+
+		stepLog = "Destroy applications on the destination cluster"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			cleanup()
+		})
+
+		stepLog = "Destroy applications on the source cluster"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := SwitchCluster(kubeConfigPath[asyncdr.SecondCluster], asyncdr.SecondCluster)
+			log.FailOnError(err, "Failed to switch cluster")
+			cleanup()
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+func IsMigrationInProgress(migrationSchedName, namespace string) (bool, error) {
+	migSchedule, err := storkops.Instance().GetMigrationSchedule(migrationSchedName, namespace)
+	if err != nil {
+		return false, err
+	}
+	migrations := migSchedule.Status.Items["Interval"]
+	for _, mig := range migrations {
+		log.Infof("Validating migration status for: %v", mig.Name)
+		migration, err := storkops.Instance().GetMigration(mig.Name, namespace)
+		if err != nil {
+			return false, err
+		}
+		if migration.Status.Status == storkapi.MigrationStatusInProgress {
+			log.Infof("Migration name: [%s], Migration current status: [%v]", mig.Name, migration.Status.Status)
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func SwitchCluster(configPath string, cluster int) error {
+	err := hardSetConfig(configPath)
+	if err != nil {
+		return fmt.Errorf("error setting cluster %v config: %w", cluster, err)
+	}
+
+	err = SetCustomKubeConfig(cluster)
+	if err != nil {
+		return fmt.Errorf("switching context to cluster %v failed: %w", cluster, err)
+	}
+
+	err = Inst().S.RefreshNodeRegistry()
+	if err != nil {
+		return fmt.Errorf("node registry refresh failed: %w", err)
+	}
+
+	err = Inst().V.RefreshDriverEndpoints()
+	if err != nil {
+		return fmt.Errorf("refreshing driver endpoints failed: %w", err)
+	}
+
+	log.Infof("Successfully switched to cluster %v", cluster)
+	return nil
+}
+
+func DeletePXOnSourceAndDestination(configPath string, cluster int) error {
+	var pxNamespace string
+	pxNamespace, err = Inst().V.GetVolumeDriverNamespace()
+	if err != nil {
+		return err
+	}
+	err = DeletePXPods(pxNamespace)
+	if err != nil {
+		return err
+	}
+
+	for _, n := range node.GetStorageDriverNodes() {
+		err := Inst().V.WaitForPxPodsToBeUp(n)
+		if err != nil {
+			return err
+		}
+	}
+
+	err := SwitchCluster(configPath, cluster)
+	if err != nil {
+		return err
+	}
+
+	pxNamespace, err = Inst().V.GetVolumeDriverNamespace()
+	if err != nil {
+		return err
+	}
+	err = DeletePXPods(pxNamespace)
+	if err != nil {
+		return err
+	}
+
+	log.InfoD("Waiting for PX Nodes to be up")
+	for _, n := range node.GetStorageDriverNodes() {
+		err := Inst().V.WaitForPxPodsToBeUp(n)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
