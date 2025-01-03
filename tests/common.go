@@ -10614,14 +10614,20 @@ type KvdbNode struct {
 // GetAllKvdbNodes returns list of all kvdb nodes present in the cluster
 func GetAllKvdbNodes() ([]KvdbNode, error) {
 	type kvdbNodes []map[string]KvdbNode
-	var found bool
 	var randomNode node.Node
 	workerNodes := node.GetStorageNodes()
 	if Inst().V.IsPxLiteCluster() {
 		workerNodes = node.GetStorageDriverNodes()
 	}
+	eligibleNodes := []node.Node{}
+	for _, node := range workerNodes {
+		if Inst().V.IsPxReadyOnNode(node) {
+			eligibleNodes = append(eligibleNodes, node)
+		}
+	}
+	found := false
 	for !found {
-		randomIndex := rand.Intn(len(workerNodes))
+		randomIndex := rand.Intn(len(eligibleNodes))
 		randomNode = workerNodes[randomIndex]
 		log.Infof("Random node to run storage %s", randomNode.Name)
 		status := Inst().V.IsPxReadyOnNode(randomNode)

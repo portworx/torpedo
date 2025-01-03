@@ -3355,3 +3355,333 @@ var _ = Describe("{RestartPxNodesAfterKVDBMasterFailure}", Label("p1", "kvdb_ops
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
+
+var _ = Describe("{ValidateSecondKVDBFailOver}", Label("staging", "kvdb_ops", "p1", "negative"), func() {
+	/*
+		    ticket id: https://purestorage.atlassian.net/browse/HAZEL-1030
+			Pre-requisities: Atleast 7 nodes in the cluster
+			Label 4 nodes with metadata=true & kill px on all these nodes
+			Remaning nodes label metadata=false & kill px on all these nodes
+			Create apps
+			IDentify current 3 nodes that have kvdb cluster
+			Long stop Px on all 3 current kvdb nodes
+			Validate kvdb cluster has failed over to some other nodes
+			Label kvdb node with metadata=false
+			Bring up Px on the nodes from Step 4
+			Again long stop Px on any one of the kvdb member
+			Validate kvdb cluster becomes healthy again as some other node gets chosen as kvdb member
+			Bring up Px on failed node from step 7
+			Validate apps
+	*/
+
+	var testrailID = 0
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest(" ValidateSecondKVDBFailOver", "Testing KVDB cluster failover, quorum, and recovery under node failures while ensuring application availability.", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	stepLog := "Label 4 nodes with px/metadata=true, stop PX on KVDB nodes to validate failover, restart PX, stop one KVDB node again, verify fourth node joins the cluster, and validate app functionality."
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		var (
+			contexts                            []*scheduler.Context
+			stopped_px_kvdb_nodes_ids           []string
+			nonKvdbNodes                        []node.Node
+			selectedNodesNotInKvdbForLabelTrue  []node.Node
+			selectedNodesNotInKvdbForLabelFalse []node.Node
+			selected_node_for_px_stop           KvdbNode
+			nonKvdbNodeAfterLabel               node.Node
+			healthyCount                        int
+		)
+		storageNodes := node.GetStorageNodes()
+		log.Infof("Storage node in the cluster: [%v]", storageNodes)
+		if len(storageNodes) < 7 {
+			Skip("At least 7 nodes are required to run the tests")
+		}
+		log.InfoD("Get all KVDB nodes")
+		kvdbNodes, err := GetAllKvdbNodes()
+		log.FailOnError(err, "Unable to retrieve KVDB nodes")
+		log.Infof("Initally kvdb node in the cluster: [%v]", kvdbNodes)
+
+		cleanup := func() {
+			log.Info("Executing cleanup tasks")
+			if len(selectedNodesNotInKvdbForLabelTrue) > 0 {
+				for _, node := range selectedNodesNotInKvdbForLabelTrue {
+					err := Inst().S.RemoveLabelOnNode(node, "px/metadata-node")
+					log.FailOnError(err, "Failed to remove label  'px/metadata-node=true' from node [%s]", node)
+					log.Infof("Successfully removed label from node [%s]", node)
+				}
+			}
+			if len(selectedNodesNotInKvdbForLabelFalse) > 0 {
+				for _, node := range selectedNodesNotInKvdbForLabelFalse {
+					err := Inst().S.RemoveLabelOnNode(node, "px/metadata-node")
+					log.FailOnError(err, "Failed to remove label  'px/metadata-node=false' from node [%s]", node)
+					log.Infof("Successfully removed label from node [%s]", node)
+				}
+			}
+			if len(stopped_px_kvdb_nodes_ids) > 0 {
+				for _, px_stop_node := range stopped_px_kvdb_nodes_ids {
+					node, err := node.GetNodeDetailsByNodeID(px_stop_node)
+					log.FailOnError(err, "Unable to get the node details for the node  [%v]", node)
+					err = Inst().V.StartDriver(node)
+					log.FailOnError(err, "error starting driver on node %s", node.Name)
+					err = Inst().V.WaitDriverUpOnNode(node, 10*time.Minute)
+					log.FailOnError(err, "error while waiting for driver up on node %s", node.Name)
+					log.Infof("Successfully start the portworx :[%v]", px_stop_node)
+				}
+			}
+			if selected_node_for_px_stop.ID != "" {
+				node, err := node.GetNodeDetailsByNodeID(selected_node_for_px_stop.ID)
+				log.FailOnError(err, "Unable to get the node details for the node  [%v]", node)
+				err = Inst().V.StartDriver(node)
+				log.FailOnError(err, "error starting driver on node %s", node.Name)
+				err = Inst().V.WaitDriverUpOnNode(node, 10*time.Minute)
+				log.FailOnError(err, "error while waiting for driver up on node %s", node.Name)
+				log.Infof("Successfully start the portworx :[%v]", selected_node_for_px_stop)
+
+			}
+			DestroyApps(contexts, nil)
+		}
+		defer cleanup()
+
+		stepLog = "Getting non KVDB nodes in the cluster"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			kvdbNodeMap := make(map[string]bool)
+			for _, kvdbNode := range kvdbNodes {
+				kvdbNodeMap[kvdbNode.ID] = true
+			}
+			for _, storageNode := range storageNodes {
+				if _, exists := kvdbNodeMap[storageNode.Id]; !exists {
+					nonKvdbNodes = append(nonKvdbNodes, storageNode)
+				}
+			}
+			log.Infof("Storage nodes not part of KVDB cluster: [%v]", nonKvdbNodes)
+
+		})
+
+		selectedNodesNotInKvdbForLabelTrue = nonKvdbNodes[0:4]
+		selectedNodesNotInKvdbForLabelFalse = nonKvdbNodes[4:len(nonKvdbNodes)]
+
+		stepLog = "Label the node px/metadata-node=true and kill the px "
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Infof("Selected nodes for labeling: %v", selectedNodesNotInKvdbForLabelTrue)
+			for _, Non_kvdb_Node := range selectedNodesNotInKvdbForLabelTrue {
+				err := Inst().S.AddLabelOnNode(Non_kvdb_Node, "px/metadata-node", "true")
+				log.FailOnError(err, "Failed to add label 'px/metadata-node=true' to node [%s]", Non_kvdb_Node)
+				log.InfoD("Stop PX  service  on the  node: %v", Non_kvdb_Node)
+				StopVolDriverAndWait([]node.Node{Non_kvdb_Node})
+				log.InfoD("PX service successfully stopped on node: %v", Non_kvdb_Node)
+				log.Infof("Restarting PX on node: %v", Non_kvdb_Node)
+				err = Inst().V.StartDriver(Non_kvdb_Node)
+				log.FailOnError(err, "error starting driver on node %s", Non_kvdb_Node)
+				err = Inst().V.WaitDriverUpOnNode(Non_kvdb_Node, 10*time.Minute)
+				log.FailOnError(err, "error while waiting for driver up on node %s", Non_kvdb_Node)
+				log.Infof("Successfully restart the portworx :[%v]", Non_kvdb_Node.Name)
+			}
+		})
+
+		stepLog = "Label remaining nodes with px/metadata-node=false and kill the px on those nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Infof("Selected nodes for labeling: %v", selectedNodesNotInKvdbForLabelFalse)
+			for _, Non_kvdb_label_false_node := range selectedNodesNotInKvdbForLabelFalse {
+				err := Inst().S.AddLabelOnNode(Non_kvdb_label_false_node, "px/metadata-node", "false")
+				log.FailOnError(err, "Failed to add label 'px/metadata-node=true' to node [%s]", Non_kvdb_label_false_node)
+				log.Info("Stop the volume driver and wait for it to stop completely")
+				StopVolDriverAndWait([]node.Node{Non_kvdb_label_false_node})
+				log.InfoD("PX service successfully stopped on node: %v", Non_kvdb_label_false_node)
+				log.Infof("Restarting PX on node: %v", Non_kvdb_label_false_node)
+				err = Inst().V.StartDriver(Non_kvdb_label_false_node)
+				log.FailOnError(err, "error starting driver on node %s", Non_kvdb_label_false_node.Name)
+				err = Inst().V.WaitDriverUpOnNode(Non_kvdb_label_false_node, 10*time.Minute)
+				log.FailOnError(err, "error while waiting for driver up on node %s", Non_kvdb_label_false_node.Name)
+				log.Infof("Successfully restart the portworx :[%v]", Non_kvdb_label_false_node.Name)
+			}
+
+		})
+
+		stepLog := "Schedule application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("kvdbfailover-%d", i))...)
+			}
+			ValidateApplications(contexts)
+		})
+
+		stepLog = "Stopping portworx on KVDB member node and wait labeled node to join"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			kvdbNodes, err := GetAllKvdbNodes()
+			log.FailOnError(err, "Unable to retrieve KVDB nodes")
+			log.InfoD("KVDB nodes for PX service stop: %v", kvdbNodes)
+			for _, kvdbNode := range kvdbNodes {
+				nodeDetails, err := node.GetNodeDetailsByNodeID(kvdbNode.ID)
+				log.FailOnError(err, "Unable to retrieve node details for NodeID [%v]", kvdbNode.ID)
+				StopVolDriverAndWait([]node.Node{nodeDetails})
+				log.InfoD("PX service successfully stopped on node: %v", nodeDetails)
+				checkKVDBQuorum := func() (interface{}, bool, error) {
+					log.Infof("Checking if the labeled node has joined and verifying that the quorum is intact before stopping PX on the next node.")
+					getKVDBNodes, err := GetAllKvdbNodes()
+					if err != nil {
+						return nil, true, fmt.Errorf("unable to get KVDB nodes: %w", err)
+					}
+					log.Infof("KVDB node details: %v", getKVDBNodes)
+					healthyCount := 0
+					for _, each := range getKVDBNodes {
+						if each.IsHealthy == true {
+							healthyCount++
+						}
+					}
+					if healthyCount == 3 {
+						log.Infof("KVDB quorum intact. Healthy count: %d, Expected: 3", healthyCount)
+						return nil, false, nil
+					}
+					log.Errorf("KVDB quorum lost. Healthy count: %d, Expected: 3. Retrying...", healthyCount)
+					return nil, true, fmt.Errorf("quorum lost. Healthy count: %d, Expected: 3", healthyCount)
+				}
+				_, err = task.DoRetryWithTimeout(checkKVDBQuorum, 5*time.Minute, 30*time.Second)
+				log.FailOnError(err, "Error occurred while checking KVDB quorum")
+				stopped_px_kvdb_nodes_ids = append(stopped_px_kvdb_nodes_ids, kvdbNode.ID)
+			}
+		})
+
+		stepLog = "Label KVDB nodes with px/metadata-node=false"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Infof("Selected nodes for labeling: %v", stopped_px_kvdb_nodes_ids)
+			for _, kvdb_node_label_false := range stopped_px_kvdb_nodes_ids {
+				nodeDetails, err := node.GetNodeDetailsByNodeID(kvdb_node_label_false)
+				log.FailOnError(err, "Unable to retrieve node details for NodeID [%v]", kvdb_node_label_false)
+				err = Inst().S.AddLabelOnNode(nodeDetails, "px/metadata-node", "false")
+				log.FailOnError(err, "Failed to add label 'px/metadata-node=true' to node [%s]", kvdb_node_label_false)
+				selectedNodesNotInKvdbForLabelFalse = append(selectedNodesNotInKvdbForLabelFalse, nodeDetails)
+
+			}
+		})
+
+		stepLog = "Restart Portworx on stopped kvdb nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, px_stop_node := range stopped_px_kvdb_nodes_ids {
+				node, err := node.GetNodeDetailsByNodeID(px_stop_node)
+				log.FailOnError(err, "Unable to get the node details for the node  [%v]", node)
+				err = Inst().V.StartDriver(node)
+				log.FailOnError(err, "error starting driver on node %s", node.Name)
+				err = Inst().V.WaitDriverUpOnNode(node, 10*time.Minute)
+				log.FailOnError(err, "error while waiting for driver up on node %s", node.Name)
+				log.Infof("Successfully start the portworx :[%v]", px_stop_node)
+			}
+
+		})
+
+		stepLog = "Check if the selected nodes are part of KVDB members"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			getKVDBNodes, err := GetAllKvdbNodes()
+			log.FailOnError(err, "Unable to get KVDB nodes")
+			log.Infof("After KVDB members labeled: [%v]", getKVDBNodes)
+
+			kvdbNodeMap := make(map[string]bool)
+			NonkvdbNodesAfterLabel := []string{}
+			kvdbNodesAfterLabeled := []string{}
+			for _, kvdbNode := range getKVDBNodes {
+				kvdbNodeMap[kvdbNode.ID] = true
+				log.Infof("KVDB member found: NodeID [%s]", kvdbNode.ID)
+			}
+			for _, node := range selectedNodesNotInKvdbForLabelTrue {
+				if _, exists := kvdbNodeMap[node.Id]; !exists {
+					log.Infof("Node [%s] is NOT a KVDB member.", node.Id)
+					NonkvdbNodesAfterLabel = append(NonkvdbNodesAfterLabel, node.Id)
+					nonKvdbNodeAfterLabel = node
+					log.Infof("Storing the node that is not part of KVDB: [%s] [%s]", nonKvdbNodeAfterLabel.Id, nonKvdbNodeAfterLabel)
+				} else {
+					log.Infof("Node [%s] is a KVDB member.", node.Id)
+					kvdbNodesAfterLabeled = append(kvdbNodesAfterLabeled, node.Id)
+				}
+			}
+			if len(NonkvdbNodesAfterLabel) > 1 {
+				err := fmt.Errorf("More than one labeled node is not part of the KVDB cluster: %v", NonkvdbNodesAfterLabel)
+				log.FailOnError(err, "Test failed: More than one node is not part of KVDB.")
+			}
+			dash.VerifyFatal(len(kvdbNodesAfterLabeled) == 3, true, fmt.Sprintf("Labeled nodes are part of KVDB members? %v", kvdbNodesAfterLabeled))
+		})
+
+		stepLog = "Initiating second KVDB failover by stopping PX on one of the KVDB member nodes and checking the quorum"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			getKVDBNodes, err := GetAllKvdbNodes()
+			log.FailOnError(err, "Unable to get KVDB nodes")
+			selected_node_for_px_stop = getKVDBNodes[0]
+			log.Infof("Selected node for PX stop: %v", selected_node_for_px_stop.ID)
+			node_details, err := node.GetNodeDetailsByNodeID(selected_node_for_px_stop.ID)
+			log.FailOnError(err, "Unable to retrieve node details for NodeID [%v]", selected_node_for_px_stop.ID)
+			StopVolDriverAndWait([]node.Node{node_details})
+			checkKVDBQuorum := func() (interface{}, bool, error) {
+				log.Infof("Checking if the labeled node has joined and verifying that the quorum is intact before stopping PX on the next node.")
+				getKVDBNodes, err := GetAllKvdbNodes()
+				if err != nil {
+					return nil, true, fmt.Errorf("unable to get KVDB nodes: %w", err)
+				}
+				log.Infof("KVDB node details: %v", getKVDBNodes)
+				healthyCount = 0
+				for _, each := range getKVDBNodes {
+					if each.IsHealthy == true {
+						healthyCount++
+					}
+				}
+				if healthyCount == 3 {
+					log.Infof("KVDB quorum intact. Healthy count: %d, Expected: 3", healthyCount)
+					return nil, false, nil
+				}
+				log.Errorf("KVDB quorum lost. Healthy count: %d, Expected: 3. Retrying...", healthyCount)
+				return nil, true, fmt.Errorf("quorum lost. Healthy count: %d, Expected: 3", healthyCount)
+			}
+			_, err = task.DoRetryWithTimeout(checkKVDBQuorum, 5*time.Minute, 30*time.Second)
+			log.FailOnError(err, "Error occurred while checking KVDB quorum")
+			dash.VerifyFatal(healthyCount == 3, true, fmt.Sprintf("verify kvdb quorum is not lost.Healthy count: %d, Expected: 3", healthyCount))
+
+		})
+
+		stepLog = "Verified labeled node only joined."
+		Step(stepLog, func() {
+			getKVDBNodes, err := GetAllKvdbNodes()
+			log.FailOnError(err, "Unable to get KVDB nodes")
+			kvdbNodeMap := make(map[string]bool)
+			for _, kvdbNode := range getKVDBNodes {
+				kvdbNodeMap[kvdbNode.ID] = true
+				log.Infof("KVDB member found: NodeID [%s]", kvdbNode.ID)
+			}
+			if _, exists := kvdbNodeMap[nonKvdbNodeAfterLabel.Id]; exists {
+				log.Infof("Node [%s] is a KVDB member.", nonKvdbNodeAfterLabel.Id)
+			} else {
+				log.Infof("Node [%s] is NOT a KVDB member.", nonKvdbNodeAfterLabel.Id)
+				log.FailOnError(fmt.Errorf("Node [%s] is not a KVDB member", nonKvdbNodeAfterLabel.Id), "Selected node is not part of the KVDB cluster")
+			}
+			log.Infof("Labeled node verification completed.")
+
+		})
+		stepLog = "Starting Portworx on stopped node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			node, err := node.GetNodeDetailsByNodeID(selected_node_for_px_stop.ID)
+			log.FailOnError(err, "Unable to get the node details for the node  [%v]", node)
+			err = Inst().V.StartDriver(node)
+			log.FailOnError(err, "error starting driver on node %s", node.Name)
+			err = Inst().V.WaitDriverUpOnNode(node, 10*time.Minute)
+			log.FailOnError(err, "error while waiting for driver up on node %s", node.Name)
+			log.Infof("Successfully start the portworx :[%v]", selected_node_for_px_stop)
+		})
+
+		ValidateApplications(contexts)
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
