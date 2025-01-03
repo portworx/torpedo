@@ -403,10 +403,6 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 			scheduleName = fmt.Sprintf("schedule-bkp-%v", RandomString(5))
 		)
 		Step("create backup schedule for Pxd volumes with NameSpace Label and Verify", func() {
-			err := ThrottleNetworkSpeed(20)
-			if err != nil {
-				log.FailOnError(err, "Unable to update the network bandwidth usage")
-			}
 			// Get Admin User Context
 			adminContext, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching admin user ctx")
@@ -470,22 +466,26 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 			}
 			schedulebackup2, err := Inst().Backup.InspectBackup(adminContext, schedulebackup2InspectRequest)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Get second schedule backup object of backup schedule[%s]", scheduleName))
-			if schedulebackup2.Backup.GetStatus().Status == api.BackupInfo_StatusInfo_Success {
-				dash.Fatal(fmt.Sprintf("Verify second schedule backup is not completed before third schedule backup is triggered with backup schedule[%s]", scheduleName))
-			}
+			dash.VerifyFatal(schedulebackup2.Backup.GetStatus().Status, api.BackupInfo_StatusInfo_InProgress, fmt.Sprintf("Verify second schedule backup is in-progress before third schedule backup is triggered with backup schedule[%s]", scheduleName))
 		})
 
 		Step("cleanup- delete the created resources", func() {
-			err := ThrottleNetworkSpeed(10)
-			if err != nil {
-				log.FailOnError(err, "Unable to update the network bandwidth usage")
-			}
 			// Get Admin User Context
 			adminContext, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching admin user ctx")
 			// Suspend the backup schedule so that no new backup is created while we are deleting the schedule
 			err = SuspendBackupSchedule(scheduleName, schedulePolicyName, BackupOrgID, adminContext)
 			log.FailOnError(err, "failed to suspend backup schedule")
+			// Validate that the next backup is completed
+			err = Inst().Backup.BackupScheduleWaitForNBackupsCompletion(
+				adminContext,
+				scheduleName,
+				BackupOrgID,
+				3,
+				3*BackupCompletionWaitTime,
+				defaultWaitInterval,
+			)
+			log.FailOnError(err, "failed to wait for next backup completion")
 			// Delete the backup schedules
 			scheduleEnumerateRequest := &api.BackupScheduleEnumerateRequest{
 				OrgId: BackupOrgID,
@@ -534,10 +534,6 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 			scheduleName = fmt.Sprintf("schedule-bkp-%v", RandomString(5))
 		)
 		Step("create backup schedule for Pxd volumes with NameSpace Label and Verify", func() {
-			err := ThrottleNetworkSpeed(20)
-			if err != nil {
-				log.FailOnError(err, "Unable to update the network bandwidth usage")
-			}
 			// Get Admin User Context
 			adminContext, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching admin user ctx")
@@ -602,22 +598,26 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 			}
 			schedulebackup2, err := Inst().Backup.InspectBackup(adminContext, schedulebackup2InspectRequest)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Get second schedule backup object of backup schedule[%s]", scheduleName))
-			if schedulebackup2.Backup.GetStatus().Status != api.BackupInfo_StatusInfo_Success {
-				dash.Fatal(fmt.Sprintf("Verify second schedule backup is completed before third schedule backup is triggered with backup schedule[%s]", scheduleName))
-			}
+			dash.VerifyFatal(schedulebackup2.Backup.GetStatus().Status, api.BackupInfo_StatusInfo_Success, fmt.Sprintf("Verify second schedule backup is completed before third schedule backup is triggered with backup schedule[%s]", scheduleName))
 		})
 
 		Step("cleanup- delete the created resources", func() {
-			err := ThrottleNetworkSpeed(10)
-			if err != nil {
-				log.FailOnError(err, "Unable to update the network bandwidth usage")
-			}
 			// Get Admin User Context
 			adminContext, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching admin user ctx")
 			// Suspend the backup schedule so that no new backup is created while we are deleting the schedule
 			err = SuspendBackupSchedule(scheduleName, schedulePolicyName, BackupOrgID, adminContext)
 			log.FailOnError(err, "failed to suspend backup schedule")
+			// Validate that the next backup is completed
+			err = Inst().Backup.BackupScheduleWaitForNBackupsCompletion(
+				adminContext,
+				scheduleName,
+				BackupOrgID,
+				3,
+				3*BackupCompletionWaitTime,
+				defaultWaitInterval,
+			)
+			log.FailOnError(err, "failed to wait for next backup completion")
 			// Delete the backup schedules
 			scheduleEnumerateRequest := &api.BackupScheduleEnumerateRequest{
 				OrgId: BackupOrgID,
@@ -1019,7 +1019,8 @@ var _ = Describe("{ParallelBackupScheduleNonPxdTestSuite}", Ordered, Label(TestC
 			dash.VerifyFatal(schedulebackup1.Backup.GetStatus().Status, api.BackupInfo_StatusInfo_InProgress, fmt.Sprintf("Verify first schedule backup is in-progress even after second schedule backup is triggered with backup schedule[%s]", scheduleName))
 
 			// schedulebackup3
-			schedulebackup3name, err := GetNextScheduleBackupName(scheduleName, 15, adminContext)
+			// The scheduleInterval is set to 60 minutes to account for the maximum backup time required by non-PXD volumes, which can take up to 60 minutes here.
+			schedulebackup3name, err := GetNextScheduleBackupName(scheduleName, 60, adminContext)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Get third schedule backup name of backup schedule[%s]", scheduleName))
 			log.InfoD("Third schedule backup for schedule name [%s] is [%s]", scheduleName, schedulebackup3name)
 
@@ -1029,9 +1030,7 @@ var _ = Describe("{ParallelBackupScheduleNonPxdTestSuite}", Ordered, Label(TestC
 			}
 			schedulebackup2, err := Inst().Backup.InspectBackup(adminContext, schedulebackup2InspectRequest)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Get second schedule backup object of backup schedule[%s]", scheduleName))
-			if schedulebackup2.Backup.GetStatus().Status != api.BackupInfo_StatusInfo_Success {
-				dash.Fatal(fmt.Sprintf("Verify second schedule backup is completed before third schedule backup is triggered with backup schedule[%s]", scheduleName))
-			}
+			dash.VerifyFatal(schedulebackup2.Backup.GetStatus().Status, api.BackupInfo_StatusInfo_Success, fmt.Sprintf("Verify second schedule backup is completed before third schedule backup is triggered with backup schedule[%s]", scheduleName))
 		})
 
 		Step("cleanup- delete the created resources", func() {
@@ -1041,6 +1040,16 @@ var _ = Describe("{ParallelBackupScheduleNonPxdTestSuite}", Ordered, Label(TestC
 			// Suspend the backup schedule so that no new backup is created while we are deleting the schedule
 			err = SuspendBackupSchedule(scheduleName, schedulePolicyName, BackupOrgID, adminContext)
 			log.FailOnError(err, "failed to suspend backup schedule")
+			// Validate that the next backup is completed
+			err = Inst().Backup.BackupScheduleWaitForNBackupsCompletion(
+				adminContext,
+				scheduleName,
+				BackupOrgID,
+				3,
+				3*BackupCompletionWaitTime,
+				defaultWaitInterval,
+			)
+			log.FailOnError(err, "failed to wait for next backup completion")
 			// Delete the backup schedules
 			scheduleEnumerateRequest := &api.BackupScheduleEnumerateRequest{
 				OrgId: BackupOrgID,
