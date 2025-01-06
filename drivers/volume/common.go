@@ -519,6 +519,14 @@ func (d *DefaultDriver) GetNodeForVolume(vol *Volume, timeout time.Duration, ret
 
 }
 
+// GetAttachedNodeForVolume returns the node on which the volume is attached
+func (d *DefaultDriver) GetAttachedNodeForVolume(vol string) (*node.Node, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetAttachedNodeForVolume()",
+	}
+}
+
 // GetNodeForBackup returns the node on which the volume is attached
 func (d *DefaultDriver) GetNodeForBackup(backupID string) (node.Node, error) {
 	return node.Node{}, &errors.ErrNotSupported{
@@ -602,11 +610,51 @@ func (d *DefaultDriver) SetReplicationFactor(vol *Volume, replFactor int64, node
 	}
 }
 
+// ChecksumVerification Trigger checksum verification and wait for completion.
+func (d *DefaultDriver) ChecksumVerification(vol *Volume, resumeFromSavedOffset bool, waitForVerificationToFinish bool) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ChecksumVerification()",
+	}
+}
+
 // WaitForReplicationToComplete waits for replication factor to complete .
 func (d *DefaultDriver) WaitForReplicationToComplete(vol *Volume, replFactor int64, replicationUpdateTimeout time.Duration) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "WaitForReplicationToComplete()",
+	}
+}
+
+// WaitForChecksumVerificationToComplete waits for checksum verification to complete .
+func (d *DefaultDriver) WaitForChecksumVerificationToComplete(volumeID string, checksumVerificationTimeout time.Duration) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "WaitForChecksumVerificationToComplete()",
+	}
+}
+
+// StartChecksumVerification triggers checksum verification on the volume
+func (d *DefaultDriver) StartChecksumVerification(volumeID string, resumeFromSavedOffset bool) (*api.SdkVerifyChecksumStartResponse, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "StartChecksumVerification()",
+	}
+}
+
+// StopChecksumVerification stops checksum verification on the volume
+func (d *DefaultDriver) StopChecksumVerification(volumeID string) (*api.SdkVerifyChecksumStopResponse, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "StopChecksumVerification()",
+	}
+}
+
+// StatusChecksumVerification return status of checksum verification job
+func (d *DefaultDriver) StatusChecksumVerification(volumeID string) (*api.SdkVerifyChecksumStatusResponse, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "StatusChecksumVerification()",
 	}
 }
 

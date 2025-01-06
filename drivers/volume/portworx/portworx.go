@@ -114,44 +114,45 @@ const (
 )
 
 const (
-	defaultTimeout                    = 2 * time.Minute
-	defaultRetryInterval              = 10 * time.Second
-	podUpRetryInterval                = 30 * time.Second
-	maintenanceOpTimeout              = 1 * time.Minute
-	maintenanceWaitTimeout            = 10 * time.Minute
-	inspectVolumeTimeout              = 2 * time.Minute
-	inspectVolumeRetryInterval        = 3 * time.Second
-	validateDeleteVolumeTimeout       = 15 * time.Minute
-	validateReplicationUpdateTimeout  = 60 * time.Minute
-	validateClusterStartTimeout       = 2 * time.Minute
-	validatePXStartTimeout            = 5 * time.Minute
-	validatePxPodsUpTimeout           = 30 * time.Minute
-	validateNodeStopTimeout           = 5 * time.Minute
-	validateStoragePoolSizeTimeout    = 3 * time.Hour
-	validateStoragePoolSizeInterval   = 30 * time.Second
-	validateRebalanceJobsTimeout      = 30 * time.Minute
-	validateRebalanceJobsInterval     = 30 * time.Second
-	validateDeploymentTimeout         = 3 * time.Minute
-	validateDeploymentInterval        = 5 * time.Second
-	getNodeTimeout                    = 3 * time.Minute
-	getNodeRetryInterval              = 5 * time.Second
-	stopDriverTimeout                 = 5 * time.Minute
-	crashDriverTimeout                = 2 * time.Minute
-	startDriverTimeout                = 2 * time.Minute
-	upgradeTimeout                    = 10 * time.Minute
-	upgradeRetryInterval              = 30 * time.Second
-	upgradePerNodeTimeout             = 15 * time.Minute
-	waitVolDriverToCrash              = 1 * time.Minute
-	waitDriverDownOnNodeRetryInterval = 2 * time.Second
-	sdkDiagCollectionTimeout          = 30 * time.Minute
-	sdkDiagCollectionRetryInterval    = 10 * time.Second
-	validateDiagsOnS3RetryTimeout     = 60 * time.Minute
-	validateDiagsOnS3RetryInterval    = 30 * time.Second
-	validateStorageClusterTimeout     = 40 * time.Minute
-	expandStoragePoolTimeout          = 2 * time.Minute
-	volumeUpdateTimeout               = 2 * time.Minute
-	skinnySnapRetryInterval           = 5 * time.Second
-	defaulDefragTriggerInterval       = 15 * time.Minute
+	defaultTimeout                      = 2 * time.Minute
+	defaultRetryInterval                = 10 * time.Second
+	podUpRetryInterval                  = 30 * time.Second
+	maintenanceOpTimeout                = 1 * time.Minute
+	maintenanceWaitTimeout              = 10 * time.Minute
+	inspectVolumeTimeout                = 2 * time.Minute
+	inspectVolumeRetryInterval          = 3 * time.Second
+	validateDeleteVolumeTimeout         = 15 * time.Minute
+	validateReplicationUpdateTimeout    = 60 * time.Minute
+	validateChecksumVerificationTimeout = 10 * time.Minute
+	validateClusterStartTimeout         = 2 * time.Minute
+	validatePXStartTimeout              = 5 * time.Minute
+	validatePxPodsUpTimeout             = 30 * time.Minute
+	validateNodeStopTimeout             = 5 * time.Minute
+	validateStoragePoolSizeTimeout      = 3 * time.Hour
+	validateStoragePoolSizeInterval     = 30 * time.Second
+	validateRebalanceJobsTimeout        = 30 * time.Minute
+	validateRebalanceJobsInterval       = 30 * time.Second
+	validateDeploymentTimeout           = 3 * time.Minute
+	validateDeploymentInterval          = 5 * time.Second
+	getNodeTimeout                      = 3 * time.Minute
+	getNodeRetryInterval                = 5 * time.Second
+	stopDriverTimeout                   = 5 * time.Minute
+	crashDriverTimeout                  = 2 * time.Minute
+	startDriverTimeout                  = 2 * time.Minute
+	upgradeTimeout                      = 10 * time.Minute
+	upgradeRetryInterval                = 30 * time.Second
+	upgradePerNodeTimeout               = 15 * time.Minute
+	waitVolDriverToCrash                = 1 * time.Minute
+	waitDriverDownOnNodeRetryInterval   = 2 * time.Second
+	sdkDiagCollectionTimeout            = 30 * time.Minute
+	sdkDiagCollectionRetryInterval      = 10 * time.Second
+	validateDiagsOnS3RetryTimeout       = 60 * time.Minute
+	validateDiagsOnS3RetryInterval      = 30 * time.Second
+	validateStorageClusterTimeout       = 40 * time.Minute
+	expandStoragePoolTimeout            = 2 * time.Minute
+	volumeUpdateTimeout                 = 2 * time.Minute
+	skinnySnapRetryInterval             = 5 * time.Second
+	defaulDefragTriggerInterval         = 15 * time.Minute
 )
 const (
 	telemetryNotEnabled = "15"
@@ -203,31 +204,32 @@ var pxOperator = operator.Instance()
 var apiExtentions = apiextensions.Instance()
 
 type portworx struct {
-	legacyClusterManager  cluster.Cluster
-	clusterManager        api.OpenStorageClusterClient
-	nodeManager           api.OpenStorageNodeClient
-	mountAttachManager    api.OpenStorageMountAttachClient
-	volDriver             api.OpenStorageVolumeClient
-	clusterPairManager    api.OpenStorageClusterPairClient
-	alertsManager         api.OpenStorageAlertsClient
-	csbackupManager       api.OpenStorageCloudBackupClient
-	storagePoolManager    api.OpenStoragePoolClient
-	diagsManager          api.OpenStorageDiagsClient
-	diagsJobManager       api.OpenStorageJobClient
-	licenseManager        pxapi.PortworxLicenseClient
-	licenseFeatureManager pxapi.PortworxLicensedFeatureClient
-	autoFsTrimManager     api.OpenStorageFilesystemTrimClient
-	portworxServiceClient pxapi.PortworxServiceClient
-	defragManager         api.OpenStorageFilesystemDefragClient
-	openStorageSchedule   api.OpenStorageScheduleClient
-	schedOps              schedops.Driver
-	nodeDriver            node.Driver
-	namespace             string
-	refreshEndpoint       bool
-	token                 string
-	skipPXSvcEndpoint     bool
-	skipPxOperatorUpgrade bool
-	DiagsFile             string
+	legacyClusterManager            cluster.Cluster
+	clusterManager                  api.OpenStorageClusterClient
+	nodeManager                     api.OpenStorageNodeClient
+	mountAttachManager              api.OpenStorageMountAttachClient
+	volDriver                       api.OpenStorageVolumeClient
+	clusterPairManager              api.OpenStorageClusterPairClient
+	alertsManager                   api.OpenStorageAlertsClient
+	csbackupManager                 api.OpenStorageCloudBackupClient
+	storagePoolManager              api.OpenStoragePoolClient
+	diagsManager                    api.OpenStorageDiagsClient
+	diagsJobManager                 api.OpenStorageJobClient
+	openStorageVerifyChecksumClient api.OpenStorageVerifyChecksumClient
+	licenseManager                  pxapi.PortworxLicenseClient
+	licenseFeatureManager           pxapi.PortworxLicensedFeatureClient
+	autoFsTrimManager               api.OpenStorageFilesystemTrimClient
+	portworxServiceClient           pxapi.PortworxServiceClient
+	defragManager                   api.OpenStorageFilesystemDefragClient
+	openStorageSchedule             api.OpenStorageScheduleClient
+	schedOps                        schedops.Driver
+	nodeDriver                      node.Driver
+	namespace                       string
+	refreshEndpoint                 bool
+	token                           string
+	skipPXSvcEndpoint               bool
+	skipPxOperatorUpgrade           bool
+	DiagsFile                       string
 
 	pureDeviceBaseline map[string]map[string]pureLocalPathEntry // Stores a list of Pure mapper devices present on each storage node
 }
@@ -823,7 +825,7 @@ func (d *portworx) CreateVolume(volName string, size uint64, haLevel int64) (str
 		&api.SdkVolumeCreateRequest{
 			Name: volName,
 			Spec: &api.VolumeSpec{
-				Size:    size,
+				Size:    size * 1024 * 1024 * 1024,
 				HaLevel: haLevel,
 				Format:  api.FSType_FS_TYPE_EXT4,
 			},
@@ -958,6 +960,22 @@ func (d *portworx) CreateSnapshot(volumeID string, snapName string) (*api.SdkVol
 	}
 	return snapshotResponse, nil
 
+}
+
+func (d *portworx) StartChecksumVerification(volumeID string, resumeFromSavedOffset bool) (*api.SdkVerifyChecksumStartResponse, error) {
+	checksumClient := d.getVerifyChecksumClient()
+	log.Infof("StartChecksumVerification for volume %s", volumeID)
+	return checksumClient.Start(d.getContext(), &api.SdkVerifyChecksumStartRequest{VolumeId: volumeID, ResumeFromSavedOffset: resumeFromSavedOffset})
+}
+
+func (d *portworx) StopChecksumVerification(volumeID string) (*api.SdkVerifyChecksumStopResponse, error) {
+	checksumClient := d.getVerifyChecksumClient()
+	return checksumClient.Stop(d.getContext(), &api.SdkVerifyChecksumStopRequest{VolumeId: volumeID})
+}
+
+func (d *portworx) StatusChecksumVerification(volumeID string) (*api.SdkVerifyChecksumStatusResponse, error) {
+	checksumClient := d.getVerifyChecksumClient()
+	return checksumClient.Status(d.getContext(), &api.SdkVerifyChecksumStatusRequest{VolumeId: volumeID})
 }
 
 func (d *portworx) InspectVolume(name string) (*api.Volume, error) {
@@ -2521,6 +2539,36 @@ func (d *portworx) KillPXDaemon(nodes []node.Node, triggerOpts *driver_api.Trigg
 	return driver_api.PerformTask(stopFn, triggerOpts)
 }
 
+// GetAttachedNodeForVolume returns the node on which volume is attached
+func (d *portworx) GetAttachedNodeForVolume(volumeName string) (*node.Node, error) {
+
+	volumeInspectResponse, err := d.getVolDriver().Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
+	if err != nil {
+		log.Warnf("Failed to inspect volume [%s], Err: %v", volumeName, err)
+		return nil, &ErrFailedToInspectVolume{
+			ID:    volumeName,
+			Cause: err.Error(),
+		}
+	}
+
+	pxVol := volumeInspectResponse.Volume
+	for _, n := range node.GetStorageDriverNodes() {
+		ok, err := d.IsVolumeAttachedOnNode(pxVol, n)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			return &n, err
+		}
+	}
+
+	// Snapshots may not be attached to a node
+	if pxVol.Source.Parent != "" {
+		return nil, nil
+	}
+	return nil, fmt.Errorf("volume [%s] is not attached on any node", volumeName)
+}
+
 // GetNodeForVolume returns the node on which volume is attached
 func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume, timeout time.Duration, retryInterval time.Duration) (*node.Node, error) {
 	volumeName := d.schedOps.GetVolumeName(vol)
@@ -2534,6 +2582,7 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume, timeout time.Dura
 				Cause: err.Error(),
 			}
 		}
+
 		isPureFile, err := d.IsPureFileVolume(vol)
 		if err != nil {
 			return nil, false, err
@@ -3298,6 +3347,72 @@ func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor in
 	return nil
 }
 
+func (d *portworx) ChecksumVerification(vol *torpedovolume.Volume, resumeFromSavedOffset bool, waitForVerificationToFinish bool) error {
+	volumeName := d.schedOps.GetVolumeName(vol)
+
+	t := func() (interface{}, bool, error) {
+		volDriver := d.getVolDriver()
+		volumeInspectResponse, err := volDriver.Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
+		if err != nil && errIsNotFound(err) {
+			return nil, false, err
+		} else if err != nil {
+			return nil, true, err
+		}
+
+		log.Infof("Trigger checksum verification for volume %s id %s", volumeName, volumeInspectResponse.Volume.Id)
+		resp, err := d.StartChecksumVerification(volumeInspectResponse.Volume.Id, true)
+		if err != nil {
+			log.Infof("Failed to trigger checksum verification for volume %s error %v", volumeName, err)
+			return nil, true, err
+		}
+
+		if resp.Status != api.VerifyChecksum_VERIFY_CHECKSUM_STARTED {
+			log.Infof("Failed to trigger checksum verification for volume %s status %v", volumeName, resp.Status)
+			return nil, false, err
+		}
+
+		err = d.WaitForChecksumVerificationToComplete(volumeInspectResponse.Volume.Id, validateChecksumVerificationTimeout)
+		return err, false, nil
+	}
+
+	_, err := task.DoRetryWithTimeout(t, validateChecksumVerificationTimeout, defaultRetryInterval*6)
+	return err
+}
+
+func (d *portworx) WaitForChecksumVerificationToComplete(volumeID string, checksumVerificationTimeout time.Duration) error {
+	checksumClient := d.getVerifyChecksumClient()
+	response, err := checksumClient.Status(d.getContext(), &api.SdkVerifyChecksumStatusRequest{VolumeId: volumeID})
+	if err != nil {
+		return err
+	}
+
+	quitFlag := false
+	waitTime := time.After(checksumVerificationTimeout)
+	for !quitFlag && response.Status == api.VerifyChecksum_VERIFY_CHECKSUM_STARTED {
+		select {
+		case <-waitTime:
+			quitFlag = true
+		default:
+			response, err = checksumClient.Status(d.getContext(), &api.SdkVerifyChecksumStatusRequest{VolumeId: volumeID})
+			if err != nil {
+				return err
+			}
+			time.Sleep(defaultRetryInterval)
+		}
+	}
+
+	switch response.Status {
+	case api.VerifyChecksum_VERIFY_CHECKSUM_STARTED:
+		return fmt.Errorf("volume %s did not finish checksum verification within %d", volumeID, waitTime)
+
+	case api.VerifyChecksum_VERIFY_CHECKSUM_FAILED:
+		return fmt.Errorf("verify checksum failed on volume %s", volumeID)
+
+	default:
+		return nil
+	}
+}
+
 func (d *portworx) WaitForReplicationToComplete(vol *torpedovolume.Volume, replFactor int64, replicationUpdateTimeout time.Duration) error {
 	volumeName := d.schedOps.GetVolumeName(vol)
 	volDriver := d.getVolDriver()
@@ -3468,6 +3583,7 @@ func (d *portworx) testAndSetEndpoint(endpoint string, sdkport, apiport int32) e
 	d.licenseManager = pxapi.NewPortworxLicenseClient(conn)
 	d.diagsManager = api.NewOpenStorageDiagsClient(conn)
 	d.diagsJobManager = api.NewOpenStorageJobClient(conn)
+	d.openStorageVerifyChecksumClient = api.NewOpenStorageVerifyChecksumClient(conn)
 	d.licenseFeatureManager = pxapi.NewPortworxLicensedFeatureClient(conn)
 	d.autoFsTrimManager = api.NewOpenStorageFilesystemTrimClient(conn)
 	d.portworxServiceClient = pxapi.NewPortworxServiceClient(conn)
@@ -4297,6 +4413,13 @@ func (d *portworx) GetNodeStatus(n node.Node) (*api.Status, error) {
 	nodeResponse := resp.(*api.SdkNodeInspectResponse)
 
 	return &nodeResponse.Node.Status, nil
+}
+
+func (d *portworx) getVerifyChecksumClient() api.OpenStorageVerifyChecksumClient {
+	if d.refreshEndpoint {
+		d.setDriver()
+	}
+	return d.openStorageVerifyChecksumClient
 }
 
 func (d *portworx) getVolDriver() api.OpenStorageVolumeClient {

@@ -137,6 +137,7 @@ const (
 
 const (
 	validateReplicationUpdateTimeout = 4 * time.Hour
+	validateChecksumVerificationTimeout = 60 * time.Minute
 	errorChannelSize                 = 50
 	snapshotScheduleRetryInterval    = 2 * time.Minute
 	snapshotScheduleRetryTimeout     = 60 * time.Minute

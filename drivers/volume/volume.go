@@ -217,6 +217,9 @@ type Driver interface {
 	// GetNodeForVolume returns the node on which the volume is attached
 	GetNodeForVolume(vol *Volume, timeout time.Duration, retryInterval time.Duration) (*node.Node, error)
 
+	// GetNodeForVolume returns the node on which the volume is attached
+	GetAttachedNodeForVolume(volumeName string) (*node.Node, error)
+
 	// GetNodeForBackup returns the node on which cloudsnap backup is started
 	GetNodeForBackup(backupID string) (node.Node, error)
 
@@ -300,6 +303,12 @@ type Driver interface {
 
 	//WaitForReplicationToComplete waits for replication factor change to complete
 	WaitForReplicationToComplete(vol *Volume, replFactor int64, replicationUpdateTimeout time.Duration) error
+
+	// ChecksumVerification trigger checksum verification and wait for completion
+	ChecksumVerification(vol *Volume, resumeFromSavedOffset bool, waitForVerificationToFinish bool) error
+
+	//WaitForChecksumVerificationToComplete waits for checksum verification to complete
+	WaitForChecksumVerificationToComplete(volumeID string, checksumVerificationTimeout time.Duration) error
 
 	// GetMaxReplicationFactor returns the max supported repl factor of a volume
 	GetMaxReplicationFactor() int64
@@ -562,6 +571,15 @@ type Driver interface {
 
 	// ValidateLastDefragScheduleStatus validate defrag status in given node ids
 	ValidateLastDefragScheduleStatus(scheduleId string, nodeIDList []string) ([]string, error)
+
+	// StartChecksumVerification triggers checksum verification on the volume
+	StartChecksumVerification(volumeID string, resumeFromSavedOffset bool) (*api.SdkVerifyChecksumStartResponse, error)
+
+	// StopChecksumVerification stops checksum verification on the volume
+	StopChecksumVerification(volumeID string) (*api.SdkVerifyChecksumStopResponse, error)
+
+	// StatusChecksumVerification return status of checksum verification job
+	StatusChecksumVerification(volumeID string) (*api.SdkVerifyChecksumStatusResponse, error)
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

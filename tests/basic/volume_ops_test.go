@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/volume/portworx"
-	"github.com/portworx/torpedo/pkg/restutil"
 	"math"
 	"math/rand"
 	"net/http"
@@ -14,6 +12,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/portworx/torpedo/drivers/volume/portworx"
+	"github.com/portworx/torpedo/pkg/restutil"
 
 	"github.com/google/uuid"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
@@ -40,7 +41,8 @@ import (
 const (
 	bandwidthMBps = 1
 	// buffered BW = 1 MBps with 10% buffer speed in KBps
-	bufferedBW = 1130
+	bufferedBW                          = 1130
+	validateChecksumVerificationTimeout = 60 * time.Minute
 )
 const (
 	fio                     = "fio-throttle-io"
@@ -62,6 +64,1223 @@ type CloudBackupSizeAPI struct {
 	CompressedObjectBytes string `json:"compressed_object_bytes"`
 	Capacity              string `json:"capacity_required_for_restore"`
 }
+
+func createVolume(volName string, n node.Node, size uint64, haUpdate int64, ioSize int64) (string, error) {
+	volId, err := Inst().V.CreateVolume(volName, size, haUpdate)
+	if err != nil {
+		log.FailOnError(err, fmt.Sprintf("Failed to create volume with vol Name [%v]", volName))
+	}
+	log.InfoD("Volume Created with ID [%v]", volId)
+
+	//attach volume to host
+	attachCmd := fmt.Sprintf("pxctl host attach %s", volName)
+	cmdConnectionOpts := node.ConnectionOpts{
+		Timeout:         15 * time.Second,
+		TimeBeforeRetry: 5 * time.Second,
+		Sudo:            true,
+	}
+
+	_, err = Inst().N.RunCommandWithNoRetry(n, attachCmd, cmdConnectionOpts)
+	if err != nil {
+		return "", err
+	}
+
+	err = writeFioDataToVolume(volName, n, ioSize)
+	if err != nil {
+		return "", err
+	}
+
+	return volId, nil
+}
+
+func deleteVolume(volumeID string, volName string, n node.Node) error {
+	pxctlUnmountCmd := fmt.Sprintf("host unmount --path /var/lib/osd/mounts/%s %s", volName, volName)
+	_, err = runPxctlCommand(pxctlUnmountCmd, n, nil)
+	if err == nil {
+		log.InfoD("Succesfully unmounted volume: %v", volName)
+	} else {
+		log.Errorf("Failed to unmount volume %s err %v", volumeID, err)
+	}
+
+	err := Inst().V.DetachVolume(volumeID)
+	if err != nil {
+		log.Errorf("Failed to detach volume %s err %v", volumeID, err)
+	} else {
+		log.InfoD("Succesfully detached volume: %v", volumeID)
+	}
+
+	err = Inst().V.DeleteVolume(volumeID)
+	if err != nil {
+		log.Errorf("Failed to deleted volume %s err %v", volumeID, err)
+	} else {
+		log.InfoD("Succesfully deleted volume: %v", volumeID)
+	}
+	return err
+}
+
+// Checksum verification on repl3 volume
+var _ = Describe("{VerifyChecksumRepl3}", func() {
+	var testrailID = 87581026
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/87581026
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("VerifyChecksumRepl3", "Verify checksum on repl-3 volume", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "has to create volume and start checksum verification"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		var err error
+		contexts = make([]*scheduler.Context, 0)
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("volchecksum-%d", i))...)
+		}
+
+		ValidateApplications(contexts)
+
+		stepLog = "get volumes for all apps in test and trigger checksum verification"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				var appVolumes []*volume.Volume
+				stepLog = fmt.Sprintf("get volumes for %s app", ctx.App.Key)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					appVolumes, err = Inst().S.GetVolumes(ctx)
+					log.FailOnError(err, "Failed to get volumes for app %s", ctx.App.Key)
+					dash.VerifyFatal(len(appVolumes) > 0, true, "App volumes exist?")
+				})
+				for _, v := range appVolumes {
+					stepLog = fmt.Sprintf("trigger checksum verification volume driver %s on app %s's volume: %v",
+						Inst().V.String(), ctx.App.Key, v)
+					Step(stepLog,
+						func() {
+							log.InfoD(stepLog)
+							err = Inst().V.ChecksumVerification(v, false, true)
+							log.FailOnError(err, "Failed checksum verification on volume %v", v.Name)
+							dash.VerifyFatal(err == nil, true, fmt.Sprintf("Checksum verification on %s successful ?", v.Name))
+						})
+				}
+			}
+		})
+
+		Step("destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+func verifyChecksumNRepl(haLevel int64, expectSuccess bool) {
+	stepLog := "has to create volume and start checksum verification on the volume"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		selectedNode := node.GetStorageDriverNodes()[0]
+		volName := fmt.Sprintf("VerifyChecksumRepl1_%d", rand.Int())
+		volID := ""
+		stepLog = "Create 1 Volume, Run fio"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			volID, err = createVolume(volName, selectedNode, 20, haLevel, 10)
+			log.FailOnError(err, "Failed to create volume and write data")
+			log.InfoD("Succesfully created Volume %s with id %s", volName, volID)
+		})
+
+		defer deleteVolume(volID, volName, selectedNode)
+
+		stepLog = "Trigger checksum Verification"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			resp, err := Inst().V.StartChecksumVerification(volID, false)
+			log.FailOnError(err, "Failed to trigger checksum verification on %s", volName)
+			dash.VerifyFatal(resp.Status == api.VerifyChecksum_VERIFY_CHECKSUM_STARTED, true, "Checksum verification started?")
+			log.InfoD("Succesfully started checksum verification on Volume %s with id %s", volName, volID)
+		})
+
+		stepLog = "Wait for checksum Verification to complete"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().V.WaitForChecksumVerificationToComplete(volID, validateChecksumVerificationTimeout)
+			if expectSuccess {
+				log.FailOnError(err, "Failed to complete checksum verification on %s", volName)
+			} else {
+				log.FailOnNoError(err, "Checksum verification on %s should have aborted", volName)
+			}
+		})
+	})
+}
+
+// Checksum verification on repl 1 volume
+var _ = Describe("{VerifyChecksumRepl1}", func() {
+	var testrailID = 87581028
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/87581028
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("VerifyChecksumRepl1", "Verify checksum on repl-1 volume", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	var contexts []*scheduler.Context
+
+	verifyChecksumNRepl(1, false)
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+// Checksum verification on repl 2 volume
+var _ = Describe("{VerifyChecksumRepl2}", func() {
+	var testrailID = 87581028
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/87581028
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("VerifyChecksumRepl1", "Verify checksum on repl-1 volume", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	var contexts []*scheduler.Context
+
+	verifyChecksumNRepl(2, true)
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+// Pause checksum verification and resume
+var _ = Describe("{VerifyChecksumPauseResume}", func() {
+	var testrailID = 87581029
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/87581029
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("VerifyChecksumPauseResume", "Trigger checksum verification, pause and resume", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "has to trigger checksum verification, pause and resume"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		selectedNode := node.GetStorageDriverNodes()[0]
+		volName := fmt.Sprintf("VerifyChecksumPauseResume_%d", rand.Int())
+		volID := ""
+		stepLog = "Create 1 Volume, Run fio"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			volID, err = createVolume(volName, selectedNode, 20, 3, 10)
+			log.FailOnError(err, "Failed to create volume and write data")
+			log.InfoD("Succesfully created Volume %s with id %s", volName, volID)
+		})
+
+		defer deleteVolume(volID, volName, selectedNode)
+
+		stepLog = "Trigger checksum Verification"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			resp, err := Inst().V.StartChecksumVerification(volID, false)
+			log.FailOnError(err, "Failed to trigger checksum verification on %s", volName)
+			dash.VerifyFatal(resp.Status == api.VerifyChecksum_VERIFY_CHECKSUM_STARTED, true, "Checksum verification started?")
+			log.InfoD("Succesfully started checksum verification on Volume %s with id %s", volName, volID)
+		})
+
+		stepLog = "Pause checksum Verification"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			_, err := Inst().V.StopChecksumVerification(volID)
+			log.FailOnError(err, "Failed to trigger checksum verification on %s", volName)
+			log.InfoD("Succesfully stopped checksum verification on Volume %s with id %s", volName, volID)
+		})
+
+		stepLog = "Restart checksum Verification"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			resp, err := Inst().V.StartChecksumVerification(volID, true)
+			log.FailOnError(err, "Failed to trigger checksum verification on %s", volName)
+			dash.VerifyFatal(resp.Status == api.VerifyChecksum_VERIFY_CHECKSUM_STARTED, true, "Checksum verification started?")
+			log.InfoD("Succesfully resumed checksum verification on Volume %s with id %s", volName, volID)
+		})
+
+		stepLog = "Wait for checksum Verification to complete"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().V.WaitForChecksumVerificationToComplete(volID, validateChecksumVerificationTimeout)
+			log.FailOnError(err, "Failed to complete checksum verification on %s", volName)
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+// Abort checksum verification and restart
+var _ = Describe("{VerifyChecksumAbortResume}", func() {
+	var testrailID = 87581030
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/87581030
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("VerifyChecksumAbortResume", "Trigger checksum verification, abort and restart", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "has to trigger checksum verification, abort and restart"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		selectedNode := node.GetStorageDriverNodes()[0]
+		volName := fmt.Sprintf("VerifyChecksumAbortResume_%d", rand.Int())
+		volID := ""
+		stepLog = "Create 1 Volume, Run fio"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			volID, err = createVolume(volName, selectedNode, 20, 3, 10)
+			log.FailOnError(err, "Failed to create volume and write data")
+			log.InfoD("Succesfully created Volume %s with id %s", volName, volID)
+		})
+
+		defer deleteVolume(volID, volName, selectedNode)
+
+		stepLog = "Trigger checksum Verification"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			resp, err := Inst().V.StartChecksumVerification(volID, false)
+			log.FailOnError(err, "Failed to trigger checksum verification on %s", volName)
+			dash.VerifyFatal(resp.Status == api.VerifyChecksum_VERIFY_CHECKSUM_STARTED, true, "Checksum verification started?")
+			log.InfoD("Succesfully started checksum verification on Volume %s with id %s", volName, volID)
+		})
+
+		stepLog = "Pause checksum Verification"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			_, err := Inst().V.StopChecksumVerification(volID)
+			log.FailOnError(err, "Failed to trigger checksum verification on %s", volName)
+			log.InfoD("Succesfully stopped checksum verification on Volume %s with id %s", volName, volID)
+		})
+
+		stepLog = "Restart checksum Verification"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			resp, err := Inst().V.StartChecksumVerification(volID, false)
+			log.FailOnError(err, "Failed to trigger checksum verification on %s", volName)
+			dash.VerifyFatal(resp.Status == api.VerifyChecksum_VERIFY_CHECKSUM_STARTED, true, "Checksum verification started?")
+			log.InfoD("Succesfully resumed checksum verification on Volume %s with id %s", volName, volID)
+		})
+
+		stepLog = "Wait for checksum Verification to complete"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().V.WaitForChecksumVerificationToComplete(volID, validateChecksumVerificationTimeout)
+			log.FailOnError(err, "Failed to complete checksum verification on %s", volName)
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+// Trigger checksum verification and ha-add
+var _ = Describe("{VerifyChecksumHaAdd}", func() {
+	var testrailID = 87581031
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/87581031
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("VerifyChecksumHaAdd", "Trigger checksum verification, increase replication factor", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "has to trigger checksum verification, increase replication factor"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		selectedNode := node.GetStorageDriverNodes()[0]
+		volName := fmt.Sprintf("VerifyChecksumHaAdd_%d", rand.Int())
+		volID := ""
+		stepLog = "Create 1 Volume, Run fio"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			volID, err = createVolume(volName, selectedNode, 20, 2, 10)
+			log.FailOnError(err, "Failed to create volume and write data")
+			log.InfoD("Succesfully created Volume %s with id %s", volName, volID)
+		})
+
+		defer deleteVolume(volID, volName, selectedNode)
+
+		stepLog = "Trigger checksum Verification"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			resp, err := Inst().V.StartChecksumVerification(volID, false)
+			log.FailOnError(err, "Failed to trigger checksum verification on %s", volName)
+			dash.VerifyFatal(resp.Status == api.VerifyChecksum_VERIFY_CHECKSUM_STARTED, true, "Checksum verification started?")
+			log.InfoD("Succesfully started checksum verification on Volume %s with id %s", volName, volID)
+		})
+
+		stepLog = fmt.Sprintf("repl increase on volume volume: %v", volName)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			// Increase replication factor to 3
+			pxctlHAUpdateCmd := fmt.Sprintf("v ha-update --repl 3 %v", volName)
+			_, err = runPxctlCommand(pxctlHAUpdateCmd, selectedNode, nil)
+			log.FailOnError(err, "Failed to increase replication factor to 3")
+			log.InfoD("Successfully increase replication factor to 3")
+		})
+
+		stepLog = "Wait for checksum Verification to complete"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().V.WaitForChecksumVerificationToComplete(volID, validateChecksumVerificationTimeout)
+			log.FailOnError(err, "Failed to complete checksum verification on %s", volName)
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+// Trigger checksum verification and ha-reduce
+var _ = Describe("{VerifyChecksumHaReduce}", func() {
+	var testrailID = 87581032
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/87581032
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("VerifyChecksumHaReduce", "Trigger checksum verification, decrease replication factor", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "has to trigger checksum verification, decrease replication factor"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		selectedNode := node.GetStorageDriverNodes()[0]
+		volName := fmt.Sprintf("VerifyChecksumHaReduce_%d", rand.Int())
+		volID := ""
+		stepLog = "Create 1 Volume, Run fio"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			volID, err = createVolume(volName, selectedNode, 20, 3, 10)
+			log.FailOnError(err, "Failed to create volume and write data")
+			log.InfoD("Succesfully created Volume %s with id %s", volName, volID)
+		})
+
+		defer deleteVolume(volID, volName, selectedNode)
+
+		stepLog = "Trigger checksum Verification"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			resp, err := Inst().V.StartChecksumVerification(volID, false)
+			log.FailOnError(err, "Failed to trigger checksum verification on %s", volName)
+			dash.VerifyFatal(resp.Status == api.VerifyChecksum_VERIFY_CHECKSUM_STARTED, true, "Checksum verification started?")
+			log.InfoD("Succesfully started checksum verification on Volume %s with id %s", volName, volID)
+		})
+
+		stepLog = fmt.Sprintf("repl decrease on volume volume: %v", volName)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			// Increase replication factor to 3
+			pxctlHAUpdateCmd := fmt.Sprintf("v ha-update --repl 2 %v", volName)
+			_, err = runPxctlCommand(pxctlHAUpdateCmd, selectedNode, nil)
+			log.FailOnError(err, "Failed to decrease replication factor to 2")
+			log.InfoD("Successfully decrease replication factor to 2")
+		})
+
+		stepLog = "Wait for checksum Verification to complete"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().V.WaitForChecksumVerificationToComplete(volID, validateChecksumVerificationTimeout)
+			log.FailOnError(err, "Failed to complete checksum verification on %s", volName)
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+// Trigger checksum verification and snapshot
+var _ = Describe("{VerifyChecksumSnapshot}", func() {
+	var testrailID = 87581033
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/87581033
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("VerifyChecksumSnapshot", "Trigger checksum verification and create snapshot of volume", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "has to trigger checksum verification and create snapshot of volume"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		selectedNode := node.GetStorageDriverNodes()[0]
+		volName := fmt.Sprintf("VerifyChecksumSnapshot_%d", rand.Int())
+		volID := ""
+		stepLog = "Create 1 Volume, Run fio"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			volID, err = createVolume(volName, selectedNode, 20, 3, 10)
+			log.FailOnError(err, "Failed to create volume and write data")
+			log.InfoD("Succesfully created Volume %s with id %s", volName, volID)
+		})
+
+		defer deleteVolume(volID, volName, selectedNode)
+
+		stepLog = "Trigger checksum Verification"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			resp, err := Inst().V.StartChecksumVerification(volID, false)
+			log.FailOnError(err, "Failed to trigger checksum verification on %s", volName)
+			dash.VerifyFatal(resp.Status == api.VerifyChecksum_VERIFY_CHECKSUM_STARTED, true, "Checksum verification started?")
+			log.InfoD("Succesfully started checksum verification on Volume %s with id %s", volName, volID)
+		})
+
+		stepLog = "Create a clone of volume and run fio on the cloned volume"
+		cloneVol := ""
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			cloneVol, err = Inst().V.CloneVolume(volName)
+			log.FailOnError(err, "Failed to clone volume")
+			log.InfoD("successfully create clone of volume :%v -> %v", volName, cloneVol)
+		})
+
+		stepLog = "Delete the clone volume"
+		Step(stepLog, func() {
+			err = Inst().V.DeleteVolume(cloneVol)
+			log.FailOnError(err, "Failed to delete volume:%v", cloneVol)
+		})
+
+		stepLog = "Wait for checksum Verification to complete"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().V.WaitForChecksumVerificationToComplete(volID, validateChecksumVerificationTimeout)
+			log.FailOnError(err, "Failed to complete checksum verification on %s", volName)
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+// Trigger checksum verification and restart px on co-ordinator node
+var _ = Describe("{VerifyChecksumPxRestartCoOrdinator}", func() {
+	var testrailID = 87581034
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/87581034
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("VerifyChecksumPxRestartCoOrdinator", "Trigger checksum verification and restart px on co-ordinator node", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "has to trigger checksum verification and restart px on co-ordinator node"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		selectedNode := node.GetStorageDriverNodes()[0]
+		volName := fmt.Sprintf("VerifyChecksumPxRestartCoOrdinator_%d", rand.Int())
+		volID := ""
+		stepLog = "Create 1 Volume, Run fio"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			volID, err = createVolume(volName, selectedNode, 20, 3, 10)
+			log.FailOnError(err, "Failed to create volume and write data")
+			log.InfoD("Succesfully created Volume %s with id %s", volName, volID)
+		})
+
+		defer deleteVolume(volID, volName, selectedNode)
+
+		stepLog = "Trigger checksum Verification"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			resp, err := Inst().V.StartChecksumVerification(volID, false)
+			log.FailOnError(err, "Failed to trigger checksum verification on %s", volName)
+			dash.VerifyFatal(resp.Status == api.VerifyChecksum_VERIFY_CHECKSUM_STARTED, true, "Checksum verification started?")
+			log.InfoD("Succesfully started checksum verification on Volume %s with id %s", volName, volID)
+		})
+
+		stepLog = "Restart PX on co-ordinator node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			attachedNode, err := Inst().V.GetAttachedNodeForVolume(volName)
+			log.FailOnError(err, fmt.Sprintf("error getting attached node for volume [%s]", volName))
+
+			StopVolDriverAndWait([]node.Node{*attachedNode})
+			log.Infof("waiting for 1 min before starting PX for volumes corordinator to failover")
+			time.Sleep(1 * time.Second)
+			StartVolDriverAndWait([]node.Node{*attachedNode})
+			status, err := IsPxRunningOnNode(attachedNode)
+			log.FailOnError(err, "error checking px status on node [%s]", attachedNode.Name)
+			dash.VerifyFatal(status, true, fmt.Sprintf("verfiy px is running on node [%s]", attachedNode.Name))
+		})
+
+		stepLog = "Wait for checksum Verification to complete"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().V.WaitForChecksumVerificationToComplete(volID, validateChecksumVerificationTimeout)
+			log.FailOnError(err, "Failed to complete checksum verification on %s", volName)
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+// Trigger checksum verification and restart co-ordinator node
+var _ = Describe("{VerifyChecksumRestartCoOrdinator}", func() {
+	var testrailID = 87581035
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/87581035
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("VerifyChecksumRestartCoOrdinator", "Trigger checksum verification, restart coordinator node", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "has to trigger checksum verification, restart coordinator node"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		selectedNode := node.GetStorageDriverNodes()[0]
+		volName := fmt.Sprintf("VerifyChecksumRestartCoOrdinator_%d", rand.Int())
+		volID := ""
+		stepLog = "Create 1 Volume, Run fio"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			volID, err = createVolume(volName, selectedNode, 20, 3, 10)
+			log.FailOnError(err, "Failed to create volume and write data")
+			log.InfoD("Succesfully created Volume %s with id %s", volName, volID)
+		})
+
+		defer deleteVolume(volID, volName, selectedNode)
+
+		stepLog = "Trigger checksum Verification"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			resp, err := Inst().V.StartChecksumVerification(volID, false)
+			log.FailOnError(err, "Failed to trigger checksum verification on %s", volName)
+			dash.VerifyFatal(resp.Status == api.VerifyChecksum_VERIFY_CHECKSUM_STARTED, true, "Checksum verification started?")
+			log.InfoD("Succesfully started checksum verification on Volume %s with id %s", volName, volID)
+		})
+
+		stepLog = "Restart PX on co-ordinator node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			attachedNode, err := Inst().V.GetAttachedNodeForVolume(volName)
+			log.FailOnError(err, fmt.Sprintf("error getting attached node for volume [%s]", volName))
+
+			StopVolDriverAndWait([]node.Node{*attachedNode})
+			log.Infof("waiting for 1 min before starting PX for volumes corordinator to failover")
+			time.Sleep(1 * time.Second)
+			StartVolDriverAndWait([]node.Node{*attachedNode})
+			status, err := IsPxRunningOnNode(attachedNode)
+			log.FailOnError(err, "error checking px status on node [%s]", attachedNode.Name)
+			dash.VerifyFatal(status, true, fmt.Sprintf("verfiy px is running on node [%s]", attachedNode.Name))
+		})
+
+		stepLog = "Wait for checksum Verification to complete"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().V.WaitForChecksumVerificationToComplete(volID, validateChecksumVerificationTimeout)
+			log.FailOnError(err, "Failed to complete checksum verification on %s", volName)
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+// Trigger checksum verification and restart target
+var _ = Describe("{VerifyChecksumRestartTarget}", func() {
+	var testrailID = 87581036
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/87581036
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("VerifyChecksumRestartTarget", "Trigger checksum verification and restart target node", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "has to trigger checksum verification and restart target node"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		selectedNode := node.GetStorageDriverNodes()[0]
+		volName := fmt.Sprintf("VerifyChecksumRestartTarget_%d", rand.Int())
+		volID := ""
+		stepLog = "Create 1 Volume, Run fio"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			volID, err = createVolume(volName, selectedNode, 20, 3, 10)
+			log.FailOnError(err, "Failed to create volume and write data")
+			log.InfoD("Succesfully created Volume %s with id %s", volName, volID)
+		})
+
+		defer deleteVolume(volID, volName, selectedNode)
+
+		stepLog = "Trigger checksum Verification"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			resp, err := Inst().V.StartChecksumVerification(volID, false)
+			log.FailOnError(err, "Failed to trigger checksum verification on %s", volName)
+			dash.VerifyFatal(resp.Status == api.VerifyChecksum_VERIFY_CHECKSUM_STARTED, true, "Checksum verification started?")
+			log.InfoD("Succesfully started checksum verification on Volume %s with id %s", volName, volID)
+		})
+
+		stepLog = "Restart one target node"
+		Step(stepLog, func() {
+			poolIds, err := GetPoolIDsFromVolName(volID)
+			if err != nil {
+				log.FailOnError(err, "failed to get pool details from the volume")
+			}
+
+			randomIndex := rand.Intn(len(poolIds))
+			poolPicked := poolIds[randomIndex]
+
+			nodeDetail, err := GetNodeWithGivenPoolID(poolPicked)
+			if err != nil {
+				log.FailOnError(err, "error while fetching node details from pool ID")
+			}
+			log.InfoD("Restarting Px on Node [%v] and waiting for the Px to come back online", nodeDetail.Name)
+
+			err = Inst().V.RestartDriver(*nodeDetail, nil)
+			if err != nil {
+				log.FailOnError(err, fmt.Sprintf("error restarting px on node %s", nodeDetail.Name))
+			}
+
+			err = Inst().V.WaitDriverUpOnNode(*nodeDetail, 10*time.Minute)
+			if err != nil {
+				log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", nodeDetail.Name))
+			}
+		})
+
+		stepLog = "Wait for checksum Verification to complete"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().V.WaitForChecksumVerificationToComplete(volID, validateChecksumVerificationTimeout)
+			log.FailOnError(err, "Failed to complete checksum verification on %s", volName)
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+// Trigger checksum verification and run IO
+var _ = Describe("{VerifyChecksumWithIO}", func() {
+	var testrailID = 87581037
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/87581037
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("VerifyChecksumWithIO", "Trigger checksum verification and run IO on volume", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "has to trigger checksum verification and run IO on volume"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		selectedNode := node.GetStorageDriverNodes()[0]
+		volName := fmt.Sprintf("VerifyChecksumWithIO_%d", rand.Int())
+		volID := ""
+		stepLog = "Create 1 Volume, Run fio"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			volID, err = createVolume(volName, selectedNode, 20, 3, 10)
+			log.FailOnError(err, "Failed to create volume and write data")
+			log.InfoD("Succesfully created Volume %s with id %s", volName, volID)
+		})
+
+		defer deleteVolume(volID, volName, selectedNode)
+
+		stepLog = "Trigger checksum Verification"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			resp, err := Inst().V.StartChecksumVerification(volID, false)
+			log.FailOnError(err, "Failed to trigger checksum verification on %s", volName)
+			dash.VerifyFatal(resp.Status == api.VerifyChecksum_VERIFY_CHECKSUM_STARTED, true, "Checksum verification started?")
+			log.InfoD("Succesfully started checksum verification on Volume %s with id %s", volName, volID)
+		})
+
+		stepLog = "Wait for checksum Verification to complete"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().V.WaitForChecksumVerificationToComplete(volID, validateChecksumVerificationTimeout)
+			log.FailOnError(err, "Failed to complete checksum verification on %s", volName)
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+// Trigger checksum verification on repl 3 volume and stop px
+var _ = Describe("{VerifyChecksumStopPX}", func() {
+	var testrailID = 87581038
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/87581038
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("VerifyChecksumStopPX", "Trigger checksum verification and stop px on one node", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "has to trigger checksum verification and stop px on one node"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		selectedNode := node.GetStorageDriverNodes()[0]
+		volName := fmt.Sprintf("VerifyChecksumStopPX_%d", rand.Int())
+		volID := ""
+		stepLog = "Create 1 Volume, Run fio"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			volID, err = createVolume(volName, selectedNode, 20, 3, 10)
+			log.FailOnError(err, "Failed to create volume and write data")
+			log.InfoD("Succesfully created Volume %s with id %s", volName, volID)
+		})
+
+		defer deleteVolume(volID, volName, selectedNode)
+
+		stepLog = "Trigger checksum Verification"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			resp, err := Inst().V.StartChecksumVerification(volID, false)
+			log.FailOnError(err, "Failed to trigger checksum verification on %s", volName)
+			dash.VerifyFatal(resp.Status == api.VerifyChecksum_VERIFY_CHECKSUM_STARTED, true, "Checksum verification started?")
+			log.InfoD("Succesfully started checksum verification on Volume %s with id %s", volName, volID)
+		})
+
+		stepLog = "Stop one target node"
+		var nodeDetail *node.Node
+		Step(stepLog, func() {
+			poolIds, err := GetPoolIDsFromVolName(volID)
+			if err != nil {
+				log.FailOnError(err, "failed to get pool details from the volume")
+			}
+
+			randomIndex := rand.Intn(len(poolIds))
+			poolPicked := poolIds[randomIndex]
+
+			nodeDetail, err = GetNodeWithGivenPoolID(poolPicked)
+			if err != nil {
+				log.FailOnError(err, "error while fetching node details from pool ID")
+			}
+			log.InfoD("Stop Px on Node [%v]", nodeDetail.Name)
+
+			StopVolDriverAndWait([]node.Node{*nodeDetail})
+		})
+
+		stepLog = "Wait for checksum Verification to complete"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().V.WaitForChecksumVerificationToComplete(volID, validateChecksumVerificationTimeout)
+			log.FailOnError(err, "Failed to complete checksum verification on %s", volName)
+		})
+
+		stepLog = fmt.Sprintf("Starting PX on node %s", nodeDetail.Name)
+		Step(stepLog, func() {
+			StartVolDriverAndWait([]node.Node{*nodeDetail})
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+// Trigger checksum verification on repl 2 volume and stop px
+var _ = Describe("{VerifyChecksumStopPX_1}", func() {
+	var testrailID = 87581039
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/87581039
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("VerifyChecksumStopPX_1", "Trigger checksum verification on repl 2 volume and stop one px node", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "has to trigger checksum verification on repl 2 volume and stop one px node"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		selectedNode := node.GetStorageDriverNodes()[0]
+		volName := fmt.Sprintf("VerifyChecksumStopPX_1_%d", rand.Int())
+		volID := ""
+		stepLog = "Create 1 Volume, Run fio"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			volID, err = createVolume(volName, selectedNode, 20, 2, 10)
+			log.FailOnError(err, "Failed to create volume and write data")
+			log.InfoD("Succesfully created Volume %s with id %s", volName, volID)
+		})
+
+		defer deleteVolume(volID, volName, selectedNode)
+
+		stepLog = "Trigger checksum Verification"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			resp, err := Inst().V.StartChecksumVerification(volID, false)
+			log.FailOnError(err, "Failed to trigger checksum verification on %s", volName)
+			dash.VerifyFatal(resp.Status == api.VerifyChecksum_VERIFY_CHECKSUM_STARTED, true, "Checksum verification started?")
+			log.InfoD("Succesfully started checksum verification on Volume %s with id %s", volName, volID)
+		})
+
+		stepLog = "Stop one target node"
+		var nodeDetail *node.Node
+		Step(stepLog, func() {
+			poolIds, err := GetPoolIDsFromVolName(volID)
+			if err != nil {
+				log.FailOnError(err, "failed to get pool details from the volume")
+			}
+
+			randomIndex := rand.Intn(len(poolIds))
+			poolPicked := poolIds[randomIndex]
+
+			nodeDetail, err = GetNodeWithGivenPoolID(poolPicked)
+			if err != nil {
+				log.FailOnError(err, "error while fetching node details from pool ID")
+			}
+			log.InfoD("Stop Px on Node [%v]", nodeDetail.Name)
+
+			StopVolDriverAndWait([]node.Node{*nodeDetail})
+		})
+
+		stepLog = "Wait for checksum Verification to complete"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().V.WaitForChecksumVerificationToComplete(volID, validateChecksumVerificationTimeout)
+			log.FailOnNoError(err, "Failed to complete checksum verification on %s", volName)
+		})
+
+		stepLog = fmt.Sprintf("Starting PX on node %s", nodeDetail.Name)
+		Step(stepLog, func() {
+			StartVolDriverAndWait([]node.Node{*nodeDetail})
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+// Trigger checksum verification and detach and attach volume
+var _ = Describe("{VerifyChecksumDetachAttach}", func() {
+	var testrailID = 87581040
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/87581040
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("VerifyChecksumDetachAttach", "Trigger checksum verification, detach and reattach volume", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "has to trigger checksum verification, detach and reattach volume"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		selectedNode := node.GetStorageDriverNodes()[0]
+		volName := fmt.Sprintf("VerifyChecksumDetachAttach_%d", rand.Int())
+		volID := ""
+		stepLog = "Create 1 Volume, Run fio"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			volID, err = createVolume(volName, selectedNode, 20, 2, 10)
+			log.FailOnError(err, "Failed to create volume and write data")
+			log.InfoD("Succesfully created Volume %s with id %s", volName, volID)
+		})
+
+		defer deleteVolume(volID, volName, selectedNode)
+
+		stepLog = "Trigger checksum Verification"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			resp, err := Inst().V.StartChecksumVerification(volID, false)
+			log.FailOnError(err, "Failed to trigger checksum verification on %s", volName)
+			dash.VerifyFatal(resp.Status == api.VerifyChecksum_VERIFY_CHECKSUM_STARTED, true, "Checksum verification started?")
+			log.InfoD("Succesfully started checksum verification on Volume %s with id %s", volName, volID)
+		})
+
+		stepLog = "Unmount and detach the volume"
+		Step(stepLog, func() {
+			pxctlUnmountCmd := fmt.Sprintf("host unmount --path /var/lib/osd/mounts/%s %s", volName, volName)
+			_, err = runPxctlCommand(pxctlUnmountCmd, selectedNode, nil)
+			log.FailOnError(err, fmt.Sprintf("Failed to unmount volume %s id %v", volName, volID))
+			log.InfoD("Succesfully unmounted volume: %v", volName)
+			log.FailOnError(Inst().V.DetachVolume(volID), fmt.Sprintf("Failed to detach volume %s id %v", volName, volID))
+			log.InfoD("Succesfully detached volume: %v", volName)
+		})
+
+		stepLog = "Reattach the volume"
+		Step(stepLog, func() {
+			//attach volume to host
+			attachCmd := fmt.Sprintf("pxctl host attach %s", volID)
+			cmdConnectionOpts := node.ConnectionOpts{
+				Timeout:         15 * time.Second,
+				TimeBeforeRetry: 5 * time.Second,
+				Sudo:            true,
+			}
+
+			newNode := node.GetStorageDriverNodes()[1]
+			_, err = Inst().N.RunCommandWithNoRetry(newNode, attachCmd, cmdConnectionOpts)
+			log.FailOnError(err, "Failed to attach volume %s to host", volName)
+			log.InfoD("Succesfully attached volume: %v", volName)
+		})
+
+		stepLog = "Wait for checksum Verification to complete"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().V.WaitForChecksumVerificationToComplete(volID, validateChecksumVerificationTimeout)
+			log.FailOnError(err, "Failed to complete checksum verification on %s", volName)
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+func verifyChecksumMulti(detach bool) {
+	stepLog := "has to create multiple volumes and start checksum verification on the volume"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		var selectedNodes []node.Node
+		var volumeIds []string
+		var volumeNames []string
+
+		stepLog = "Create 4 Volume, Run fio"
+		Step(stepLog, func() {
+			for i := 0; i < 4; i++ {
+				selectedNode := node.GetStorageDriverNodes()[i]
+				volName := fmt.Sprintf("VerifyChecksumRepl1__%d_%d", i, rand.Int())
+				volID := ""
+				log.InfoD(stepLog)
+				volID, err = createVolume(volName, selectedNode, 20, 3, 10)
+				log.FailOnError(err, "Failed to create volume and write data")
+				log.InfoD("Succesfully created Volume %s with id %s", volName, volID)
+
+				selectedNodes = append(selectedNodes, selectedNode)
+				volumeIds = append(volumeIds, volID)
+				volumeNames = append(volumeNames, volName)
+			}
+		})
+
+		deleteVolumes := func() {
+			for idx, volID := range volumeIds {
+				deleteVolume(volID, volumeNames[idx], selectedNodes[idx])
+			}
+		}
+
+		defer deleteVolumes()
+
+		if detach {
+			stepLog = "Unmount and detach volume"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for idx, volID := range volumeIds {
+					pxctlUnmountCmd := fmt.Sprintf("host unmount --path /var/lib/osd/mounts/%s %s", volumeNames[idx], volumeNames[idx])
+					_, err = runPxctlCommand(pxctlUnmountCmd, selectedNodes[idx], nil)
+					log.FailOnError(err, "Failed to create unmount volume %s err %v", volumeNames[idx], err)
+
+					err := Inst().V.DetachVolume(volID)
+					log.FailOnError(err, "Failed to detach volume %s err %v", volumeNames[idx], err)
+				}
+			})
+		}
+
+		stepLog = "Trigger checksum Verification"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for idx, volID := range volumeIds {
+				resp, err := Inst().V.StartChecksumVerification(volID, false)
+				log.FailOnError(err, "Failed to trigger checksum verification on %s", volumeNames[idx])
+				dash.VerifyFatal(resp.Status == api.VerifyChecksum_VERIFY_CHECKSUM_STARTED, true, "Checksum verification started?")
+				log.InfoD("Succesfully started checksum verification on Volume %s with id %s", volumeNames[idx], volID)
+			}
+		})
+
+		stepLog = "Wait for checksum Verification to complete"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for idx, volID := range volumeIds {
+				err = Inst().V.WaitForChecksumVerificationToComplete(volID, validateChecksumVerificationTimeout)
+				log.FailOnError(err, "Failed to complete checksum verification on %s", volumeNames[idx])
+			}
+		})
+	})
+}
+
+// Trigger checksum verification on multiple attached volumes
+var _ = Describe("{verifyChecksumAttachedMulti}", func() {
+	var testrailID = 87581041
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/87581041
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("verifyChecksumAttachedMulti", "Trigger checksum verification on volume and delete the volume", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	verifyChecksumMulti(false)
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+// Trigger checksum verification on multiple detached volumes
+var _ = Describe("{verifyChecksumdetachedMulti}", func() {
+	var testrailID = 87581042
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/87581042
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("verifyChecksumdetachedMulti", "Trigger checksum verification on volume and delete the volume", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	verifyChecksumMulti(true)
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+// Trigger checksum verification and delete volume
+var _ = Describe("{VerifyChecksumDeleteVolume}", func() {
+	var testrailID = 87581050
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/87581050
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("VerifyChecksumDeleteVolume", "Trigger checksum verification on volume and delete the volume", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "has to trigger checksum verification on volume and delete the volume"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		selectedNode := node.GetStorageDriverNodes()[0]
+		volName := fmt.Sprintf("VerifyChecksumDeleteVolume_%d", rand.Int())
+		volID := ""
+		stepLog = "Create 1 Volume, Run fio"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			volID, err = createVolume(volName, selectedNode, 20, 2, 10)
+			log.FailOnError(err, "Failed to create volume and write data")
+			log.InfoD("Succesfully created Volume %s with id %s", volName, volID)
+		})
+
+		stepLog = "Trigger checksum Verification"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			resp, err := Inst().V.StartChecksumVerification(volID, false)
+			log.FailOnError(err, "Failed to trigger checksum verification on %s", volName)
+			dash.VerifyFatal(resp.Status == api.VerifyChecksum_VERIFY_CHECKSUM_STARTED, true, "Checksum verification started?")
+			log.InfoD("Succesfully started checksum verification on Volume %s with id %s", volName, volID)
+		})
+
+		stepLog = "Delete the volume"
+		Step(stepLog, func() {
+			err = deleteVolume(volName, selectedNode)
+			log.FailOnError(err, "Failed to delete volume:%v", volName)
+		})
+
+		stepLog = "Wait for checksum Verification to complete"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().V.WaitForChecksumVerificationToComplete(volID, validateChecksumVerificationTimeout)
+			log.FailOnNoError(err, "Checksum verification on %s even after volume deletion", volName)
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+// Trigger checksum verification and delete clone volume
+var _ = Describe("{VerifyChecksumDeleteCloneVolume}", func() {
+	var testrailID = 87581052
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/87581052
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("VerifyChecksumDeleteCloneVolume", "Trigger checksum verification on repl 3 volume and delete clone volume", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "has to trigger checksum verification on repl 3 volume and delete clone volume"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		selectedNode := node.GetStorageDriverNodes()[0]
+		volName := fmt.Sprintf("VerifyChecksumDeleteCloneVolume_%d", rand.Int())
+		volID := ""
+		stepLog = "Create 1 Volume, Run fio"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			volID, err = createVolume(volName, selectedNode, 20, 2, 10)
+			log.FailOnError(err, "Failed to create volume and write data")
+			log.InfoD("Succesfully created Volume %s with id %s", volName, volID)
+		})
+
+		defer deleteVolume(volID, volName, selectedNode)
+
+		stepLog = "Trigger checksum Verification"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			resp, err := Inst().V.StartChecksumVerification(volID, false)
+			log.FailOnError(err, "Failed to trigger checksum verification on %s", volName)
+			dash.VerifyFatal(resp.Status == api.VerifyChecksum_VERIFY_CHECKSUM_STARTED, true, "Checksum verification started?")
+			log.InfoD("Succesfully started checksum verification on Volume %s with id %s", volName, volID)
+		})
+
+		cloneName := volID + "-checksum_clone"
+		stepLog = "Delete the clone volume"
+		Step(stepLog, func() {
+			err = Inst().V.DeleteVolume(cloneName)
+			log.FailOnError(err, "Failed to delete volume:%v", cloneName)
+		})
+
+		stepLog = "Wait for checksum Verification to complete"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().V.WaitForChecksumVerificationToComplete(volID, validateChecksumVerificationTimeout)
+			log.FailOnNoError(err, "Failed to complete checksum verification on %s", volName)
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
 
 // Volume replication change
 var _ = Describe("{VolumeUpdate}", func() {
