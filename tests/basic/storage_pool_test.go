@@ -12963,6 +12963,189 @@ var _ = Describe("{PXInstallWithPXRestart}", Label("p1", "px_install", "hal_init
 	})
 })
 
+var _ = Describe("{PoolResizeWithVolumeResync}", Label("p0", "negative", "staging", "hal_ops_disruption", "HA_Increase_Decrease", "PoolExpand", "ResizeDisk", "functional"), func() {
+
+	/*
+		https://purestorage.atlassian.net/browse/HAZEL-1028
+		Create 50 volumes in a setup → (func CreateLargeNumberOfVolumesTest)
+		trigger HA Update on all volumes in parallel
+		trigger pool resize on all pools one by one across nodes
+		once pool resize is done, validate HA Update is successful for all volumes
+	*/
+
+	var (
+		contexts   []*scheduler.Context
+		nodePools  []*api.StoragePool
+		fioVolList []*volume.Volume
+		allVolList []*volume.Volume
+		wg         sync.WaitGroup
+	)
+
+	BeforeEach(func() {
+		StartTorpedoTest("PoolResizeWithVolumeResync", "Try pool resize when lot of volumes are in resync state	", nil, 0)
+	})
+
+	ItLog := "Try pool resize when lot of volumes are in resync state"
+	It(ItLog, func() {
+		log.InfoD(ItLog)
+		applist := Inst().AppList
+		defer func() {
+			Inst().AppList = applist
+		}()
+		stepLog := "Create nginx and fio apps"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			//create app nginx
+			Inst().AppList = []string{"nginx"}
+			for i := 0; i < 45; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("createmultiplevols-nginx-%d", i))...)
+			}
+			//create app fio
+			Inst().AppList = []string{"fio"}
+			for i := 0; i < 1; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("createmultiplevols-fio-%d", i))...)
+			}
+			ValidateApplications(contexts)
+		})
+		defer DestroyApps(contexts, nil)
+
+		//Get list of all volumes present in the cluster
+		log.InfoD("Listing all the volumes present in the cluster")
+		allVolumeIds, err := Inst().V.ListAllVolumes()
+		log.FailOnError(err, "failed to list all the volume")
+		log.Info(fmt.Sprintf("total number of volumes present in the cluster [%v]", len(allVolumeIds)))
+		dash.VerifyFatal(len(allVolumeIds) >= 50, true, "verify 50 volumes are present on the cluster")
+
+		isjournal, err := IsJournalEnabled()
+		log.FailOnError(err, "Failed to check is journal enabled")
+
+		// Get Storage nodes
+		nodes, err := GetStorageNodes()
+		log.FailOnError(err, fmt.Sprintf("error getting storage nodes"))
+		for _, node := range nodes {
+			nodePools = append(nodePools, node.GetPools()...)
+		}
+
+		for _, eachCtx := range contexts {
+			vols, err := Inst().S.GetVolumes(eachCtx)
+			log.FailOnError(err, "Failed to get list of Volumes in the cluster")
+
+			for _, eachVol := range vols {
+				if strings.Contains(eachVol.Name, "fio") {
+					if strings.Contains(eachVol.Name, "log") {
+						continue
+					}
+					fioVolList = append(fioVolList, eachVol)
+				}
+				allVolList = append(allVolList, eachVol)
+			}
+		}
+
+		setReplOnVolumes := func(vol *volume.Volume, wait bool, wg *sync.WaitGroup, setReplErrChan chan error) {
+			defer wg.Done()
+			defer GinkgoRecover()
+			setRepl := 3
+			log.Infof("Setting Replication factor on Volume [%v] with ID [%v] to [%v]", vol.Name, vol.ID, setRepl)
+			err = Inst().V.SetReplicationFactor(vol, int64(setRepl), nil, nil, wait)
+			if err != nil {
+				err = fmt.Errorf("err setting repl factor  to %d for  vol : %s", setRepl, vol.Name)
+				setReplErrChan <- err
+			}
+		}
+
+		stepLog = "perform HA update on Volumes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			batchSize := 5
+			// Set Repl Factor on all the volumes at ones
+			for i := 0; i < len(allVolList); i += batchSize {
+				n := i + batchSize
+				if n > len(allVolList) {
+					n = len(allVolList)
+				}
+				setReplErrChan := make(chan error, batchSize)
+				for _, eachVol := range allVolList[i:n] {
+					wg.Add(1)
+					go setReplOnVolumes(eachVol, false, &wg, setReplErrChan)
+				}
+				wg.Wait()
+				close(setReplErrChan)
+
+				for err := range setReplErrChan {
+					log.FailOnError(err, "failed to set repl factor to 3")
+				}
+			}
+		})
+
+		stepLog = "Verify volume replica are in resync state"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			replicaStatusErrChan := make(chan error, len(fioVolList))
+			//Check volume repl status is in resync state
+			for _, eachVol := range fioVolList {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					defer GinkgoRecover()
+					replStatus := ""
+					timeOutForResyncState := 30 * time.Minute
+					var waitTime time.Duration
+					for startTime := time.Now(); replStatus != "Resync"; time.Sleep(1 * time.Minute) {
+						if waitTime = time.Since(startTime); waitTime > timeOutForResyncState {
+							err = fmt.Errorf("getting replication status %s after %f mins , but expected state 'Resync'", replStatus, waitTime.Minutes())
+							replicaStatusErrChan <- err
+							return
+						}
+						replStatus, err = GetVolumeReplicationStatus(eachVol)
+						if err != nil {
+							replicaStatusErrChan <- err
+							return
+						}
+					}
+				}()
+			}
+			go func() {
+				wg.Wait()
+				close(replicaStatusErrChan)
+			}()
+			for err := range replicaStatusErrChan {
+				log.FailOnError(err, "failed to check volume in resync state")
+			}
+		})
+
+		stepLog = "Perform pool resize on all pools one by one"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, nodePool := range nodePools {
+				originalSizeInBytes := nodePool.TotalSize
+				targetSizeInBytes := originalSizeInBytes + 100*units.GiB
+				targetSizeGiB := targetSizeInBytes / units.GiB
+				log.InfoD("Current Size of pool %s is %d GiB. Expand to %v GiB with type add-disk...", nodePool.Uuid, originalSizeInBytes/units.GiB, targetSizeGiB)
+				err = Inst().V.ExpandPool(nodePool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, targetSizeGiB, true)
+				log.FailOnError(err, "verify pool expansion request is succesfful using type RESIZE DISK")
+				resizeErr := waitForPoolToBeResized(targetSizeGiB, nodePool.Uuid, isjournal)
+				dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d' if pool has journal", targetSizeGiB, targetSizeGiB-3))
+			}
+		})
+
+		stepLog = "Verify HA update is successful"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, vol := range fioVolList {
+				err = ValidateReplFactorUpdate(vol, 3)
+				log.FailOnError(err, "error in ha-increase after pool resize")
+				log.Infof("verified HA update for the vol %s", vol.ID)
+			}
+		})
+
+	})
+
+	AfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
 var _ = Describe("{StoragePoolMultipleExpandDiskResize}", Label("p0", "negative", "pool_ops", "PoolExpand", "ResizeDisk", "staging"), func() {
 	/*
 		    https://purestorage.atlassian.net/browse/HAZEL-1027
