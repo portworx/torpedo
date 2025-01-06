@@ -49,6 +49,14 @@ var (
 	importerPodRetryInterval         = 20 * time.Second
 	defaultMigrationTimeout          = 30 * time.Minute
 	defaultMigrationRetryInterval    = 30 * time.Second
+	// RebootFlag sends the signal to start the reboot operation of node or px during hot-plug disk
+	RebootFlag chan struct{}
+	/*
+		SignalSent flag is set to true once the signal for reboot is sent during hot-plug disk so that
+		the signal is sent only once even if there are multiple DVs to be added (for loop).
+		Make sure to set this to false in JustAfterEach block of test once test completes
+	*/
+	SignalSent bool
 )
 
 // AddDisksToKubevirtVM is a function which takes number of disks to add and adds them to the kubevirt VMs passed (Please provide size in Gi)
@@ -1334,19 +1342,19 @@ func CreateBlankDataVolume(namespace string, dvName string, storageClassName str
 }
 
 // HotPlugDataVolumesToKubevirtVM main trigger to hot plug volumes to a running VM
-func HotPlugDataVolumesToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDVs int, size string, volumeMode string,opts ...int) (bool, error) {
-	var(
-		newDiskCount int
+func HotPlugDataVolumesToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDVs int, size string, volumeMode string, opts ...int) (bool, error) {
+	var (
+		newDiskCount     int
 		initialDiskCount int
-		) 
+	)
 	log.InfoD("Beginning hot-plug of [%d] DataVolume(s) to each VM (size=%s, volumeMode=%s)",
 		numberOfDVs, size, volumeMode)
 
-		numberOfVMs := -1 // Default: no limit
-		if len(opts) > 0 {
-			numberOfVMs = opts[0] // Use the first optional parameter as the number of VMs
-		}
-		vmCount := 0
+	numberOfVMs := -1 // Default: no limit
+	if len(opts) > 0 {
+		numberOfVMs = opts[0] // Use the first optional parameter as the number of VMs
+	}
+	vmCount := 0
 
 	for _, appCtx := range virtualMachines {
 		vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
@@ -1378,15 +1386,21 @@ func HotPlugDataVolumesToKubevirtVM(virtualMachines []*scheduler.Context, number
 			log.Infof("Initial number of disks in VM [%s]: %d", vm.Name, initialDiskCount)
 
 			for i := 0; i < numberOfDVs; i++ {
-				dvName := fmt.Sprintf("hotplug-dv-%s-%d", vm.Name, i)
+				dvName := fmt.Sprintf("hotplug-dv-%s-%v-%d", vm.Name, time.Now().Unix(), i)
 				log.Infof("Creating blank DataVolume [%s/%s] with size=[%s]", vm.Namespace, dvName, size)
 
 				dv, err := CreateBlankDataVolume(vm.Namespace, dvName, storageClass, size, volumeMode)
 				if err != nil {
 					return false, fmt.Errorf("failed to create DV [%s/%s]: %v", vm.Namespace, dvName, err)
 				}
-				log.Infof("Data Volum Created. Hard Sleep for 30 seconds for DV to settle down")
+				log.Infof("Data Volume Created. Hard Sleep for 30 seconds for DV to settle down")
 				time.Sleep(30 * time.Second)
+				// send signal to start the reboot operation of PX or Node reboot during hot-plug disk
+				if RebootFlag != nil && !SignalSent {
+					log.Infof("Reboot flag initiated during hot-plug")
+					RebootFlag <- struct{}{}
+					SignalSent = true
+				}
 				err = HotPlugDVToVM(vm.Name, vm.Namespace, dv.Name)
 				if err != nil {
 					return false, fmt.Errorf("failed to hotplug DV [%s/%s] into VM [%s/%s]: %v",
@@ -1414,7 +1428,7 @@ func HotPlugDataVolumesToKubevirtVM(virtualMachines []*scheduler.Context, number
 				}
 				return newDiskCount, false, nil
 			}
-			log.Infof("Number of disks after adding Hot Pluggable disk [%v] vs initial disks before adding disk [%v]",newDiskCount,initialDiskCount)
+			log.Infof("Number of disks after adding Hot Pluggable disk [%v] vs initial disks before adding disk [%v]", newDiskCount, initialDiskCount)
 			_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 20*time.Second)
 			if err != nil {
 				return false, fmt.Errorf("failed to confirm new disks in VM [%s/%s]: %v", vm.Namespace, vm.Name, err)
@@ -1422,7 +1436,7 @@ func HotPlugDataVolumesToKubevirtVM(virtualMachines []*scheduler.Context, number
 		}
 		vmCount++
 	}
-	log.Infof("Total number of disks after adding Hot Pluggable disk [%v] and total number of disks before adding Hot pluggable disk [%v] ",newDiskCount,initialDiskCount)
+	log.Infof("Total number of disks after adding Hot Pluggable disk [%v] and total number of disks before adding Hot pluggable disk [%v] ", newDiskCount, initialDiskCount)
 	return true, nil
 }
 

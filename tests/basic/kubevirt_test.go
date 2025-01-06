@@ -6141,7 +6141,7 @@ var _ = Describe("{LMAfterAddNewHotPlugDiskToKubevirtVM}", Label("p0", "positive
 				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
 			}
 		}
-		
+
 		if app == "kubevirt-debian-fio-minimal" {
 			volumeMode = ""
 		} else {
@@ -6276,7 +6276,7 @@ var _ = Describe("{Add26NewHotPlugDiskToKubevirtVM}", Label("p0", "positive", "k
 				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
 			}
 		}
-		
+
 		if app == "kubevirt-debian-fio-minimal" {
 			volumeMode = ""
 		} else {
@@ -6316,9 +6316,9 @@ var _ = Describe("{Add26NewHotPlugDiskToKubevirtVM}", Label("p0", "positive", "k
 			wg.Wait()
 		})
 		//numberOfVolumes:=26
-		/* It’s failing with more than 3 volumes - Dhruv to file a bug and update here. 
+		/* It’s failing with more than 3 volumes - Dhruv to file a bug and update here.
 		Till then we will run with 2 volumes */
-		numberOfVolumes:=2
+		numberOfVolumes := 2
 		stepLog = "Adding multiple Hot Pluggable disks to kubevirt VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -6337,6 +6337,408 @@ var _ = Describe("{Add26NewHotPlugDiskToKubevirtVM}", Label("p0", "positive", "k
 	})
 
 	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
+	})
+})
+
+var _ = Describe("{PxRestartDuringAddNewHotPlugDiskToKubevirtVM}", Label("p1", "negative", "kubevirt", "px_crash", "staging"), func() {
+	/*
+	   Step 1: Create a VM
+	   Step 2: Add Hot plug disk to a VM
+	   Step 3: kill Px on source node during hot-plug operation
+	   Step 4: Validate hot plug volume inside VM
+	   JIRA ID: https://purestorage.atlassian.net/browse/HAZEL-1751
+	*/
+	var (
+		app, volType  string
+		present       bool
+		appCtxs       []*scheduler.Context
+		namespace     string
+		canSsh        bool
+		volumeMode    string
+		initialUptime map[string]time.Duration
+		vmNodeName    string
+		bindMount     bool
+		nodes         []string
+		vmDiskCount   map[string]int
+		newDiskCount  int
+		hotPlugDisk   bool
+		wg            sync.WaitGroup
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("PxRestartDuringAddNewHotPlugDiskToKubevirtVM", "Restart Portworx during adding a new raw disk to a running KubeVirt VM via hot-plug", nil, 0)
+		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
+		if !present {
+			app = "kubevirt-debian-fio-minimal"
+		}
+		if volType == "pxe-raw" {
+			app = "kubevirt-raw-vol"
+		} else if volType == "fada-raw" {
+			app = "kubevirt-fada-raw-fio"
+		} else {
+			app = "kubevirt-debian-fio-minimal"
+		}
+		log.InfoD("Setting app for this test to be : %s", app)
+	})
+
+	It("Px restart during hot-plug of a new disk to a running KubeVirt VM", func() {
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+
+		numberOfVolumes := 1
+
+		Inst().AppList = []string{app}
+		Inst().CsiAppList = []string{app}
+
+		stepLog := "Schedule a kubevirt VM"
+		Step(stepLog, func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
+				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
+			}
+		})
+		ValidateApplications(appCtxs)
+
+		if !present {
+			for _, appCtx := range appCtxs {
+				bindMount, err = IsVMBindMounted(appCtx, false)
+				log.FailOnError(err, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "VM bind mount verified")
+			}
+		}
+
+		if app == "kubevirt-debian-fio-minimal" {
+			volumeMode = ""
+		} else {
+			volumeMode = "Block"
+		}
+
+		log.Infof("Sleeping for 2 minutes to let VMs come up fully")
+		time.Sleep(2 * time.Minute)
+
+		canSsh = CreateSSHPodAndSetCanSsh()
+		ValidateFioInVMs(appCtxs, canSsh)
+		initialUptime = make(map[string]time.Duration)
+		stepLog = "Get initial uptime of VMs and current node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			var wg sync.WaitGroup
+			for _, appCtx := range appCtxs {
+				wg.Add(1)
+				go func(appCtx *scheduler.Context) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+					log.FailOnError(err, "Failed to get VMs from appCtx")
+					for _, vm := range vms {
+						uptime, err := GetVMUptime(vm)
+						log.FailOnError(err, "Failed to get uptime from VM %s", vm.Name)
+						vmKey := fmt.Sprintf("%s/%s", vm.Namespace, vm.Name)
+						initialUptime[vmKey] = uptime
+						log.Infof("Initial uptime for VM %s is %v", vmKey, uptime)
+
+						vmNodeName, err = GetNodeOfVM(vm)
+						log.FailOnError(err, "Failed to get node of VM %v", vm.Name)
+						log.Infof("VM %s is currently running on node %s", vm.Name, vmNodeName)
+					}
+				}(appCtx)
+			}
+			wg.Wait()
+		})
+
+		vmDiskCount = make(map[string]int)
+		stepLog = "Kill Px on node hosting VM during hot-plug"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, appCtx := range appCtxs {
+				vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+				log.FailOnError(err, "Failed to get VMs from context")
+				for _, vm := range vms {
+					nodeName, err := GetNodeOfVM(vm)
+					log.FailOnError(err, "Failed to get node of vm %v", vm.Name)
+					nodes = append(nodes, nodeName)
+					newDiskCount, err = GetNumberOfDrivesInVM(vm)
+					log.FailOnError(err, "Failed to get disk count of vm %v", vm.Name)
+					vmDiskCount[vm.Name] = newDiskCount
+				}
+			}
+
+			RebootFlag = make(chan struct{}, 1)
+			killPxHook := func() {
+				<-RebootFlag // Wait until HotPlugDVToVM in HotPlugDataVolumesToKubevirtVM starts
+				log.Infof("Starting the px kill operation during hot-plug")
+				for _, appNode := range node.GetStorageDriverNodes() {
+					for _, vmNode := range nodes {
+						if vmNode == appNode.Name {
+							wg.Add(1)
+							go func(appNode node.Node) {
+								defer wg.Done()
+
+								stepLog := fmt.Sprintf("Stop volume driver %s on node: %s", Inst().V.String(), appNode.Name)
+								Step(stepLog, func() {
+									log.InfoD(stepLog)
+									StopVolDriverAndWait([]node.Node{appNode})
+								})
+
+								stepLog = fmt.Sprintf("Start volume driver %s on node %s", Inst().V.String(), appNode.Name)
+								Step(stepLog, func() {
+									log.InfoD(stepLog)
+									StartVolDriverAndWait([]node.Node{appNode})
+								})
+
+								stepLog = "Giving a few seconds for volume driver to stabilize"
+								Step(stepLog, func() {
+									log.InfoD(stepLog)
+									time.Sleep(20 * time.Second)
+								})
+							}(appNode)
+						}
+					}
+				}
+			}
+
+			go killPxHook()
+
+			wg.Add(1)
+			go func(appCtxs []*scheduler.Context, numberOfVolumes int, volumeMode string) {
+				defer wg.Done()
+				defer GinkgoRecover()
+				log.InfoD("Starting hot-plug disk operation")
+				hotPlugDisk, err = HotPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "50Gi", volumeMode)
+				log.FailOnError(err, "Failed to hot-plug DataVolume to KubeVirt VM")
+				dash.VerifyFatal(hotPlugDisk, true, "DataVolume hot-plugged to KubeVirt VM")
+			}(appCtxs, numberOfVolumes, volumeMode)
+
+			wg.Wait()
+		})
+
+		ValidateFioInVMs(appCtxs, canSsh)
+		ValidateVMUptime(appCtxs, canSsh, initialUptime)
+
+		stepLog = "Validate hot plug volume inside VM"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, appCtx := range appCtxs {
+				vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+				log.FailOnError(err, "Failed to get VMs from context")
+				for _, vm := range vms {
+					diskCountAfterPxRestart, err := GetNumberOfDrivesInVM(vm)
+					log.FailOnError(err, "Failed to get disk count of vm %v", vm.Name)
+					dash.VerifyFatal(diskCountAfterPxRestart == vmDiskCount[vm.Name]+1, true, "Validate the number of disks is increased by 1 when PX is restarted during hotplug")
+				}
+			}
+		})
+
+		stepLog = "Destroy Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
+		})
+	})
+
+	JustAfterEach(func() {
+		SignalSent = false
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
+	})
+})
+
+var _ = Describe("{RebootNodeDuringAddNewHotPlugDiskToKubevirtVM}", Label("p1", "negative", "kubevirt", "node_reboot", "staging"), func() {
+	/*
+	   Step 1: Create a VM
+	   Step 2: Add Hot plug disk to a VM
+	   Step 3: Reboot source node during hot-plug operation
+	   Step 4: Validate hot plug volume inside VM
+	   JIRA ID: https://purestorage.atlassian.net/browse/HAZEL-1752
+	*/
+	var (
+		app, volType    string
+		present         bool
+		appCtxs         []*scheduler.Context
+		namespace       string
+		canSsh          bool
+		volumeMode      string
+		initialNodeName map[string]string
+		bindMount       bool
+		nodes           []string
+		vmDiskCount     map[string]int
+		newDiskCount    int
+		hotPlugDisk     bool
+		wg              sync.WaitGroup
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("RebootNodeDuringAddNewHotPlugDiskToKubevirtVM", "Reboot source node during adding a new raw disk to a running KubeVirt VM via hot-plug", nil, 0)
+		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
+		if !present {
+			app = "kubevirt-debian-fio-minimal"
+		}
+		if volType == "pxe-raw" {
+			app = "kubevirt-raw-vol"
+		} else if volType == "fada-raw" {
+			app = "kubevirt-fada-raw-fio"
+		} else {
+			app = "kubevirt-debian-fio-minimal"
+		}
+		log.InfoD("Setting app for this test to be : %s", app)
+	})
+
+	It("Node reboot during hot-plug of a new disk to a running KubeVirt VM", func() {
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+
+		numberOfVolumes := 1
+
+		Inst().AppList = []string{app}
+		Inst().CsiAppList = []string{app}
+
+		stepLog := "Schedule a kubevirt VM"
+		Step(stepLog, func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
+				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
+			}
+		})
+		ValidateApplications(appCtxs)
+
+		if !present {
+			for _, appCtx := range appCtxs {
+				bindMount, err = IsVMBindMounted(appCtx, false)
+				log.FailOnError(err, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "VM bind mount verified")
+			}
+		}
+
+		if app == "kubevirt-debian-fio-minimal" {
+			volumeMode = ""
+		} else {
+			volumeMode = "Block"
+		}
+
+		log.Infof("Sleeping for 2 minutes to let VMs come up fully")
+		time.Sleep(2 * time.Minute)
+
+		canSsh = CreateSSHPodAndSetCanSsh()
+		ValidateFioInVMs(appCtxs, canSsh)
+
+		initialNodeName = make(map[string]string)
+		vmDiskCount = make(map[string]int)
+		stepLog = "Reboot node hosting VM during hot-plug"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			RebootFlag = make(chan struct{}, 1)
+			rebootNodeHook := func() {
+				<-RebootFlag // Wait until HotPlugDVToVM in HotPlugDataVolumesToKubevirtVM starts
+				log.Infof("Starting the Reboot node operation during hot plug")
+				for _, virtualMachineCtx := range appCtxs {
+					wg.Add(1)
+					go func(virtualMachineCtx *scheduler.Context) {
+						defer wg.Done()
+						defer GinkgoRecover()
+						vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{virtualMachineCtx})
+						log.FailOnError(err, "Failed to get VMs from scheduled contexts")
+						dash.VerifyFatal(len(vms) > 0, true, "Got VMs from scheduled contexts?")
+						for _, vm := range vms {
+							nodeName, err := GetNodeOfVM(vm)
+							log.FailOnError(err, "Failed to get node of vm %v", vm.Name)
+							nodes = append(nodes, nodeName)
+							newDiskCount, err = GetNumberOfDrivesInVM(vm)
+							log.FailOnError(err, "Failed to get disk count of vm %v", vm.Name)
+							vmDiskCount[vm.Name] = newDiskCount
+							initialNodeName[vm.Name] = nodeName
+							nodeObj, err := node.GetNodeByName(nodeName)
+							log.FailOnError(err, "Failed to get node object for node name: %s", nodeName)
+							err = Inst().N.RebootNodeAndWait(nodeObj)
+							log.FailOnError(err, "Failed to reboot node: %s", nodeObj.Name)
+							log.Infof("Successfully rebooted node: %s", nodeObj.Name)
+						}
+					}(virtualMachineCtx)
+				}
+			}
+
+			go rebootNodeHook()
+
+			// hotplug DataVolume fails during node reboot
+			wg.Add(1)
+			go func(appCtxs []*scheduler.Context, numberOfVolumes int, volumeMode string) {
+				defer wg.Done()
+				defer GinkgoRecover()
+				log.InfoD("Starting hot-plug disk operation")
+				hotPlugDisk, err = HotPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "50Gi", volumeMode)
+				dash.VerifyFatal(err != nil, true, "Error on hot plug addition during reboot node")
+				log.Infof("Failed to hot-plug DataVolume to KubeVirt VM with error: %v", err)
+				dash.VerifyFatal(hotPlugDisk, false, "DataVolume hot-plugged to KubeVirt VM")
+			}(appCtxs, numberOfVolumes, volumeMode)
+
+			wg.Wait()
+
+			ValidateApplications(appCtxs)
+			log.Infof("Sleeping for 2 minutes to stabilize")
+			time.Sleep(2 * time.Minute)
+			for _, virtualMachineCtx := range appCtxs {
+				vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{virtualMachineCtx})
+				log.FailOnError(err, "Failed to get VMs from scheduled contexts")
+				dash.VerifyFatal(len(vms) > 0, true, "VMs from scheduled contexts")
+				for _, vm := range vms {
+					nodeName, err := GetNodeOfVM(vm)
+					log.FailOnError(err, "Failed to get node name for VM: %s", vm.Name)
+					dash.VerifyFatal(nodeName != initialNodeName[vm.Name], true, "VM moved out of Node?")
+					log.Infof("Post reboot VM [%s] in namespace [%s] is scheduled on node [%s]", vm.Name, vm.Namespace, nodeName)
+				}
+			}
+
+			ValidateApplications(appCtxs)
+
+		})
+
+		ValidateFioInVMs(appCtxs, canSsh)
+
+		stepLog = "Hot-plug one raw disk (DataVolume) to the running KubeVirt VM after reboot"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			hotPlugDisk, err := HotPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "50Gi", volumeMode)
+			log.FailOnError(err, "Failed to hot-plug DataVolume to KubeVirt VM")
+			dash.VerifyFatal(hotPlugDisk, true, "DataVolume hot-plugged to KubeVirt VM")
+		})
+
+		stepLog = "Validate hot plug volume inside VM"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, appCtx := range appCtxs {
+				vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+				log.FailOnError(err, "Failed to get VMs from context")
+				for _, vm := range vms {
+					diskCountAfterNodeReboot, err := GetNumberOfDrivesInVM(vm)
+					log.FailOnError(err, "Failed to get disk count of vm %v", vm.Name)
+					dash.VerifyFatal(diskCountAfterNodeReboot == vmDiskCount[vm.Name]+1, true, "Validate the number of disks is increased by 1 when node is rebooted during hotplug")
+				}
+			}
+		})
+
+		stepLog = "Destroy Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
+		})
+	})
+
+	JustAfterEach(func() {
+		SignalSent = false
 		defer EndTorpedoTest()
 		AfterEachTest(appCtxs)
 	})
