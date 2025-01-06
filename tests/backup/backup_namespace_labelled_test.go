@@ -354,7 +354,7 @@ var _ = Describe("{BackupScheduleForOldAndNewNS}", Label(TestCaseLabelsMap[Backu
 			dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
 			scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
 			err = CreateScheduleBackupWithNamespaceLabel(scheduleName, SourceClusterName, clusterUid, backupLocationName, backupLocationUID,
-				labelSelectors, BackupOrgID, "", "", "", "", nsLabelString, periodicSchPolicyName, periodicSchPolicyUid, ctx)
+				labelSelectors, BackupOrgID, "", "", "", "", nsLabelString, periodicSchPolicyName, periodicSchPolicyUid, false, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule name [%s]", scheduleName))
 			firstSchBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, BackupOrgID)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstSchBackupName))
@@ -604,7 +604,7 @@ var _ = Describe("{ManualAndScheduledBackupUsingNamespaceAndResourceLabel}", Lab
 			scheduleBackupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
 			appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
 			firstScheduleBackupName, err = CreateScheduleBackupWithNamespaceLabelWithValidation(ctx, scheduleBackupName, SourceClusterName, srcClusterUid, backupLocationName, backupLocationUID, appContextsExpectedInBackup,
-				nil, BackupOrgID, "", "", "", "", namespaceLabel, periodicSchPolicyName, periodicSchPolicyUid)
+				nil, BackupOrgID, "", "", "", "", namespaceLabel, periodicSchPolicyName, periodicSchPolicyUid, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of creating first schedule backup %s with labels [%v]", scheduleBackupName, namespaceLabel))
 		})
 		Step("Restoring first scheduled backup", func() {
@@ -764,7 +764,7 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", Label(TestCaseLab
 			scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
 			appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
 			firstScheduleBackupName, err = CreateScheduleBackupWithNamespaceLabelWithValidation(ctx, scheduleName, SourceClusterName, srcClusterUid, backupLocationName, backupLocationUID, appContextsExpectedInBackup,
-				nil, BackupOrgID, "", "", "", "", namespaceLabel, periodicSchPolicyName, periodicSchPolicyUid)
+				nil, BackupOrgID, "", "", "", "", namespaceLabel, periodicSchPolicyName, periodicSchPolicyUid, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of first schedule backup [%s]", firstScheduleBackupName))
 			log.InfoD("Waiting for %d minutes for the next schedule backup to be triggered", schPolicyInterval)
 			secondScheduleBackupName, err = GetNextScheduleBackupName(scheduleName, time.Duration(schPolicyInterval), ctx)
@@ -1091,7 +1091,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit}", Label(
 			schBackupSingleNS = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
 			appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{singleNamespace})
 			firstSchBackupForSingleNS, err = CreateScheduleBackupWithNamespaceLabelWithValidation(ctx, schBackupSingleNS, SourceClusterName, clusterUid, backupLocationName, backupLocationUID, appContextsExpectedInBackup,
-				nil, BackupOrgID, "", "", "", "", labelForSingleNamespace, periodicSchPolicyName, periodicSchPolicyUid)
+				nil, BackupOrgID, "", "", "", "", labelForSingleNamespace, periodicSchPolicyName, periodicSchPolicyUid, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of first scheduled backup [%s] for single namespace with labels [%v]", firstSchBackupForSingleNS, labelForSingleNamespace))
 			err = NamespaceLabelBackupSuccessCheck(firstSchBackupForSingleNS, ctx, []string{singleNamespace}, labelForSingleNamespace)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the labeled namespace [%v] is backed up and checks for labels [%s] applied to backup [%s]", singleNamespace, labelForSingleNamespace, firstSchBackupForSingleNS))
@@ -1104,7 +1104,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit}", Label(
 			schBackupMultipleNS = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
 			appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, multipleNamespace)
 			firstSchBackupForMultipleNS, err = CreateScheduleBackupWithNamespaceLabelWithValidation(ctx, schBackupMultipleNS, SourceClusterName, clusterUid, backupLocationName, backupLocationUID, appContextsExpectedInBackup,
-				nil, BackupOrgID, "", "", "", "", labelForMultipleNamespace, periodicSchPolicyName, periodicSchPolicyUid)
+				nil, BackupOrgID, "", "", "", "", labelForMultipleNamespace, periodicSchPolicyName, periodicSchPolicyUid, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of first scheduled backup [%s] for multiple namespaces with labels [%v]", firstSchBackupForMultipleNS, labelForMultipleNamespace))
 			err = NamespaceLabelBackupSuccessCheck(firstSchBackupForMultipleNS, ctx, multipleNamespace, labelForMultipleNamespace)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the labeled namespaces [%v] are backed up and check for labels [%s] applied to backups [%s]", multipleNamespace, labelForMultipleNamespace, firstSchBackupForMultipleNS))
@@ -1117,7 +1117,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit}", Label(
 			schBackupAllNS = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
 			appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
 			firstSchBackupForAllNS, err = CreateScheduleBackupWithNamespaceLabelWithValidation(ctx, schBackupAllNS, SourceClusterName, clusterUid, backupLocationName, backupLocationUID, appContextsExpectedInBackup,
-				nil, BackupOrgID, "", "", "", "", labelForAllNamespace, periodicSchPolicyName, periodicSchPolicyUid)
+				nil, BackupOrgID, "", "", "", "", labelForAllNamespace, periodicSchPolicyName, periodicSchPolicyUid, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of first schedule backup [%s] for all namespaces with labels [%v]", firstSchBackupForAllNS, labelForAllNamespace))
 			err = NamespaceLabelBackupSuccessCheck(firstSchBackupForAllNS, ctx, bkpNamespaces, labelForAllNamespace)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the labeled namespaces [%v] are backed up and check for labels [%s] applied to backups [%s]", bkpNamespaces, labelForAllNamespace, firstSchBackupForAllNS))
@@ -1364,7 +1364,7 @@ var _ = Describe("{NamespaceLabelledBackupOfEmptyNamespace}", Label(TestCaseLabe
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, RandomString(5))
 			scheduledAppContextsExpectedToBeInBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{})
-			firstScheduleBackupName, err = CreateScheduleBackupWithNamespaceLabelWithValidation(ctx, scheduleName, SourceClusterName, clusterUid, backupLocationName, backupLocationUID, scheduledAppContextsExpectedToBeInBackup, nil, BackupOrgID, "", "", "", "", labelForNamespace, periodicSchedulePolicyName, periodicSchedulePolicyUid)
+			firstScheduleBackupName, err = CreateScheduleBackupWithNamespaceLabelWithValidation(ctx, scheduleName, SourceClusterName, clusterUid, backupLocationName, backupLocationUID, scheduledAppContextsExpectedToBeInBackup, nil, BackupOrgID, "", "", "", "", labelForNamespace, periodicSchedulePolicyName, periodicSchedulePolicyUid, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of empty namespace labelled schedule backup [%s] with label [%s]", scheduleName, labelForNamespace))
 			err = NamespaceLabelBackupSuccessCheck(firstScheduleBackupName, ctx, []string{}, labelForNamespace)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying that no namespace are included in this schedule backup %s as no namespaces are labelled with %s label", firstScheduleBackupName, labelForNamespace))

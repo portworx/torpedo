@@ -150,7 +150,7 @@ var _ = Describe("{MultipleProvisionerCsiSnapshotDeleteBackupAndRestore}", Label
 					provisionerSelectDefaultVolumeSnapshotClass[key] = "Default"
 				}
 				multipleProvisionerSameNsScheduleName = fmt.Sprintf("multiple-provisioner-same-namespace-schedule-%v", RandomString(randomStringLength))
-				multipleNsSchBackupName, err = CreateScheduleBackupWithValidationWithVscMapping(ctx, multipleProvisionerSameNsScheduleName, SourceClusterName, srcClusterUid, backupLocationName, backupLocationUID, scheduledAppContextsForMultipleAppSinleNs, make(map[string]string), BackupOrgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schedulePolicyName, schedulePolicyUID, provisionerSelectDefaultVolumeSnapshotClass, false)
+				multipleNsSchBackupName, err = CreateScheduleBackupWithValidationWithVscMapping(ctx, multipleProvisionerSameNsScheduleName, SourceClusterName, srcClusterUid, backupLocationName, backupLocationUID, scheduledAppContextsForMultipleAppSinleNs, make(map[string]string), BackupOrgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schedulePolicyName, schedulePolicyUID, provisionerSelectDefaultVolumeSnapshotClass, false, false)
 				scheduleList = append(scheduleList, multipleProvisionerSameNsScheduleName)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s] for backup location %s", multipleNsSchBackupName, backupLocationName))
 				err = IsFullBackup(multipleNsSchBackupName, BackupOrgID, ctx)
@@ -443,7 +443,7 @@ var _ = Describe("{MultipleProvisionerCsiKdmpBackupAndRestore}", Label(TestCaseL
 					provisionerDefaultVolumeSnapshotClass[key] = "default"
 				}
 				multipleProvisionerSameNsScheduleName = fmt.Sprintf("multiple-provisioner-same-namespace-schedule-%v", RandomString(randomStringLength))
-				multipleNsSchBackupName, err = CreateScheduleBackupWithValidationWithVscMapping(ctx, multipleProvisionerSameNsScheduleName, SourceClusterName, srcClusterUid, backupLocationName, backupLocationUID, scheduledAppContextsForMultipleAppSinleNs, make(map[string]string), BackupOrgID, preRuleNameMultiProvisioner, preRuleUidMultiProvisioner, postRuleNameMultiProvisioner, postRuleUidMultiProvisioner, schedulePolicyName, schedulePolicyUID, provisionerDefaultVolumeSnapshotClass, false)
+				multipleNsSchBackupName, err = CreateScheduleBackupWithValidationWithVscMapping(ctx, multipleProvisionerSameNsScheduleName, SourceClusterName, srcClusterUid, backupLocationName, backupLocationUID, scheduledAppContextsForMultipleAppSinleNs, make(map[string]string), BackupOrgID, preRuleNameMultiProvisioner, preRuleUidMultiProvisioner, postRuleNameMultiProvisioner, postRuleUidMultiProvisioner, schedulePolicyName, schedulePolicyUID, provisionerDefaultVolumeSnapshotClass, false, false)
 				scheduleList = append(scheduleList, multipleNsSchBackupName)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s] for backup location %s", multipleNsSchBackupName, backupLocationName))
 				err = IsFullBackup(multipleNsSchBackupName, BackupOrgID, ctx)
@@ -466,7 +466,7 @@ var _ = Describe("{MultipleProvisionerCsiKdmpBackupAndRestore}", Label(TestCaseL
 					provisionerSelectDefaultVolumeSnapshotClass[key] = "default"
 				}
 				defaultProvisionerScheduleName = fmt.Sprintf("default-provisioner-schedule-%v", RandomString(randomStringLength))
-				defaultSchBackupName, err = CreateScheduleBackupWithValidationWithVscMapping(ctx, defaultProvisionerScheduleName, SourceClusterName, srcClusterUid, backupLocationName, backupLocationUID, scheduledAppContextsForDefaultVscBackup, make(map[string]string), BackupOrgID, preRuleNameDefaultVsc, preRuleUidDefaultVsc, postRuleNameDefaultVsc, postRuleUidDefaultVsc, schedulePolicyName, schedulePolicyUID, provisionerSelectDefaultVolumeSnapshotClass, false)
+				defaultSchBackupName, err = CreateScheduleBackupWithValidationWithVscMapping(ctx, defaultProvisionerScheduleName, SourceClusterName, srcClusterUid, backupLocationName, backupLocationUID, scheduledAppContextsForDefaultVscBackup, make(map[string]string), BackupOrgID, preRuleNameDefaultVsc, preRuleUidDefaultVsc, postRuleNameDefaultVsc, postRuleUidDefaultVsc, schedulePolicyName, schedulePolicyUID, provisionerSelectDefaultVolumeSnapshotClass, false, false)
 				scheduleList = append(scheduleList, defaultSchBackupName)
 
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s] for backup location %s", defaultSchBackupName, backupLocationName))
@@ -485,7 +485,7 @@ var _ = Describe("{MultipleProvisionerCsiKdmpBackupAndRestore}", Label(TestCaseL
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			if len(provisionerSnapshotClassMap) > 0 {
 				nonDefaultProvisionerScheduleName := fmt.Sprintf("default-provisioner-schedule-%v", RandomString(randomStringLength))
-				nonDefaultVscSchBackupName, err = CreateScheduleBackupWithValidationWithVscMapping(ctx, nonDefaultProvisionerScheduleName, SourceClusterName, srcClusterUid, backupLocationName, backupLocationUID, scheduledAppContextsForDefaultVscBackup, make(map[string]string), BackupOrgID, preRuleNameCustomVsc, preRuleUidCustomVsc, postRuleNameCustomVsc, postRuleUidCustomVsc, schedulePolicyName, schedulePolicyUID, provisionerSnapshotClassMap, false)
+				nonDefaultVscSchBackupName, err = CreateScheduleBackupWithValidationWithVscMapping(ctx, nonDefaultProvisionerScheduleName, SourceClusterName, srcClusterUid, backupLocationName, backupLocationUID, scheduledAppContextsForDefaultVscBackup, make(map[string]string), BackupOrgID, preRuleNameCustomVsc, preRuleUidCustomVsc, postRuleNameCustomVsc, postRuleUidCustomVsc, schedulePolicyName, schedulePolicyUID, provisionerSnapshotClassMap, false, false)
 				scheduleList = append(scheduleList, nonDefaultProvisionerScheduleName)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s] for backup location %s", nonDefaultVscSchBackupName, backupLocationName))
 				err = IsFullBackup(nonDefaultVscSchBackupName, BackupOrgID, ctx)
@@ -503,7 +503,7 @@ var _ = Describe("{MultipleProvisionerCsiKdmpBackupAndRestore}", Label(TestCaseL
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			provisionerNonDefaultSnapshotClassMap := map[string]string{}
 			kdmpScheduleName = fmt.Sprintf("default-provisioner-schedule-%v", RandomString(randomStringLength))
-			forceKdmpSchBackupName, err = CreateScheduleBackupWithValidationWithVscMapping(ctx, kdmpScheduleName, SourceClusterName, srcClusterUid, backupLocationName, backupLocationUID, scheduledAppContextsForDefaultVscBackup, make(map[string]string), BackupOrgID, preRuleNameDefaultVsc, preRuleUidDefaultVsc, postRuleNameDefaultVsc, postRuleUidDefaultVsc, schedulePolicyName, schedulePolicyUID, provisionerNonDefaultSnapshotClassMap, true)
+			forceKdmpSchBackupName, err = CreateScheduleBackupWithValidationWithVscMapping(ctx, kdmpScheduleName, SourceClusterName, srcClusterUid, backupLocationName, backupLocationUID, scheduledAppContextsForDefaultVscBackup, make(map[string]string), BackupOrgID, preRuleNameDefaultVsc, preRuleUidDefaultVsc, postRuleNameDefaultVsc, postRuleUidDefaultVsc, schedulePolicyName, schedulePolicyUID, provisionerNonDefaultSnapshotClassMap, true, false)
 			scheduleList = append(scheduleList, kdmpScheduleName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s] for backup location %s", nonDefaultVscSchBackupName, backupLocationName))
 			err = IsFullBackup(forceKdmpSchBackupName, BackupOrgID, ctx)

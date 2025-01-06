@@ -167,7 +167,7 @@ var _ = Describe("{DeleteSameNameObjectsByMultipleUsersFromAdmin}", Label(TestCa
 				userScheduleName := fmt.Sprintf("backup-schedule-%v", randomSuffix)
 				for backupLocationUID, backupLocationName := range userBackupLocationMap[user] {
 					for schedulePolicyUID, schedulePolicyName := range userSchedulePolicyMap[user] {
-						_, err = CreateScheduleBackupWithValidation(nonAdminCtx, userScheduleName, SourceClusterName, userClusterMap[user][SourceClusterName], backupLocationName, backupLocationUID, scheduledAppContexts, make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID)
+						_, err = CreateScheduleBackupWithValidation(nonAdminCtx, userScheduleName, SourceClusterName, userClusterMap[user][SourceClusterName], backupLocationName, backupLocationUID, scheduledAppContexts, make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, false)
 						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of schedule backup with schedule name [%s]", schedulePolicyName))
 						break
 					}
@@ -849,7 +849,7 @@ var _ = Describe("{DeleteObjectsByMultipleUsersFromNewAdmin}", Label(TestCaseLab
 				userScheduleName := fmt.Sprintf("backup-schedule-%s-%s", user, RandomString(5))
 				for backupLocationUID, backupLocationName := range userBackupLocationMap[user] {
 					for schedulePolicyUID, schedulePolicyName := range userSchedulePolicyMap[user] {
-						_, err = CreateScheduleBackupWithValidation(nonAdminCtx, userScheduleName, SourceClusterName, userClusterMap[user][SourceClusterName], backupLocationName, backupLocationUID, scheduledAppContexts, make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID)
+						_, err = CreateScheduleBackupWithValidation(nonAdminCtx, userScheduleName, SourceClusterName, userClusterMap[user][SourceClusterName], backupLocationName, backupLocationUID, scheduledAppContexts, make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, false)
 						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of schedule backup with schedule name [%s]", schedulePolicyName))
 						err = SuspendBackupSchedule(userScheduleName, schedulePolicyName, BackupOrgID, nonAdminCtx)
 						dash.VerifyFatal(err, nil, fmt.Sprintf("Suspending Backup Schedule [%s] for user [%s]", schedulePolicyName, user))
@@ -2123,7 +2123,7 @@ var _ = Describe("{DeleteBackupOfUserNonSharedRBAC}", Label(TestCaseLabelsMap[De
 					log.InfoD("Creating a schedule backup of namespace [%s] without pre and post exec rules", bkpNamespaces[0])
 					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
 					scheduleBackupName, err := CreateScheduleBackupWithValidation(nonAdminCtx, scheduleNameMap[nonAdminUserName], SourceClusterName, clusterUidMap[nonAdminUserName][SourceClusterName], backupLocationNameMap[nonAdminUserName], backupLocationUidMap[nonAdminUserName], appContextsToBackup,
-						labelSelectors, BackupOrgID, "", "", "", "", periodicSchedulePolicyNameMap[nonAdminUserName], periodicSchedulePolicyUidMap[nonAdminUserName])
+						labelSelectors, BackupOrgID, "", "", "", "", periodicSchedulePolicyNameMap[nonAdminUserName], periodicSchedulePolicyUidMap[nonAdminUserName], false)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", scheduleBackupName))
 					singleNamespaceBackupsMap[nonAdminUserName] = SafeAppend(&mutex, singleNamespaceBackupsMap[nonAdminUserName], scheduleBackupName).([]string)
 					userBackupNamesMap[nonAdminUserName] = SafeAppend(&mutex, userBackupNamesMap[nonAdminUserName], scheduleBackupName).([]string)
@@ -2151,7 +2151,7 @@ var _ = Describe("{DeleteBackupOfUserNonSharedRBAC}", Label(TestCaseLabelsMap[De
 					log.InfoD("Creating a backup of namespaces [%v] with pre and post exec rules", bkpNamespaces)
 					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
 					scheduleBackupName, err := CreateScheduleBackupWithNamespaceLabelWithValidation(nonAdminCtx, scheduleNameMap[nonAdminUserName], SourceClusterName, clusterUidMap[nonAdminUserName][SourceClusterName], backupLocationNameMap[nonAdminUserName], backupLocationUidMap[nonAdminUserName], appContextsToBackup,
-						labelSelectors, BackupOrgID, preRuleNameMap[nonAdminUserName], preRuleUidMap[nonAdminUserName], postRuleNameMap[nonAdminUserName], postRuleUidMap[nonAdminUserName], namespaceLabel, periodicSchedulePolicyNameMap[nonAdminUserName], periodicSchedulePolicyUidMap[nonAdminUserName])
+						labelSelectors, BackupOrgID, preRuleNameMap[nonAdminUserName], preRuleUidMap[nonAdminUserName], postRuleNameMap[nonAdminUserName], postRuleUidMap[nonAdminUserName], namespaceLabel, periodicSchedulePolicyNameMap[nonAdminUserName], periodicSchedulePolicyUidMap[nonAdminUserName], false)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", scheduleBackupName))
 					multipleNamespaceLabelBackupsMap[nonAdminUserName] = SafeAppend(&mutex, multipleNamespaceLabelBackupsMap[nonAdminUserName], scheduleBackupName).([]string)
 					userBackupNamesMap[nonAdminUserName] = SafeAppend(&mutex, userBackupNamesMap[nonAdminUserName], scheduleBackupName).([]string)
@@ -2690,7 +2690,7 @@ var _ = Describe("{DeleteBackupOfUserSharedRBAC}", Label(TestCaseLabelsMap[Delet
 					log.InfoD("Creating a schedule backup of namespace [%s] without pre and post exec rules", bkpNamespaces[0])
 					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
 					scheduleBackupName, err := CreateScheduleBackupWithValidation(nonAdminCtx, scheduleNameMap[nonAdminUserName], SourceClusterName, clusterUidMap[nonAdminUserName][SourceClusterName], backupLocationName, backupLocationUID, appContextsToBackup,
-						labelSelectors, BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid)
+						labelSelectors, BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, false)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", scheduleBackupName))
 					singleNamespaceBackupsMap[nonAdminUserName] = SafeAppend(&mutex, singleNamespaceBackupsMap[nonAdminUserName], scheduleBackupName).([]string)
 					userBackupNamesMap[nonAdminUserName] = SafeAppend(&mutex, userBackupNamesMap[nonAdminUserName], scheduleBackupName).([]string)
@@ -2715,7 +2715,7 @@ var _ = Describe("{DeleteBackupOfUserSharedRBAC}", Label(TestCaseLabelsMap[Delet
 					log.InfoD("Creating a schedule backup of namespace [%s] with pre and post exec rules", bkpNamespaces)
 					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
 					scheduleBackupName, err := CreateScheduleBackupWithValidation(nonAdminCtx, scheduleNameMap[nonAdminUserName], SourceClusterName, clusterUidMap[nonAdminUserName][SourceClusterName], backupLocationName, backupLocationUID, appContextsToBackup,
-						labelSelectors, BackupOrgID, preRuleName, preRuleUid, postRuleName, postRuleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid)
+						labelSelectors, BackupOrgID, preRuleName, preRuleUid, postRuleName, postRuleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid, false)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", scheduleBackupName))
 					multipleNamespaceBackupsMap[nonAdminUserName] = SafeAppend(&mutex, multipleNamespaceBackupsMap[nonAdminUserName], scheduleBackupName).([]string)
 					userBackupNamesMap[nonAdminUserName] = SafeAppend(&mutex, userBackupNamesMap[nonAdminUserName], scheduleBackupName).([]string)
@@ -2743,7 +2743,7 @@ var _ = Describe("{DeleteBackupOfUserSharedRBAC}", Label(TestCaseLabelsMap[Delet
 					log.InfoD("Creating a backup of namespaces [%v] with pre and post exec rules", bkpNamespaces)
 					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
 					scheduleBackupName, err := CreateScheduleBackupWithNamespaceLabelWithValidation(nonAdminCtx, scheduleNameMap[nonAdminUserName], SourceClusterName, clusterUidMap[nonAdminUserName][SourceClusterName], backupLocationName, backupLocationUID, appContextsToBackup,
-						labelSelectors, BackupOrgID, preRuleName, preRuleUid, postRuleName, postRuleUid, namespaceLabel, periodicSchedulePolicyName, periodicSchedulePolicyUid)
+						labelSelectors, BackupOrgID, preRuleName, preRuleUid, postRuleName, postRuleUid, namespaceLabel, periodicSchedulePolicyName, periodicSchedulePolicyUid, false)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", scheduleBackupName))
 					multipleNamespaceLabelBackupsMap[nonAdminUserName] = SafeAppend(&mutex, multipleNamespaceLabelBackupsMap[nonAdminUserName], scheduleBackupName).([]string)
 					userBackupNamesMap[nonAdminUserName] = SafeAppend(&mutex, userBackupNamesMap[nonAdminUserName], scheduleBackupName).([]string)
@@ -3184,7 +3184,7 @@ var _ = Describe("{UpdatesBackupOfUserFromAdmin}", Label(TestCaseLabelsMap[Updat
 			log.InfoD("Creating a schedule backup of namespace [%s] without pre and post exec rules", bkpNamespaces[0])
 			appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
 			scheduleBackupName, err := CreateScheduleBackupWithValidation(nonAdminCtx, scheduleName, SourceClusterName, srcClusterUid, backupLocationName, backupLocationUID, appContextsToBackup,
-				labelSelectors, BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid)
+				labelSelectors, BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", scheduleBackupName))
 			userBackupNames = append(userBackupNames, scheduleBackupName)
 		})
@@ -3542,7 +3542,7 @@ var _ = Describe("{DeleteBackupSharedByMultipleUsersFromAdmin}", Label(TestCaseL
 					log.InfoD("Creating a schedule backup of namespace [%s] without pre and post exec rules", bkpNamespaces[0])
 					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
 					scheduleBackupName, err := CreateScheduleBackupWithValidation(nonAdminCtx, scheduleNameMap[nonAdminUserName], SourceClusterName, clusterUidMap[nonAdminUserName][SourceClusterName], backupLocationUserMap[nonAdminUserName], backupLocationUidUserMap[nonAdminUserName], appContextsToBackup,
-						labelSelectors, BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid)
+						labelSelectors, BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, false)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", scheduleBackupName))
 					err = SuspendBackupSchedule(scheduleNameMap[nonAdminUserName], periodicSchedulePolicyName, BackupOrgID, nonAdminCtx)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Suspending Backup Schedule [%s] for user [%s]", scheduleNameMap[nonAdminUserName], nonAdminUserName))

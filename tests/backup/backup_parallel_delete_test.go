@@ -310,7 +310,7 @@ var _ = Describe("{TimeTakenToDeleteScheduleBackupWithHeavyLoadAfterSuspendingTh
 			log.InfoD("Creating %v schedule backup on destination cluster", totalNoOfScheduleBackups)
 			scheduleName = fmt.Sprintf("%s-%v", BackupNamePrefix, RandomString(5))
 			labelSelectors := make(map[string]string)
-			_, err := CreateScheduleBackupWithValidation(ctx, scheduleName, DestinationClusterName, clusterUid, backupLocation, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid)
+			_, err := CreateScheduleBackupWithValidation(ctx, scheduleName, DestinationClusterName, clusterUid, backupLocation, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup on destination cluster with schedule name [%s]", scheduleName))
 			log.InfoD("Waiting for %v schedule backups to be created", totalNoOfScheduleBackups)
 			noOfScheduleBackups := func() (interface{}, bool, error) {
@@ -524,7 +524,7 @@ var _ = Describe("{BackupDeletionWithDynamicPVCGeneration}", Label(TestCaseLabel
 			log.InfoD("Creating schedule backup on destination cluster")
 			scheduleName = fmt.Sprintf("%s-%v", BackupNamePrefix, RandomString(5))
 			labelSelectors := make(map[string]string)
-			_, err := CreateScheduleBackupWithValidation(ctx, scheduleName, DestinationClusterName, clusterUid, backupLocation, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid)
+			_, err := CreateScheduleBackupWithValidation(ctx, scheduleName, DestinationClusterName, clusterUid, backupLocation, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup on destination cluster with schedule name [%s]", scheduleName))
 		})
 

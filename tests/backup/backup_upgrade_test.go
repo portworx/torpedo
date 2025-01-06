@@ -152,7 +152,7 @@ var _ = Describe("{StorkUpgradeWithBackup}", Label(TestCaseLabelsMap[StorkUpgrad
 				scheduleName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
 				appContextsToBackupMap[scheduleName] = appContextsToBackup
-				_, err = CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, clusterUid, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, "", "", "", "", periodicPolicyName, schPolicyUid)
+				_, err = CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, clusterUid, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, "", "", "", "", periodicPolicyName, schPolicyUid, false)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", scheduleName))
 				scheduleNames = append(scheduleNames, scheduleName)
 			}
@@ -655,7 +655,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 				singleNSScheduleName := fmt.Sprintf("%s-single-namespace-schedule-%v", namespace, time.Now().Unix())
 				log.InfoD("Creating schedule backup with schedule [%s] of source cluster namespace [%s]", singleNSScheduleName, namespace)
 				err = CreateScheduleBackup(singleNSScheduleName, SourceClusterName, srcClusterUid, backupLocationName, backupLocationUid, []string{namespace},
-					labelSelectors, BackupOrgID, preRuleNames[appName], preRuleUids[appName], postRuleNames[appName], postRuleUids[appName], schedulePolicyName, schedulePolicyUid, ctx)
+					labelSelectors, BackupOrgID, preRuleNames[appName], preRuleUids[appName], postRuleNames[appName], postRuleUids[appName], schedulePolicyName, schedulePolicyUid, false, ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule [%s]", singleNSScheduleName))
 				firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, singleNSScheduleName, BackupOrgID)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching name of the first schedule backup with schedule [%s]", singleNSScheduleName))
@@ -675,7 +675,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 			labelSelectors := make(map[string]string)
 			log.InfoD("Creating schedule backup with schedule [%s] of all namespaces of destination cluster [%s]", allNSScheduleName, allNamespaces)
 			err = CreateScheduleBackup(allNSScheduleName, DestinationClusterName, destClusterUid, backupLocationName, backupLocationUid, allNamespaces,
-				labelSelectors, BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUid, ctx)
+				labelSelectors, BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUid, false, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule [%s]", allNSScheduleName))
 			firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, allNSScheduleName, BackupOrgID)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching name of the first schedule backup with schedule [%s]", allNSScheduleName))
@@ -894,7 +894,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 					log.FailOnError(err, "Fetching user [%s] ctx", user)
 					scheduleName := fmt.Sprintf("%s-%s-%s", "schedule", user, RandomString(5))
 					appContextsToBackup := FilterAppContextsByNamespace(superAdminScheduledAppContexts, []string{superAdminUserNamespaceMap[user]})
-					scheduleBackupName, err := CreateScheduleBackupWithValidation(nonAdminCtx, scheduleName, SourceClusterName, superAdminUserClusterMap[user][SourceClusterName], superAdminBackupLocationName, superAdminBackupLocationUID, appContextsToBackup, superAdminLabelSelectors, BackupOrgID, "", "", "", "", superAdminSchedulePolicyName, superAdminSchedulePolicyUID)
+					scheduleBackupName, err := CreateScheduleBackupWithValidation(nonAdminCtx, scheduleName, SourceClusterName, superAdminUserClusterMap[user][SourceClusterName], superAdminBackupLocationName, superAdminBackupLocationUID, appContextsToBackup, superAdminLabelSelectors, BackupOrgID, "", "", "", "", superAdminSchedulePolicyName, superAdminSchedulePolicyUID, false)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup [%s] form user [%s]", scheduleName, user))
 					err = SuspendBackupSchedule(scheduleName, superAdminSchedulePolicyName, BackupOrgID, nonAdminCtx)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Suspend schedule [%s]", scheduleBackupName))
@@ -2326,7 +2326,7 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", Label(TestCaseLabelsMap[PXBacku
 				singleNSScheduleName := fmt.Sprintf("%s-single-namespace-schedule-%v", namespace, time.Now().Unix())
 				log.InfoD("Creating schedule backup with schedule [%s] of source cluster namespace [%s]", singleNSScheduleName, namespace)
 				err = CreateScheduleBackup(singleNSScheduleName, SourceClusterName, srcClusterUid, backupLocationName, backupLocationUid, []string{namespace},
-					labelSelectors, BackupOrgID, preRuleNames[appName], preRuleUids[appName], postRuleNames[appName], postRuleUids[appName], schedulePolicyName, schedulePolicyUid, ctx)
+					labelSelectors, BackupOrgID, preRuleNames[appName], preRuleUids[appName], postRuleNames[appName], postRuleUids[appName], schedulePolicyName, schedulePolicyUid, false, ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule [%s]", singleNSScheduleName))
 				firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, singleNSScheduleName, BackupOrgID)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching name of the first schedule backup with schedule [%s]", singleNSScheduleName))

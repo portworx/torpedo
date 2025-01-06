@@ -1189,7 +1189,7 @@ var _ = Describe("{ClusterShareTestcasesWithAppUsers}", Label(TestCaseLabelsMap[
 			// Take Backup Schedule
 			log.InfoD("Taking schedule backup of multiple namespaces")
 			testUser2backupScheduleName = fmt.Sprintf("schedule-bkp-%v", RandomString(5))
-			err = CreateScheduleBackup(testUser2backupScheduleName, SourceClusterName, clusterUid, bkpLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, pxbUsers[2].ctx)
+			err = CreateScheduleBackup(testUser2backupScheduleName, SourceClusterName, clusterUid, bkpLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, false, pxbUsers[2].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s]", testUser2backupScheduleName))
 
 			// Get the first schedule backup name
@@ -1351,7 +1351,7 @@ var _ = Describe("{ClusterShareTestcasesWithAppUsers}", Label(TestCaseLabelsMap[
 			var err error
 			log.InfoD("Taking schedule backup of multiple namespaces")
 			testUser2backupScheduleName = fmt.Sprintf("schedule-bkp-%v", RandomString(5))
-			err = CreateScheduleBackup(testUser2backupScheduleName, SourceClusterName, clusterUid, bkpLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, pxbUsers[2].ctx)
+			err = CreateScheduleBackup(testUser2backupScheduleName, SourceClusterName, clusterUid, bkpLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, false, pxbUsers[2].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s]", testUser2backupScheduleName))
 
 			// Get the first schedule backup name
@@ -1386,7 +1386,7 @@ var _ = Describe("{ClusterShareTestcasesWithAppUsers}", Label(TestCaseLabelsMap[
 			var err error
 			log.InfoD("Taking schedule backup of multiple namespaces")
 			testUser1backupScheduleName = fmt.Sprintf("schedule-bkp-%v", RandomString(5))
-			err = CreateScheduleBackup(testUser1backupScheduleName, SourceClusterName, clusterUid, bkpLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, pxbUsers[1].ctx)
+			err = CreateScheduleBackup(testUser1backupScheduleName, SourceClusterName, clusterUid, bkpLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, false, pxbUsers[1].ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s]", testUser1backupScheduleName))
 
 			// Get the first schedule backup name
@@ -1927,7 +1927,7 @@ var _ = Describe("{ClusterShareFromAppAdminAndAppUserToAnyUser}", Label(TestCase
 
 			// Create a backup schedule
 			scheduleName := fmt.Sprintf("schedule-bkp-%v", RandomString(5))
-			err = CreateScheduleBackup(scheduleName, SourceClusterName, clusterUid, backupLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, testUser1Ctx)
+			err = CreateScheduleBackup(scheduleName, SourceClusterName, clusterUid, backupLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, false, testUser1Ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of scheduled backup with schedule name [%s]", scheduleName))
 			log.InfoD("Backup schedule [%s] created successfully", scheduleName)
 		})
@@ -1967,7 +1967,7 @@ var _ = Describe("{ClusterShareFromAppAdminAndAppUserToAnyUser}", Label(TestCase
 
 			// Create a backup schedule with user1
 			schedule1Name := fmt.Sprintf("schedule-bkp-%v", RandomString(5))
-			err = CreateScheduleBackup(schedule1Name, SourceClusterName, clusterUid, backupLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, testUser1Ctx)
+			err = CreateScheduleBackup(schedule1Name, SourceClusterName, clusterUid, backupLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, false, testUser1Ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of scheduled backup with schedule name [%s]", schedule1Name))
 
 			// verify the backup schedule is not accessible to user2
@@ -1996,7 +1996,7 @@ var _ = Describe("{ClusterShareFromAppAdminAndAppUserToAnyUser}", Label(TestCase
 
 			// Create a backup schedule with user2
 			schedule2Name := fmt.Sprintf("schedule-bkp-%v", RandomString(5))
-			err = CreateScheduleBackup(schedule2Name, SourceClusterName, clusterUid, backupLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, testUser2Ctx)
+			err = CreateScheduleBackup(schedule2Name, SourceClusterName, clusterUid, backupLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, false, testUser2Ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of scheduled backup with schedule name [%s]", schedule2Name))
 
 			// verify the backup schedule is not accessible to user1
@@ -2078,7 +2078,7 @@ var _ = Describe("{ClusterShareFromAppAdminAndAppUserToAnyUser}", Label(TestCase
 			// Create a backup schedule
 			scheduleName := fmt.Sprintf("schedule-bkp-%v", RandomString(5))
 
-			err = CreateScheduleBackup(scheduleName, SourceClusterName, clusterUid, backupLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, testUser2Ctx)
+			err = CreateScheduleBackup(scheduleName, SourceClusterName, clusterUid, backupLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, false, testUser2Ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of scheduled backup with schedule name [%s]", scheduleName))
 		})
 
@@ -2143,7 +2143,7 @@ var _ = Describe("{ClusterShareFromAppAdminAndAppUserToAnyUser}", Label(TestCase
 
 			// Create a backup schedule with user1
 			schedule1Name := fmt.Sprintf("schedule-bkp-%v", RandomString(5))
-			err = CreateScheduleBackup(schedule1Name, SourceClusterName, clusterUid, backupLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, testUser2Ctx)
+			err = CreateScheduleBackup(schedule1Name, SourceClusterName, clusterUid, backupLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, false, testUser2Ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of scheduled backup with schedule name [%s]", schedule1Name))
 
 			// verify the backup schedule is not accessible to testUser3
@@ -2172,7 +2172,7 @@ var _ = Describe("{ClusterShareFromAppAdminAndAppUserToAnyUser}", Label(TestCase
 
 			// Create a backup schedule with user2
 			schedule2Name := fmt.Sprintf("schedule-bkp-%v", RandomString(5))
-			err = CreateScheduleBackup(schedule2Name, SourceClusterName, clusterUid, backupLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, testUser3Ctx)
+			err = CreateScheduleBackup(schedule2Name, SourceClusterName, clusterUid, backupLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, false, testUser3Ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of scheduled backup with schedule name [%s]", schedule2Name))
 
 			// verify the backup schedule is not accessible to user1

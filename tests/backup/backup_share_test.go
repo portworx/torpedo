@@ -2033,7 +2033,7 @@ var _ = Describe("{ClusterBackupShareToggle}", Label(TestCaseLabelsMap[ClusterBa
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
 			labelSelectors := make(map[string]string)
-			_, err = CreateScheduleBackupWithValidation(ctx, scheduleName, backupClusterName, clusterUid, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid)
+			_, err = CreateScheduleBackupWithValidation(ctx, scheduleName, backupClusterName, clusterUid, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", scheduleName))
 			scheduleNames = append(scheduleNames, scheduleName)
 			log.InfoD("Getting the first schedule backup from admin")

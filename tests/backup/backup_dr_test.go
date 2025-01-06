@@ -8,8 +8,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/pborman/uuid"
 
-	storkapi "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	storkapi "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
 	storkops "github.com/pure-px/stork/pkg/crud/stork"
 	"github.com/pure-px/torpedo/drivers/backup"
 	"github.com/pure-px/torpedo/drivers/scheduler"
@@ -236,7 +236,7 @@ var _ = Describe("{BackupAndRestoreSyncDR}", Label(TestCaseLabelsMap[BackupAndRe
 				log.InfoD("Creating a schedule backup of namespace [%s] without pre and post exec rules", namespace)
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
 				scheduleBackupName, err := CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, srcClusterUid, bkpLocationName, backupLocationUID, appContextsToBackup,
-					labelSelectors, BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid)
+					labelSelectors, BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, false)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", scheduleBackupName))
 				err = SuspendBackupSchedule(scheduleName, periodicSchedulePolicyName, BackupOrgID, ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Suspending Backup Schedule [%s] ", scheduleName))
@@ -256,7 +256,7 @@ var _ = Describe("{BackupAndRestoreSyncDR}", Label(TestCaseLabelsMap[BackupAndRe
 				log.InfoD("Creating a schedule backup of namespace [%s] without pre and post exec rules", namespace)
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
 				scheduleBackupName, err := CreateScheduleBackupWithValidation(ctx, scheduleName, DestinationClusterName, destClusterUid, bkpLocationName, backupLocationUID, appContextsToBackup,
-					labelSelectors, BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid)
+					labelSelectors, BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, false)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", scheduleBackupName))
 				err = SuspendBackupSchedule(scheduleName, periodicSchedulePolicyName, BackupOrgID, ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Suspending Backup Schedule [%s] ", scheduleName))

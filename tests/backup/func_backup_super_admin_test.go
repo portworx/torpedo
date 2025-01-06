@@ -566,7 +566,7 @@ var _ = Describe("{SuperAdminAccessVerificationWithBackupRestoreOperations}", La
 
 			// Create a backup schedule
 			scheduleName := fmt.Sprintf("schedule-bkp-%v", RandomString(5))
-			err = CreateScheduleBackup(scheduleName, SourceClusterName, clusterUid, backupLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, adminCtx)
+			err = CreateScheduleBackup(scheduleName, SourceClusterName, clusterUid, backupLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, false, adminCtx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of scheduled backup with schedule name [%s]", scheduleName))
 			backupScheduleList = append(backupScheduleList, scheduleName)
 		})
@@ -759,7 +759,7 @@ var _ = Describe("{SuperAdminAccessVerificationWithBackupRestoreOperations}", La
 
 			// Create a backup schedule
 			scheduleName := fmt.Sprintf("schedule-bkp-%v", RandomString(5))
-			err = CreateScheduleBackup(scheduleName, SourceClusterName, clusterUid, backupLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, adminCtx)
+			err = CreateScheduleBackup(scheduleName, SourceClusterName, clusterUid, backupLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, false, adminCtx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of scheduled backup with schedule name [%s]", scheduleName))
 			backupScheduleList = append(backupScheduleList, scheduleName)
 
@@ -787,7 +787,7 @@ var _ = Describe("{SuperAdminAccessVerificationWithBackupRestoreOperations}", La
 
 			// Create a backup schedule
 			scheduleName := fmt.Sprintf("schedule-bkp-%v", RandomString(5))
-			err = CreateScheduleBackup(scheduleName, SourceClusterName, clusterUid, backupLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, testUser1Ctx)
+			err = CreateScheduleBackup(scheduleName, SourceClusterName, clusterUid, backupLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, false, testUser1Ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of scheduled backup with schedule name [%s]", scheduleName))
 			backupScheduleList = append(backupScheduleList, scheduleName)
 
@@ -901,7 +901,7 @@ var _ = Describe("{SuperAdminAccessVerificationWithBackupRestoreOperations}", La
 
 			// Create a backup schedule
 			scheduleName = fmt.Sprintf("schedule-bkp-%v", RandomString(5))
-			err = CreateScheduleBackup(scheduleName, clusterName, clsuter1UID, backupLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, testUser1Ctx)
+			err = CreateScheduleBackup(scheduleName, clusterName, clsuter1UID, backupLocationName, backupLocationUID, bkpNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, false, testUser1Ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of scheduled backup with schedule name [%s]", scheduleName))
 
 			// Create restore from backup
@@ -1019,7 +1019,7 @@ var _ = Describe("{SuperAdminAccessVerificationWithBackupRestoreOperations}", La
 			log.InfoD("Creating BackupSchedule with Admin Context")
 			scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, RandomString(6))
 			labelSelectors := make(map[string]string)
-			err = CreateScheduleBackup(scheduleName, SourceClusterName, clusterUid, backupLocationName, backupLocationUID, bkpNamespaces, labelSelectors, BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, adminCtx)
+			err = CreateScheduleBackup(scheduleName, SourceClusterName, clusterUid, backupLocationName, backupLocationUID, bkpNamespaces, labelSelectors, BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, false, adminCtx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule name [%s]", scheduleName))
 		})
 
@@ -1085,7 +1085,7 @@ var _ = Describe("{SuperAdminAccessVerificationWithBackupRestoreOperations}", La
 
 			log.InfoD("Creating BackupSchedule with superAdmin context")
 			scheduleName := fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, RandomString(6))
-			err = CreateScheduleBackup(scheduleName, SourceClusterName, clusterUid, backupLocationName, backupLocationUID, bkpNamespaces, nil, BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, ctx)
+			err = CreateScheduleBackup(scheduleName, SourceClusterName, clusterUid, backupLocationName, backupLocationUID, bkpNamespaces, nil, BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, false, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule name [%s]", scheduleName))
 
 			for _, namespace := range bkpNamespaces {
@@ -1135,7 +1135,7 @@ var _ = Describe("{SuperAdminAccessVerificationWithBackupRestoreOperations}", La
 			log.InfoD("Creating BackupSchedule with Admin Context")
 			scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, RandomString(6))
 			labelSelectors := make(map[string]string)
-			err = CreateScheduleBackup(scheduleName, SourceClusterName, clusterUid, backupLocationName, backupLocationUID, bkpNamespaces, labelSelectors, BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, adminCtx)
+			err = CreateScheduleBackup(scheduleName, SourceClusterName, clusterUid, backupLocationName, backupLocationUID, bkpNamespaces, labelSelectors, BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, false, adminCtx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule name [%s] using admix ctx", scheduleName))
 
 			for _, namespace := range bkpNamespaces {

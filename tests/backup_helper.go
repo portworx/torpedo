@@ -1261,8 +1261,8 @@ func TakeMultipleBackupsPerDeploymentWithoutCheck(ctx context1.Context, backupOr
 // CreateScheduleBackup creates a schedule backup and checks for success of first (immediately triggered) backup
 func CreateScheduleBackup(scheduleName string, clusterName string, clusterUid string, bLocation string, bLocationUID string,
 	namespaces []string, labelSelectors map[string]string, orgID string, preRuleName string,
-	preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, ctx context1.Context) error {
-	_, err := CreateScheduleBackupWithoutCheck(scheduleName, clusterName, clusterUid, bLocation, bLocationUID, namespaces, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, ctx, false)
+	preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, parallelBackup bool, ctx context1.Context) error {
+	_, err := CreateScheduleBackupWithoutCheck(scheduleName, clusterName, clusterUid, bLocation, bLocationUID, namespaces, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, ctx, parallelBackup)
 	if err != nil {
 		return err
 	}
@@ -1280,7 +1280,7 @@ func CreateScheduleBackup(scheduleName string, clusterName string, clusterUid st
 }
 
 // CreateScheduleBackupWithValidationWithVscMapping creates a schedule backup, checks for success of first (immediately triggered) backup, validates that backup and returns the name of that first scheduled backup
-func CreateScheduleBackupWithValidationWithVscMapping(ctx context1.Context, scheduleName string, clusterName string, clusterUid string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, provisionerVolumeSnapshotClassMap map[string]string, forceKdmp bool) (string, error) {
+func CreateScheduleBackupWithValidationWithVscMapping(ctx context1.Context, scheduleName string, clusterName string, clusterUid string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, provisionerVolumeSnapshotClassMap map[string]string, forceKdmp bool, parallelBackup bool) (string, error) {
 	namespaces := make([]string, 0)
 	for _, scheduledAppContext := range scheduledAppContextsToBackup {
 		namespace := scheduledAppContext.ScheduleOptions.Namespace
@@ -1288,7 +1288,7 @@ func CreateScheduleBackupWithValidationWithVscMapping(ctx context1.Context, sche
 			namespaces = append(namespaces, namespace)
 		}
 	}
-	_, err := CreateScheduleBackupWithoutCheckWithVscMapping(scheduleName, clusterName, clusterUid, bLocation, bLocationUID, namespaces, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, ctx, provisionerVolumeSnapshotClassMap, forceKdmp)
+	_, err := CreateScheduleBackupWithoutCheckWithVscMapping(scheduleName, clusterName, clusterUid, bLocation, bLocationUID, namespaces, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, ctx, provisionerVolumeSnapshotClassMap, forceKdmp, parallelBackup)
 	if err != nil {
 		return "", err
 	}
@@ -1302,7 +1302,7 @@ func CreateScheduleBackupWithValidationWithVscMapping(ctx context1.Context, sche
 }
 
 // CreateScheduleBackupWithValidation creates a schedule backup, checks for success of first (immediately triggered) backup, validates that backup and returns the name of that first scheduled backup
-func CreateScheduleBackupWithValidation(ctx context1.Context, scheduleName string, clusterName string, clusterUid string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, resourceTypes ...string) (string, error) {
+func CreateScheduleBackupWithValidation(ctx context1.Context, scheduleName string, clusterName string, clusterUid string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, parallelBackup bool, resourceTypes ...string) (string, error) {
 	namespaces := make([]string, 0)
 	for _, scheduledAppContext := range scheduledAppContextsToBackup {
 		namespace := scheduledAppContext.ScheduleOptions.Namespace
@@ -1310,7 +1310,7 @@ func CreateScheduleBackupWithValidation(ctx context1.Context, scheduleName strin
 			namespaces = append(namespaces, namespace)
 		}
 	}
-	_, err := CreateScheduleBackupWithoutCheck(scheduleName, clusterName, clusterUid, bLocation, bLocationUID, namespaces, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, ctx, false, resourceTypes...)
+	_, err := CreateScheduleBackupWithoutCheck(scheduleName, clusterName, clusterUid, bLocation, bLocationUID, namespaces, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, ctx, parallelBackup, resourceTypes...)
 	if err != nil {
 		return "", err
 	}
@@ -1326,7 +1326,7 @@ func CreateScheduleBackupWithValidation(ctx context1.Context, scheduleName strin
 // CreateVMScheduledBackupWithValidation creates a VM scheduled backup and checks for success
 func CreateVMScheduledBackupWithValidation(scheduleName string, vms []kubevirtv1.VirtualMachine, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context,
 	labelSelectors map[string]string, orgID string, uid string, preRuleName string,
-	preRuleUid string, postRuleName string, postRuleUid string, skipVMAutoExecRules bool, schPolicyName string, schPolicyUID string, ctx context1.Context) (string, error) {
+	preRuleUid string, postRuleName string, postRuleUid string, skipVMAutoExecRules bool, schPolicyName string, schPolicyUID string, parallelBackup bool, ctx context1.Context) (string, error) {
 
 	var removeSpecs []interface{}
 	for _, scheduledAppContext := range scheduledAppContextsToBackup {
@@ -1344,7 +1344,7 @@ func CreateVMScheduledBackupWithValidation(scheduleName string, vms []kubevirtv1
 		}
 	}
 
-	_, err := CreateVMScheduleBackupByNamespacesWithoutCheck(scheduleName, vms, clusterName, bLocation, bLocationUID, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, skipVMAutoExecRules, schPolicyName, schPolicyUID, ctx)
+	_, err := CreateVMScheduleBackupByNamespacesWithoutCheck(scheduleName, vms, clusterName, bLocation, bLocationUID, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, skipVMAutoExecRules, schPolicyName, schPolicyUID, parallelBackup, ctx)
 	if err != nil {
 		return "", err
 	}
@@ -1358,7 +1358,7 @@ func CreateVMScheduledBackupWithValidation(scheduleName string, vms []kubevirtv1
 }
 
 // CreateScheduleBackupWithValidation creates a schedule backup, checks for success of first (immediately triggered) backup, validates that backup and returns the name of that first scheduled backup along with CR validation
-func CreateScheduleBackupWithCRValidation(ctx context1.Context, scheduleName string, clusterName string, clusterUid string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string) (string, error) {
+func CreateScheduleBackupWithCRValidation(ctx context1.Context, scheduleName string, clusterName string, clusterUid string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, parallelBackup bool) (string, error) {
 	namespaces := make([]string, 0)
 	for _, scheduledAppContext := range scheduledAppContextsToBackup {
 		namespace := scheduledAppContext.ScheduleOptions.Namespace
@@ -1366,7 +1366,7 @@ func CreateScheduleBackupWithCRValidation(ctx context1.Context, scheduleName str
 			namespaces = append(namespaces, namespace)
 		}
 	}
-	backupScheduleInspectReponse, err := CreateScheduleBackupWithoutCheck(scheduleName, clusterName, clusterUid, bLocation, bLocationUID, namespaces, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, ctx, false)
+	backupScheduleInspectReponse, err := CreateScheduleBackupWithoutCheck(scheduleName, clusterName, clusterUid, bLocation, bLocationUID, namespaces, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, ctx, parallelBackup)
 	if err != nil {
 		return "", err
 	}
@@ -1730,7 +1730,7 @@ func CreateScheduleBackupWithoutCheck(scheduleName string, clusterName string, c
 // CreateVMScheduleBackupByNamespacesWithoutCheck creates VM schedule backup of provided namespaces without waiting for success.
 func CreateVMScheduleBackupByNamespacesWithoutCheck(scheduleName string, vms []kubevirtv1.VirtualMachine, clusterName string, bLocation string, bLocationUID string,
 	labelSelectors map[string]string, orgID string, uid string, preRuleName string,
-	preRuleUid string, postRuleName string, postRuleUid string, skipVMAutoExecRules bool, schPolicyName string, schPolicyUID string, ctx context1.Context) (*api.BackupScheduleInspectResponse, error) {
+	preRuleUid string, postRuleName string, postRuleUid string, skipVMAutoExecRules bool, schPolicyName string, schPolicyUID string, parallelBackup bool, ctx context1.Context) (*api.BackupScheduleInspectResponse, error) {
 
 	backupDriver := Inst().Backup
 	includeResource := GenerateResourceInfo(vms)
@@ -1769,6 +1769,7 @@ func CreateVMScheduleBackupByNamespacesWithoutCheck(scheduleName string, vms []k
 			Type: api.BackupScheduleCreateRequest_BackupObjectType_VirtualMachine,
 		},
 		SkipVmAutoExecRules: skipVMAutoExecRules,
+		ParallelBackup:      parallelBackup,
 	}
 
 	err := AdditionalScheduledBackupRequestParams(bkpScheduleCreateRequest)
@@ -1793,7 +1794,7 @@ func CreateVMScheduleBackupByNamespacesWithoutCheck(scheduleName string, vms []k
 }
 
 // CreateScheduleBackupWithoutCheckWithVscMapping creates a schedule backup without waiting for success
-func CreateScheduleBackupWithoutCheckWithVscMapping(scheduleName string, clusterName string, clusterUid string, bLocation string, bLocationUID string, namespaces []string, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, ctx context1.Context, provisionerVolumeSnapshotClassMap map[string]string, forceKdmp bool) (*api.BackupScheduleInspectResponse, error) {
+func CreateScheduleBackupWithoutCheckWithVscMapping(scheduleName string, clusterName string, clusterUid string, bLocation string, bLocationUID string, namespaces []string, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, ctx context1.Context, provisionerVolumeSnapshotClassMap map[string]string, forceKdmp bool, parallelBackup bool) (*api.BackupScheduleInspectResponse, error) {
 
 	if GlobalRuleFlag {
 		preRuleName = GlobalPreRuleName
@@ -1839,6 +1840,7 @@ func CreateScheduleBackupWithoutCheckWithVscMapping(scheduleName string, cluster
 			Name: clusterName,
 			Uid:  clusterUid,
 		},
+		ParallelBackup: parallelBackup,
 	}
 
 	err := AdditionalScheduledBackupRequestParams(bkpSchCreateRequest)
@@ -5336,8 +5338,8 @@ func CreateBackupWithNamespaceLabelWithValidation(ctx context1.Context, backupNa
 }
 
 // CreateScheduleBackupWithNamespaceLabel creates a schedule backup with namespace label and checks for success
-func CreateScheduleBackupWithNamespaceLabel(scheduleName string, clusterName string, clusterUid string, bkpLocation string, bkpLocationUID string, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, namespaceLabel, schPolicyName string, schPolicyUID string, ctx context1.Context) error {
-	_, err := CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName, clusterName, clusterUid, bkpLocation, bkpLocationUID, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, namespaceLabel, ctx, false)
+func CreateScheduleBackupWithNamespaceLabel(scheduleName string, clusterName string, clusterUid string, bkpLocation string, bkpLocationUID string, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, namespaceLabel, schPolicyName string, schPolicyUID string, parallelBackup bool, ctx context1.Context) error {
+	_, err := CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName, clusterName, clusterUid, bkpLocation, bkpLocationUID, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, namespaceLabel, ctx, parallelBackup)
 	if err != nil {
 		return err
 	}
@@ -5424,7 +5426,7 @@ func CreateBackupWithNamespaceLabelWithoutCheck(backupName string, clusterName s
 }
 
 // CreateScheduleBackupWithNamespaceLabelWithoutCheck creates a schedule backup with namespace label filter without waiting for success
-func CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName string, clusterName string, clusterUid string, bkpLocation string, bkpLocationUID string, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, namespaceLabel string, ctx context1.Context, parallelBackups bool) (*api.BackupScheduleInspectResponse, error) {
+func CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName string, clusterName string, clusterUid string, bkpLocation string, bkpLocationUID string, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, namespaceLabel string, ctx context1.Context, parallelBackup bool) (*api.BackupScheduleInspectResponse, error) {
 
 	if GlobalRuleFlag {
 		preRuleName = GlobalPreRuleName
@@ -5468,7 +5470,7 @@ func CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName string, clu
 			Name: clusterName,
 			Uid:  clusterUid,
 		},
-		ParallelBackup: parallelBackups,
+		ParallelBackup: parallelBackup,
 	}
 
 	err := AdditionalScheduledBackupRequestParams(bkpSchCreateRequest)
@@ -5492,7 +5494,7 @@ func CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName string, clu
 }
 
 // CreateVMScheduleBackupWithNamespaceLabelWithoutCheck creates a schedule backup with namespace label filter without waiting for success
-func CreateVMScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName string, vms []kubevirtv1.VirtualMachine, clusterName string, bkpLocation string, bkpLocationUID string, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, namespaceLabel string, skipVmAutoExecRules bool, ctx context1.Context) (*api.BackupScheduleInspectResponse, error) {
+func CreateVMScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName string, vms []kubevirtv1.VirtualMachine, clusterName string, bkpLocation string, bkpLocationUID string, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, namespaceLabel string, skipVmAutoExecRules bool, parallelBackup bool, ctx context1.Context) (*api.BackupScheduleInspectResponse, error) {
 	backupDriver := Inst().Backup
 
 	includeResource := GenerateResourceInfo(vms)
@@ -5534,6 +5536,7 @@ func CreateVMScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName string, v
 			Name: clusterName,
 			Uid:  clusterUid,
 		},
+		ParallelBackup: parallelBackup,
 	}
 
 	err = AdditionalScheduledBackupRequestParams(bkpScheduleCreateRequest)
@@ -5558,8 +5561,8 @@ func CreateVMScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName string, v
 }
 
 // CreateScheduleBackupWithNamespaceLabelWithValidation creates a schedule backup with namespace label, checks for success of first (immediately triggered) backup, validates that backup and returns the name of that first scheduled backup
-func CreateScheduleBackupWithNamespaceLabelWithValidation(ctx context1.Context, scheduleName string, clusterName string, clusterUid string, bkpLocation string, bkpLocationUID string, scheduledAppContextsExpectedInBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, namespaceLabel string, schPolicyName string, schPolicyUID string) (string, error) {
-	_, err := CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName, clusterName, clusterUid, bkpLocation, bkpLocationUID, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, namespaceLabel, ctx, false)
+func CreateScheduleBackupWithNamespaceLabelWithValidation(ctx context1.Context, scheduleName string, clusterName string, clusterUid string, bkpLocation string, bkpLocationUID string, scheduledAppContextsExpectedInBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, namespaceLabel string, schPolicyName string, schPolicyUID string, parallelBackup bool) (string, error) {
+	_, err := CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName, clusterName, clusterUid, bkpLocation, bkpLocationUID, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, namespaceLabel, ctx, parallelBackup)
 	if err != nil {
 		return "", err
 	}
@@ -5574,7 +5577,7 @@ func CreateScheduleBackupWithNamespaceLabelWithValidation(ctx context1.Context, 
 }
 
 // CreateVMScheduleBackupWithNamespaceLabelWithValidation creates a schedule backup for VM with namespace label, checks for success of first (immediately triggered) backup, validates that backup and returns the name of that first scheduled backup
-func CreateVMScheduleBackupWithNamespaceLabelWithValidation(ctx context1.Context, scheduleName string, vms []kubevirtv1.VirtualMachine, clusterName string, bkpLocation string, bkpLocationUID string, scheduledAppContextsExpectedInBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, namespaceLabel string, schPolicyName string, schPolicyUID string, skipVmAutoExecRules bool) (string, error) {
+func CreateVMScheduleBackupWithNamespaceLabelWithValidation(ctx context1.Context, scheduleName string, vms []kubevirtv1.VirtualMachine, clusterName string, bkpLocation string, bkpLocationUID string, scheduledAppContextsExpectedInBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, namespaceLabel string, schPolicyName string, schPolicyUID string, skipVmAutoExecRules bool, parallelBackup bool) (string, error) {
 	var removeSpecs []interface{}
 	for _, scheduledAppContext := range scheduledAppContextsExpectedInBackup {
 		// Removing specs which are outside the scope of VM Backup
@@ -5591,7 +5594,7 @@ func CreateVMScheduleBackupWithNamespaceLabelWithValidation(ctx context1.Context
 		}
 	}
 
-	_, err := CreateVMScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName, vms, clusterName, bkpLocation, bkpLocationUID, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, namespaceLabel, skipVmAutoExecRules, ctx)
+	_, err := CreateVMScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName, vms, clusterName, bkpLocation, bkpLocationUID, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, namespaceLabel, skipVmAutoExecRules, parallelBackup, ctx)
 	if err != nil {
 		return "", err
 	}
@@ -10848,7 +10851,7 @@ func CreatePartialBackupWithValidationWithVscMapping(ctx context1.Context, backu
 }
 
 // CreatePartialScheduleBackupWithValidationWithVscMapping creates a partial schedule backup, checks for partial success of first (immediately triggered) backup, validates that backup and returns the name of that first partial scheduled backup
-func CreatePartialScheduleBackupWithValidationWithVscMapping(ctx context1.Context, scheduleName string, clusterName string, clusterUid string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, provisionerVolumeSnapshotClassMap map[string]string, forceKdmp bool, failedVolumes []*corev1.PersistentVolumeClaim) (string, error) {
+func CreatePartialScheduleBackupWithValidationWithVscMapping(ctx context1.Context, scheduleName string, clusterName string, clusterUid string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, provisionerVolumeSnapshotClassMap map[string]string, forceKdmp bool, failedVolumes []*corev1.PersistentVolumeClaim, parallelBackup bool) (string, error) {
 	namespaces := make([]string, 0)
 	for _, scheduledAppContext := range scheduledAppContextsToBackup {
 		namespace := scheduledAppContext.ScheduleOptions.Namespace
@@ -10856,7 +10859,7 @@ func CreatePartialScheduleBackupWithValidationWithVscMapping(ctx context1.Contex
 			namespaces = append(namespaces, namespace)
 		}
 	}
-	_, err := CreateScheduleBackupWithoutCheckWithVscMapping(scheduleName, clusterName, clusterUid, bLocation, bLocationUID, namespaces, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, ctx, provisionerVolumeSnapshotClassMap, forceKdmp)
+	_, err := CreateScheduleBackupWithoutCheckWithVscMapping(scheduleName, clusterName, clusterUid, bLocation, bLocationUID, namespaces, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, ctx, provisionerVolumeSnapshotClassMap, forceKdmp, parallelBackup)
 	if err != nil {
 		return "", err
 	}

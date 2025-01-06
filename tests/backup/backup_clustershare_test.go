@@ -242,7 +242,7 @@ var _ = Describe("{ClusterShareWithLargeNumberOfUsersAndClusters}", Label(TestCa
 			createScheduleBackupsFromUser := func(user string) {
 				scheduleName := fmt.Sprintf("%s-%s-%s", "schedule", user, RandomString(5))
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{userNamespaceMap[user]})
-				scheduleBackupName, err := CreateScheduleBackupWithValidation(userCtx[user], scheduleName, SourceClusterName, userClusterMap[user][SourceClusterName], backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID)
+				scheduleBackupName, err := CreateScheduleBackupWithValidation(userCtx[user], scheduleName, SourceClusterName, userClusterMap[user][SourceClusterName], backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, false)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup [%s]", scheduleBackupName))
 				mu.Lock()
 				defer mu.Unlock()
@@ -426,7 +426,7 @@ var _ = Describe("{ClusterShareWithLargeNumberOfUsersAndClusters}", Label(TestCa
 				userNamespace := backedUpNamespaces[rand.Intn(len(backedUpNamespaces))]
 				scheduleName := fmt.Sprintf("%s-%s-%s", "schedule", user, RandomString(5))
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{userNamespace})
-				scheduleBackupName, err := CreateScheduleBackupWithValidation(nonAdminCtx, scheduleName, SourceClusterName, sharedUserClusterMap[user][SourceClusterName], backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID)
+				scheduleBackupName, err := CreateScheduleBackupWithValidation(nonAdminCtx, scheduleName, SourceClusterName, sharedUserClusterMap[user][SourceClusterName], backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, false)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup [%s] form user [%s]", scheduleName, user))
 				userScheduleFromSharedClusterMap[user] = scheduleName
 				err = SuspendBackupSchedule(scheduleName, schedulePolicyName, BackupOrgID, nonAdminCtx)
@@ -632,7 +632,7 @@ var _ = Describe("{ClusterShareWithLargeNumberOfUsersAndClusters}", Label(TestCa
 				userNamespace := backedUpNamespaces[rand.Intn(len(backedUpNamespaces))]
 				scheduleName := fmt.Sprintf("%s-%s-%s", "schedule", user, RandomString(5))
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{userNamespace})
-				scheduleBackupName, err := CreateScheduleBackupWithValidation(nonAdminCtx, scheduleName, SourceClusterName, iter2ClusterUserMap[user][SourceClusterName], backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID)
+				scheduleBackupName, err := CreateScheduleBackupWithValidation(nonAdminCtx, scheduleName, SourceClusterName, iter2ClusterUserMap[user][SourceClusterName], backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, false)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup [%s]", scheduleBackupName))
 				err = SuspendBackupSchedule(scheduleName, schedulePolicyName, BackupOrgID, nonAdminCtx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Suspend schedule [%s]", scheduleName))
@@ -1124,7 +1124,7 @@ var _ = Describe("{BackupSuperAdminRoleForLocalUser}", Label(TestCaseLabelsMap[B
 				log.FailOnError(err, "failed to fetch user [%s] ctx", user)
 				scheduleName := fmt.Sprintf("%s-%s-%s", "schedule", user, RandomString(5))
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{userNamespaceMap[user]})
-				scheduleBackupName, err := CreateScheduleBackupWithValidation(nonAdminCtx, scheduleName, SourceClusterName, userClusterMap[user][SourceClusterName], userBkpLocationNameMap[user], userBkpLocationUidMap[user], appContextsToBackup, labelSelectors, BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID)
+				scheduleBackupName, err := CreateScheduleBackupWithValidation(nonAdminCtx, scheduleName, SourceClusterName, userClusterMap[user][SourceClusterName], userBkpLocationNameMap[user], userBkpLocationUidMap[user], appContextsToBackup, labelSelectors, BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, false)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup [%s]", scheduleBackupName))
 				err = SuspendBackupSchedule(scheduleName, schedulePolicyName, BackupOrgID, nonAdminCtx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Suspending Backup Schedule [%s] for user [%s]", scheduleName, user))
@@ -1489,7 +1489,7 @@ var _ = Describe("{BackupSuperAdminRoleForLocalUser}", Label(TestCaseLabelsMap[B
 			for _, clusterUser := range []string{userTobeDemoted, superAdminUsers[3]} {
 				scheduleName := fmt.Sprintf("%s-%s-%s", "schedule-cluster", userTobeDemoted, userClusterMap[clusterUser][SourceClusterName])
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{userNamespaceMap[userTobeDemoted]})
-				scheduleBackupName, err := CreateScheduleBackupWithValidation(userCtx, scheduleName, SourceClusterName, userClusterMap[clusterUser][SourceClusterName], userBkpLocationNameMap[userTobeDemoted], userBkpLocationUidMap[userTobeDemoted], appContextsToBackup, labelSelectors, BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID)
+				scheduleBackupName, err := CreateScheduleBackupWithValidation(userCtx, scheduleName, SourceClusterName, userClusterMap[clusterUser][SourceClusterName], userBkpLocationNameMap[userTobeDemoted], userBkpLocationUidMap[userTobeDemoted], appContextsToBackup, labelSelectors, BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, false)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup for super admin from owned cluster[%s]", scheduleBackupName))
 				demotedUserSchedules = append(demotedUserSchedules, scheduleName)
 				demotedUserBackups = append(demotedUserBackups, scheduleBackupName)

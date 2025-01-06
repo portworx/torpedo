@@ -742,7 +742,7 @@ func eventScheduleBackup(inputsForEventBuilder *PxBackupLongevity) (error, strin
 			appContextsToBackup,
 			labelSelectors,
 			BackupOrgID,
-			"", "", "", "", inputsForEventBuilder.BackupData.SchedulePolicyName, inputsForEventBuilder.BackupData.SchedulePolicyUid)
+			"", "", "", "", inputsForEventBuilder.BackupData.SchedulePolicyName, inputsForEventBuilder.BackupData.SchedulePolicyUid, false)
 
 		backupScheduleNames = append(backupScheduleNames, scheduleName)
 		if err != nil {
