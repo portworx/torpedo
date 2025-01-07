@@ -91,7 +91,6 @@ var (
 
 // PoolRuleByTotalSize returns an autopilot pool expand rule that uses total pool size
 func PoolRuleByTotalSize(total, scalePercentage uint64, expandType string, labelSelector map[string]string) apapi.AutopilotRule {
-
 	matchExpressions := []meta_v1.LabelSelectorRequirement{}
 	for key, value := range labelSelector {
 		matchExpressions = append(matchExpressions, meta_v1.LabelSelectorRequirement{
@@ -108,6 +107,40 @@ func PoolRuleByTotalSize(total, scalePercentage uint64, expandType string, label
 			Selector: apapi.RuleObjectSelector{
 				LabelSelector: meta_v1.LabelSelector{
 					MatchExpressions: matchExpressions,
+				},
+			},
+			Conditions: apapi.RuleConditions{
+				Expressions: []*apapi.LabelSelectorRequirement{
+					{
+						Key:      PxPoolTotalCapacityMetric,
+						Operator: apapi.LabelSelectorOpLt,
+						Values:   []string{fmt.Sprintf("%d", total)},
+					},
+				},
+			},
+			Actions: []*apapi.RuleAction{
+				{
+					Name: StorageSpecAction,
+					Params: map[string]string{
+						RuleActionsScalePercentage: fmt.Sprintf("%d", scalePercentage),
+						RuleScaleType:              expandType,
+					},
+				},
+			},
+		},
+	}
+}
+
+// PoolRuleByTotalSizeUsingMatchLabels returns an autopilot pool expand rule that uses total pool size
+func PoolRuleByTotalSizeUsingMatchLabels(total, scalePercentage uint64, expandType string, labelSelector map[string]string) apapi.AutopilotRule {
+	return apapi.AutopilotRule{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Name: fmt.Sprintf("pool-%s-total-%d", expandType, total),
+		},
+		Spec: apapi.AutopilotRuleSpec{
+			Selector: apapi.RuleObjectSelector{
+				LabelSelector: meta_v1.LabelSelector{
+					MatchLabels: labelSelector,
 				},
 			},
 			Conditions: apapi.RuleConditions{

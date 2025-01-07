@@ -38,7 +38,7 @@ const (
 	triggerCheckInterval     = 2 * time.Second
 	triggerCheckTimeout      = 5 * time.Minute
 	autDeploymentName        = "autopilot"
-	autDeploymentNamespace   = "kube-system"
+	autDeploymentNamespace   = "portworx"
 )
 
 var autopilotruleBasicTestCases = []apapi.AutopilotRule{
@@ -76,6 +76,14 @@ var _ = Describe(fmt.Sprintf("{%sPvcBasic}", testSuiteName), Label("p0", "positi
 					labels := map[string]string{
 						"autopilot": apRule.Name,
 					}
+					matchExpressions := []meta_v1.LabelSelectorRequirement{
+						{
+							Key:      "autopilot",
+							Operator: "In",
+							Values:   []string{apRule.Name},
+						},
+					}
+					apRule.Spec.Selector.LabelSelector.MatchExpressions = matchExpressions
 					apRule.Spec.ActionsCoolDownPeriod = int64(60)
 					context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
 						AppKeys:            Inst().AppList,
@@ -725,17 +733,19 @@ var _ = Describe(fmt.Sprintf("{%sUpgradeAutopilot}", testSuiteName), Label("p0",
 	It("has to start IO workloads, create rules that resize pools based on capacity, upgrade autopilot and validate pools have been resized once", func() {
 		var err error
 		var contexts []*scheduler.Context
-
+		autObject, err := apps.Instance().GetDeployment(autDeploymentName, "portworx")
+		dash.VerifyFatal(err, nil, "Validate: Get autopilot deployment")
+		previousAutopilotImage := autObject.Spec.Template.Spec.Containers[0].Image
 		if Inst().AutopilotUpgradeImage == "" {
 			err = fmt.Errorf("no image supplied for upgrading autopilot")
 		}
-		Expect(err).NotTo(HaveOccurred())
+		dash.VerifyFatal(err, nil, "Validate if image supplied for upgrading autopilot")
 
 		testName := strings.ToLower(fmt.Sprintf("%sUpgradeAutopilot", testSuiteName))
 		poolLabel := map[string]string{"autopilot": "adddisk"}
 		storageNodes := node.GetStorageDriverNodes()
 		apRules := []apapi.AutopilotRule{
-			aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNodes[0])/units.GiB)+1, 10, aututils.RuleScaleTypeAddDisk, poolLabel),
+			aututils.PoolRuleByTotalSizeUsingMatchLabels((getTotalPoolSize(storageNodes[0]) / units.GiB), 20, aututils.RuleScaleTypeAddDisk, poolLabel),
 		}
 
 		// setup task to upgrade autopilot pod as soon as it starts doing expansions
@@ -744,7 +754,7 @@ var _ = Describe(fmt.Sprintf("{%sUpgradeAutopilot}", testSuiteName), Label("p0",
 				ruleEvents, err := core.Instance().ListEvents("", meta_v1.ListOptions{
 					FieldSelector: fmt.Sprintf("involvedObject.kind=AutopilotRule,involvedObject.name=%s", apRule.Name),
 				})
-				Expect(err).NotTo(HaveOccurred())
+				dash.VerifyFatal(err, nil, "Validate if events are listed")
 
 				for _, ruleEvent := range ruleEvents.Items {
 					if strings.Contains(ruleEvent.Message, aututils.ActiveActionsPendingToActiveActionsInProgress) {
@@ -765,8 +775,8 @@ var _ = Describe(fmt.Sprintf("{%sUpgradeAutopilot}", testSuiteName), Label("p0",
 		}
 
 		t := func(interval sched.Interval) {
-			err := upgradeAutopilot(Inst().AutopilotUpgradeImage, upgradeOpts)
-			Expect(err).NotTo(HaveOccurred())
+			err := updateAutopilot(Inst().AutopilotUpgradeImage, upgradeOpts)
+			dash.VerifyFatal(err, nil, "Validate if upgrade autopilot was successful")
 		}
 
 		id, err := sched.Instance().Schedule(t, sched.Periodic(time.Second), time.Now(), true)
@@ -774,25 +784,33 @@ var _ = Describe(fmt.Sprintf("{%sUpgradeAutopilot}", testSuiteName), Label("p0",
 
 		defer sched.Instance().Cancel(id)
 
-		Step("schedule apps with autopilot rules", func() {
+		stepLog := "schedule apps with autopilot rules"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			err := AddLabelsOnNode(storageNodes[0], poolLabel)
 			Expect(err).NotTo(HaveOccurred())
 			contexts = scheduleAppsWithAutopilot(testName, 1, apRules, scheduler.ScheduleOptions{})
 		})
 
 		// schedule deletion of autopilot once the pool expansion starts
-		Step("wait until workload completes on volume", func() {
+		stepLog = "wait until workload completes on volume"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			for _, ctx := range contexts {
 				err := Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
 				Expect(err).NotTo(HaveOccurred())
 			}
 		})
 
-		Step("validating and verifying size of storage pools", func() {
+		stepLog = "validating and verifying size of storage pools"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			ValidateStoragePools(contexts)
 		})
 
-		Step("destroy apps", func() {
+		stepLog = "destroy apps"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			opts := make(map[string]bool)
 			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 			for _, ctx := range contexts {
@@ -806,7 +824,121 @@ var _ = Describe(fmt.Sprintf("{%sUpgradeAutopilot}", testSuiteName), Label("p0",
 					Inst().S.RemoveLabelOnNode(storageNode, k)
 				}
 			}
+			log.InfoD("Update the autopilot image back to original")
+			err := updateAutopilot(previousAutopilotImage, nil)
+			dash.VerifyFatal(err, nil, "Validate if upgrade autopilot was successful")
 		})
+	})
+
+	It("has to resize pvc, validate size of pvc, upgrade autopilot, resize pvc again and validate size of pvc", func() {
+		var err error
+		var contexts []*scheduler.Context
+		autObject, err := apps.Instance().GetDeployment(autDeploymentName, "portworx")
+		dash.VerifyFatal(err, nil, "Validate: Get autopilot deployment")
+		previousAutopilotImage := autObject.Spec.Template.Spec.Containers[0].Image
+		if Inst().AutopilotUpgradeImage == "" {
+			err = fmt.Errorf("no image supplied for upgrading autopilot")
+		}
+		dash.VerifyFatal(err, nil, "Validate if image supplied for upgrading autopilot")
+
+		testName := strings.ToLower(fmt.Sprintf("%sUpgradeAutopilot", testSuiteName))
+		pvcLabel := map[string]string{"autopilot": "pvc-expand"}
+		pvcApRules := []apapi.AutopilotRule{
+			aututils.PVCRuleByTotalSize(10, 100, ""),
+		}
+		stepLog := "schedule applications for PVC expand"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for id, apRule := range pvcApRules {
+				apRule.Spec.Selector.LabelSelector.MatchLabels = pvcLabel
+				taskName := fmt.Sprintf("%s-%d-aprule%d", testName, 0, id)
+				apRule.Name = fmt.Sprintf("%s-%d", apRule.Name, 0)
+				apRule.Spec.ActionsCoolDownPeriod = int64(60)
+				context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+					AppKeys:            Inst().AppList,
+					StorageProvisioner: Inst().Provisioner,
+					AutopilotRule:      apRule,
+					Labels:             pvcLabel,
+				})
+				dash.VerifyFatal(err, nil, "Validate if applications are scheduled")
+				dash.VerifyFatal(len(context) > 0, true, "Verify app context created")
+				contexts = append(contexts, context...)
+			}
+		})
+
+		stepLog = "wait until workload completes on volume"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				err := Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
+				dash.VerifyFatal(err, nil, "Validate if workload is completed")
+			}
+		})
+
+		stepLog = "validating volumes and verifying size of volumes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				ValidateVolumes(ctx)
+			}
+		})
+
+		stepLog = "upgrade autopilot"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := updateAutopilot(Inst().AutopilotUpgradeImage, nil)
+			dash.VerifyFatal(err, nil, "Validate if upgrade autopilot was successful")
+		})
+
+		stepLog = "Schedule applications for PVC expand post autopilot upgrade"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for id, _ := range pvcApRules {
+				taskName := fmt.Sprintf("post-upgrade-%s-%d-aprule%d", testName, 0, id)
+				context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+					AppKeys:            Inst().AppList,
+					StorageProvisioner: Inst().Provisioner,
+					Labels:             pvcLabel,
+				})
+				dash.VerifyFatal(err, nil, "Validate if applications are scheduled")
+				dash.VerifyFatal(len(context) > 0, true, "Verify app context created")
+				contexts = append(contexts, context...)
+			}
+		})
+
+		stepLog = "wait for unscheduled resize of volume"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				err := Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
+				dash.VerifyFatal(err, nil, "Validate if workload is completed")
+			}
+		})
+
+		stepLog = "validating volumes and verifying size of volumes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				ValidateVolumes(ctx)
+			}
+		})
+
+		stepLog = "destroy apps"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+			for _, apRule := range pvcApRules {
+				Inst().S.DeleteAutopilotRule(apRule.Name)
+			}
+			log.InfoD("Update the autopilot image back to original")
+			err := updateAutopilot(previousAutopilotImage, nil)
+			dash.VerifyFatal(err, nil, "Validate if upgrade autopilot was successful")
+		})
+
 	})
 	JustAfterEach(func() {
 		EndTorpedoTest()
@@ -1369,7 +1501,7 @@ var _ = Describe(fmt.Sprintf("{%sDMThinPoolExpandFailure}", testSuiteName), Labe
 		EndTorpedoTest()
 	})
 
-	It("create rules with scale type add-drive, wait for failed event, update scale-type to resize-drive value and validate pools", func() {
+	It("create rules with scale type add-drive, wait for failed event, update scale-type to empty string value which defaults to Auto and validate pools", func() {
 		var contexts []*scheduler.Context
 		var isAutVersionGreaterThanOrEqualTo bool
 		var autObject *appsv1.Deployment
@@ -1405,11 +1537,11 @@ var _ = Describe(fmt.Sprintf("{%sDMThinPoolExpandFailure}", testSuiteName), Labe
 			dash.VerifyFatal(err, nil, "Validate: Wait for event with message add-drive not supported on dmthin")
 		})
 
-		Step("updating autopilot rules with scale-type: resize-drive", func() {
+		Step("updating autopilot rules by removing scale type. It will by default use scaleType auto", func() {
 			aRule, err := Inst().S.GetAutopilotRule(apRules[0].Name)
 			dash.VerifyFatal(err, nil, "Validate: Get autopilot rule")
 			for i := range aRule.Spec.Actions {
-				aRule.Spec.Actions[i].Params[aututils.RuleScaleType] = "resize-drive"
+				aRule.Spec.Actions[i].Params[aututils.RuleScaleType] = ""
 				_, err := Inst().S.UpdateAutopilotRule(aRule)
 				dash.VerifyFatal(err, nil, "Validate: Update autopilot rule")
 			}
@@ -2673,12 +2805,12 @@ func getTotalPoolSize(node node.Node) uint64 {
 	return totalPoolSize
 }
 
-func upgradeAutopilot(image string, opts *scheduler.UpgradeAutopilotOptions) error {
+func updateAutopilot(image string, opts *scheduler.UpgradeAutopilotOptions) error {
 
-	upgradeAutopilot := func() error {
+	updateAutopilot := func() error {
 		k8sApps := apps.Instance()
 
-		log.Infof("Upgrading autopilot with new image %s", image)
+		log.Infof("Updating autopilot with new image %s", image)
 		autopilotObj, err := k8sApps.GetDeployment(autDeploymentName, autDeploymentNamespace)
 
 		if err != nil {
@@ -2688,27 +2820,27 @@ func upgradeAutopilot(image string, opts *scheduler.UpgradeAutopilotOptions) err
 		for i := range containers {
 			containers[i].Image = image
 		}
-		upgradedAutopilotObj, err := k8sApps.UpdateDeployment(autopilotObj)
+		updateAutopilotObj, err := k8sApps.UpdateDeployment(autopilotObj)
 		if err != nil {
 			return fmt.Errorf("failed to update autopilot version. Err: %v", err)
 		}
-		if err := k8sApps.ValidateDeployment(upgradedAutopilotObj, k8s.DefaultTimeout, k8s.DefaultRetryInterval); err != nil {
+		if err := k8sApps.ValidateDeployment(updateAutopilotObj, k8s.DefaultTimeout, k8s.DefaultRetryInterval); err != nil {
 			return fmt.Errorf("failed to validate autopilot deployment %s. Err: %v", autopilotObj.Name, err)
 		}
 
-		for _, container := range upgradedAutopilotObj.Spec.Template.Spec.Containers {
+		for _, container := range updateAutopilotObj.Spec.Template.Spec.Containers {
 			if container.Image != image {
-				return fmt.Errorf("failed to upgrade autopilot. New version mismatch. Actual %s, Expected: %s", container.Image, image)
+				return fmt.Errorf("failed to update autopilot. New version mismatch. Actual %s, Expected: %s", container.Image, image)
 			}
 		}
-		log.Infof("autopilot with new image %s upgraded successfully", image)
+		log.Infof("autopilot with new image %s updated successfully", image)
 		return nil
 	}
 	if opts == nil {
-		return upgradeAutopilot()
+		return updateAutopilot()
 	}
 
-	return api.PerformTask(upgradeAutopilot, &opts.TriggerOptions)
+	return api.PerformTask(updateAutopilot, &opts.TriggerOptions)
 }
 
 func getVolumeSizeByProvisionedPercentage(n node.Node, numOfVolumes int, provPercentage float64) int64 {

@@ -2172,9 +2172,8 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 			labels := options.Labels
 			if apRule.Name != "" {
 				apRule.Labels = defaultTorpedoLabel
-				labelSelector := metav1.LabelSelector{MatchLabels: labels}
-				apRule.Spec.Selector = apapi.RuleObjectSelector{LabelSelector: labelSelector}
-				apRule.Spec.NamespaceSelector = apapi.RuleObjectSelector{LabelSelector: labelSelector}
+				apRule.Spec.Selector.MatchLabels = labels
+				apRule.Spec.NamespaceSelector.MatchLabels = labels
 				_, err := k.CreateAutopilotRule(apRule)
 				if err != nil {
 					return nil, err
