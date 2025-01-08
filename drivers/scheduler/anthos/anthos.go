@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pure-px/torpedo/pkg/errors"
@@ -19,8 +20,8 @@ import (
 	"github.com/hashicorp/go-version"
 	anthosops "github.com/portworx/sched-ops/k8s/anthos"
 	k8s "github.com/portworx/sched-ops/k8s/core"
-	"github.com/pure-px/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/task"
+	"github.com/pure-px/sched-ops/k8s/operator"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/node/ssh"
 	"github.com/pure-px/torpedo/drivers/scheduler"
@@ -100,7 +101,7 @@ const (
 	vcenterCrtFile               = "vcenter.crt"
 	vcenterCredFile              = "credential.yaml"
 	googleDownloadUrl            = "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads"
-	googleCloudCliPkg            = "google-cloud-cli-428.0.0-linux-x86_64.tar.gz"
+	googleCloudCliPkg            = "google-cloud-cli-linux-x86_64.tar.gz"
 	upgradeAdminWsCmd            = "gkeadm upgrade admin-workstation"
 	upgradePrepareCmd            = "gkectl prepare  --bundle-path /var/lib/gke/bundles/gke-onprem-vsphere-"
 	upgradeUserClusterCmd        = "gkectl upgrade cluster"
@@ -120,8 +121,10 @@ const (
 	jsonInstances                = "/instances.json"
 	userClusterConfPath          = "/home/ubuntu/user-cluster.yaml"
 	adminClusterConfPath         = "/home/ubuntu/admin-cluster.yaml"
-	errorTimeDuration            = 15 * time.Minute
+	errorTimeDuration            = 30 * time.Minute
+	defaultTimeDuration          = 15 * time.Minute
 	logCollectFrequencyDuration  = 15 * time.Minute
+	disablingIPv6TickerDuration  = 5 * time.Minute
 	defaultTestConnectionTimeout = 15 * time.Minute
 	defaultWaitUpgradeRetry      = 10 * time.Second
 	defaultRetryInterval         = 1 * time.Minute
@@ -136,8 +139,9 @@ const (
 )
 
 var (
-	versionReg = regexp.MustCompile(`\w.\w+.\w+-gke.\w+`)
-	k8sCore    = k8s.Instance()
+	versionReg  = regexp.MustCompile(`\w.\w+.\w+-gke.\w+`)
+	k8sCore     = k8s.Instance()
+	cmdExecLock sync.Mutex
 )
 
 type AnthosInstance struct {
@@ -240,6 +244,8 @@ func (anth *anthos) Init(schedOpts scheduler.InitOptions) error {
 
 // execOnAdminWSNode execute command on admin workstation node
 func (anth *anthos) execOnAdminWSNode(cmd string) (string, error) {
+	cmdExecLock.Lock()
+	defer cmdExecLock.Unlock()
 	if err := anth.setUserNameAndKey(); err != nil {
 		return "", err
 	}
@@ -301,10 +307,6 @@ func (anth *anthos) UpgradeScheduler(version string) error {
 	timeTaken := time.Since(startTime)
 	log.Infof("Anthos user cluster took: %v time to complete the upgrade", timeTaken)
 	if err := anth.RefreshNodeRegistry(); err != nil {
-		return err
-	}
-	log.Infof("Disable IPv6 in nodes after upgrade")
-	if err := disableIPv6Conf(); err != nil {
 		return err
 	}
 	if err := anth.checkUserClusterNodesUpgradeTime(); err != nil {
@@ -497,6 +499,7 @@ func (anth *anthos) upgradeAdminWorkstation(version string) error {
 func (anth *anthos) upgradeUserCluster(version string) error {
 	log.Infof("Upgrading user cluster to a newer version: %s", version)
 	logChan := make(chan bool)
+	ipv6Chan := make(chan bool)
 	enableControlplaneV2 := false
 	controlPlaneEnableReg := regexp.MustCompile(`enableControlplaneV2:\s+true`)
 	// Describe user cluster command help to identify dataplanev2 cluster
@@ -519,22 +522,25 @@ func (anth *anthos) upgradeUserCluster(version string) error {
 		return fmt.Errorf("preparing user cluster for upgrade is failing: [%s]. Err: (%v)", out, err)
 	}
 
+	disableIPv6Ticker := anth.startDisablingIPv6(ipv6Chan)
+
 	// skipPDBUpgradePreflightFlag is needed to skip PDB check
-	cmd = fmt.Sprintf("%s --kubeconfig %s --config %s %s %s",
+	cmd = fmt.Sprintf("nohup %s --kubeconfig %s --config %s %s %s",
 		upgradeUserClusterCmd, adminKubeconfPath, userClusterConfPath, skipReconcilePreflightFlag, skipValidationAllFlag)
 
 	if anth.skipPDBFlag {
-		cmd += fmt.Sprintf(" %s", skipPDBUpgradePreflightFlag)
+		cmd += fmt.Sprintf(" %s &", skipPDBUpgradePreflightFlag)
 	}
 
 	if out, err := anth.execOnAdminWSNode(cmd); err != nil {
 		return fmt.Errorf("upgrading user cluster is failing: [%s]. Err: (%v)", out, err)
 	}
+	anth.stopTicker(disableIPv6Ticker, ipv6Chan)
 	if err := anth.updateFileOwnership(homeDir); err != nil {
 		return err
 	}
 	log.Debug("Successfully upgraded the user cluster")
-	anth.stopLogCollector(upgradeLogger, logChan)
+	anth.stopTicker(upgradeLogger, logChan)
 	return nil
 }
 
@@ -809,10 +815,10 @@ func (anth *anthos) startLogCollector(logChan chan bool, clusterName string, ena
 	return logTicker
 }
 
-// stopLogCollector stop ticker for collecting upgrade logs
-func (anth *anthos) stopLogCollector(logTicker *time.Ticker, logChan chan bool) {
-	log.Debugf("Stopping log collector at %t", time.Now())
-	logTicker.Stop()
+// stopTicker stop ticker for collecting upgrade logs
+func (anth *anthos) stopTicker(ticker *time.Ticker, logChan chan bool) {
+	log.Debugf("Stopping ticker at %t", time.Now())
+	ticker.Stop()
 	logChan <- true
 }
 
@@ -952,7 +958,6 @@ func downloadAndInstallGsutils() error {
 	if err != nil {
 		return fmt.Errorf("installing openssh is failing: [%s]. Err: %v", out, err)
 	}
-
 	return nil
 }
 
@@ -1018,7 +1023,7 @@ func (anth *anthos) DeleteNode(node node.Node) error {
 		}
 		return 0, false, nil
 	}
-	_, err := task.DoRetryWithTimeout(t, errorTimeDuration, defaultRetryInterval)
+	_, err := task.DoRetryWithTimeout(t, defaultTimeDuration, defaultRetryInterval)
 	if err != nil {
 		return err
 	}
@@ -1148,14 +1153,24 @@ func (anth *anthos) SetASGClusterSize(perZoneCount int64, timeout time.Duration)
 
 // disableIPv6Conf disable IPv6 conf in Anthos nodes
 // Anthos nodes always try to pull image over ipv6 and it fails
-func disableIPv6Conf() error {
+func (anth *anthos) disableIPv6Conf() error {
 	nodeDriver := &ssh.SSH{}
+	cmdExecLock.Lock()
+	defer cmdExecLock.Unlock()
 	cmds := []string{
 		"sysctl net.ipv6.conf.all.disable_ipv6=1",
 		"sysctl net.ipv6.conf.default.disable_ipv6=1",
 		"systemctl restart docker",
 	}
 	for _, n := range node.GetWorkerNodes() {
+		// Checking if node is ready then only disabling IPv6
+		if err := anth.IsNodeReady(n); err != nil {
+			log.Warnf("Node: [%s] is not ready. Unable to disable IPv6 this time", n.Name)
+			continue
+		}
+		if err := unsetUserNameAndKey(); err != nil {
+			return fmt.Errorf("failed to unset torpedo user name and key. Err: %v", err)
+		}
 		for _, cmd := range cmds {
 			if _, err := nodeDriver.RunCommand(n, cmd, node.ConnectionOpts{
 				Timeout:         kube.DefaultTimeout,
@@ -1167,6 +1182,25 @@ func disableIPv6Conf() error {
 		}
 	}
 	return nil
+}
+
+// startDisablingIPv6 start ticker for disabling IPv6 in nodes
+func (anth *anthos) startDisablingIPv6(DisableIPv6Chan chan bool) *time.Ticker {
+	ticker := time.NewTicker(disablingIPv6TickerDuration)
+	go func() {
+		for {
+			select {
+			case <-DisableIPv6Chan:
+				return
+			case tm := <-ticker.C:
+				log.Debugf("Disabling IPv6 during anthos upgrade: %v", tm)
+				if err := anth.disableIPv6Conf(); err != nil {
+					log.Fatalf("Disabling IPv6 fails with error. Err: (%v)", err)
+				}
+			}
+		}
+	}()
+	return ticker
 }
 
 // init registering anthos sheduler
