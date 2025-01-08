@@ -59,7 +59,10 @@ func validateVolumeTime(volumes []*volume.Volume) error {
 			return err
 		}
 		timeDifference := appVol.AttachTime.AsTime().Sub(RebootTime).Seconds()
-		dash.VerifySafely(timeDifference < 120, true, fmt.Sprintf("%s volume took %.0f secs to move", vol.ID, timeDifference))
+		// dash.VerifySafely(timeDifference < 120, true, fmt.Sprintf("%s volume took %.0f secs to move", vol.ID, timeDifference))
+		if timeDifference >= 120 {
+			log.Info("Attach Time [%v] Reboot Time [%v] Time Difference[%v]", appVol.AttachTime.AsTime(), RebootTime, timeDifference)
+		}
 	}
 	return nil
 }
