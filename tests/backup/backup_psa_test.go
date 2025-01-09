@@ -559,44 +559,53 @@ var _ = Describe("{EnableNsAndClusterLevelPSAWithBackupAndRestore}", Label(TestC
 // RestoreFromHigherPrivilegedNamespaceToLower verifies restore of applications from higher privileged to lower privileged at namespace level PSA
 var _ = Describe("{RestoreFromHigherPrivilegedNamespaceToLower}", Label(TestCaseLabelsMap[RestoreFromHigherPrivilegedNamespaceToLower]...), func() {
 	var (
-		backupNames                    []string
-		scheduledAppContexts           []*scheduler.Context
-		label                          map[string]string
-		providers                      []string
-		restrictedNamespaceList        []string
-		baselineNamespaceList          []string
-		cloudCredName                  string
-		cloudCredUID                   string
-		destClusterUid                 string
-		backupLocationUID              string
-		backupLocationMap              map[string]string
-		sourceClusterUid               string
-		controlChannel                 chan string
-		errorGroup                     *errgroup.Group
-		restrictedScheduledAppContexts []*scheduler.Context
-		baselineScheduledAppContexts   []*scheduler.Context
-		preRuleNameMultiApplication    string
-		postRuleNameMultiApplication   string
-		preRuleUidMultiApplication     string
-		postRuleUidMultiApplication    string
-		originalAppList                []string
+		backupNames                                 []string
+		scheduledAppContexts                        []*scheduler.Context
+		label                                       map[string]string
+		providers                                   []string
+		restrictedNamespaceList                     []string
+		baselineNamespaceList                       []string
+		cloudCredName                               string
+		cloudCredUID                                string
+		destClusterUid                              string
+		backupLocationUID                           string
+		backupLocationMap                           map[string]string
+		sourceClusterUid                            string
+		controlChannel                              chan string
+		errorGroup                                  *errgroup.Group
+		restrictedScheduledAppContexts              []*scheduler.Context
+		baselineScheduledAppContexts                []*scheduler.Context
+		preRuleNameMultiApplication                 string
+		postRuleNameMultiApplication                string
+		preRuleUidMultiApplication                  string
+		postRuleUidMultiApplication                 string
+		originalAppList                             []string
+		psaNameSpaceList                            []string
+		restrictedNamespaceListInDestinationCluster []string
+		AppContextsMapping                          map[string]*scheduler.Context
+		appPrivilegeToBkpMap                        map[string]string
+		appPrivilegeToNsMap                         map[string]string
+		mulAppScheduledAppContexts                  []*scheduler.Context
+		mulAppRestrictedNamespaceList               []string
+		appPrivilegeToRestoreMap                    map[string][]string
 	)
-	AppContextsMapping := make(map[string]*scheduler.Context)
-	providers = GetBackupProviders()
-	label = make(map[string]string)
-	backupLocationMap = make(map[string]string)
-	scheduledAppContexts = make([]*scheduler.Context, 0)
-	appPrivilegeToBkpMap := make(map[string]string)
-	appPrivilegeToRestoreMap := make(map[string][]string)
-	appPrivilegeToNsMap := make(map[string]string)
-	restrictedScheduledAppContexts = make([]*scheduler.Context, 0)
-	baselineScheduledAppContexts = make([]*scheduler.Context, 0)
-	mulAppScheduledAppContexts := make([]*scheduler.Context, 0)
-	mulAppRestrictedNamespaceList := make([]string, 0)
 
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("RestoreFromHigherPrivilegedNamespaceToLower", "Restore from higher Privileged to lower Privileged namespace", nil, 299239, Sn, Q2FY25)
-
+		AppContextsMapping = make(map[string]*scheduler.Context)
+		providers = GetBackupProviders()
+		label = make(map[string]string)
+		backupLocationMap = make(map[string]string)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		appPrivilegeToBkpMap = make(map[string]string)
+		appPrivilegeToRestoreMap = make(map[string][]string)
+		appPrivilegeToNsMap = make(map[string]string)
+		restrictedScheduledAppContexts = make([]*scheduler.Context, 0)
+		baselineScheduledAppContexts = make([]*scheduler.Context, 0)
+		mulAppScheduledAppContexts = make([]*scheduler.Context, 0)
+		mulAppRestrictedNamespaceList = make([]string, 0)
+		psaNameSpaceList = make([]string, 0)
+		restrictedNamespaceListInDestinationCluster = make([]string, 0)
 		pipelineAppList := Inst().AppList
 		Inst().AppList = []string{"postgres-backup", "mysql-backup"}
 		originalAppList = Inst().AppList
@@ -792,7 +801,6 @@ var _ = Describe("{RestoreFromHigherPrivilegedNamespaceToLower}", Label(TestCase
 			err := SetDestinationKubeConfig()
 			log.FailOnError(err, "Switching context to destination cluster failed")
 			for _, psalevel := range []string{"restricted", "baseline", "privileged"} {
-				psaNameSpaceList := make([]string, 0)
 
 				for i := 0; i < len(originalAppList); i++ {
 					namespace := fmt.Sprintf("%s-%s", psalevel, RandomString(10))
@@ -870,21 +878,24 @@ var _ = Describe("{RestoreFromHigherPrivilegedNamespaceToLower}", Label(TestCase
 			log.InfoD("Perform a custom restore of the backup taken from the namespace in baseline mode to a namespace with restricted mode with replace option on different cluster")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
-			restrictedNamespaceList := make([]string, 0)
-
+			log.InfoD("Switching context to destination cluster to create ns in restricted mode")
+			err = SetDestinationKubeConfig()
+			log.FailOnError(err, "Switching context to destination cluster failed")
 			for i := 0; i < len(originalAppList); i++ {
 				namespace := fmt.Sprintf("%s-%s", "restricted-ns-1", RandomString(10))
 				err = CreateNamespaceAndAssignLabels(namespace, RestrictedPSALabel)
-				dash.VerifyFatal(err, nil, "Creating namespace and assigning labels")
-				restrictedNamespaceList = append(restrictedNamespaceList, namespace)
+				dash.VerifyFatal(err, nil, "Creating namespace and assigning labels on destination cluster")
+				restrictedNamespaceListInDestinationCluster = append(restrictedNamespaceListInDestinationCluster, namespace)
 			}
-
+			// Switch context back to source cluster
+			err = SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster failed")
 			restoreName := fmt.Sprintf("%s-%s", "test-restore", RandomString(10))
 			namespaceMapping := make(map[string]string)
 
 			// Populate namespaceMapping with mappings for baseline to restricted namespace with replace option
 			for i := range originalAppList {
-				namespaceMapping[mulAppRestrictedNamespaceList[i]] = restrictedNamespaceList[i]
+				namespaceMapping[mulAppRestrictedNamespaceList[i]] = restrictedNamespaceListInDestinationCluster[i]
 			}
 			err = CreateRestoreWithReplacePolicyWithValidation(restoreName, appPrivilegeToBkpMap["baseline-mul-ns-single-app"], namespaceMapping, DestinationClusterName, BackupOrgID, ctx, make(map[string]string), 2, mulAppScheduledAppContexts)
 			log.Infof("error while validation of restore")
@@ -959,6 +970,11 @@ var _ = Describe("{RestoreFromHigherPrivilegedNamespaceToLower}", Label(TestCase
 		}
 
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		log.InfoD("Switching context to destination cluster to delete restored namespace on destination cluster")
+		err = SetDestinationKubeConfig()
+		log.FailOnError(err, "Switching context to destination cluster failed")
+		err = DeleteNamespaces(append(psaNameSpaceList, restrictedNamespaceListInDestinationCluster...))
+		log.FailOnError(err, "failed to delete restored namespaces on destination cluster")
 	})
 })
 
