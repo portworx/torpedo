@@ -6743,3 +6743,244 @@ var _ = Describe("{RebootNodeDuringAddNewHotPlugDiskToKubevirtVM}", Label("p1", 
 		AfterEachTest(appCtxs)
 	})
 })
+
+var _ = Describe("{RebootSourceNodeDuringMigration}", Label("p1", "negative", "kubevirt", "error_injection", "node_reboot", "staging"), func() {
+	/*
+	   Step 1: Create a VM
+	   Step 2: Trigger Migration
+	   Step 3: While Migration is happening, reboot node on source node
+	   Step 4: If Migration fails, wait for the node to come up
+	   Step 5: Trigger migration again
+	   JIRA ID: https://purestorage.atlassian.net/browse/HAZEL-1787
+	*/
+
+	var (
+		app                 string
+		volType             string
+		appCtxs             []*scheduler.Context
+		namespace           string
+		migration           *kubevirtdy.VirtualMachineInstanceMigration
+		vm                  kubevirtv1.VirtualMachine
+		vmNodeName          string
+		canSsh              bool
+		initialNodeName     map[string]string
+		bindMount           bool
+		migrationFailedFlag bool
+		present             bool
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("RebootSourceNodeDuringMigration", "Live migrate KubeVirt VM and reboot node on source node during migration", nil, 0)
+		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
+		if !present {
+			app = "kubevirt-debian-fio-minimal"
+		}
+		if volType == "pxe-raw" {
+			app = "kubevirt-raw-vol"
+		} else if volType == "fada-raw" {
+			app = "kubevirt-fada-raw-fio"
+		} else {
+			app = "kubevirt-debian-fio-minimal"
+		}
+		log.InfoD("Setting app for this test to be : %s", app)
+	})
+
+	itLog := "Live migrate KubeVirt VM and reboot node on source node during migration"
+	It(itLog, func() {
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		Inst().AppList = []string{app}
+		Inst().CsiAppList = []string{app}
+
+		stepLog := "Schedule a KubeVirt VM"
+		Step(stepLog, func() {
+			appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
+		})
+		ValidateApplications(appCtxs)
+
+		if !present {
+			for _, appCtx := range appCtxs {
+				bindMount, err = IsVMBindMounted(appCtx, false)
+				log.FailOnError(err, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "VM bind mount verified")
+			}
+		}
+
+		log.Infof("Sleeping for 2 minutes to let VMs come up")
+		time.Sleep(2 * time.Minute)
+
+		canSsh = CreateSSHPodAndSetCanSsh()
+		ValidateFioInVMs(appCtxs, canSsh)
+
+		initialNodeName = make(map[string]string)
+		stepLog = "Get initial node name and start live migration of the KubeVirt VM"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			vms, err := GetAllVMsFromScheduledContexts(appCtxs)
+			log.FailOnError(err, "Failed to get VMs from context")
+			if len(vms) == 0 {
+				log.FailOnError(fmt.Errorf("No VMs found"), "No VMs found in context")
+			} else {
+				vm = vms[0]
+				vmKey := fmt.Sprintf("%s/%s", vm.Namespace, vm.Name)
+				vmNodeName, err = GetNodeOfVM(vm)
+				log.FailOnError(err, "Failed to get node of VM %v", vm.Name)
+				log.Infof("VM %s is running on node %s", vm.Name, vmNodeName)
+				initialNodeName[vmKey] = vmNodeName
+			}
+
+			// start migration
+			migration, err = kubevirtdy.Instance().CreateVirtualMachineInstanceMigration(context1.TODO(), vm.Namespace, vm.Name)
+			log.FailOnError(err, "Failed to create VM migration for VM [%s]", vm.Name)
+			log.Infof("Migration [%s] created for VM [%s]", migration.Name, vm.Name)
+		})
+
+		migrationCreatedChan := make(chan struct{})
+		var wg sync.WaitGroup
+		wg.Add(2)
+
+		go func() {
+			defer GinkgoRecover()
+			defer wg.Done()
+
+			close(migrationCreatedChan)
+
+			stepLog = "Wait for migration to complete"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				t := func() (interface{}, bool, error) {
+					migr, err := kubevirtdy.Instance().GetVirtualMachineInstanceMigration(context1.TODO(), vm.Namespace, migration.Name)
+					if err != nil {
+						log.Infof("Error getting migration: %v", err)
+						return nil, true, err
+					}
+					if migr.Phase == string(kubevirtv1.MigrationSucceeded) {
+						log.Infof("Migration has succeeded")
+						return nil, false, nil
+					} else if migr.Phase == string(kubevirtv1.MigrationFailed) {
+						migrationFailedFlag = true
+						log.Infof("Migration has failed")
+						return nil, false, nil
+					}
+					return nil, true, fmt.Errorf("Migration not yet completed")
+				}
+				_, err := task.DoRetryWithTimeout(t, triggerCheckTimeout, triggerCheckInterval)
+				log.FailOnError(err, "Failed to wait for migration to complete")
+				dash.VerifyFatal(migrationFailedFlag, true, "Migration failed during migration")
+			})
+		}()
+
+		go func() {
+			defer GinkgoRecover()
+			defer wg.Done()
+
+			<-migrationCreatedChan
+
+			t := func() (interface{}, bool, error) {
+				migr, err := kubevirtdy.Instance().GetVirtualMachineInstanceMigration(context1.TODO(), vm.Namespace, migration.Name)
+				if err != nil {
+					log.Infof("Error getting migration: %v", err)
+					return nil, true, err
+				}
+				phase := migr.Phase
+				if phase == string(kubevirtv1.MigrationRunning) {
+					log.Infof("Migration is in progress")
+					return nil, false, nil
+				} else if phase == string(kubevirtv1.MigrationSucceeded) {
+					log.Infof("Migration has already succeeded")
+					return nil, false, nil
+				} else if phase == string(kubevirtv1.MigrationFailed) {
+					log.Infof("Migration has failed")
+					return nil, false, fmt.Errorf("Migration has failed")
+				}
+				return nil, true, fmt.Errorf("Migration not yet in progress, current phase: [%s]", phase)
+			}
+			_, err := task.DoRetryWithTimeout(t, triggerCheckTimeout, triggerCheckInterval)
+			log.FailOnError(err, "Failed to wait for migration to be in progress")
+
+			appNode, err := node.GetNodeByName(vmNodeName)
+			log.FailOnError(err, "Failed to get node object for node %s", vmNodeName)
+
+			stepLog = fmt.Sprintf("Rebooting the source node %s", appNode.Name)
+			Step(stepLog, func() {
+				err = Inst().N.RebootNodeAndWait(appNode)
+				log.FailOnError(err, "Failed to reboot node: [%s]", appNode.Name)
+				log.Infof("Successfully rebooted node: [%s]", appNode.Name)
+			})
+		}()
+
+		wg.Wait()
+
+		log.Infof("Sleeping for 2 minutes to stabilize")
+		time.Sleep(2 * time.Minute)
+
+		stepLog = "Validate VM is moved to a different node due to node reboot"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			newNodeName, err := GetNodeOfVM(vm)
+			log.FailOnError(err, "Failed to get node of VM [%s] after migration", vm.Name)
+			log.Infof("VM [%s] is now running on node [%s]", vm.Name, newNodeName)
+			initialNode := initialNodeName[fmt.Sprintf("%s/%s", vm.Namespace, vm.Name)]
+			dash.VerifyFatal(newNodeName != initialNode, true, "VM is on other node after migration failure during node reboot")
+			// assign new node name for vm
+			initialNodeName[fmt.Sprintf("%s/%s", vm.Namespace, vm.Name)] = newNodeName
+		})
+
+		ValidateFioInVMs(appCtxs, canSsh)
+
+		stepLog = "Start live migration of VM again"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, appCtx := range appCtxs {
+				wg.Add(1)
+				go func(appCtx *scheduler.Context) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					err := StartAndWaitForVMIMigration(appCtx, context1.TODO())
+					log.FailOnError(err, "Failed to live migrate kubevirt VM")
+				}(appCtx)
+			}
+		})
+		wg.Wait()
+
+		stepLog = "Check the state of the VM after migration"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := CheckVMState(vm)
+			log.FailOnError(err, "Failed to verify VM state after migration")
+		})
+
+		stepLog = "Validate VM has migrated to a different node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			newNodeName, err := GetNodeOfVM(vm)
+			log.FailOnError(err, "Failed to get node of VM [%s] after migration", vm.Name)
+			log.Infof("VM [%s] is now running on node [%s] after migration", vm.Name, newNodeName)
+			initialNode := initialNodeName[fmt.Sprintf("%s/%s", vm.Namespace, vm.Name)]
+			if newNodeName == initialNode {
+				log.FailOnError(fmt.Errorf("VM %s did not migrate to a different node", vm.Name), "VM is still on node [%s] after migration", initialNode)
+			} else {
+				log.Infof("VM [%s] successfully migrated from node [%s] to node [%s]", vm.Name, initialNode, newNodeName)
+			}
+		})
+
+		ValidateFioInVMs(appCtxs, canSsh)
+
+		stepLog = "Destroy Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
+	})
+})
