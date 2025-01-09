@@ -108,7 +108,7 @@ var _ = Describe("{RebootOneNode}", Label("p1", "negative", "node_ops", "error_i
 					if n.IsStorageDriverInstalled {
 						Step(fmt.Sprintf("reboot node: %s", n.Name), func() {
 							log.InfoD("reboot node: %s", n.Name)
-							rebootTime, err := Inst().N.RunCommand(n, "date", node.ConnectionOpts{
+							rebootTime, err := Inst().N.RunCommand(n, "date -u +'%a %b %d %T UTC %Y'", node.ConnectionOpts{
 								Timeout:         defaultCommandTimeout,
 								TimeBeforeRetry: defaultCommandRetry,
 								IgnoreError:     false,
