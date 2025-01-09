@@ -6985,3 +6985,137 @@ var _ = Describe("{RebootSourceNodeDuringMigration}", Label("p1", "negative", "k
 		AfterEachTest(appCtxs)
 	})
 })
+
+var _ = Describe("{LMAfterFillingDisksOfKubevirtVM}", Label("p1", "positive", "kubevirt", "LiveMigration"), func() {
+	/*
+		https://purestorage.atlassian.net/browse/HAZEL-1753
+		Step 1 : Schedule a kubevirt VM
+		Step 2 : Add a new disk to the VM
+		Step 3 : Write data to the new disk until it becomes full
+		Step 4 : Live migrate the VM
+	*/
+	var (
+		app, volType  string
+		appCtxs       []*scheduler.Context
+		namespace     string
+		canSsh        bool
+		initialUptime map[string]time.Duration
+	)
+	JustBeforeEach(func() {
+		StartTorpedoTest("LMAfterFillingDisksOfKubevirtVM", "Live Migrate a VM After Adding a new disk to a kubevirtVM", nil, 0)
+		volType, _ = os.LookupEnv("KUBEVIRT_VOL_TYPE")
+		if volType == "pxe-raw" || volType == "fada-raw" {
+			Skip("This test is not applicable for PXE and FADA")
+		} else {
+			app = "kubevirt-fill-vm-disk"
+		}
+		log.InfoD("Setting app for this test to be : %s", app)
+	})
+
+	itLog := "LM a VM after completely filling Disks Of Kubevirt VM"
+	It(itLog, func() {
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+
+		Inst().AppList = []string{app}
+		Inst().CsiAppList = []string{app}
+
+		stepLog := "Schedule a kubevirt VM"
+		Step(stepLog, func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
+				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
+			}
+		})
+		ValidateApplications(appCtxs)
+
+		log.Infof("Sleeping for 2 minutes to let VMs come up fully")
+		time.Sleep(2 * time.Minute)
+
+		canSsh = CreateSSHPodAndSetCanSsh()
+		ValidateFioInVMs(appCtxs, canSsh)
+		initialUptime = make(map[string]time.Duration)
+		stepLog = "Get initial uptime of VMs and current node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			var wg sync.WaitGroup
+			for _, appCtx := range appCtxs {
+				wg.Add(1)
+				go func(appCtx *scheduler.Context) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+					if err != nil {
+						log.FailOnError(err, "Failed to get VMs from appCtx")
+					}
+					for _, vm := range vms {
+						uptime, err := GetVMUptime(vm)
+						if err != nil {
+							log.FailOnError(err, "Failed to get uptime from VM %s", vm.Name)
+						}
+						vmKey := fmt.Sprintf("%s/%s", vm.Namespace, vm.Name)
+						initialUptime[vmKey] = uptime
+						log.Infof("Initial uptime for VM %s is %v", vmKey, uptime)
+
+						vmNodeName, err := GetNodeOfVM(vm)
+						if err != nil {
+							log.FailOnError(err, "Failed to get node of VM %v", vm.Name)
+						}
+						log.Infof("VM %s is currently running on node %s", vm.Name, vmNodeName)
+					}
+				}(appCtx)
+			}
+			wg.Wait()
+		})
+
+		stepLog = "Check if disks are completely full"
+		Step(stepLog, func() {
+			vms, err := GetAllVMsFromScheduledContexts(appCtxs)
+			if err != nil {
+				log.FailOnError(err, "Failed to get VMs from appCtx")
+			}
+			if len(vms) == 0 {
+				log.FailOnError(err, "No VMs found in appCtx")
+			}
+			for _, vm := range vms {
+				diskSize, err := CheckIsDiskSizeFullInVM(vm)
+				if err != nil {
+					log.FailOnError(err, "Failed to get disk size from VM [%s]: %v", vm.Name, err)
+				}
+				dash.VerifyFatal(diskSize, true, "Is disk size full in VM ?")
+			}
+		})
+
+		stepLog = "Live migrate the kubevirt VM for five times"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, appCtx := range appCtxs {
+				for i := 0; i < 5; i++ {
+					err := StartAndWaitForVMIMigration(appCtx, context1.TODO())
+					if err != nil {
+						log.FailOnError(err, "Failed to live migrate kubevirt VM")
+					}
+					log.Infof("Successfully migrated VM  for [%v]th time", i+1)
+				}
+			}
+		})
+
+		ValidateVMUptime(appCtxs, canSsh, initialUptime)
+
+		stepLog = "Destroy Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
+	})
+})

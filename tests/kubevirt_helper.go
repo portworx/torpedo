@@ -1608,3 +1608,51 @@ func ValidateVMUptime(appCtxs []*scheduler.Context, canSsh bool, initialUptime m
 		})
 	}
 }
+
+func CheckIsDiskSizeFullInVM(vm kubevirtv1.VirtualMachine) (bool, error) {
+	ipAddress, err := GetVMIPAddress(vm)
+	if err != nil {
+		return false, fmt.Errorf("failed to get IP address: %w", err)
+	}
+	targetMounts := []string{"/mnt/disks/vdb", "/mnt/disks/vdc"}
+
+	for {
+		cmd := "df -kh"
+		output, err := RunCommandInVM(ipAddress, cmd)
+		if err != nil {
+			return false, fmt.Errorf("failed to run command in VM: %w", err)
+		}
+		log.Infof("Disk usage output for VM [%s]:\n%s", vm.Name, output)
+
+		for _, mount := range targetMounts {
+			if isMountUsageFull(output, mount) {
+				log.Infof("Disk usage for [%s] has reached 100%%", mount)
+				return true, nil
+			}
+		}
+		log.Infof("Rechecking disk usage after 10 seconds...")
+		time.Sleep(10 * time.Second)
+	}
+}
+
+// isMountUsageFull parses the `df -kh` output and checks if the specified mount has 100% usage.
+func isMountUsageFull(output, mount string) bool {
+	lines := strings.Split(output, "\n")
+	for _, line := range lines {
+		if strings.Contains(line, mount) {
+			parts := strings.Fields(line)
+			if len(parts) < 5 {
+				continue
+			}
+			usageStr := parts[4] // Use% column
+			if strings.HasSuffix(usageStr, "%") {
+				usage, err := strconv.Atoi(strings.TrimSuffix(usageStr, "%"))
+				if err == nil && usage == 100 {
+					log.Infof("Mount %s is at 100%% usage.", mount)
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
