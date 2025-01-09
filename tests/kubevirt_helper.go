@@ -1605,6 +1605,116 @@ func ValidateVMUptime(appCtxs []*scheduler.Context, canSsh bool, initialUptime m
 	}
 }
 
+func RemoveHotPluggedDiskFromVM(appCtx []*scheduler.Context) (bool, error) {
+	var (
+		vmName           string
+		namespace        string
+		dvName           string
+		initialDiskCount int
+		finalDiskCount   int
+	)
+
+	// Get the KubeVirt client
+	kvClient := k8sKubevirt.GetKubevirtClient()
+
+	vms, err := GetAllVMsFromScheduledContexts(appCtx)
+	if err != nil {
+		return false, fmt.Errorf("failed to get VMs from scheduled contexts: %v", err)
+	}
+
+	for _, vm := range vms {
+		vmName = vm.Name
+		namespace = vm.Namespace
+		log.Infof("Checking VM [%v] for hot-plugged volumes", vmName)
+
+		initialDiskCount, err = GetNumberOfDrivesInVM(vm)
+		if err != nil {
+			return false, fmt.Errorf("failed to get initial number of disks in VM [%s]: %v", vm.Name, err)
+		}
+		log.Infof("Initial number of disks in VM [%s]: %d", vm.Name, initialDiskCount)
+
+		// Look for hot-plugged volumes in the VMI status
+		vmi, err := kvClient.VirtualMachineInstance(namespace).Get(context1.TODO(), vmName, &metav1.GetOptions{})
+		if err != nil {
+			return false, fmt.Errorf("failed to get VMI for VM [%v], error : [%v]", vmName, err)
+		}
+
+		// Filter hot-plugged volumes
+		for _, volumeStatus := range vmi.Status.VolumeStatus {
+			if volumeStatus.HotplugVolume != nil {
+				dvName = volumeStatus.Name
+				log.Infof("Found hot-plugged volume [%v] for VM [%v]", dvName, vmName)
+
+				// Prepare remove volume options
+				removeVolumeOptions := &kubevirtv1.RemoveVolumeOptions{
+					Name: dvName,
+				}
+
+				// Remove the volume
+				err = kvClient.VirtualMachineInstance(namespace).RemoveVolume(context1.TODO(), vmName, removeVolumeOptions)
+				if err != nil {
+					return false, fmt.Errorf("failed to remove hot-plugged DataVolume [%v from VM [%v], error : [%v]",
+						dvName, vmName, err)
+				}
+
+				log.Infof("Successfully initiated removal of hot-plugged DataVolume [%v] from VM [%v]", dvName, vmName)
+
+				// Wait for the disk to be detached
+				err = WaitForHotplugVolumeDetached(namespace, vmName, dvName, 5*time.Minute, 10*time.Second)
+				if err != nil {
+					return false, fmt.Errorf("failed to confirm removal of hot-plugged DataVolume [%v] from VM [%v], error : %v",
+						dvName, vmName, err)
+				}
+
+				log.Infof("Successfully removed hot-plugged DataVolume [%v] from VM [%v]", dvName, vmName)
+			}
+		}
+		finalDiskCount, err = GetNumberOfDrivesInVM(vm)
+		if err != nil {
+			return false, fmt.Errorf("failed to get initial number of disks in VM [%s]: %v", vm.Name, err)
+		}
+		log.Infof("Final number of disks [%v] to the initial number of disks [%v] in VM [%s]: %d", finalDiskCount, initialDiskCount, vmName)
+	}
+
+	return true, nil
+}
+
+func WaitForHotplugVolumeDetached(namespace, vmName, dvName string, timeout, retryInterval time.Duration) error {
+	f := func() (interface{}, bool, error) {
+		kvClient := k8sKubevirt.GetKubevirtClient()
+		vmi, err := kvClient.VirtualMachineInstance(namespace).Get(context1.TODO(), vmName, &metav1.GetOptions{})
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to get VMI [%v] in namespace [%v], error : [%v]", vmName, namespace, err)
+		}
+
+		if vmi == nil {
+			return nil, true, fmt.Errorf("No vmi [%v] is found for namespace [%v]", vmName, namespace)
+		}
+
+		if vmi.Status.VolumeStatus == nil {
+			return nil, true, fmt.Errorf("vmi.Status.VolumeStatus [%v] is nil for namespace [%v]", vmName, namespace)
+		}
+
+		for _, vs := range vmi.Status.VolumeStatus {
+
+			if vs.Name == dvName {
+				log.Infof("Volume [%s] is still attached to VM [%s/%s]. Retrying...", dvName, namespace, vmName)
+				return nil, true, fmt.Errorf("volume [%s] is still attached to VM [%v] for namespace [%v]", dvName, vmName, namespace)
+			}
+		}
+
+		log.Infof("Volume [%v] has been successfully detached from VM [%v] for namepsace [%v]", dvName, vmName, namespace)
+		return nil, false, nil
+	}
+
+	_, err := task.DoRetryWithTimeout(f, timeout, retryInterval)
+	if err != nil {
+		return fmt.Errorf("volume [%s] didn't detach from VM [%v] within [%v],error : [%v]",
+			dvName, vmName, timeout, err)
+	}
+	return nil
+}
+
 func CheckIsDiskSizeFullInVM(vm kubevirtv1.VirtualMachine) (bool, error) {
 	ipAddress, err := GetVMIPAddress(vm)
 	if err != nil {
