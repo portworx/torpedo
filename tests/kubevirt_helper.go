@@ -256,73 +256,69 @@ func StartAndWaitForVMIMigration(virtualMachineCtx *scheduler.Context, ctx conte
 	if err != nil {
 		return err
 	}
-
-	// Get the namespace and name of the VM
 	if len(vms) == 0 {
-		return fmt.Errorf("no VMs found for VM [%s] in namespace [%s]", virtualMachineCtx.App.Key, virtualMachineCtx.App.NameSpace)
+		return fmt.Errorf("No VMs found for VM [%s] in namespace [%s]", virtualMachineCtx.App.Key, virtualMachineCtx.App.NameSpace)
 	}
-	vmiNamespace := vms[0].Namespace
-	vmiName := vms[0].Name
-	if len(vms) > 1 {
-		return fmt.Errorf("more than 1 VMs found for VM [%s] in namespace [%s]", virtualMachineCtx.App.Key, virtualMachineCtx.App.NameSpace)
-	}
+	log.Infof("Total number of VMs [%v] in namespace [%s]",len(vms), virtualMachineCtx.App.NameSpace)
 
-	//Get the node where the vm is scheduled before the migration
-	nodeName, err := GetNodeOfVM(vms[0])
-	if err != nil {
-		return err
-	}
-	log.Infof("VM [%s] in namespace [%s] is scheduled on node [%s]", vmiName, vmiNamespace, nodeName)
+	for _, vm := range vms {
+		vmiNamespace := vm.Namespace
+		vmiName := vm.Name
 
-	// Start the VM migration
-	migration, err := kubevirtdy.Instance().CreateVirtualMachineInstanceMigration(ctx, vmiNamespace, vmiName)
-	if err != nil {
-		return err
-	}
-	log.Infof("VM migration created for VM [%s] in namespace [%s]", vmiName, vmiNamespace)
-
-	// wait for completion
-	var migr *kubevirtdy.VirtualMachineInstanceMigration
-
-	// get volumes from app context
-	vols, err := Inst().S.GetVolumes(virtualMachineCtx)
-	if err != nil {
-		return err
-	}
-
-	t := func() (interface{}, bool, error) {
-		migr, err = kubevirtdy.Instance().GetVirtualMachineInstanceMigration(ctx, vmiNamespace, migration.Name)
+		//Get the node where the vm is scheduled before the migration
+		nodeName, err := GetNodeOfVM(vm)
 		if err != nil {
-			log.InfoD("Error: %v", err)
-			return "", false, fmt.Errorf("failed to get migration for VM [%s] in namespace [%s]", vmiName, vmiNamespace)
+			return err
 		}
-		if !(migr.Phase == "Succeeded") {
-			return "", true, fmt.Errorf("waiting for migration to complete for VM [%s] in namespace [%s]", vmiName, vmiNamespace)
-		}
+		log.Infof("VM [%s] in namespace [%s] is scheduled on node [%s]", vmiName, vmiNamespace, nodeName)
 
-		// wait until there is only one pod in the running state
-		//TODO https://purestorage.atlassian.net/browse/PTX-23166 - This is a temporary fix to get the pod of the VM
-		testPod, err := GetVirtLauncherPodForVM(virtualMachineCtx, vols[0])
+		// Start the VM migration
+		migration, err := kubevirtdy.Instance().CreateVirtualMachineInstanceMigration(ctx, vmiNamespace, vmiName)
 		if err != nil {
-			return "", true, err
+			return err
+		}
+		log.Infof("VM migration created for VM [%s] in namespace [%s]", vmiName, vmiNamespace)
+
+		// get volumes from app context
+		vols, err := Inst().S.GetVolumes(virtualMachineCtx)
+		if err != nil {
+			return err
 		}
 
-		//Get the node where the vm is scheduled after the migration
-		nodeNameAfterMigration := testPod.Spec.NodeName
+		t := func() (interface{}, bool, error) {
+			var migr *kubevirtdy.VirtualMachineInstanceMigration
+			migr, err = kubevirtdy.Instance().GetVirtualMachineInstanceMigration(ctx, vmiNamespace, migration.Name)
+			if err != nil {
+				log.InfoD("Error: %v", err)
+				return "", false, fmt.Errorf("failed to get migration for VM [%s] in namespace [%s]", vmiName, vmiNamespace)
+			}
+			if !(migr.Phase == "Succeeded") {
+				return "", true, fmt.Errorf("waiting for migration to complete for VM [%s] in namespace [%s]", vmiName, vmiNamespace)
+			}
 
-		if nodeName == nodeNameAfterMigration {
-			return "", false, fmt.Errorf("VM pod live migrated [%s] in namespace [%s] but is still on the same node [%s]", testPod.Name, testPod.Namespace, nodeName)
+			// wait until there is only one pod in the running state
+			//TODO https://purestorage.atlassian.net/browse/PTX-23166 - This is a temporary fix to get the pod of the VM
+			testPod, err := GetVirtLauncherPodForVM(virtualMachineCtx, vols[0])
+			if err != nil {
+				return "", true, err
+			}
+
+			//Get the node where the vm is scheduled after the migration
+			nodeNameAfterMigration := testPod.Spec.NodeName
+
+			if nodeName == nodeNameAfterMigration {
+				return "", false, fmt.Errorf("VM pod live migrated [%s] in namespace [%s] but is still on the same node [%s]", testPod.Name, testPod.Namespace, nodeName)
+			}
+			log.InfoD("VM pod live migrated to node: [%s]", nodeNameAfterMigration)
+			return "", false, nil
 		}
-		log.InfoD("VM pod live migrated to node: [%s]", nodeNameAfterMigration)
-		return "", false, nil
-	}
-	_, err = task.DoRetryWithTimeout(t, defaultMigrationTimeout, defaultMigrationRetryInterval)
-	if err != nil {
-		return err
+		_, err = task.DoRetryWithTimeout(t, defaultMigrationTimeout, defaultMigrationRetryInterval)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
-
 // GetVirtLauncherPodForVM returns the virt-launcher pod for the VM
 func GetVirtLauncherPodForVM(virtualMachineCtx *scheduler.Context, vol *volume.Volume) (*corev1.Pod, error) {
 	pods, err := core.Instance().GetPodsUsingPV(vol.ID)

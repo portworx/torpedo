@@ -116,7 +116,7 @@ var _ = Describe("{KubeVirtLiveMigration}", Label("p0", "positive", "kubevirt", 
 		log.FailOnError(err, "Failed to get volume driver namespace")
 		defer ListEvents(pxNs)
 
-		namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
+		
 		log.InfoD(stepLog)
 		appList := Inst().AppList
 		defer func() {
@@ -126,6 +126,7 @@ var _ = Describe("{KubeVirtLiveMigration}", Label("p0", "positive", "kubevirt", 
 		stepLog := "schedule a kubevirt VM"
 		Step(stepLog, func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
 				taskName := fmt.Sprintf("test-%v", i)
 				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, taskName)...)
 			}
