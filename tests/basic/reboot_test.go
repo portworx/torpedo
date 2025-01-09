@@ -62,7 +62,7 @@ func validateVolumeTime(volumes []*volume.Volume) error {
 			return err
 		}
 		timeDifference := appVol.AttachTime.AsTime().Sub(RebootTime).Seconds()
-		dash.VerifySafely(timeDifference < 120, true, fmt.Sprintf("%s volume took %.0f secs to move", vol.ID, timeDifference))
+		dash.VerifyFatal(timeDifference < 120, true, fmt.Sprintf("%s volume took %.0f secs to move", vol.ID, timeDifference))
 	}
 	return nil
 }
@@ -167,7 +167,7 @@ var _ = Describe("{RebootOneNode}", Label("p1", "negative", "node_ops", "error_i
 								log.InfoD("Checking node %s to see volume got migrated in <2 mins", n.MgmtIp)
 								volumesToCheck := volMountedMap[n.MgmtIp]
 								err := validateVolumeTime(volumesToCheck)
-								dash.VerifySafely(err == nil, true, "Volumes got migrated on time?")
+								dash.VerifyFatal(err == nil, true, "Volumes got migrated on time?")
 							} else {
 								log.InfoD("Skipping the volume check for node %s since it does not contain shared V4 vol", n.MgmtIp)
 							}
