@@ -11,10 +11,11 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 	"sync"
+	"time"
 
 	"github.com/libopenstorage/openstorage/api"
+	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/kubevirt"
 	kubevirtdy "github.com/portworx/sched-ops/k8s/kubevirt-dynamic"
@@ -27,7 +28,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubevirtv1 "kubevirt.io/api/core/v1"
-	. "github.com/onsi/ginkgo/v2"
 )
 
 const (
@@ -1342,7 +1342,7 @@ func CreateBlankDataVolume(namespace string, dvName string, storageClassName str
 }
 
 // HotPlugDataVolumesToKubevirtVM main trigger to hot plug volumes to a running VM
-func HotPlugDataVolumesToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDVs int, size string, volumeMode string, opts ...int) (bool, error) {
+func HotPlugDataVolumesToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDVs int, size string, volumeMode string, persist bool, opts ...int) (bool, error) {
 	var (
 		newDiskCount     int
 		initialDiskCount int
@@ -1401,7 +1401,7 @@ func HotPlugDataVolumesToKubevirtVM(virtualMachines []*scheduler.Context, number
 					RebootFlag <- struct{}{}
 					SignalSent = true
 				}
-				err = HotPlugDVToVM(vm.Name, vm.Namespace, dv.Name)
+				err = HotPlugDVToVM(vm.Name, vm.Namespace, dv.Name, persist)
 				if err != nil {
 					return false, fmt.Errorf("failed to hotplug DV [%s/%s] into VM [%s/%s]: %v",
 						dv.Namespace, dv.Name, vm.Namespace, vm.Name, err)
@@ -1494,7 +1494,7 @@ func WaitForHotplugVolumeReady(namespace, vmName, dvName string, timeout, retryI
 }
 
 // HotPlugDVToVM method triggers hot pluging of given datavolume to given VM
-func HotPlugDVToVM(vmName, namespace, dvName string) error {
+func HotPlugDVToVM(vmName, namespace, dvName string, persist bool) error {
 	kvClient := k8sKubevirt.GetKubevirtClient()
 	bytes := make([]byte, 10)
 	serial := hex.EncodeToString(bytes)
@@ -1510,9 +1510,40 @@ func HotPlugDVToVM(vmName, namespace, dvName string) error {
 			DataVolume: &kubevirtv1.DataVolumeSource{Name: dvName},
 		},
 	}
-	return kvClient.
-		VirtualMachineInstance(namespace).
-		AddVolume(context1.TODO(), vmName, addVolumeOptions)
+
+	err := kvClient.VirtualMachineInstance(namespace).AddVolume(context1.TODO(), vmName, addVolumeOptions)
+	if err != nil {
+		return err
+	}
+	if persist {
+		vm, err := kvClient.VirtualMachine(namespace).Get(vmName, &metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+		vm.Spec.Template.Spec.Domain.Devices.Disks = append(
+			vm.Spec.Template.Spec.Domain.Devices.Disks,
+			kubevirtv1.Disk{
+				Name: dvName,
+				DiskDevice: kubevirtv1.DiskDevice{
+					Disk: &kubevirtv1.DiskTarget{Bus: kubevirtv1.DiskBusSCSI},
+				},
+			},
+		)
+		vm.Spec.Template.Spec.Volumes = append(
+			vm.Spec.Template.Spec.Volumes,
+			kubevirtv1.Volume{
+				Name: dvName,
+				VolumeSource: kubevirtv1.VolumeSource{
+					DataVolume: &kubevirtv1.DataVolumeSource{Name: dvName},
+				},
+			},
+		)
+		_, err = kvClient.VirtualMachine(namespace).Update(vm)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func CreateSSHPodAndSetCanSsh() bool {

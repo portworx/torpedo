@@ -15178,7 +15178,7 @@ func updateVMPowerStatus(numberOfThread int, wg *sync.WaitGroup, nodesInThread [
 func deleteStorageClass(scName string, event *EventRecord) {
 	if err := storage.Instance().DeleteStorageClass(scName); err != nil {
 		log.Errorf("Failed to delete storage class: %s. Error: %v", scName, err)
-		UpdateOutcome(event, err) 
+		UpdateOutcome(event, err)
 	}
 }
 
@@ -15253,7 +15253,7 @@ func TriggerAddHotPlugDiskToVMAndLiveMigrate(contexts *[]*scheduler.Context, rec
 			}
 			if len(vms) == 0 {
 				err = fmt.Errorf("No VMs found")
-				UpdateOutcome(event, err )
+				UpdateOutcome(event, err)
 				log.FailOnError(err, "No VMs found")
 				return
 			}
@@ -15262,7 +15262,7 @@ func TriggerAddHotPlugDiskToVMAndLiveMigrate(contexts *[]*scheduler.Context, rec
 			log.Infof("VM selected for adding Hot Pluggable disk :[%v]", selectedVM.Name)
 			vmNamespace = selectedVM.Namespace
 
-			for _,vmCtx := range *contexts {
+			for _, vmCtx := range *contexts {
 				if vmCtx.App.NameSpace == vmNamespace {
 					vmContext = append(vmContext, vmCtx)
 				}
@@ -15323,9 +15323,9 @@ func TriggerAddHotPlugDiskToVMAndLiveMigrate(contexts *[]*scheduler.Context, rec
 			stepLog = "Hot-plug one raw block disk (DataVolume) to the running KubeVirt VM"
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
-				numberOfVMs=1
+				numberOfVMs = 1
 				log.Infof("Number of VMs selected to adding Hot Pluggable disk [%v]", numberOfVMs)
-				isHotPlugged, err := HotPlugDataVolumesToKubevirtVM(vmContext, numberOfVolumes, "50Gi", volumeMode,numberOfVMs)
+				isHotPlugged, err := HotPlugDataVolumesToKubevirtVM(vmContext, numberOfVolumes, "50Gi", volumeMode, true, numberOfVMs)
 				log.FailOnError(err, "Failed to hot-plug DataVolume to KubeVirt VM")
 				dash.VerifyFatal(isHotPlugged, true, "Successfully Hot Plugged Data Volume to KubeVirt VM ?")
 			})
@@ -15347,4 +15347,3 @@ func TriggerAddHotPlugDiskToVMAndLiveMigrate(contexts *[]*scheduler.Context, rec
 		}
 	})
 }
-

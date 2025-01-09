@@ -5546,14 +5546,15 @@ var _ = Describe("{AddNewHotPlugDiskToKubevirtVM}", Label("p0", "positive", "kub
 		stepLog = "Hot-plug one raw disk (DataVolume) to the running KubeVirt VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			_, err := HotPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "50Gi", volumeMode)
+			_, err := HotPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "50Gi", volumeMode, true)
 			log.FailOnError(err, "Failed to hot-plug DataVolume to KubeVirt VM")
 			dash.VerifyFatal(true, true, "DataVolume hot-plugged to KubeVirt VM")
 		})
 
 		ValidateFioInVMs(appCtxs, canSsh)
 		ValidateVMUptime(appCtxs, canSsh, initialUptime)
-
+		log.Infof("Sleeping for 30 minutes")
+		time.Sleep(30 * time.Minute)
 		stepLog = "Destroy Applications"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -5680,7 +5681,7 @@ var _ = Describe("{RebootNodeAfterAddNewHotPlugDiskToKubevirtVM}", Label("p1", "
 		stepLog = "Hot-plug one raw disk (DataVolume) to the running KubeVirt VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			hotPlugDisk, err := HotPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "50Gi", volumeMode)
+			hotPlugDisk, err := HotPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "50Gi", volumeMode, true)
 			log.FailOnError(err, "Failed to hot-plug DataVolume to KubeVirt VM")
 			dash.VerifyFatal(hotPlugDisk, true, "DataVolume hot-plugged to KubeVirt VM")
 		})
@@ -5867,7 +5868,7 @@ var _ = Describe("{PxRestartAfterAddNewHotPlugDiskToKubevirtVM}", Label("p1", "n
 		stepLog = "Hot-plug one raw disk (DataVolume) to the running KubeVirt VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			hotPlugDisk, err := HotPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "50Gi", volumeMode)
+			hotPlugDisk, err := HotPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "50Gi", volumeMode, true)
 			log.FailOnError(err, "Failed to hot-plug DataVolume to KubeVirt VM")
 			dash.VerifyFatal(hotPlugDisk, true, "DataVolume hot-plugged to KubeVirt VM")
 		})
@@ -6184,7 +6185,7 @@ var _ = Describe("{LMAfterAddNewHotPlugDiskToKubevirtVM}", Label("p0", "positive
 		stepLog = "Hot-plug one disk (DataVolume) to the running KubeVirt VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			isHotPlugged, err := HotPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "50Gi", volumeMode)
+			isHotPlugged, err := HotPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "50Gi", volumeMode, true)
 			log.FailOnError(err, "Failed to hot-plug DataVolume to KubeVirt VM")
 			dash.VerifyFatal(isHotPlugged, true, "Successfully hot-plugged DataVolume to KubeVirt VM ?")
 		})
@@ -6322,7 +6323,7 @@ var _ = Describe("{Add26NewHotPlugDiskToKubevirtVM}", Label("p0", "positive", "k
 		stepLog = "Adding multiple Hot Pluggable disks to kubevirt VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			isHotPlugged, err := HotPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "50Gi", volumeMode)
+			isHotPlugged, err := HotPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "50Gi", volumeMode, true)
 			log.FailOnError(err, "Failed to hot-plug DataVolume to KubeVirt VM")
 			dash.VerifyFatal(isHotPlugged, true, "Successfully hot-plugged DataVolume to KubeVirt VM?")
 		})
@@ -6512,7 +6513,7 @@ var _ = Describe("{PxRestartDuringAddNewHotPlugDiskToKubevirtVM}", Label("p1", "
 				defer wg.Done()
 				defer GinkgoRecover()
 				log.InfoD("Starting hot-plug disk operation")
-				hotPlugDisk, err = HotPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "50Gi", volumeMode)
+				hotPlugDisk, err = HotPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "50Gi", volumeMode, true)
 				log.FailOnError(err, "Failed to hot-plug DataVolume to KubeVirt VM")
 				dash.VerifyFatal(hotPlugDisk, true, "DataVolume hot-plugged to KubeVirt VM")
 			}(appCtxs, numberOfVolumes, volumeMode)
@@ -6679,7 +6680,7 @@ var _ = Describe("{RebootNodeDuringAddNewHotPlugDiskToKubevirtVM}", Label("p1", 
 				defer wg.Done()
 				defer GinkgoRecover()
 				log.InfoD("Starting hot-plug disk operation")
-				hotPlugDisk, err = HotPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "50Gi", volumeMode)
+				hotPlugDisk, err = HotPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "50Gi", volumeMode, true)
 				dash.VerifyFatal(err != nil, true, "Error on hot plug addition during reboot node")
 				log.Infof("Failed to hot-plug DataVolume to KubeVirt VM with error: %v", err)
 				dash.VerifyFatal(hotPlugDisk, false, "DataVolume hot-plugged to KubeVirt VM")
@@ -6711,7 +6712,7 @@ var _ = Describe("{RebootNodeDuringAddNewHotPlugDiskToKubevirtVM}", Label("p1", 
 		stepLog = "Hot-plug one raw disk (DataVolume) to the running KubeVirt VM after reboot"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			hotPlugDisk, err := HotPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "50Gi", volumeMode)
+			hotPlugDisk, err := HotPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "50Gi", volumeMode, true)
 			log.FailOnError(err, "Failed to hot-plug DataVolume to KubeVirt VM")
 			dash.VerifyFatal(hotPlugDisk, true, "DataVolume hot-plugged to KubeVirt VM")
 		})
