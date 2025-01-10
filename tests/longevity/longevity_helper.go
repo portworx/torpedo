@@ -45,6 +45,7 @@ var (
 	triggerFunctions       map[string]func(*[]*scheduler.Context, *chan *EventRecord)
 	triggerBackupFunctions map[string]func(*[]*scheduler.Context, *chan *EventRecord)
 	emailTriggerFunction   map[string]func()
+	triggerBkpFunctions    map[string]func(*[]*scheduler.Context, *chan *EventRecord)
 	eventTimeMap           = make(map[string]time.Time)
 
 	// Pure Topology is disabled by default
@@ -401,7 +402,7 @@ func populateTriggerFuncs() {
 		FadaSimultaneousSnapshots:         TriggerFadaSimultaneousSnapshots,
 		TestPxCSIFadaAttachLimit:          TriggerPxCSIFadaAttachLimit,
 		PowerOffNBy2PlusOneNodes:          TriggerPowerOffNBy2PlusOneNodes,
-		AddHotPlugDiskToVMAndLiveMigrate:   TriggerAddHotPlugDiskToVMAndLiveMigrate,
+		AddHotPlugDiskToVMAndLiveMigrate:  TriggerAddHotPlugDiskToVMAndLiveMigrate,
 	}
 
 	//Creating a distinct trigger to make sure email triggers at regular intervals

@@ -116,7 +116,7 @@ var _ = Describe("{DeletionOfMultipleScheduleBackupsWithoutSuspendingScheduleLon
 	var populateDone bool
 	CommonPassword = backup.PxCentralAdminPwd + RandomString(4)
 	triggerEventsChan := make(chan *EventRecord, 100)
-	triggerBackupFunctions = map[string]func(*[]*scheduler.Context, *chan *EventRecord){
+	triggerBkpFunctions = map[string]func(*[]*scheduler.Context, *chan *EventRecord){
 		RestartPxBackupPod: TriggerRestartPxBackupPod,
 	}
 	// Creating a distinct trigger to make sure email triggers at regular intervals
@@ -157,7 +157,7 @@ var _ = Describe("{DeletionOfMultipleScheduleBackupsWithoutSuspendingScheduleLon
 		}()
 
 		Step("Register test triggers", func() {
-			for triggerType, triggerFunc := range triggerBackupFunctions {
+			for triggerType, triggerFunc := range triggerBkpFunctions {
 				log.InfoD("Registering trigger: [%v]", triggerType)
 				wg.Add(1) // Add to wait group before launching goroutine
 				backupEventTrigger(&wg, &contexts, triggerType, triggerFunc, &triggerLock, &triggerEventsChan)
