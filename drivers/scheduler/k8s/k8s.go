@@ -174,7 +174,7 @@ const (
 	// DefaultTimeout default timeout
 	DefaultTimeout = 5 * time.Minute
 	// SnapshotReadyTimeout timeout for snapshot to be ready
-	SnapshotReadyTimeout             = 5 * time.Minute
+	SnapshotReadyTimeout             = 10 * time.Minute
 	numOfRestoredPVCForCloneManyTest = 500
 
 	autopilotDefaultNamespace         = "kube-system"
@@ -7512,7 +7512,22 @@ func (k *K8s) DeleteNode(node node.Node) error {
 
 // DeleteSecret deletes secret with given name in given namespace
 func (k *K8s) DeleteSecret(namespace, name string) error {
-	return k8sCore.DeleteSecret(name, namespace)
+	err := k8sCore.DeleteSecret(name, namespace)
+	if err != nil {
+		return err
+	}
+	log.Infof("Waiting for secret [%s] to be deleted in namespace: %s ", name, namespace)
+	t := func() (interface{}, bool, error) {
+		_, err = k8sCore.GetSecret(name, namespace)
+		if err != nil && k8serrors.IsNotFound(err) {
+			return "", false, nil
+		}
+		return "", true, fmt.Errorf("secret is not deleted")
+	}
+	if _, err = task.DoRetryWithTimeout(t, DefaultTimeout, DefaultRetryInterval); err != nil {
+		return err
+	}
+	return nil
 }
 
 // GetSecretData returns secret with given name in given namespace

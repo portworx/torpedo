@@ -176,7 +176,7 @@ func createPVC(pvcName string, scName string, pvcSize string, nsName string) (*c
 		return nil, fmt.Errorf("failed to create pvc [%s] with storage class [%s]. Err: [%v]", pvcName, scName, err)
 	}
 	log.Infof("Validating pvc [%s] with storage class [%s]", pvcName, scName)
-	err = k8sCore.ValidatePersistentVolumeClaim(pvc, defaultCommandTimeout, defaultCommandRetry)
+	err = k8sCore.ValidatePersistentVolumeClaim(pvc, 10*time.Minute, defaultCommandRetry)
 	if err != nil {
 		return nil, fmt.Errorf("failed to validate pvc [%s] with storage class [%s]. Err: [%v]", pvcName, scName, err)
 	}

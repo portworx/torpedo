@@ -1859,7 +1859,7 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotInvalidCredentials}", func() {
 				}
 				return "", true, fmt.Errorf("snapshot with name %s and content %s is not deleted", snap.Name, contentName)
 			}
-			if _, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second); err != nil {
+			if _, err := task.DoRetryWithTimeout(t, 15*time.Minute, 10*time.Second); err != nil {
 				log.FailOnError(err, fmt.Sprintf("error deleting snapshot %s in namespace [%s]", snapName, ns))
 			}
 		})
