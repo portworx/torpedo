@@ -235,6 +235,8 @@ const (
 	StorkVersionForPartialBackup          = "24.3.0"
 	KeyCloakStateFulSet                   = "pxcentral-keycloak"
 	WaitPeriodForResourceReady            = 5 * time.Minute
+	PxBackupLabelKey                      = "pxb-label"
+	PxBackupLabelValue                    = "pxb-backup-app-label"
 )
 
 var (
