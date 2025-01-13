@@ -160,6 +160,22 @@ var _ = Describe("{PxBackupTotalSize}", Label(TestCaseLabelsMap[ValidateMetrics]
 		// Clean up the cluster
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
+
+		last := len(backupNames) - 1
+		for i := last; i >= 0; i-- {
+			backupUid, err := Inst().Backup.GetBackupUID(ctx, backupNames[i], BackupOrgID)
+			log.FailOnError(err, "Unable to fetch backup UID")
+			err = DeleteBackupAndWaitForCompletion(backupNames[i], backupUid, BackupOrgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup [%s]", backupNames[i]))
+		}
+
+		err = DeleteNamespaces(bkpNamespaces)
+		dash.VerifySafely(err, nil, "deleting namespaces")
+
+		log.InfoD("Deleting the deployed apps after the testcase")
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		DestroyApps(scheduledAppContexts, opts)
 		CleanupCloudSettingsAndClusters(nil, "", "", ctx)
 
 	})
@@ -1187,13 +1203,20 @@ var _ = Describe("{VerifyPxRestoreSize}", Label(TestCaseLabelsMap[ValidateMetric
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(contexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
-		log.Info("Delete restores")
-		for _, restoreName := range restoreNames {
-			err = DeleteRestore(restoreName, BackupOrgID, ctx)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
-		}
-		// Clean up the cluster
 		log.FailOnError(err, "Fetching px-central-admin ctx")
+		log.Info("Delete restores")
+		last := len(restoreNames) - 1
+		for i := last; i >= 0; i-- {
+			err = DeleteRestore(restoreNames[i], BackupOrgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreNames[i]))
+		}
+
+		// Clean up the cluster
+		log.InfoD("Deleting the deployed apps after the testcase")
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		DestroyApps(scheduledAppContexts, opts)
+
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })

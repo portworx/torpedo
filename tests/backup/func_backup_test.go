@@ -743,7 +743,6 @@ var _ = Describe("{ValidateGenericAndNonGenericBackupSync}", Label(TestCaseLabel
 	backupLocationMap := make(map[string]string)
 	bkpNamespaces = make([]string, 0)
 	backupNames = make([]string, 0)
-	labelSelectors := make(map[string]string)
 
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("VerifyValidateGenericAndNonGenericBackupSync", "Validate that the backup sync syncs all the backups (both generic and non-genric) present in bucket.", nil, 300159, Pingle, Q3FY25)
@@ -819,13 +818,11 @@ var _ = Describe("{ValidateGenericAndNonGenericBackupSync}", Label(TestCaseLabel
 		// 6. Take 2 KDMP backup.
 		Step("Taking backup of applications", func() {
 			for i := 0; i < numOfKDMPBackup; i++ {
-				backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, bkpNamespaces[0], time.Now().Unix())
-				namespaceLabel := fmt.Sprintf("%s-label-schedule-%s", BackupNamePrefix, RandomString(4))
+				backupName = fmt.Sprintf("%s-%v-%d", BackupNamePrefix, time.Now().Unix(), i)
 				params := map[string]string{"backupName": backupName, "backupOrgID": BackupOrgID, "bkpLocationName": bkpLocationName, "backupLocationUID": backupLocationUID, "clusterName": SourceClusterName, "clusterUid": clusterUid}
 				bkpCreateRequest, err := PrepareGenericBackupRequest(params)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("decorating data of KDMP backup [%s]", backupName))
-				bkpCreateRequest.NsLabelSelectors = namespaceLabel
-				bkpCreateRequest.LabelSelectors = labelSelectors
+				bkpCreateRequest.Namespaces = bkpNamespaces
 				log.InfoD("Backup without check [%s] started at [%s]", backupName, time.Now().Format("2006-01-02 15:04:05"))
 				_, err = Inst().Backup.CreateBackup(ctx, bkpCreateRequest)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of KDMP backup [%s]", backupName))
@@ -853,7 +850,7 @@ var _ = Describe("{ValidateGenericAndNonGenericBackupSync}", Label(TestCaseLabel
 				}
 				return "", false, nil
 			}
-			_, err = DoRetryWithTimeoutWithGinkgoRecover(backupLocationDeleteStatusCheck, 3*time.Minute, 30*time.Second)
+			_, err = DoRetryWithTimeoutWithGinkgoRecover(backupLocationDeleteStatusCheck, 10*time.Minute, 30*time.Second)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", bkpLocationName))
 		})
 

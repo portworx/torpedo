@@ -1563,9 +1563,9 @@ var _ = Describe("{ShareBackupWithFullAccessToGroupAndAdminDeletionAttempt}", La
 		customRoleName       backup.PxBackupRole = backup.InfrastructureOwner
 		userList             []string
 		user1Ctx             context.Context
-		user2Ctx             context.Context
 		adminCtx             context.Context
 		groupName            string
+		restoreName          string
 	)
 
 	JustBeforeEach(func() {
@@ -1628,8 +1628,6 @@ var _ = Describe("{ShareBackupWithFullAccessToGroupAndAdminDeletionAttempt}", La
 			providers = GetBackupProviders()
 			user1Ctx, err = backup.GetNonAdminCtx(userList[0], CommonPassword)
 			log.FailOnError(err, "Fetching px-central-infra-admin user1 ctx")
-			user2Ctx, err = backup.GetNonAdminCtx(userList[1], CommonPassword)
-			log.FailOnError(err, "Fetching px-central-infra-admin ctx2")
 			adminCtx, err = backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 
@@ -1674,7 +1672,7 @@ var _ = Describe("{ShareBackupWithFullAccessToGroupAndAdminDeletionAttempt}", La
 			log.InfoD("Taking Backup of application")
 			backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
 			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-			_, err := CreateBackupWithoutCheck(user1Ctx, backupName, SourceClusterName, backupLocation, backupLocationUID, appContextsToBackup, nil, BackupOrgID, clusterUid, "", "", "", "")
+			err := CreateBackupWithValidation(user1Ctx, backupName, SourceClusterName, backupLocation, backupLocationUID, appContextsToBackup, nil, BackupOrgID, clusterUid, "", "", "", "")
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", backupName))
 		})
 
@@ -1685,20 +1683,10 @@ var _ = Describe("{ShareBackupWithFullAccessToGroupAndAdminDeletionAttempt}", La
 			log.FailOnError(err, "Failed to share backup with group %s", backupName)
 		})
 
-		//9. Enumerate backup from user2
-		Step("Enumerate backup from user2", func() {
-			bkpEnumerateReq := &api.BackupEnumerateRequest{OrgId: BackupOrgID}
-			backupResponse, err := Inst().Backup.EnumerateBackup(user2Ctx, bkpEnumerateReq)
-			dash.VerifyFatal(err, nil, "Enumerate backup from user2 ctx")
-			expected := strconv.Itoa(FullAccess)
-			actual := ""
-
-			for _, bk := range backupResponse.GetBackups() {
-				accessType := bk.Metadata.Ownership.Groups[0].Access
-				actual = strconv.Itoa(int(accessType))
-				log.Info("actual is:", actual)
-			}
-			dash.VerifyFatal(actual, expected, "Enumerate specific backup from user2 ctx")
+		//9. Validate access from user2
+		Step("Validate access from user2", func() {
+			restoreName = fmt.Sprintf("%s-%v", RestoreNamePrefix, RandomString(5))
+			ValidateSharedBackupWithUsers(userList[1], FullAccess, backupName, restoreName)
 		})
 
 		//10. Delete backup from admin user
@@ -1719,6 +1707,9 @@ var _ = Describe("{ShareBackupWithFullAccessToGroupAndAdminDeletionAttempt}", La
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
 		// Cleaning up applications created
+		err := DeleteRestore(restoreName, BackupOrgID, adminCtx)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
+
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		DestroyApps(scheduledAppContexts, opts)
