@@ -233,6 +233,8 @@ const (
 	HelmRepoUrl                           = "PX_BACKUP_UPGRADE_HELM_VERSION"
 	DefaultHelmRepoUrl                    = "http://charts.portworx.io/"
 	StorkVersionForPartialBackup          = "24.3.0"
+	KeyCloakStateFulSet                   = "pxcentral-keycloak"
+	WaitPeriodForResourceReady            = 5 * time.Minute
 )
 
 var (
