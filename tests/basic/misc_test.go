@@ -3811,3 +3811,114 @@ var _ = Describe("{ValidateSecondKVDBFailOver}", Label("staging", "kvdb_ops", "p
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
+
+var _ = Describe("{RestartPxOnStorageLessNode}", Label("staging", "kvdb_ops", "p1", "negative"), func() {
+	/*
+		https://purestorage.atlassian.net/browse/HAZEL-1020
+		Step 1: Have 7 storage nodes & 3 storageless nodes
+		Step 2: Create apps
+		Step 3: Kill the PX on one of the kvdb node
+		Step 4: Px restart on all storage less nodes
+		Step 5: Validate apps
+	*/
+
+	var (
+		testrailID           = 0
+		runID                int
+		contexts             []*scheduler.Context
+		Kill_px_on_kvdb_node KvdbNode
+	)
+	JustBeforeEach(func() {
+		StartTorpedoTest("RestartPxOnStorageLessNode", "Managing applications and validating them after restarting Px on storageless nodes.", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	stepLog := "Identify KVDB nodes, stop PX on one KVDB node, restart PX on storageless nodes, and validate applications."
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		storageNodes := node.GetStorageNodes()
+		log.Infof("Storage node in the cluster: [%v]", storageNodes)
+
+		storageLessNode := node.GetStorageLessNodes()
+		if len(storageLessNode) >= 3 {
+			Skip("At least 3 storageless nodes are required to run the tests.")
+		}
+		log.InfoD("Get all KVDB nodes")
+		kvdbNodes, err := GetAllKvdbNodes()
+		log.FailOnError(err, "Unable to retrieve KVDB nodes")
+
+		cleanup := func() {
+			log.Info("Executing cleanup tasks")
+			node, err := node.GetNodeDetailsByNodeID(Kill_px_on_kvdb_node.ID)
+			log.FailOnError(err, "Unable to get the node details for the node  [%v]", node)
+			err = Inst().V.StartDriver(node)
+			log.FailOnError(err, "error starting driver on node %s", node.Name)
+			err = Inst().V.WaitDriverUpOnNode(node, 10*time.Minute)
+			log.FailOnError(err, "error while waiting for driver up on node %s", node.Name)
+			log.Infof("Successfully start the portworx :[%v]", Kill_px_on_kvdb_node)
+			DestroyApps(contexts, nil)
+		}
+		defer cleanup()
+
+		stepLog := "Schedule application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("kvdbfailover-%d", i))...)
+			}
+			ValidateApplications(contexts)
+		})
+
+		stepLog = "Kill the Portworx one of the  KVDB member node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			Kill_px_on_kvdb_node = kvdbNodes[0]
+			nodeDetails, err := node.GetNodeDetailsByNodeID(Kill_px_on_kvdb_node.ID)
+			log.FailOnError(err, "Unable to retrieve node details for NodeID [%v]", Kill_px_on_kvdb_node.ID)
+			StopVolDriverAndWait([]node.Node{nodeDetails})
+			log.InfoD("PX service successfully stopped on node: %v", nodeDetails)
+			checkKVDBQuorum := func() (interface{}, bool, error) {
+				getKVDBNodes, err := GetAllKvdbNodes()
+				if err != nil {
+					return nil, true, fmt.Errorf("unable to get KVDB nodes: %w", err)
+				}
+				log.Infof("KVDB node details: %v", getKVDBNodes)
+				healthyCount := 0
+				for _, each := range getKVDBNodes {
+					if each.IsHealthy == true {
+						healthyCount++
+					}
+				}
+				if healthyCount == 2 {
+					log.Infof("KVDB quorum intact. Healthy count: %d, Expected: 2", healthyCount)
+					return nil, false, nil
+				}
+				log.Errorf("KVDB quorum not lost. Healthy count: %d, Expected: 2. Retrying...", healthyCount)
+				return nil, true, fmt.Errorf("quorum need to lost. Healthy count: %d, Expected: 2", healthyCount)
+			}
+			_, err = task.DoRetryWithTimeout(checkKVDBQuorum, 5*time.Minute, 30*time.Second)
+			log.FailOnError(err, "Error occurred while checking KVDB quorum")
+		})
+
+		stepLog = "Restart PX on all storageless node"
+		Step(stepLog, func() {
+			log.Info(stepLog)
+			for _, storage_less_node := range storageLessNode {
+				err = Inst().V.RestartDriver(storage_less_node, nil)
+				log.FailOnError(err, fmt.Sprintf("Error restarting px on node [%s]", storage_less_node.Name))
+				err = Inst().V.WaitForPxPodsToBeUp(storage_less_node)
+				log.FailOnError(err, fmt.Sprintf("Error occured while Validating PX restart is done on node:%v", storage_less_node.Name))
+				log.Infof("PX restart validated successfully on storageless node: %v", storage_less_node.Name)
+
+			}
+		})
+
+		ValidateApplications(contexts)
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
