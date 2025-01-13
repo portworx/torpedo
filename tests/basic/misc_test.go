@@ -3922,3 +3922,70 @@ var _ = Describe("{RestartPxOnStorageLessNode}", Label("staging", "kvdb_ops", "p
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
+
+var _ = Describe("{ContinuousPXRestartAndAppValidation}", Label("p0", "negative", "px_vol_ops", "staging"), func() {
+	/*
+	   ticket id:https://purestorage.atlassian.net/browse/HAZEL-996
+	   Create apps
+	   Randomly choose a storage node
+	   Kill PX on this storage node
+	   Wait for PX to come up
+	   Validate apps
+	   Repeat steps 2 to 5 at least 25 times
+	*/
+	var (
+		testrailID = 0
+		runID      int
+		contexts   []*scheduler.Context
+	)
+	JustBeforeEach(func() {
+		StartTorpedoTest("ContinuousPXRestartAndAppValidation", "Continuously kills PX on a random storage node, waits for it to restart, and validates apps.", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	itLog := "Continuously kills PX on a random storage node, waits for it to restart, and validates apps"
+	It(itLog, func() {
+		log.InfoD(itLog)
+
+		log.Info("Get storage nodes")
+		storageNodes := node.GetStorageNodes()
+		log.Infof("Storage node in the cluster: [%v]", storageNodes)
+
+		cleanup := func() {
+			log.InfoD("Cleanup the task")
+			for _, n := range storageNodes {
+				pxStatus, err := Inst().V.GetPxctlStatus(n)
+				if err == nil && pxStatus != api.Status_STATUS_OK.String() {
+					err = Inst().V.StartDriver(n)
+					log.FailOnError(err, "Failed to start Portworx driver on node %s", n.Name)
+					err = Inst().V.WaitDriverUpOnNode(n, 10*time.Minute)
+					log.FailOnError(err, "Failed to waiting for Portworx driver to start on node %s", n.Name)
+				}
+			}
+			DestroyApps(contexts, nil)
+		}
+		defer cleanup()
+
+		stepLog = "Kill PX on a random storage node and validate applications 25 times"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < 25; i++ {
+				pxNode := GetRandomNode(storageNodes)
+				log.Infof("Stopping the volume driver on node %v", pxNode)
+				StopVolDriverAndWait([]node.Node{pxNode})
+				log.Infof("PX service successfully stopped on node: %v", pxNode)
+				log.Infof("Restarting PX on node: %v", pxNode)
+				err := Inst().V.StartDriver(pxNode)
+				log.FailOnError(err, "Error starting PX driver on node %s", pxNode)
+				err = Inst().V.WaitDriverUpOnNode(pxNode, 10*time.Minute)
+				log.FailOnError(err, "Error waiting for PX driver up on node %s", pxNode)
+				log.Infof("PX restarted successfully on node: %v", pxNode)
+				ValidateApplications(contexts)
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
