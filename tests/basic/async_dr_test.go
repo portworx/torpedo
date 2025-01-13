@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -3168,3 +3169,181 @@ func DeletePXOnSourceAndDestination(configPath string, cluster int) error {
 	}
 	return nil
 }
+
+var _ = Describe("{AsyncDRFailoverWithSourceClusterDown}", Label("staging", "p1", "negative", "AsyncDR"), func() {
+	/*
+		https://purestorage.atlassian.net/browse/HAZEL-1047
+		1. Create apps
+		2. Bring down Source Cluster (Restart all worker nodes)
+		3. Trigger Failover
+		4. Validate failover
+	*/
+	var (
+		testrailID          = 0
+		runID               int
+		contexts            []*scheduler.Context
+		taskNamePrefix      = "dr-sourcedown"
+		defaultNs           = "kube-system"
+		migrationNamespaces []string
+		kubeConfigPath      = map[int]string{}
+		migrationSchedName  string
+		schedulePolicy      *storkapi.SchedulePolicy
+		clusterPairName     string
+		migNamespaces       string
+		schedulePolicyName  = "async-policy"
+		migrationInterval   = 5
+		wg                  sync.WaitGroup
+	)
+	BeforeEach(func() {
+		if !kubeConfigWritten {
+			WriteKubeconfigToFiles()
+			kubeConfigWritten = true
+		}
+	})
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("AsyncDRFailoverWithSourceClusterDown", "Perform failover with source cluster down", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	stepLog := "Restart all worker nodes in the source cluster, perform failover, and validate the operation"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+
+		cleanup := func() {
+			log.Infof("Perform cleanup task")
+			if len(contexts) > 0 {
+				for _, ctx := range contexts {
+					ctx.SkipVolumeValidation = true
+					TearDownContext(ctx, map[string]bool{
+						SkipClusterScopedObjects:                    true,
+						scheduler.OptionsWaitForResourceLeakCleanup: true,
+						scheduler.OptionsWaitForDestroy:             true,
+					})
+				}
+			}
+			log.Infof("Remove migrations from namespace [%v]", defaultNs)
+			migrationSchedules, err := storkops.Instance().ListMigrationSchedules(defaultNs)
+			log.FailOnError(err, "Failed to get migration schedule list from the namespace %v", defaultNs)
+			for _, migrSched := range migrationSchedules.Items {
+				err := asyncdr.DeleteAndWaitForMigrationSchedDeletion(migrSched.Name, defaultNs)
+				log.FailOnError(err, "Failed to deleting migration schedule on destination cluster")
+			}
+			log.Infof("Remove volumes")
+			volList, err := Inst().V.ListAllVolumes()
+			log.FailOnError(err, "Failed to get volume list")
+			if len(volList) > 0 {
+				for _, volName := range volList {
+					_ = Inst().V.DeleteVolume(volName)
+				}
+			}
+		}
+		defer cleanup()
+
+		stepLog = "Scheduling applications and creating a schedule policy for migration"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			migrationNamespaces, contexts = initialSetupApps(taskNamePrefix, false, false)
+			migNamespaces = strings.Join(migrationNamespaces, ",")
+
+			for _, cluster := range []int{asyncdr.FirstCluster, asyncdr.SecondCluster} {
+				kubeConfigPath[cluster], err = GetCustomClusterConfigPath(cluster)
+				log.FailOnError(err, "Getting error while fetching path for %v cluster", cluster)
+			}
+
+			schedulePolicy, err = asyncdr.CreateSchedulePolicy(schedulePolicyName, migrationInterval)
+			log.FailOnError(err, "Failed to create schedule policy")
+		})
+
+		extraArgs := map[string]string{
+			"namespaces":           migNamespaces,
+			"kubeconfig":           kubeConfigPath[asyncdr.FirstCluster],
+			"schedule-policy-name": schedulePolicy.Name,
+		}
+
+		stepLog = "Creating cluster pair and starting migration schedule"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			clusterPairName = defaultClusterPairName + time.Now().Format("15h03m05s")
+			err = ScheduleBidirectionalClusterPair(clusterPairName, defaultNs, "", storkapi.BackupLocationType(defaultBackupLocation), defaultSecret, "async-dr", asyncdr.FirstCluster, asyncdr.SecondCluster, nil)
+			log.FailOnError(err, "Failed creating bidirectional cluster pair")
+
+			log.InfoD("Start migration schedule")
+			migrationSchedName = migrationSchedKey + time.Now().Format("15h03m05s")
+			createMigSchdAndValidateMigration(migrationSchedName, clusterPairName, defaultNs, kubeConfigPath[asyncdr.FirstCluster], extraArgs)
+		})
+
+		stepLog = "Restart all worker nodes in the source cluster"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			nodesToRestartPx := node.GetStorageNodes()
+			for _, eachNode := range nodesToRestartPx {
+				wg.Add(1)
+				go func(n node.Node) {
+					defer wg.Done()
+					log.Infof("Restarting node: %v", n.Name)
+
+					err := Inst().N.RebootNode(n, node.RebootNodeOpts{
+						Force: true,
+						ConnectionOpts: node.ConnectionOpts{
+							Timeout:         1 * time.Minute,
+							TimeBeforeRetry: 5 * time.Second,
+						},
+					})
+					log.FailOnError(err, "Failed to reboot node [%v]", n.Name)
+				}(eachNode)
+			}
+			wg.Wait()
+			log.InfoD("Node restart Initiated on all storage nodes")
+		})
+
+		stepLog = "Performing failover on the destination cluster"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := SwitchCluster(kubeConfigPath[asyncdr.SecondCluster], asyncdr.SecondCluster)
+			log.FailOnError(err, "Failed to switch source to destination cluster")
+
+			extraArgsFailoverFailback := map[string]string{
+				"kubeconfig": kubeConfigPath[asyncdr.SecondCluster],
+			}
+			failoverParam := failoverFailbackParam{
+				action:                    "failover",
+				failoverOrFailbackNs:      defaultNs,
+				migrationSchedName:        migrationSchedName,
+				configPath:                kubeConfigPath[asyncdr.SecondCluster],
+				single:                    false,
+				skipSourceOp:              false,
+				includeNs:                 false,
+				excludeNs:                 false,
+				extraArgsFailoverFailback: extraArgsFailoverFailback,
+				contexts:                  contexts,
+			}
+			performFailoverFailback(failoverParam)
+		})
+
+		stepLog = "Destroy applications on the destination cluster"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			cleanup()
+		})
+
+		stepLog = "Destroy applications on the source cluster"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := SwitchCluster(kubeConfigPath[asyncdr.FirstCluster], asyncdr.FirstCluster)
+			log.FailOnError(err, "Failed to switch destination to source cluster")
+			stNodes := node.GetStorageNodes()
+			for _, eachNode := range stNodes {
+				err = Inst().V.WaitDriverUpOnNode(eachNode, Inst().DriverStartTimeout)
+				log.FailOnError(err, "Failed to wait for px up on node %v", eachNode.Name)
+			}
+			cleanup()
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
