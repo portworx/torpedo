@@ -13239,3 +13239,122 @@ var _ = Describe("{StoragePoolMultipleExpandDiskResize}", Label("p0", "negative"
 		AfterEachTest(contexts)
 	})
 })
+
+// RebootKVDBLeaderDuringPoolResize tests the behavior of Portworx when the KVDB leader node
+// is rebooted during a pool resize operation.
+var _ = Describe("{RebootKVDBLeaderDuringPoolResize}", Label("p0", "positive", "kvdb_ops", "pool_ops", "node_ops", "interruptions"), func() {
+	/*
+		https://purestorage.atlassian.net/browse/PTX-27938
+		Test Steps:
+		1. Identify the KVDB leader node.
+		2. Resize the pool on the KVDB leader node by adding a specified increment.
+		3. While the pool expansion is in progress, reboot the KVDB leader node.
+		4. Ensure a new node joins the KVDB cluster post-reboot.
+		5. Validate that the pool has been resized correctly.
+	*/
+
+	var (
+		leader            *node.Node
+		poolToBeResized   *api.StoragePool
+		poolIDToBeResized string
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("RebootKVDBLeaderDuringPoolResize",
+			"Reboot the KVDB leader node while resizing the pool and verify KVDB cluster adjustments", nil, 0)
+	})
+
+	It("reboots the KVDB leader node during pool resize and verifies cluster adjustments", func() {
+		// Identify the KVDB leader node & get the pool to be resized
+		stepLog := "Identify the KVDB leader node & get the pool to be resized"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			var err error
+			leader, err = GetKvdbMasterNode()
+			log.FailOnError(err, "Failed to identify the KVDB leader node")
+			log.Infof("KVDB Leader Node identified: %s", leader.Name)
+
+			// Get all storage pools on the leader node
+			pools, err := GetPoolsDetailsOnNode(leader)
+			log.FailOnError(err, fmt.Sprintf("Error retrieving pools on node %s", leader.Name))
+
+			// Verify that at least one pool exists on the leader node
+			dash.VerifyFatal(len(pools) > 0, true, "Verify that there is at least one pool on the KVDB leader node")
+
+			// Select the first pool for resizing
+			poolToBeResized = getStoragePool(pools[0].Uuid)
+			if poolToBeResized == nil {
+				log.FailOnError(fmt.Errorf("failed to retrieve pool for KVDB leader node [%s]", leader.Name), "")
+			}
+
+			poolIDToBeResized = poolToBeResized.GetUuid()
+			log.Infof("Selected Pool ID for resize: %s", poolIDToBeResized)
+		})
+
+		var expectedSize uint64
+		var expectedSizeWithJournal uint64
+
+		// Resize the pool on the KVDB leader node, initiate a reboot, and verify the cluster adjustments
+		stepLog = "Calculate expected pool size and trigger pool resize"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			drvSize, err := getPoolDiskSize(poolToBeResized)
+			log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
+			expectedSize = (poolToBeResized.TotalSize / units.GiB) + drvSize
+
+			isjournal, err := IsJournalEnabled()
+			log.FailOnError(err, "Failed to check is journal enabled")
+
+			//To-Do Need to handle the case for multiple pools
+			expectedSizeWithJournal = expectedSize
+			if isjournal {
+				expectedSizeWithJournal = expectedSizeWithJournal - 3
+			}
+			log.InfoD("Current Size of the pool %s is %d", poolIDToBeResized, poolToBeResized.TotalSize/units.GiB)
+			err = Inst().V.ExpandPool(poolIDToBeResized, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
+			dash.VerifyFatal(err, nil, "Pool expansion init successful ?")
+
+			err = WaitForExpansionToStart(poolIDToBeResized)
+			log.FailOnError(err, "Expansion is not started")
+
+			storageNode, err := GetNodeWithGivenPoolID(poolIDToBeResized)
+			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDToBeResized))
+			err = RebootNodeAndWaitForPxUp(*storageNode)
+			log.FailOnError(err, "Failed to reboot node and wait till it is up")
+			resizeErr := waitForPoolToBeResized(expectedSize, poolIDToBeResized, isjournal)
+			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d'", expectedSize, expectedSizeWithJournal))
+		})
+
+		// Ensure that a new KVDB node joins the cluster post-reboot
+		stepLogJoin := "Ensure that KVDB cluster is intact post reboot"
+		Step(stepLogJoin, func() {
+			log.InfoD(stepLogJoin)
+
+			err := WaitForKVDBMembers()
+			log.FailOnError(err, "Failed to wait for KVDB members to join the cluster")
+			log.Infof("All KVDB members have joined the cluster successfully")
+		})
+
+		// Verify that the pool has been resized correctly
+		stepLog = "Ensure that pool has been expanded to the expected size"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			ValidateApplications(contexts)
+
+			resizedPool, err := GetStoragePoolByUUID(poolIDToBeResized)
+			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDToBeResized))
+			newPoolSize := resizedPool.TotalSize / units.GiB
+			isExpansionSuccess := false
+			if newPoolSize >= expectedSizeWithJournal {
+				isExpansionSuccess = true
+			}
+			dash.VerifyFatal(isExpansionSuccess, true,
+				fmt.Sprintf("Expected new pool size to be %v or %v, got %v", expectedSize, expectedSizeWithJournal, newPoolSize))
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
