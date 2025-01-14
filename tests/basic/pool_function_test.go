@@ -1192,7 +1192,7 @@ var _ = Describe("{PoolExpandAddDiskInMaintenanceMode}", Label("p1", "negative",
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
 				log.InfoD("Bring Node out of Maintenance Mode")
-				err = Inst().V.ExitMaintenance(*nodeDetail)
+				err = Inst().V.ExitPoolMaintenance(*nodeDetail)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to shift Node [%s] out of Mainteinance Mode", nodeDetail.Name))
 			})
 
