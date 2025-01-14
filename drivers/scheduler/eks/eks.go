@@ -37,16 +37,17 @@ const (
 
 type EKS struct {
 	kube.K8s
-	clusterName       string
-	region            string
-	config            aws.Config
-	eksClient         *eks.Client
-	ec2Client         *ec2.Client
-	svcSsm            *ssm.SSM
-	pxNodeGroupName   string
-	isConfigured      bool
-	instances         []ec2types.Instance
-	autoscalingClient *autoscaling.Client
+	clusterName         string
+	region              string
+	config              aws.Config
+	eksClient           *eks.Client
+	ec2Client           *ec2.Client
+	svcSsm              *ssm.SSM
+	pxNodeGroupName     string
+	pxNodeGroupNameList []string
+	isConfigured        bool
+	instances           []ec2types.Instance
+	autoscalingClient   *autoscaling.Client
 }
 
 // String returns the string name of this driver.
@@ -79,7 +80,7 @@ func (e *EKS) GetCurrentVersion() (string, error) {
 	return aws.ToString(eksDescribeClusterOutput.Cluster.Version), nil
 }
 
-// UpgradeControlPlane upgrades the EKS control plane to the specified version
+// UpgradeControlPlane upgrades the EKS control plane to the specified version and wait for it to finish
 func (e *EKS) UpgradeControlPlane(version string) error {
 	log.Infof("Upgrading EKS cluster [%s] control plane to version [%s]", e.clusterName, version)
 	_, err := e.eksClient.UpdateClusterVersion(
@@ -92,6 +93,12 @@ func (e *EKS) UpgradeControlPlane(version string) error {
 	if err != nil {
 		return fmt.Errorf("failed to set EKS cluster [%s] control plane version to [%s], Err: [%v]", e.clusterName, version, err)
 	}
+
+	// Wait for control plane to be upgraded
+	if err := e.WaitForControlPlaneToUpgrade(version); err != nil {
+		return fmt.Errorf("failed to wait for EKS cluster [%s] control plane to be upgraded to [%s], Err: [%v]", e.clusterName, version, err)
+	}
+
 	log.Infof("Initiated EKS cluster [%s] control plane upgrade to [%s] successfully", e.clusterName, version)
 	return nil
 }
@@ -146,7 +153,7 @@ func (e *EKS) UpgradeNodeGroup(nodeGroupName string, version string) error {
 }
 
 // SetMaxUnavailableForUpgradeInNodeGroup updates Max Unavailable values for upgrades for a given node group
-func (e *EKS) SetMaxUnavailableForUpgradeInNodeGroup(nodeGroupName string) error {
+func (e *EKS) SetMaxUnavailableForUpgradeInNodeGroup(nodeGroupNameList []string) error {
 	updateNodeGroup := false
 
 	log.Info("Checking if we need to configure EKS Node Group Max Unavailable values for surge upgrade..")
@@ -183,21 +190,26 @@ func (e *EKS) SetMaxUnavailableForUpgradeInNodeGroup(nodeGroupName string) error
 		return nil
 	}
 
-	log.Infof("Updating Node Group [%s] with Max Unavailable values for surge upgrade for EKS cluster [%s]", nodeGroupName, e.clusterName)
-	_, err := e.eksClient.UpdateNodegroupConfig(context.TODO(), &eks.UpdateNodegroupConfigInput{
-		ClusterName:   aws.String(e.clusterName),
-		NodegroupName: aws.String(nodeGroupName),
-		UpdateConfig:  updateConfig,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to configure Max Unavailable for EKS cluster [%s] node group [%s], Err: [%v]", e.clusterName, nodeGroupName, err)
+	log.Infof("Updating all Node Groups in the list [%s] with Max Unavailable values for surge upgrade for EKS cluster [%s]", nodeGroupNameList, e.clusterName)
+	for _, nodeGroupName := range nodeGroupNameList {
+		log.Infof("Updating Node Group [%s] with Max Unavailable values for surge upgrade for EKS cluster [%s]", nodeGroupName, e.clusterName)
+		_, err := e.eksClient.UpdateNodegroupConfig(context.TODO(), &eks.UpdateNodegroupConfigInput{
+			ClusterName:   aws.String(e.clusterName),
+			NodegroupName: aws.String(nodeGroupName),
+			UpdateConfig:  updateConfig,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to configure Max Unavailable for EKS cluster [%s] node group [%s], Err: [%v]", e.clusterName, nodeGroupName, err)
+		}
+
+		if err := e.WaitForNodeGroupUpdate(nodeGroupName); err != nil {
+			return err
+		}
+
+		log.Infof("Successfully configured EKS cluster [%s] node group [%s] with Max Unavailable values for surge upgrade", e.clusterName, nodeGroupName)
 	}
 
-	if err := e.WaitForNodeGroupUpdate(nodeGroupName); err != nil {
-		return err
-	}
-
-	log.Infof("Successfully configured EKS cluster [%s] node group [%s] with Max Unavailable values for surge upgrade", e.clusterName, nodeGroupName)
+	log.Infof("Successfully configured EKS cluster [%s] all [%d] node groups in the list [%s] with Max Unavailable values for surge upgrade", e.clusterName, len(nodeGroupNameList), nodeGroupNameList)
 	return nil
 }
 
@@ -283,6 +295,7 @@ func (e *EKS) configureEKSClient() error {
 		if err != nil {
 			log.Errorf("failed to get pods from default namespace. Err: [%v]", err)
 		}
+
 		if pods != nil {
 			for _, pod := range pods.Items {
 				if pod.Name == "torpedo" {
@@ -290,12 +303,14 @@ func (e *EKS) configureEKSClient() error {
 				}
 			}
 		}
+
 		torpedoNodeGroupName := ""
 		nodeGroupLabel := "eks.amazonaws.com/nodegroup"
 		nodes, err := core.Instance().GetNodes()
 		if err != nil {
 			log.Errorf("failed to get nodes. Err: [%v]", err)
 		}
+
 		if nodes != nil {
 			for _, n := range nodes.Items {
 				if n.Name == torpedoNodeName {
@@ -304,22 +319,36 @@ func (e *EKS) configureEKSClient() error {
 				}
 			}
 		}
+
 		e.pxNodeGroupName = os.Getenv("EKS_PX_NODEGROUP_NAME")
 		if e.pxNodeGroupName == "" {
 			log.Warnf("env EKS_PX_NODEGROUP_NAME not set. Using node label [%s] to determine Portworx node group", nodeGroupLabel)
+
+			// Initialize a set to store unique node group names
+			nodeGroupSet := make(map[string]struct{})
 			if torpedoNodeGroupName != "" && nodes != nil {
 				for _, n := range nodes.Items {
-					if n.Labels[nodeGroupLabel] != torpedoNodeGroupName {
-						e.pxNodeGroupName = n.Labels[nodeGroupLabel]
-						log.Infof("Used node label [%s] to determine Portworx node group [%s]", nodeGroupLabel, e.pxNodeGroupName)
-						break
+					if nodeGroup, exists := n.Labels[nodeGroupLabel]; exists && n.Labels[nodeGroupLabel] != torpedoNodeGroupName {
+						nodeGroupSet[nodeGroup] = struct{}{}
+						log.Infof("Used node label [%s] to determine Portworx node group [%s]", nodeGroupLabel, nodeGroup)
 					}
 				}
 			}
-			if e.pxNodeGroupName == "" {
-				return fmt.Errorf("env EKS_PX_NODEGROUP_NAME or node label [%s] not set", nodeGroupLabel)
+
+			e.pxNodeGroupNameList = make([]string, 0, len(nodeGroupSet))
+			for nodeGroup := range nodeGroupSet {
+				e.pxNodeGroupNameList = append(e.pxNodeGroupNameList, nodeGroup)
 			}
+		} else {
+			e.pxNodeGroupNameList = append(e.pxNodeGroupNameList, e.pxNodeGroupName)
 		}
+		log.Infof("List of PX node groups [%s]", e.pxNodeGroupNameList)
+
+		// Check if we have any PX node groups, because we cannot continue if there aren't any present
+		if len(e.pxNodeGroupNameList) == 0 {
+			return fmt.Errorf("env EKS_PX_NODEGROUP_NAME or node label [%s] not set", nodeGroupLabel)
+		}
+
 		e.region = os.Getenv("EKS_CLUSTER_REGION")
 		if e.region == "" {
 			nodeRegionLabel := "topology.kubernetes.io/region"
@@ -395,77 +424,79 @@ func (e *EKS) configureEKSClient() error {
 
 // UpgradeScheduler upgrades the EKS cluster to the specified version
 func (e *EKS) UpgradeScheduler(version string) error {
-	err := e.configureEKSClient()
-	if err != nil {
+	if err := e.configureEKSClient(); err != nil {
 		return fmt.Errorf("failed to configure EKS client. Err: [%v]", err)
 	}
+
 	currentVersion, err := e.GetCurrentVersion()
 	if err != nil {
 		return fmt.Errorf("failed to get EKS cluster [%s] current version, Err: [%v]", e.clusterName, err)
 	}
 	log.Infof("Starting EKS cluster [%s] upgrade from [%s] to [%s]", e.clusterName, currentVersion, version)
 
-	// Upgrade Control Plane
-	err = e.UpgradeControlPlane(version)
-	if err != nil {
+	// Upgrade Control Plane and wait for upgrade to finish
+	if err := e.UpgradeControlPlane(version); err != nil {
 		return fmt.Errorf("failed to set EKS cluster [%s] control plane version to [%s], Err: [%v]", e.clusterName, version, err)
 	}
 
-	// Wait for control plane to be upgraded
-	err = e.WaitForControlPlaneToUpgrade(version)
-	if err != nil {
-		return fmt.Errorf("failed to wait for EKS cluster [%s] control plane to be upgraded to [%s], Err: [%v]", e.clusterName, version, err)
+	// Update Max Unavailable values for all PX Node Groups
+	if err := e.SetMaxUnavailableForUpgradeInNodeGroup(e.pxNodeGroupNameList); err != nil {
+		return fmt.Errorf("failed to configure EKS cluster [%s] node groups with Max Unavailable values, Err: [%v]", e.clusterName, err)
 	}
 
-	// Update Max Unavailable values for Node Group
-	err = e.SetMaxUnavailableForUpgradeInNodeGroup(e.pxNodeGroupName)
-	if err != nil {
-		return fmt.Errorf("failed to configure EKS cluster [%s] node group [%s] Max Unavailable values, Err: [%v]", e.clusterName, e.pxNodeGroupName, err)
+	// Upgrade PX Node Groups
+	if err := e.UpgradeNodeGroups(e.pxNodeGroupNameList, version); err != nil {
+		return err
 	}
 
-	// Upgrade Node Group
-	err = e.UpgradeNodeGroup(e.pxNodeGroupName, version)
-	if err != nil {
-		return fmt.Errorf("failed to upgrade EKS cluster [%s] node group [%s] to [%s]. Err: [%v]", e.clusterName, e.pxNodeGroupName, version, err)
-	}
-
-	// Wait for the portworx node group to be upgraded
-	err = e.WaitForNodeGroupToUpgrade(e.pxNodeGroupName, version)
-	if err != nil {
-		return fmt.Errorf("failed to wait for EKS cluster [%s] node group [%s] to be upgraded to [%s]. Err: [%v]", e.clusterName, e.pxNodeGroupName, version, err)
-	}
 	log.Infof("Successfully finished EKS cluster [%s] upgrade from [%s] to [%s]", e.clusterName, currentVersion, version)
+	return nil
+}
+
+// UpgradeNodeGroups upgrades all node groups in the given list, one by one, to a specific given version and waits for upgrade to complete, otherwise return error
+func (e *EKS) UpgradeNodeGroups(pxNodeGroupNameList []string, version string) error {
+	log.Infof("Found [%d] node group(s) to upgrade in the list %s..", len(pxNodeGroupNameList), pxNodeGroupNameList)
+	for _, pxNodeGroupName := range pxNodeGroupNameList {
+		if err := e.UpgradeNodeGroup(pxNodeGroupName, version); err != nil {
+			return fmt.Errorf("failed to upgrade EKS cluster [%s] node group [%s] to [%s]. Err: [%v]", e.clusterName, pxNodeGroupName, version, err)
+		}
+
+		if err := e.WaitForNodeGroupToUpgrade(pxNodeGroupName, version); err != nil {
+			return fmt.Errorf("failed to wait for EKS cluster [%s] node group [%s] to be upgraded to [%s]. Err: [%v]", e.clusterName, pxNodeGroupName, version, err)
+		}
+	}
+	log.Infof("Successfully upgraded all [%d] node group(s) from list %s", len(pxNodeGroupNameList), pxNodeGroupNameList)
 	return nil
 }
 
 // getAllInstances returns all instances in the EKS cluster
 func (e *EKS) getAllInstances() ([]ec2types.Instance, error) {
-	err := e.configureEKSClient()
-	if err != nil {
+	if err := e.configureEKSClient(); err != nil {
 		return nil, fmt.Errorf("failed to configure EKS client. Err: [%v]", err)
 	}
 	var instances []ec2types.Instance
-	params := &ec2.DescribeInstancesInput{
-		Filters: []ec2types.Filter{
-			{
-				Name:   aws.String("tag:kubernetes.io/cluster/" + e.clusterName),
-				Values: []string{"owned"},
+
+	for _, pxNodeGroupName := range e.pxNodeGroupNameList {
+		params := &ec2.DescribeInstancesInput{
+			Filters: []ec2types.Filter{
+				{
+					Name:   aws.String("tag:kubernetes.io/cluster/" + e.clusterName),
+					Values: []string{"owned"},
+				},
+				{
+					Name:   aws.String("tag:eks:nodegroup-name"),
+					Values: []string{pxNodeGroupName},
+				},
 			},
-			{
-				Name:   aws.String("tag:eks:nodegroup-name"),
-				Values: []string{e.pxNodeGroupName},
-			},
-		},
-	}
-	paginator := ec2.NewDescribeInstancesPaginator(e.ec2Client, params)
-	for paginator.HasMorePages() {
-		resp, err := paginator.NextPage(context.TODO())
-		if err != nil {
-			return nil, fmt.Errorf("failed to list instances in [%s]. Err: [%v]", e.region, err)
 		}
-		for _, resv := range resp.Reservations {
-			for _, ins := range resv.Instances {
-				instances = append(instances, ins)
+		paginator := ec2.NewDescribeInstancesPaginator(e.ec2Client, params)
+		for paginator.HasMorePages() {
+			resp, err := paginator.NextPage(context.TODO())
+			if err != nil {
+				return nil, fmt.Errorf("failed to list instances in [%s]. Err: [%v]", e.region, err)
+			}
+			for _, resv := range resp.Reservations {
+				instances = append(instances, resv.Instances...)
 			}
 		}
 	}
@@ -547,18 +578,25 @@ func (e *EKS) GetASGName() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to configure EKS client. Err: [%v]", err)
 	}
+
+	// TODO: Due to changes for EKS with multiple node groups, this method will be blocked, if there are more than 1 node group found
+	if len(e.pxNodeGroupNameList) > 1 {
+		return "", fmt.Errorf("there are more than 1 PX node group found for this EKS cluster, found [%d] node groups, this logic will need to be revisited..", len(e.pxNodeGroupNameList))
+	}
+	pxNodeGroupName := e.pxNodeGroupNameList[0]
+
 	nodeGroup, err := e.eksClient.DescribeNodegroup(context.TODO(), &eks.DescribeNodegroupInput{
 		ClusterName:   aws.String(e.clusterName),
-		NodegroupName: aws.String(e.pxNodeGroupName),
+		NodegroupName: aws.String(pxNodeGroupName),
 	})
 	if err != nil {
-		return "", fmt.Errorf("failed to describe node group [%s]. Err: [%v]", e.pxNodeGroupName, err)
+		return "", fmt.Errorf("failed to describe node group [%s]. Err: [%v]", pxNodeGroupName, err)
 	}
 	if len(nodeGroup.Nodegroup.Resources.AutoScalingGroups) == 0 {
-		return "", fmt.Errorf("no auto scaling groups found for node group [%s]", e.pxNodeGroupName)
+		return "", fmt.Errorf("no auto scaling groups found for node group [%s]", pxNodeGroupName)
 	}
 	asgName := nodeGroup.Nodegroup.Resources.AutoScalingGroups[0].Name
-	log.Infof("Found ASG [%s] for node group [%s]", asgName, e.pxNodeGroupName)
+	log.Infof("Found ASG [%s] for node group [%s]", asgName, pxNodeGroupName)
 	return aws.ToString(asgName), nil
 }
 
