@@ -10805,3 +10805,114 @@ var _ = Describe("{ValidatePXcsiClusterOptionsAndLicenseList}", func() {
 		EndTorpedoTest()
 	})
 })
+
+var _ = Describe("{ValidatePVCNotBound}", Label("p0", "positive", "px_vol_ops", "pure_ops"), func() {
+	/*
+	   https://purestorage.atlassian.net/browse/PTX-27944
+	   1. Loop Through pure.json file and pick an FA endpoint which has Realm, if FA is not accessible go through next FA, if none accessible Fail the Test
+	   2. Create a Storage class which will have pure_fa_pod_name using the wrong pod name that doesn't exists in the FA.
+	   3. Create Namespace and PVC with the storage class created in previous step.
+	   4. Validate that the PVC is not getting bound.
+	   5. Delete PVC, SC and Namespace.
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("ValidatePVCNotBound", "Validate that the PVC is not bound if wrong fa pod name is provided in storage class", nil, 0)
+	})
+	itLog := "ValidatePVCNotBound"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		var RealmName string
+		var isFAaccessible bool
+		var max_iops = uint64(rand.Intn(99999999) + 1)
+		var max_bandwidth = uint64(rand.Intn(511) + 1)
+		var pvc *v1.PersistentVolumeClaim
+		testName := "validate-pvc-not-bound"
+		scName := "fio-fa-da-sc" + time.Now().Format("01-02-15h04m05s")
+		pvcName := "fio-fa-da-sc-pvc"
+
+		flashArrays, err := GetFADetailsUsed()
+		log.FailOnError(err, "Failed to get FA details from pure.json in the cluster")
+		for _, fa := range flashArrays {
+			if fa.Realm != "" {
+				RealmName = fa.Realm
+				_, err := pureutils.PureCreateClientAndConnectRest2_x(fa.MgmtEndPoint, fa.APIToken)
+				if err != nil {
+					log.Errorf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint)
+					continue
+				}
+				isFAaccessible = true
+				break
+			}
+		}
+		if !isFAaccessible {
+			log.FailOnError(fmt.Errorf("No FA with realm found in pure.json"), "No FA with realm found in pure.json")
+		}
+		wrongPodNameinSC := "Torpedo-Test-Diff" + Inst().InstanceID
+		podNameinFA := RealmName + "::" + wrongPodNameinSC
+		stepLog = "Assign the wrong pod name to pure_fa_pod_name in the storage class"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			allowVolExpansionFA := true
+			faParams := map[string]string{
+				"repl":             "1",
+				"max_iops":         strconv.FormatUint(max_iops, 10),
+				"max_bandwidth":    strconv.FormatUint(max_bandwidth, 10) + "G",
+				"fs":               "ext4",
+				"pure_fa_pod_name": wrongPodNameinSC,
+			}
+			err = CreateFlashStorageClass(scName, "pure_block", v1.PersistentVolumeReclaimDelete, faParams, nil, &allowVolExpansionFA, storageApi.VolumeBindingImmediate, nil)
+			log.FailOnError(err, fmt.Sprintf("Failed to create storage class [%v]", scName))
+		})
+		stepLog = "Create Namespace and PVC with the storage class"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Infof("Create Namespace with Name [%v]", testName)
+			nsName := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: testName,
+				},
+			}
+			_, err := k8sCore.CreateNamespace(nsName)
+			log.FailOnError(err, fmt.Sprintf("Failed to create Namespace [%v]", testName))
+			pvcSize := "10"
+			size, err := resource.ParseQuantity(pvcSize)
+			log.FailOnError(err, fmt.Sprintf("failed to parse pvc size : [%s]", pvcSize))
+			pvcClaimSpec := k8s.MakePVC(size, testName, pvcName, scName, v1.ReadWriteOnce)
+			log.Infof("Creating pvc [%s] with storage class [%s] in namespace [%s]", pvcName, scName, testName)
+			pvc, err = k8sCore.CreatePersistentVolumeClaim(pvcClaimSpec)
+			log.FailOnError(err, "failed to create pvc [%s] with storage class [%s]", pvcName, scName)
+		})
+		stepLog = "Verify PVCs are not getting bound"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			var errorMessage string
+			containsPodNotFoundError := false
+			err := Inst().S.WaitForSinglePVCToBound(pvcName, testName, 5)
+			if pvc.Status.Phase == "Pending" {
+				for _, event := range Inst().S.GetEvents()["PersistentVolumeClaim"] {
+					if strings.Contains(event.Message, fmt.Sprintf("Failed to get pod %s", podNameinFA)) {
+						errorMessage = event.Message
+						containsPodNotFoundError = true
+						break
+					}
+				}
+			}
+			dash.VerifyFatal(err != nil, true, fmt.Sprintf("Verify PVC [%s] fails to get bound in namespace [%s].", pvcName, testName))
+			dash.VerifyFatal(containsPodNotFoundError, true, fmt.Sprintf("Verify PVC fails to get bound as expected with error [%s].", errorMessage))
+		})
+		stepLog = "Delete PVC, Namespace and Storage Class"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = core.Instance().DeletePersistentVolumeClaim(pvcName, testName)
+			log.FailOnError(err, fmt.Sprintf("error deleting PVC [%s] in [%s] namespace", pvcName, testName))
+			err = core.Instance().DeleteNamespace(testName)
+			log.FailOnError(err, fmt.Sprintf("error deleting namespace [%s]", testName))
+			err = storage.Instance().DeleteStorageClass(scName)
+			log.FailOnError(err, fmt.Sprintf("error deleting storage class [%s]", scName))
+			time.Sleep(30 * time.Second)
+		})
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+	})
+})
