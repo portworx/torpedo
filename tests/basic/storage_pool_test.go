@@ -5791,8 +5791,12 @@ var _ = Describe("{PoolDelete}", Label("p0", "positive", "pool_ops"), func() {
 		2) Delete the pool
 		3) Add new pool
 		4) expand newly added pool
+
 	*/
 
+	var (
+		poolToBeResized *api.StoragePool
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("PoolDelete", "Initiate pool deletion", nil, 0)
 
@@ -5845,7 +5849,6 @@ var _ = Describe("{PoolDelete}", Label("p0", "positive", "pool_ops"), func() {
 			} else {
 				log.Infof("No pool is partitioned with journal device")
 			}
-
 		}
 
 		var poolToDelete node.StoragePool
@@ -5926,7 +5929,7 @@ var _ = Describe("{PoolDelete}", Label("p0", "positive", "pool_ops"), func() {
 					break
 				}
 			}
-			poolToBeResized, err := GetStoragePoolByUUID(poolIDSelected)
+			poolToBeResized, err = GetStoragePoolByUUID(poolIDSelected)
 			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDSelected))
 			expectedSize := (poolToBeResized.TotalSize / units.GiB) + 100
 
@@ -5936,6 +5939,41 @@ var _ = Describe("{PoolDelete}", Label("p0", "positive", "pool_ops"), func() {
 
 			resizeErr := waitForPoolToBeResized(expectedSize, poolIDSelected, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on expansion using auto option", poolIDSelected))
+		})
+
+		stepLog = fmt.Sprintf("delete newly added [%d] pool on node [%s]", poolToBeResized.GetID(), nodeSelected.Name)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = DeletePoolAndValidate(nodeSelected, strconv.Itoa(int(poolToBeResized.GetID())))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Validate pool [%s] deletion in the node [%s]", poolIDToDelete, nodeSelected.Name))
+
+		})
+
+		stepLog = fmt.Sprintf("Recreate the deleted pool [%s]", nodeSelected.Name)
+
+		Step(stepLog, func() {
+			log.Info(stepLog)
+
+			driveSpecs, err := GetCloudDriveDeviceSpecs()
+			log.FailOnError(err, "Error getting cloud drive specs")
+			deviceSpec := driveSpecs[0]
+			deviceSpecParams := strings.Split(deviceSpec, ",")
+
+			paramsArr := make([]string, 0)
+			for _, param := range deviceSpecParams {
+				if strings.Contains(param, "size") {
+					paramsArr = append(paramsArr, fmt.Sprintf("size=%d,", (poolToDelete.TotalSize/units.GiB)))
+				} else {
+					paramsArr = append(paramsArr, param)
+				}
+				//drive spec generated from actual cloudrive spec
+
+			}
+			newSpec := strings.Join(paramsArr, ",")
+
+			err = Inst().V.AddCloudDrive(&nodeSelected, newSpec, -1)
+			log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", nodeSelected.Name))
+			log.InfoD("pool is added")
 		})
 
 	})
@@ -7592,6 +7630,11 @@ var _ = Describe("{AllPoolsDeleteAndCreateAndDelete}", Label("p0", "positive", "
 	// Testrail Corresponds : https://portworx.testrail.net/index.php?/cases/view/57293
 	var runID int
 
+	var (
+		nodePools      []node.StoragePool
+		jrnlPartPoolID string
+	)
+
 	JustBeforeEach(func() {
 		StartTorpedoTest("AllPoolsDeleteAndCreateAndDelete",
 			"Delete all the pools in a node, create a new pool and delete again",
@@ -7603,7 +7646,6 @@ var _ = Describe("{AllPoolsDeleteAndCreateAndDelete}", Label("p0", "positive", "
 	stepLog := "Delete all the pools in a node, create a new pool and delete again"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-
 		stNodes := node.GetStorageNodes()
 		kvdbNodesIDs := make([]string, 0)
 		kvdbMembers, err := Inst().V.GetKvdbMembers(stNodes[0])
@@ -7619,17 +7661,63 @@ var _ = Describe("{AllPoolsDeleteAndCreateAndDelete}", Label("p0", "positive", "
 			}
 		}
 
+		isjournal, err := IsJournalEnabled()
+		log.FailOnError(err, "Failed to check if Journal enabled")
+
 		stepLog = fmt.Sprintf("Deleting all the pools from the node [%s]", stNode.Name)
 		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			stepLog = "Selecting journal pool"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				pools := stNode.StoragePools
+				if isjournal && len(pools) > 1 {
+					jDev, err := Inst().V.GetJournalDevicePath(&stNode)
+					log.FailOnError(err, fmt.Sprintf("error getting journal device path from node %s", stNode.Name))
+					log.Infof("JournalDev: %s", jDev)
+					if jDev == "" {
+						log.FailOnError(fmt.Errorf("no journal device path found"), "error getting journal device path from storage spec")
+					}
+					drivesMap, err := Inst().V.GetPoolDrives(&stNode)
+					jPath := jDev[:len(jDev)-1]
+				outer:
+					for k, v := range drivesMap {
+						for _, dv := range v {
+							if strings.Contains(dv.Device, jPath) {
+								jrnlPartPoolID = k
+								break outer
+							}
+						}
+					}
+					log.InfoD(fmt.Sprintf("journal pool [%s]", jrnlPartPoolID))
 
-			nodePools := stNode.StoragePools
+				}
+
+			})
+
+			nodePools = stNode.StoragePools
 			for _, nodePool := range nodePools {
 				poolIDToDelete := fmt.Sprintf("%d", nodePool.ID)
+				if poolIDToDelete == jrnlPartPoolID {
+					continue
+				}
+
 				err = DeletePoolAndValidate(stNode, poolIDToDelete)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Validate pool [%s] deletion in the node [%s]", poolIDToDelete, stNode.Name))
 			}
+			stepLog = "Delete journal pool"
+			if jrnlPartPoolID != "" {
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+
+					err = DeletePoolAndValidate(stNode, jrnlPartPoolID)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Validate pool [%s] deletion in the node [%s]", jrnlPartPoolID, stNode.Name))
+
+				})
+			}
 			stepLog := fmt.Sprintf("validate node [%s] changed to storageless node", stNode.Name)
 			Step(stepLog, func() {
+				log.InfoD(stepLog)
 				err := Inst().V.RefreshDriverEndpoints()
 				log.FailOnError(err, "error refreshing end points")
 				slNodes := node.GetStorageLessNodes()
@@ -7647,10 +7735,8 @@ var _ = Describe("{AllPoolsDeleteAndCreateAndDelete}", Label("p0", "positive", "
 		})
 
 		stepLog = fmt.Sprintf("Creating a new pool on node [%v]", stNode.Name)
-
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-
 			err := AddCloudDrive(stNode, -1)
 			log.FailOnError(err, "error adding cloud drive")
 			stNodes := node.GetStorageNodes()
@@ -7667,7 +7753,6 @@ var _ = Describe("{AllPoolsDeleteAndCreateAndDelete}", Label("p0", "positive", "
 
 		})
 		stepLog = "Deploying Apps and validate"
-
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			contexts = make([]*scheduler.Context, 0)
@@ -7715,6 +7800,35 @@ var _ = Describe("{AllPoolsDeleteAndCreateAndDelete}", Label("p0", "positive", "
 				}
 			}
 			dash.VerifyFatal(isStorageless, true, fmt.Sprintf("Verify node %s is converted to storageless node again after deleting pool %d", stNode.Name, nodePool.ID))
+		})
+		stepLog = fmt.Sprintf("Recreate the deleted pool [%s]", stNode.Name)
+
+		Step(stepLog, func() {
+			log.Info(stepLog)
+			for _, pool := range nodePools {
+				driveSpecs, err := GetCloudDriveDeviceSpecs()
+				log.FailOnError(err, "Error getting cloud drive specs")
+				deviceSpec := driveSpecs[0]
+				deviceSpecParams := strings.Split(deviceSpec, ",")
+
+				paramsArr := make([]string, 0)
+				for _, param := range deviceSpecParams {
+					if strings.Contains(param, "size") {
+						paramsArr = append(paramsArr, fmt.Sprintf("size=%d,", pool.TotalSize/units.GiB))
+					} else {
+						paramsArr = append(paramsArr, param)
+					}
+					//drive spec generated from actual cloudrive spec
+
+				}
+				newSpec := strings.Join(paramsArr, ",")
+
+				err = Inst().V.AddCloudDrive(&stNode, newSpec, -1)
+				log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", stNode.Name))
+				time.Sleep(1 * time.Minute)
+				log.InfoD("pool is added ")
+			}
+			log.InfoD("Adding new pool was successful")
 		})
 
 	})
@@ -10192,10 +10306,11 @@ var _ = Describe("{PoolDeleteFunctionality}", Label("p0", "positive", "pool_ops"
 		Step(stepLog, func() {
 			// no need to exit pool maintenance mode
 			err = EnterPoolMaintenance(selectedNode)
-			log.FailOnError(err, "")
+			log.FailOnError(err, "unable to enter pool maintenance mode")
 			poolID := strconv.Itoa(int(nodePools[len(nodePools)-1].ID))
 			err = Inst().V.DeletePool(selectedNode, poolID, true)
-			log.FailOnError(err, "")
+			log.FailOnError(err, fmt.Sprintf("unable to delete pool : %s", poolID))
+			log.Infof("pool deleted %s", poolID)
 
 			poolsMap, err := Inst().V.GetPoolDrives(&selectedNode)
 			log.FailOnError(err, "error getting pool drive from the node [%s]", selectedNode.Name)
