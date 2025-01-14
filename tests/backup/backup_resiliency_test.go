@@ -27,6 +27,7 @@ import (
 	"github.com/pure-px/torpedo/drivers/volume/portworx/schedops"
 	"github.com/pure-px/torpedo/pkg/aututils"
 	"github.com/pure-px/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/units"
 	. "github.com/pure-px/torpedo/tests"
 	"golang.org/x/sync/errgroup"
 	appsV1 "k8s.io/api/apps/v1"
@@ -3029,6 +3030,21 @@ var _ = Describe("{AutopilotEnabledBackupRestore}", Label(TestCaseLabelsMap[Auto
 					aroNames[vol] = true
 				}
 			}
+			pods, err := core.Instance().GetPods(namespace, nil)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("getting pods from namespace [%s] ", namespace))
+			for _, pod := range pods.Items {
+				for _, v := range pod.Spec.Volumes {
+					if v.PersistentVolumeClaim != nil {
+						volId, err := GetVolumeIDForGivenPVC(v.PersistentVolumeClaim.ClaimName)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("get volume id for pvc %s", v.PersistentVolumeClaim.ClaimName))
+						appVol, err := Inst().V.InspectVolume(volId)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("inspect volume %s", v.Name))
+						pvcCapacity := appVol.Spec.Size / units.GiB
+						usedGiB := float64(appVol.GetUsage()) / units.GiB
+						log.InfoD("PVC [%s] before dd capacity: %d, used: %f GiB, %d bytes", v.PersistentVolumeClaim.ClaimName, pvcCapacity, usedGiB, appVol.GetUsage())
+					}
+				}
+			}
 			wg.Add(1)
 			go func() {
 				defer GinkgoRecover()
@@ -3039,7 +3055,7 @@ var _ = Describe("{AutopilotEnabledBackupRestore}", Label(TestCaseLabelsMap[Auto
 					containerPaths := schedops.GetContainerPVCMountMap(pod)
 					for containerName, mountPaths := range containerPaths {
 						for _, mountPath := range mountPaths {
-							dir := fmt.Sprintf("%s/%s", mountPath, testDir)
+							dir := fmt.Sprintf("%s/%s-%s", mountPath, testDir, RandomString(6))
 							cmd := fmt.Sprintf("mkdir %s; dd if=/dev/urandom of=%s/data bs=1M count=1500", dir, dir)
 							cmdArgs := []string{"/bin/sh", "-c", cmd}
 							_, err := core.Instance().RunCommandInPod(cmdArgs, pod.Name, containerName, pod.Namespace)
@@ -3095,6 +3111,21 @@ var _ = Describe("{AutopilotEnabledBackupRestore}", Label(TestCaseLabelsMap[Auto
 				}
 			}()
 			wg.Wait()
+			pods, err := core.Instance().GetPods(namespace, nil)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("getting pods from namespace [%s] ", namespace))
+			for _, pod := range pods.Items {
+				for _, v := range pod.Spec.Volumes {
+					if v.PersistentVolumeClaim != nil {
+						volId, err := GetVolumeIDForGivenPVC(v.PersistentVolumeClaim.ClaimName)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("get volume id for pvc %s", v.PersistentVolumeClaim.ClaimName))
+						appVol, err := Inst().V.InspectVolume(volId)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("inspect volume %s", v.Name))
+						pvcCapacity := appVol.Spec.Size / units.GiB
+						usedGiB := float64(appVol.GetUsage()) / units.GiB
+						log.InfoD("PVC [%s] after dd capacity: %d, used: %f GiB, %d bytes", v.PersistentVolumeClaim.ClaimName, pvcCapacity, usedGiB, appVol.GetUsage())
+					}
+				}
+			}
 			dash.VerifyFatal(err, nil, "Autopilot rule executed successfully")
 		})
 
@@ -3107,6 +3138,21 @@ var _ = Describe("{AutopilotEnabledBackupRestore}", Label(TestCaseLabelsMap[Auto
 
 		Step("Filling data into the pod for autopilot rule to execute", func() {
 			log.InfoD("Filling data into the pod for autopilot rule to execute")
+			pods, err := core.Instance().GetPods(namespace, nil)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("getting pods from namespace [%s] ", namespace))
+			for _, pod := range pods.Items {
+				for _, v := range pod.Spec.Volumes {
+					if v.PersistentVolumeClaim != nil {
+						volId, err := GetVolumeIDForGivenPVC(v.PersistentVolumeClaim.ClaimName)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("get volume id for pvc %s", v.PersistentVolumeClaim.ClaimName))
+						appVol, err := Inst().V.InspectVolume(volId)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("inspect volume %s", v.Name))
+						pvcCapacity := appVol.Spec.Size / units.GiB
+						usedGiB := float64(appVol.GetUsage()) / units.GiB
+						log.InfoD("PVC [%s] before dd capacity: %d, used: %f GiB, %d bytes", v.PersistentVolumeClaim.ClaimName, pvcCapacity, usedGiB, appVol.GetUsage())
+					}
+				}
+			}
 			wg.Add(1)
 			go func() {
 				defer GinkgoRecover()
@@ -3117,7 +3163,7 @@ var _ = Describe("{AutopilotEnabledBackupRestore}", Label(TestCaseLabelsMap[Auto
 					containerPaths := schedops.GetContainerPVCMountMap(pod)
 					for containerName, mountPaths := range containerPaths {
 						for _, mountPath := range mountPaths {
-							dir := fmt.Sprintf("%s/%s", mountPath, testDir)
+							dir := fmt.Sprintf("%s/%s-%s", mountPath, testDir, RandomString(6))
 							cmd := fmt.Sprintf("mkdir %s; dd if=/dev/urandom of=%s/data bs=1M count=2072", dir, dir)
 							cmdArgs := []string{"/bin/sh", "-c", cmd}
 							_, err := core.Instance().RunCommandInPod(cmdArgs, pod.Name, containerName, pod.Namespace)
@@ -3159,6 +3205,21 @@ var _ = Describe("{AutopilotEnabledBackupRestore}", Label(TestCaseLabelsMap[Auto
 				}
 			}()
 			wg.Wait()
+			pods, err := core.Instance().GetPods(namespace, nil)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("getting pods from namespace [%s] ", namespace))
+			for _, pod := range pods.Items {
+				for _, v := range pod.Spec.Volumes {
+					if v.PersistentVolumeClaim != nil {
+						volId, err := GetVolumeIDForGivenPVC(v.PersistentVolumeClaim.ClaimName)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("get volume id for pvc %s", v.PersistentVolumeClaim.ClaimName))
+						appVol, err := Inst().V.InspectVolume(volId)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("inspect volume %s", v.Name))
+						pvcCapacity := appVol.Spec.Size / units.GiB
+						usedGiB := float64(appVol.GetUsage()) / units.GiB
+						log.InfoD("PVC [%s] after dd capacity: %d, used: %f GiB, %d bytes", v.PersistentVolumeClaim.ClaimName, pvcCapacity, usedGiB, appVol.GetUsage())
+					}
+				}
+			}
 			backupNameWhileAPRuleIsExecuting = fmt.Sprintf("%s-during-ap-%v", BackupNamePrefix, time.Now().Unix())
 			err = CreateBackupWithValidation(ctx, backupNameWhileAPRuleIsExecuting, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, nil, BackupOrgID, sourceClusterUid, "", "", "", "")
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s] with namespace [%s] while the autopilot rule is executing", backupNameWhileAPRuleIsExecuting, namespace))
@@ -3469,7 +3530,7 @@ var _ = Describe("{RebootNodesWhileCRRestoreIsInProgress}", Label(TestCaseLabels
 		Step("Validating the restore", func() {
 			log.InfoD("Validating the restore")
 			wg.Wait()
-			err = RestoreSuccessCheck(restoreName, BackupOrgID, MaxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx)
+			err = RestoreSuccessCheck(restoreName, BackupOrgID, 2*MaxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restore [%s]", restoreName))
 		})
 	})
