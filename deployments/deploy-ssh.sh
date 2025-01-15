@@ -830,6 +830,10 @@ spec:
       value: "${GOOGLE_APPLICATION_CREDENTIALS}"
     - name: TOGGLE_PURE_MGMT_IP
       value: "${TOGGLE_PURE_MGMT_IP}"
+    - name: "CLUSTER_ID"
+      value: "${CLUSTER_ID}"
+    - name: "IS_HCP"
+      value: "${IS_HCP}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
