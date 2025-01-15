@@ -110,6 +110,7 @@ const (
 	MMurdanar      TestcaseAuthor = "mmurdanar-px"
 	Aratnam        TestcaseAuthor = "abhishek-r"
 	Shkumari       TestcaseAuthor = "shkumari-px"
+	Nvettaiyan     TestcaseAuthor = "nvettaiyan-px"
 )
 
 // TestcaseQuarter List

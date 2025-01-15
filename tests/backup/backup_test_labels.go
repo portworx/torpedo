@@ -177,6 +177,7 @@ const (
 	CheckLicensePageIntegrity                                                          TestCaseName = "LicensePageIntegrity"
 	VerifySoftLicensingPeriodInDeploymentSpec                                          TestCaseName = "VerifySoftLicensingPeriodInDeploymentSpec"
 	PxUpgradeWithBackupAndRestore                                                      TestCaseName = "PxUpgradeWithBackupAndRestore"
+	LicensingCountBeforeAndAfterBackupNodeRestart                                      TestCaseName = "LicensingCountBeforeAndAfterBackupNodeRestart"
 )
 
 // Test case labels

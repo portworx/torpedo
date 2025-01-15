@@ -3,10 +3,13 @@ package tests
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/task"
 	"github.com/pure-px/sched-ops/k8s/apps"
 	"github.com/pure-px/torpedo/drivers/backup"
 	"github.com/pure-px/torpedo/drivers/node"
@@ -298,5 +301,132 @@ var _ = Describe("{CheckIfAdditionOfClusterWithNodesEntitledForGoesThroughByDisa
 		log.InfoD("Deleting the deployed apps after the testcase")
 		CleanupCloudSettingsAndClusters(nil, "", "", ctx)
 
+	})
+})
+
+// This test case verifies the license count before and after restarting nodes hosting the px-backup pod.
+var _ = Describe("{LicensingCountBeforeAndAfterBackupNodeRestart}", Label(TestCaseLabelsMap[LicensingCountBeforeAndAfterBackupNodeRestart]...), func() {
+
+	var (
+		pxbNamespace                  string
+		sourceClusterWorkerNodes      []node.Node
+		destinationClusterWorkerNodes []node.Node
+		totalNumberOfWorkerNodes      []node.Node
+		contexts                      []*scheduler.Context
+		ctx                           context.Context
+		nodeSet                       map[string]node.Node
+		labelSelector                 map[string]string
+		backupNode                    node.Node
+		pxbPods                       *corev1.PodList
+		err                           error
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("LicensingCountBeforeAndAfterBackupNodeRestart",
+			"Verifies license count after restarting nodes where px-backup pod is hosted", nil, 300785, Nvettaiyan, Q1FY25)
+	})
+
+	It("Verify license count after restarting nodes where px-backup pods are hosted", func() {
+		ctx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+
+		Step("Adding source and destination clusters for backup", func() {
+			log.InfoD("Adding source and destination clusters for backup")
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			log.FailOnError(err, fmt.Sprintf("Adding source cluster %s and destination cluster %s", SourceClusterName, DestinationClusterName))
+		})
+
+		Step("Getting the total number of worker nodes in source and destination cluster", func() {
+			log.InfoD("Getting the total number of worker nodes in source and destination cluster")
+			sourceClusterWorkerNodes = node.GetWorkerNodes()
+			log.InfoD("Total number of worker nodes in source cluster are %v", len(sourceClusterWorkerNodes))
+			totalNumberOfWorkerNodes = append(totalNumberOfWorkerNodes, sourceClusterWorkerNodes...)
+			log.InfoD("Switching cluster context to destination cluster")
+			err = SetDestinationKubeConfig()
+			log.FailOnError(err, "Switching context to destination cluster failed")
+			destinationClusterWorkerNodes = node.GetWorkerNodes()
+			log.InfoD("Total number of worker nodes in destination cluster are %v", len(destinationClusterWorkerNodes))
+			totalNumberOfWorkerNodes = append(totalNumberOfWorkerNodes, destinationClusterWorkerNodes...)
+			log.InfoD("Total number of worker nodes in source and destination cluster are %v", len(totalNumberOfWorkerNodes))
+			log.InfoD("Switching cluster context back to source cluster")
+			err = SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster")
+		})
+
+		Step("Verifying the license count before restarting the nodes hosting the px-backup pod", func() {
+			log.InfoD("Verifying the license count before restarting the nodes hosting the px-backup pod")
+			err = VerifyLicenseConsumedCount(ctx, BackupOrgID, int64(len(totalNumberOfWorkerNodes)))
+			dash.VerifyFatal(err, nil, "Verifying license count before restarting the nodes hosting the px-backup pod")
+		})
+
+		Step("Restarting node where the px-backup pod is hosted", func() {
+			log.InfoD("Restarting node where the px-backup pod is hosted")
+
+			pxbNamespace, err = backup.GetPxBackupNamespace()
+			log.FailOnError(err, "Failed to get px-backup namespace")
+			log.InfoD("px-backup namespace: %v", pxbNamespace)
+
+			labelSelector = map[string]string{"app": "px-backup"}
+			pxbPods, err = core.Instance().GetPods(pxbNamespace, labelSelector)
+			log.FailOnError(err, "Failed to get px-backup pods")
+			log.InfoD("Fetched px-backup pods")
+
+			nodeSet = make(map[string]node.Node)
+			for _, pod := range pxbPods.Items {
+				nodeName := pod.Spec.NodeName
+				backupNode, err = node.GetNodeByName(nodeName)
+				log.FailOnError(err, fmt.Sprintf("Failed to get node %s", nodeName))
+				if _, exists := nodeSet[nodeName]; !exists {
+					nodeSet[nodeName] = backupNode
+					log.InfoD("Found px-backup pod on node %s", backupNode.Name)
+				}
+			}
+			log.InfoD("Total number of nodes hosting px-backup pods: %d", len(nodeSet))
+
+			// Reboot the px-backup nodes concurrently
+			var wg sync.WaitGroup
+			for _, selectedNode := range nodeSet {
+				wg.Add(1)
+				go func(selectedNode node.Node) {
+					defer wg.Done()
+					err = Inst().N.RebootNodeAndWait(selectedNode)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Rebooted node %s, waiting for it to fully recover...", selectedNode.Name))
+					err = Inst().S.IsNodeReady(selectedNode)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Node %v is ready after reboot", selectedNode.Name))
+				}(selectedNode)
+			}
+			wg.Wait()
+
+			log.InfoD("Validating if all the pods are up in px-backup namespace")
+			err = ValidateAllPodsInPxBackupNamespace()
+			dash.VerifyFatal(err, nil, "Successfully validated all pods in px-backup namespace")
+
+		})
+
+		Step("Verifying the license count after restarting the nodes hosting the px-backup pod", func() {
+			log.InfoD("Verifying the license count after restarting the nodes hosting the px-backup pod")
+			licenseVerification := func() (interface{}, bool, error) {
+				err = VerifyLicenseConsumedCount(ctx, BackupOrgID, int64(len(totalNumberOfWorkerNodes)))
+				if err != nil {
+					log.Warnf("License verification failed, will retry: %v", err)
+					return nil, true, err
+				}
+				return nil, false, nil
+			}
+			_, err = task.DoRetryWithTimeout(licenseVerification, 30*time.Minute, 5*time.Minute)
+			dash.VerifyFatal(err, nil, "Verifying license count after restarting the nodes hosting the px-backup pod")
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(contexts)
+		err = SetDestinationKubeConfig()
+		dash.VerifySafely(err, nil, "Switching context to destination cluster")
+		log.InfoD("Switching context to source cluster")
+		err = SetSourceKubeConfig()
+		dash.VerifySafely(err, nil, "Switching context to source cluster")
+		ctx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		CleanupCloudSettingsAndClusters(nil, "", "", ctx)
 	})
 })
