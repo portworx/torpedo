@@ -10916,3 +10916,243 @@ var _ = Describe("{ValidatePVCNotBound}", Label("p0", "positive", "px_vol_ops", 
 		EndTorpedoTest()
 	})
 })
+
+var _ = Describe("{ValidatePoolExpansionHybridPoolwithPod}", Label("p0", "positive", "pool_ops", "PoolExpand", "AddDrive"), func() {
+	/*
+	   https://purestorage.atlassian.net/browse/PTX-27926
+	   1. Create A pod in FA.
+	   2. Add a cloud drive to create new pool on KVDB master node.
+	   3. Verify new pool is added to the KVDB master node.
+	   4. Kill KVDB master node and failover.
+	   5. Expand the recently added pool on old KVDB master node by resize disk.
+	   6. Add a cloud drive to create new pool on new KVDB master node.
+	   7. Verify new pool is added to the new KVDB master node.
+	   8. Expand the recently added pool on new KVDB master node by resize disk.
+	   9. Get all nodes which has PX installed and restart PX one by one.
+	   10. Delete both the pools created in the above steps.
+	   11. Delete the pod created in step 1 from FA
+
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("ValidatePoolExpansionHybridPoolwithPod",
+			"Validate creation of New Pool by adding Cloud Drive and expansion of newly added pool by resize disk after kvdb failover", nil, 0)
+	})
+
+	var (
+		firstNewPoolUUID        string
+		secondNewPoolUUID       string
+		firstNewPoolID          string
+		secondNewPoolID         string
+		podNameinFA             string
+		faMgmtEndPoint          string
+		faAPIToken              string
+		faClient                *newFlashArray.Client
+		isFAaccessible          bool
+		nodePoolMapBfrAddDrive  map[string]string
+		nodePoolMapAftrAddDrive map[string]string
+		oldKvdbMasterNode       *node.Node
+		newKvdbMasterNode       *node.Node
+	)
+
+	itLog := "ValidatePoolExpansionHybridPoolwithPod"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		podNameinFA = "pod-outside-realm" + time.Now().Format("01-02-15h04m05s")
+
+		oldKvdbMasterNode, err = GetKvdbMasterNode()
+		log.FailOnError(err, "Failed to get kvdb master node")
+		log.InfoD("selected Node ID - %s , Name - %s", oldKvdbMasterNode.Id, oldKvdbMasterNode.Name)
+		nodePoolMapBfrAddDrive, err = Inst().V.GetNodePools(*oldKvdbMasterNode)
+		log.Infof("nodePoolMapBfrAddDrive before Map: [%v]", nodePoolMapBfrAddDrive)
+		log.FailOnError(err, fmt.Sprintf("Get Node pools failed on node %s", oldKvdbMasterNode.Name))
+		log.InfoD("Number of Pools available - %d", len(nodePoolMapBfrAddDrive))
+		if len(nodePoolMapBfrAddDrive) >= 6 {
+			Skip("Skipping the test as there can be a maximum of 6 pools allowed to be present in a node")
+		}
+
+		//Get cloudrive spec
+		driveSpecs, err := GetCloudDriveDeviceSpecs()
+		log.FailOnError(err, "Error getting cloud drive specs")
+
+		podAdded := false
+
+		deviceSpec := driveSpecs[0]
+		deviceSpecParams := strings.Split(deviceSpec, ",")
+		paramsArr := make([]string, 0)
+		for _, param := range deviceSpecParams {
+			if strings.Contains(param, "size") {
+				paramsArr = append(paramsArr, fmt.Sprintf("size=%d", 200))
+			} else if strings.Contains(param, "pod") {
+				paramsArr = append(paramsArr, fmt.Sprintf("pod=%s", podNameinFA))
+				podAdded = true
+			} else {
+				paramsArr = append(paramsArr, param)
+			}
+		}
+
+		if !podAdded {
+			paramsArr = append(paramsArr, fmt.Sprintf("pod=%s", podNameinFA))
+		}
+
+		//drive spec generated from actual cloudrive spec
+		newSpec := strings.Join(paramsArr, ",")
+
+		createNewPoolByAddCloudDrive := func(selectedNode *node.Node) {
+			err = Inst().V.AddCloudDrive(selectedNode, newSpec, -1)
+			log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", selectedNode.Name))
+			log.FailOnError(Inst().V.RefreshDriverEndpoints(), "Failed to refresh end points")
+		}
+
+		verifyPoolAddedToNode := func(selectedNode node.Node, nodePoolMapBfrAddDrive map[string]string) (string, string) {
+			var newPoolID, newPoolUUID string
+			nodePoolMapAftrAddDrive, err = Inst().V.GetNodePools(selectedNode)
+			log.Infof("nodePoolMapAftrAddDrive after Map: [%v]", nodePoolMapAftrAddDrive)
+			log.FailOnError(err, fmt.Sprintf("Get Node pools failed on node %s", selectedNode.Name))
+			dash.VerifyFatal(len(nodePoolMapAftrAddDrive) > len(nodePoolMapBfrAddDrive), true, fmt.Sprintf("expecting the pool count to be greater than the count before adding new pool . Expected %d , but received - %d", len(nodePoolMapBfrAddDrive)+1, len(nodePoolMapAftrAddDrive)))
+
+			//Identifying the newpool
+			for uuid, id := range nodePoolMapAftrAddDrive {
+				if _, ok := nodePoolMapBfrAddDrive[uuid]; !ok {
+					newPoolUUID = uuid
+					newPoolID = id
+					break
+				}
+			}
+			log.InfoD("Newly Added pool ID - %s", newPoolID)
+
+			return newPoolUUID, newPoolID
+		}
+
+		flashArrays, err := GetFADetailsUsed()
+		log.FailOnError(err, "Failed to get FA details from pure.json in the cluster")
+		for _, fa := range flashArrays {
+			faClient, err = pureutils.PureCreateClientAndConnectRest2_x(fa.MgmtEndPoint, fa.APIToken)
+			if err != nil {
+				log.Errorf("Failed to connect to FA using Mgmt IP [%v]", fa.MgmtEndPoint)
+				continue
+			}
+			faMgmtEndPoint = fa.MgmtEndPoint
+			faAPIToken = fa.APIToken
+			isFAaccessible = true
+			break
+		}
+		if !isFAaccessible {
+			log.FailOnError(fmt.Errorf("No accessible FA found in pure.json"), "No accessible FA found in pure.json")
+		}
+
+		stepLog := "Create A pod in FA"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			isPodExists, err := pureutils.IsPodExistsOnMgmtEndpoint(faClient, podNameinFA)
+			log.FailOnError(err, fmt.Sprintf("Failed to check if pod [%v] exists ", podNameinFA))
+			if !isPodExists {
+				_, err = pureutils.CreatePodinFA(faClient, podNameinFA)
+				log.FailOnError(err, fmt.Sprintf("Failed to create pod [%v] ", podNameinFA))
+				podCreatedinFA, err := pureutils.IsPodExistsOnMgmtEndpoint(faClient, podNameinFA)
+				log.FailOnError(err, fmt.Sprintf("Failed to check if pod [%v] exists ", podNameinFA))
+				if !podCreatedinFA {
+					log.FailOnError(fmt.Errorf("Pod [%v] is not created in FA", podNameinFA), "is pod created in FA?")
+				}
+			}
+			log.InfoD("Pod [%v] created in FA", podNameinFA)
+		})
+
+		stepLog = "Add drive to create newpool on kvdb master node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			createNewPoolByAddCloudDrive(oldKvdbMasterNode)
+		})
+
+		stepLog = "Verify pool is added to the kvdb master node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			firstNewPoolUUID, firstNewPoolID = verifyPoolAddedToNode(*oldKvdbMasterNode, nodePoolMapBfrAddDrive)
+		})
+
+		stepLog = "Kill kvdb master node and failover"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = KillKvdbMasterNodeAndFailover()
+		})
+
+		expandPoolUsingResizeDisk := func(poolUUID string) {
+			poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
+			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolUUID))
+			expectedSize := (poolToBeResized.TotalSize / units.GiB) + 100
+			log.InfoD("Current Size of the pool %s is %d", poolToBeResized.Uuid, poolToBeResized.TotalSize/units.GiB)
+			err = Inst().V.ExpandPool(poolToBeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, false)
+			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+			isjournal, err := IsJournalEnabled()
+			log.FailOnError(err, "Failed to check if Journal enabled")
+			resizeErr := waitForPoolToBeResized(expectedSize, poolToBeResized.Uuid, isjournal)
+			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on expansion using resize-disk", poolToBeResized.Uuid))
+		}
+
+		stepLog = "Expand recently added pool from old kvdb master node using resize disk"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			expandPoolUsingResizeDisk(firstNewPoolUUID)
+		})
+
+		stepLog = "Add drive to create newpool on new kvdb master node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			newKvdbMasterNode, err = GetKvdbMasterNode()
+			log.FailOnError(err, "Failed to get kvdb master node")
+			log.InfoD("selected Node ID - %s , Name - %s", newKvdbMasterNode.Id, newKvdbMasterNode.Name)
+			nodePoolMapBfrAddDrive, err = Inst().V.GetNodePools(*newKvdbMasterNode)
+			log.FailOnError(err, fmt.Sprintf("Get Node pools failed on node %s", newKvdbMasterNode.Name))
+			log.InfoD("Number of Pools available - %d", len(nodePoolMapBfrAddDrive))
+			if len(nodePoolMapBfrAddDrive) >= 6 {
+				Skip("Skipping the test as there can be a maximum of 6 pools allowed to be present in a node")
+			}
+			createNewPoolByAddCloudDrive(newKvdbMasterNode)
+		})
+
+		stepLog = "Verify pool is added to the new kvdb master node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			secondNewPoolUUID, secondNewPoolID = verifyPoolAddedToNode(*newKvdbMasterNode, nodePoolMapBfrAddDrive)
+		})
+
+		stepLog = "Expand recently added pool from new kvdb master node using resize disk"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().V.WaitDriverUpOnNode(*newKvdbMasterNode, addDriveUpTimeOut)
+			log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", newKvdbMasterNode.Name))
+			expandPoolUsingResizeDisk(secondNewPoolUUID)
+		})
+
+		stepLog = "Get all nodes which has PX installed and restart PX one by one"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			nodesToPXRestart := node.GetStorageDriverNodes()
+			for _, n := range nodesToPXRestart {
+				err = RebootNodeAndWaitForPxUp(n)
+				log.FailOnError(err, "Failed to reboot node [%v] and wait till it is up", n.Name)
+			}
+		})
+
+		stepLog = "Delete both the pools created in the test"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = DeletePoolAndValidate(*oldKvdbMasterNode, firstNewPoolID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Validate pool [%s] deletion in the node [%s]", firstNewPoolID, oldKvdbMasterNode.Name))
+			err = DeletePoolAndValidate(*newKvdbMasterNode, secondNewPoolID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Validate pool [%s] deletion in the node [%s]", secondNewPoolID, newKvdbMasterNode.Name))
+		})
+
+		stepLog = "Delete the pod created in FA"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			faClient, err = pureutils.PureCreateClientAndConnectRest2_x(faMgmtEndPoint, faAPIToken)
+			log.FailOnError(err, fmt.Sprintf("Failed to connect to FA using Mgmt IP [%v]", faMgmtEndPoint))
+			err = pureutils.DeletePodinFA(faClient, podNameinFA)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Pod [%v] deleted in FA", podNameinFA))
+			log.InfoD("Pod [%v] destroyed ", podNameinFA)
+		})
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+	})
+})
