@@ -24,6 +24,7 @@ import (
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/utils/strings/slices"
 
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/scheduler"
@@ -3338,6 +3339,181 @@ var _ = Describe("{AsyncDRFailoverWithSourceClusterDown}", Label("staging", "p1"
 				err = Inst().V.WaitDriverUpOnNode(eachNode, Inst().DriverStartTimeout)
 				log.FailOnError(err, "Failed to wait for px up on node %v", eachNode.Name)
 			}
+			cleanup()
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{ValidateTrashcanVolumesExcludedInVolumeOnlyMigration}", Label("staging", "p1", "positive", "AsyncDR", "px_vol_ops", "trashcan"), func() {
+	/*
+	   https://purestorage.atlassian.net/browse/HAZEL-1053
+	   1. Create apps
+	   2. Enable trashcan
+	   3. Delete apps
+	   4. Validate volumes are trashcan
+	   5. Trigger Async DR Migration
+	   6. Validate deleted volumes should not get migrated
+	*/
+	var (
+		testrailID              = 0
+		runID                   int
+		contexts                []*scheduler.Context
+		taskNamePrefix          = "trash-vol-mig"
+		defaultNs               = "kube-system"
+		migrationNamespaces     []string
+		allMigrations           []*storkapi.Migration
+		clusterPairName         string
+		includeResourcesFlag    = true
+		includeVolumesFlagAsync = true
+		startApplicationsFlag   = false
+		trashcanVolsNew         = make([]string, 0)
+	)
+	BeforeEach(func() {
+		if !kubeConfigWritten {
+			WriteKubeconfigToFiles()
+			kubeConfigWritten = true
+		}
+	})
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("ValidateTrashcanVolumesExcludedInVolumeOnlyMigration", "Validate multiple volume migration where some volumes are in trashcan", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	stepLog := "Validate multiple volume migration to destination cluster excluding trashcan volumes"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+
+		cleanup := func() {
+			log.Infof("Perform cleanup task")
+			if len(contexts) > 0 {
+				for _, ctx := range contexts {
+					TearDownContext(ctx, map[string]bool{
+						SkipClusterScopedObjects:                    true,
+						scheduler.OptionsWaitForResourceLeakCleanup: true,
+						scheduler.OptionsWaitForDestroy:             true,
+					})
+				}
+			}
+			log.Infof("Remove migrations")
+			migrations, err := storkops.Instance().ListMigrations(v1.NamespaceAll)
+			log.FailOnError(err, "failed to get all migration")
+			for _, mig := range migrations.Items {
+				err := DeleteAndWaitForMigrationDeletion(mig.Name, mig.Namespace)
+				log.FailOnError(err, "failed to delete migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err)
+			}
+			log.Infof("Disable trashcan")
+			currNode := node.GetStorageDriverNodes()[0]
+			err = Inst().V.SetClusterOptsWithConfirmation(currNode, map[string]string{
+				"--volume-expiration-minutes": "0",
+			})
+			log.FailOnError(err, fmt.Sprintf("Failed to disable trashcan feature on the node: %v", currNode.Name))
+		}
+		defer cleanup()
+
+		stepLog = "Enabling trashcan feature on the cluster"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			currNode := node.GetStorageDriverNodes()[0]
+			err := Inst().V.SetClusterOptsWithConfirmation(currNode, map[string]string{
+				"--volume-expiration-minutes": "600",
+			})
+			log.FailOnError(err, fmt.Sprintf("Failed to enable trashcan feature on the node: %v", currNode.Name))
+			log.InfoD("Trashcan feature enabled successfully on the node: %v", currNode.Name)
+		})
+
+		stepLog = "Scheduling applications and creating a clusterpair for migration"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster failed")
+			migrationNamespaces, contexts = initialSetupApps(taskNamePrefix, false, false)
+			ValidateApplications(contexts)
+
+			clusterPairName = defaultClusterPairName + time.Now().Format("15h03m05s")
+			err = ScheduleBidirectionalClusterPair(clusterPairName, defaultNs, "", storkapi.BackupLocationType(defaultBackupLocation), defaultSecret, "async-dr", asyncdr.FirstCluster, asyncdr.SecondCluster, nil)
+			log.FailOnError(err, "Failed creating bidirectional cluster pair")
+
+			log.Infof("Migration Namespaces: %v", migrationNamespaces)
+		})
+
+		stepLog = "Delete volumes and validate volumes are moved to trashcan"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				log.Infof("Destroy application [%v] from the namespace [%v]", ctx.App.Key, ctx.App.NameSpace)
+				TearDownContext(ctx, nil)
+
+				log.Infof("wait for few seconds for pvc to get deleted and volume to get detached")
+				time.Sleep(10 * time.Second)
+
+				node := node.GetStorageDriverNodes()[0]
+				trashcanVols, err := Inst().V.GetTrashCanVolumeIds(node)
+				log.FailOnError(err, "error While getting trashcan volumes")
+				for _, vol := range trashcanVols {
+					if vol = strings.ReplaceAll(vol, " ", ""); vol != "" {
+						trashcanVolsNew = append(trashcanVolsNew, vol)
+					}
+				}
+
+				log.Infof("trashcan len: %d", len(trashcanVolsNew))
+				dash.VerifyFatal(len(trashcanVols) > 0, true, "validate volumes exist in trashcan")
+				break
+			}
+		})
+
+		stepLog = "Create and validate volume only migration"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			log.InfoD("Start volume only migration")
+			for _, currMigNamespace := range migrationNamespaces {
+				migrationName := migrationKey + "volumeonly-" + time.Now().Format("15h03m05s")
+				currMig, createMigErr := asyncdr.CreateMigration(migrationName, defaultNs, clusterPairName, currMigNamespace, &includeVolumesFlagAsync, &includeResourcesFlag, &startApplicationsFlag, nil)
+				log.FailOnError(createMigErr, "Failed to create %s migration in %s namespace", migrationName, currMigNamespace)
+				allMigrations = append(allMigrations, currMig)
+				err := storkops.Instance().ValidateMigration(currMig.Name, currMig.Namespace, migrationRetryTimeout, migrationRetryInterval)
+				dash.VerifyFatal(err, nil, "Migration successful?")
+			}
+		})
+
+		stepLog = "Validate migration excludes trashcan volumes at the destination cluster"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := SetDestinationKubeConfig()
+			log.FailOnError(err, "Failed to switch source to destination cluster")
+
+			volList, err := Inst().V.ListAllVolumes()
+			log.FailOnError(err, "Failed to get volume list")
+			log.Infof("Volume list from destination cluster: %v", volList)
+
+			isTrashVolMigrated := false
+			for _, trashVolId := range trashcanVolsNew {
+				if slices.Contains(volList, trashVolId) {
+					isTrashVolMigrated = true
+					break
+				}
+			}
+			dash.VerifyFatal(isTrashVolMigrated, false, fmt.Sprintf("Verify migration excludes trashcan volumes"))
+			log.Infof("Trashcan volumes [%v] are not migrated", trashcanVolsNew)
+		})
+
+		stepLog = "Destroy applications on the destination cluster"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			cleanup()
+		})
+
+		stepLog = "Destroy applications on the source cluster"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster failed")
 			cleanup()
 		})
 	})
