@@ -9,9 +9,9 @@ import (
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	opsapi "github.com/libopenstorage/openstorage/api"
-	storkv1 "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/sched-ops/k8s/core"
+	storkv1 "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
 	storkops "github.com/pure-px/stork/pkg/crud/stork"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/scheduler"
@@ -147,7 +147,7 @@ func getVolumeRuntimeState(vol string) (string, error) {
 	return runTimeStat, nil
 }
 
-var _ = Describe("{FordRunFlatResync}",Label("p0","positive","CustomerIssue"), func() {
+var _ = Describe("{FordRunFlatResync}", Label("p0", "positive", "CustomerIssue"), func() {
 	/*
 		Test Needs 10 VM's running with Internal KVDB
 		Cluster should have 6 StorageNodes and 4 Storageless nodes
@@ -399,7 +399,7 @@ var _ = Describe("{FordRunFlatResync}",Label("p0","positive","CustomerIssue"), f
 	})
 })
 
-var _ = Describe("{ValidateZombieReplicas}",Label("p0","positive","CustomerIssue"), func() {
+var _ = Describe("{ValidateZombieReplicas}", Label("p0", "positive", "CustomerIssue"), func() {
 	/*
 			1. Create aggressive localsnap for every minute.
 			2. Validate zombie replicas
@@ -434,7 +434,7 @@ var _ = Describe("{ValidateZombieReplicas}",Label("p0","positive","CustomerIssue
 					Policy: storkv1.SchedulePolicyItem{
 						Interval: &storkv1.IntervalPolicy{
 							Retain:          storkv1.Retain(retain),
-							IntervalMinutes: 1,
+							IntervalMinutes: interval,
 						},
 					}}
 
@@ -505,11 +505,18 @@ var _ = Describe("{ValidateZombieReplicas}",Label("p0","positive","CustomerIssue
 						log.FailOnError(err, fmt.Sprintf("error while getting volume snapshot status for [%s]", snapshotScheduleName))
 						for k, v := range snapStatuses {
 							log.Infof("Policy Type: %v", k)
-							for _, e := range v {
+							for i, e := range v {
 								log.InfoD("ScheduledVolumeSnapShot Name: %v", e.Name)
-								log.InfoD("ScheduledVolumeSnapShot status: %v", e.Status)
+								log.InfoD("ScheduledVolumeSnapShot Status: %v", e.Status)
 								snapData, err := Inst().S.GetSnapShotData(ctx, e.Name, appNamespace)
-								log.FailOnError(err, fmt.Sprintf("error getting snapshot data for [%s/%s]", appNamespace, e.Name))
+								if i == 0 && err != nil && strings.Contains(err.Error(), "not found") {
+									// PWX-41171 - Sometimes the snapshots roll between when we validate the snapshot schedule and when we try to GetSnapShotData
+									// The check should run fast enough that this is only a risk for the first snapshot
+									log.Warnf("Snapshot [%s/%s] is no longer found and likely rolled off", appNamespace, e.Name)
+									continue
+								} else {
+									log.FailOnError(err, fmt.Sprintf("error getting snapshot data for [%s/%s]", appNamespace, e.Name))
+								}
 
 								snapType := snapData.Spec.PortworxSnapshot.SnapshotType
 								log.InfoD("Snapshot Type: %v", snapType)
@@ -580,7 +587,7 @@ var _ = Describe("{ValidateZombieReplicas}",Label("p0","positive","CustomerIssue
 	})
 })
 
-var _ = Describe("{CreateCloudSnapAndDelete}",Label("p0","positive","CustomerIssue"), func() {
+var _ = Describe("{CreateCloudSnapAndDelete}", Label("p0", "positive", "CustomerIssue"), func() {
 	/*
 		1. Create aggressive cloud snaps for every minute
 		2. ValidateCloudSnap Deletion
@@ -842,7 +849,7 @@ func isPodStuckNotRunning(nameSpace string) (bool, map[string]string, error) {
 	return isPodRestarting, restartDetails, nil
 }
 
-var _ = Describe("{ContainerCreateDeviceRemoval}",Label("p0","positive","CustomerIssue"), func() {
+var _ = Describe("{ContainerCreateDeviceRemoval}", Label("p0", "positive", "CustomerIssue"), func() {
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("ContainerCreateDeviceRemoval",
@@ -1069,7 +1076,7 @@ func flushAllIPtableRulesOnAllNodes() {
 	}
 }
 
-var _ = Describe("{FADAPodRecoveryAfterBounce}",Label("p0","positive","CustomerIssue"), func() {
+var _ = Describe("{FADAPodRecoveryAfterBounce}", Label("p0", "positive", "CustomerIssue"), func() {
 
 	/*
 				PTX : https://purestorage.atlassian.net/browse/PWX-31647
@@ -1217,7 +1224,7 @@ var _ = Describe("{FADAPodRecoveryAfterBounce}",Label("p0","positive","CustomerI
 	})
 })
 
-var _ = Describe("{FADAPodRecoveryAllPathDownUsingIptableRule}",Label("p0","positive","CustomerIssue"), func() {
+var _ = Describe("{FADAPodRecoveryAllPathDownUsingIptableRule}", Label("p0", "positive", "CustomerIssue"), func() {
 
 	/*
 				PTX : https://purestorage.atlassian.net/browse/PTX-19192
