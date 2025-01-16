@@ -238,6 +238,10 @@ const (
 	WaitPeriodForResourceReady            = 5 * time.Minute
 	PxBackupLabelKey                      = "pxb-label"
 	PxBackupLabelValue                    = "pxb-backup-app-label"
+	RESOURCENAME                          = "postgres"
+	RESOURCEGROUP                         = "apps"
+	RESOURCEKIND                          = "Deployment"
+	RESOURCEVERSION                       = "v1"
 )
 
 var (
@@ -13805,4 +13809,86 @@ func ValidateLocalSnapshotCompleted(backupName string, orgID string, localSnapsh
 		}
 	}
 	return nil
+}
+
+// CreateRestoreWithRequestParams creates restore with include parameter
+func CreateRestoreWithRequestParams(restoreName, backupName, clusterName, clusterUid,
+	orgID string, ctx context1.Context, namespaceMapping, storageClassMapping map[string]string, includeResources []*api.ResourceInfo) error {
+
+	var bkpUid string
+	// Check if the backup used is in successful state or not
+	bkpUid, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return err
+	}
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   bkpUid,
+		OrgId: orgID,
+	}
+
+	resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+	if err != nil {
+		return err
+	}
+
+	actual := resp.GetBackup().GetStatus().Status
+	reason := resp.GetBackup().GetStatus().Reason
+	if actual != api.BackupInfo_StatusInfo_Success && actual != api.BackupInfo_StatusInfo_PartialSuccess {
+		return fmt.Errorf("backup status for [%s] expected was [%s] but got [%s] because of [%s]", backupName, api.BackupInfo_StatusInfo_Success, actual, reason)
+	}
+
+	backupDriver := Inst().Backup
+	createRestoreReq := getCreateRestoreRequest(restoreName, orgID, backupName, bkpUid, clusterUid, clusterName, namespaceMapping, storageClassMapping, includeResources)
+	_, err = backupDriver.CreateRestore(ctx, createRestoreReq)
+	if err != nil {
+		return err
+	}
+
+	err = RestoreSuccessCheck(restoreName, orgID, MaxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx)
+	if err != nil {
+		return err
+	}
+
+	log.Infof("Restore [%s] created successfully", restoreName)
+	return nil
+}
+
+func getCreateRestoreRequest(restoreName, orgID, backupName, backupUID, clusterUid, clusterName string, namespaceMapping map[string]string, storageClassMapping map[string]string, includeResources []*api.ResourceInfo) *api.RestoreCreateRequest {
+
+	return &api.RestoreCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  restoreName,
+			OrgId: orgID,
+		},
+		Backup:              backupName,
+		Cluster:             clusterName,
+		NamespaceMapping:    namespaceMapping,
+		StorageClassMapping: storageClassMapping,
+		IncludeResources:    includeResources,
+		BackupRef: &api.ObjectRef{
+			Name: backupName,
+			Uid:  backupUID,
+		},
+		ClusterRef: &api.ObjectRef{
+			Name: clusterName,
+			Uid:  clusterUid,
+		},
+	}
+}
+
+func GetTotalBackupSize(ctx context1.Context, backupName, BackupOrgID string) uint64 {
+	backupDriver := Inst().Backup
+	backupUid, err := backupDriver.GetBackupUID(ctx, backupName, BackupOrgID)
+	dash.VerifyFatal(err, nil, "verify total backup size in namespace")
+
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   backupUid,
+		OrgId: BackupOrgID,
+	}
+
+	resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
+	dash.VerifyFatal(err, nil, "inspect total backup size in namespace")
+	return resp.Backup.BackupInfo.GetTotalSize()
 }
