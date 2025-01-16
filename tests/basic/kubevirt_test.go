@@ -116,7 +116,6 @@ var _ = Describe("{KubeVirtLiveMigration}", Label("p0", "positive", "kubevirt", 
 		log.FailOnError(err, "Failed to get volume driver namespace")
 		defer ListEvents(pxNs)
 
-		
 		log.InfoD(stepLog)
 		appList := Inst().AppList
 		defer func() {
@@ -7223,7 +7222,7 @@ var _ = Describe("{AddAndRemoveNewHotPlugDiskToKubevirtVM}", Label("p0", "positi
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			persist := false
-			_, err := HotPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "50Gi", volumeMode,persist)
+			_, err := HotPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "50Gi", volumeMode, persist)
 			log.FailOnError(err, "Failed to hot-plug DataVolume to KubeVirt VM")
 			dash.VerifyFatal(true, true, "Successfully hot-plugged disk to KubeVirt VM ?")
 		})
@@ -7260,6 +7259,266 @@ var _ = Describe("{AddAndRemoveNewHotPlugDiskToKubevirtVM}", Label("p0", "positi
 		stepLog = "Destroy Applications"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
+	})
+})
+
+var _ = Describe("{FillPoolOnSourceAndTargetNodeAndLiveMigrateVM}", Label("p1", "positive", "kubevirt", "pool_ops", "staging"), func() {
+	/*
+	   Step 1: Create a repl=2 Kubevirt VM
+	   Step 2: Identify Node 1 hosting the VM and Node 2 serving as targets for the VM
+	   Step 3: Identify the pool size on Node 1, fill the pool to 80% of the least pool size of a node. This also fills replica Node.
+	   Step 4: Live migrate the VM out of this node 1
+	   Step 5: Validate usual things like uptime, fio etc.
+	   JIRA ID: https://purestorage.atlassian.net/browse/HAZEL-1685 and https://purestorage.atlassian.net/browse/HAZEL-1686
+	*/
+	var (
+		app, volType        string
+		appCtxs             []*scheduler.Context
+		namespace           string
+		canSsh              bool
+		initialUptime       map[string]time.Duration
+		vmNodeName          string
+		bindMount           bool
+		targetNodeName      string
+		wg                  sync.WaitGroup
+		vm                  kubevirtv1.VirtualMachine
+		usedNodePoolSizeMap map[string]uint64
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("FillPoolOnSourceAndTargetNodeAndLiveMigrateVM", "Fill the pool on the source and target node to max capacity and live migrate the VM", nil, 0)
+		volType, _ = os.LookupEnv("KUBEVIRT_VOL_TYPE")
+		if volType == "pxe-raw" || volType == "fada-raw" {
+			Skip("This test will run only for sv4 apps hence skipping the test")
+		} else {
+			app = "kubevirt-fill-vm-disk"
+		}
+		log.InfoD("Setting app for this test to be : %s", app)
+	})
+
+	It("Fill the pool on the source and target node and live migrate the VM", func() {
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+
+		nodes := node.GetStorageDriverNodes()
+		// Get a random storage node and get all the pools since the pools sizes are uniform across the nodes
+		pools := nodes[0].GetPools()
+		// Get the least size pool in the node
+		leastSizePool := pools[0].GetTotalSize()
+		for _, pool := range pools {
+			if pool.GetTotalSize() < leastSizePool {
+				leastSizePool = pool.GetTotalSize()
+			}
+		}
+		leastSizePool = leastSizePool / units.GiB
+		log.Infof("Least size pool is of size: %vGi", leastSizePool)
+		// app has 2 disks hence divide by 2 and fill 80%
+		updateSize := 0.8 * float64(leastSizePool/2)
+		log.Infof("Update size of pool is %vGi", updateSize)
+
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		Inst().AppList = []string{app}
+		Inst().CsiAppList = []string{app}
+
+		// assign the volume size to each pvc
+		Inst().CustomAppConfig[app] = scheduler.AppConfig{
+			VolumeSize: fmt.Sprintf("%vGi", updateSize),
+		}
+		err = Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+		log.FailOnError(err, "Failed to rescan specs from %s for storage provider %s with VolumeSize %v", Inst().SpecDir, Inst().V.String(), updateSize)
+
+		stepLog := "Schedule a kubevirt VM"
+		Step(stepLog, func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
+				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
+			}
+		})
+		ValidateApplications(appCtxs)
+
+		for _, appCtx := range appCtxs {
+			bindMount, err = IsVMBindMounted(appCtx, false)
+			log.FailOnError(err, "Failed to verify bind mount")
+			dash.VerifyFatal(bindMount, true, "VM bind mount verified")
+		}
+
+		log.Infof("Sleeping for 2 minutes to let VMs come up fully")
+		time.Sleep(2 * time.Minute)
+
+		canSsh = CreateSSHPodAndSetCanSsh()
+		ValidateFioInVMs(appCtxs, canSsh)
+
+		initialUptime = make(map[string]time.Duration)
+		stepLog = "Get initial uptime of VMs and current node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			var wg sync.WaitGroup
+			for _, appCtx := range appCtxs {
+				wg.Add(1)
+				go func(appCtx *scheduler.Context) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+					log.FailOnError(err, "Failed to get VMs from appCtx")
+					for _, vm := range vms {
+						uptime, err := GetVMUptime(vm)
+						log.FailOnError(err, "Failed to get uptime from VM %s", vm.Name)
+						vmKey := fmt.Sprintf("%s/%s", vm.Namespace, vm.Name)
+						initialUptime[vmKey] = uptime
+						log.Infof("Initial uptime for VM %s is %v", vmKey, uptime)
+					}
+				}(appCtx)
+			}
+			wg.Wait()
+		})
+
+		usedNodePoolSizeMap = make(map[string]uint64)
+		stepLog = "Identify Node 1 hosting the VM and Node 2 serving as target for the VM"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			for _, appCtx := range appCtxs {
+				ReplicaNodes, err := GetReplicaNodesOfVM(appCtx)
+				log.FailOnError(err, "Failed to get non replica nodes of VM")
+				vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+				log.FailOnError(err, "Failed to get VMs from appCtx")
+				vm = vms[0]
+				vmNodeName, err = GetNodeOfVM(vm)
+				log.FailOnError(err, "Failed to get node of VM %v", vm.Name)
+				log.Infof("VM [%s] is currently running on node [%s]", vm.Name, vmNodeName)
+
+				for _, ReplicaNode := range ReplicaNodes {
+					if vmNodeName != ReplicaNode {
+						targetNodeName = ReplicaNode
+					}
+				}
+
+				log.Infof("Source node is [%s] and other Replica node: [%v]", vmNodeName, targetNodeName)
+
+				// Get the initial usage of pools
+				sourceNode, err := node.GetNodeByName(vmNodeName)
+				log.FailOnError(err, "Failed to get source node object for node %s", vmNodeName)
+				var sourcePoolUsedSizeBeforeDiskFull uint64
+				sourcePoolStatus, err := Inst().V.GetNodePoolsStatus(sourceNode)
+				log.FailOnError(err, "Failed to get pool status for source node [%s]", vmNodeName)
+				for poolUUID, _ := range sourcePoolStatus {
+					pool, err := GetStoragePoolByUUID(poolUUID)
+					log.FailOnError(err, "Failed to get pool by UUID [%s]", poolUUID)
+					sourcePoolUsedSizeBeforeDiskFull += pool.Used
+				}
+				sourcePoolUsedSizeBeforeDiskFull = sourcePoolUsedSizeBeforeDiskFull / units.GiB
+				log.Infof("Source Node pool usage before disk full: %vGi", sourcePoolUsedSizeBeforeDiskFull)
+				usedNodePoolSizeMap[vmNodeName] = sourcePoolUsedSizeBeforeDiskFull
+
+				targetNode, err := node.GetNodeByName(targetNodeName)
+				log.FailOnError(err, "Failed to get target node object for node %s", targetNodeName)
+				targetPoolStatus, err := Inst().V.GetNodePoolsStatus(targetNode)
+				log.FailOnError(err, "Failed to get pool status for target node [%s]", targetNodeName)
+				var targetPoolUsedSizeBeforeDiskFull uint64
+				for poolUUID, _ := range targetPoolStatus {
+					pool, err := GetStoragePoolByUUID(poolUUID)
+					log.FailOnError(err, "Failed to get pool by UUID [%s]", poolUUID)
+					targetPoolUsedSizeBeforeDiskFull += pool.Used
+				}
+				targetPoolUsedSizeBeforeDiskFull = targetPoolUsedSizeBeforeDiskFull / units.GiB
+				log.Infof("Replica Node pool usage before disk full: %vGi", targetPoolUsedSizeBeforeDiskFull)
+				usedNodePoolSizeMap[targetNodeName] = targetPoolUsedSizeBeforeDiskFull
+			}
+		})
+
+		stepLog = "check if the disk size has become full on the source node and check if pool is filled"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, appCtx := range appCtxs {
+				vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+				log.FailOnError(err, "Failed to get VMs from appCtx")
+				vm = vms[0]
+				isDiskFull, err := CheckIsDiskSizeFullInVM(vm)
+				if err != nil {
+					log.FailOnError(err, "Failed to get disk size from VM [%s]: %v", vm.Name, err)
+				}
+				dash.VerifyFatal(isDiskFull, true, "Is VM disk full?")
+
+				ReplicaNodes, err := GetReplicaNodesOfVM(appCtx)
+				log.FailOnError(err, "Failed to get non replica nodes of VM")
+				vmNodeName, err = GetNodeOfVM(vm)
+				log.FailOnError(err, "Failed to get node of VM %v", vm.Name)
+				log.Infof("VM [%s] is currently running on node [%s]", vm.Name, vmNodeName)
+
+				for _, ReplicaNode := range ReplicaNodes {
+					if vmNodeName != ReplicaNode {
+						targetNodeName = ReplicaNode
+					}
+				}
+
+				sourceNode, err := node.GetNodeByName(vmNodeName)
+				log.FailOnError(err, "Failed to get source node object for node %s", vmNodeName)
+				var sourcePoolUsedSizeAfterDiskFull uint64
+				sourcePoolStatus, err := Inst().V.GetNodePoolsStatus(sourceNode)
+				log.FailOnError(err, "Failed to get pool status for source node [%s]", vmNodeName)
+				for poolUUID, _ := range sourcePoolStatus {
+					pool, err := GetStoragePoolByUUID(poolUUID)
+					log.FailOnError(err, "Failed to get pool by UUID [%s]", poolUUID)
+					sourcePoolUsedSizeAfterDiskFull += pool.Used
+				}
+				sourcePoolUsedSizeAfterDiskFull = sourcePoolUsedSizeAfterDiskFull / units.GiB
+				log.Infof("Source Node pool usage after disk full: %vGi", sourcePoolUsedSizeAfterDiskFull)
+
+				targetNode, err := node.GetNodeByName(targetNodeName)
+				log.FailOnError(err, "Failed to get target node object for node %s", targetNodeName)
+				targetPoolStatus, err := Inst().V.GetNodePoolsStatus(targetNode)
+				log.FailOnError(err, "Failed to get pool status for target node [%s]", targetNodeName)
+				var targetPoolUsedSizeAfterDiskFull uint64
+				for poolUUID, _ := range targetPoolStatus {
+					pool, err := GetStoragePoolByUUID(poolUUID)
+					log.FailOnError(err, "Failed to get pool by UUID [%s]", poolUUID)
+					targetPoolUsedSizeAfterDiskFull += pool.Used
+				}
+				targetPoolUsedSizeAfterDiskFull = targetPoolUsedSizeAfterDiskFull / units.GiB
+				log.Infof("Replica Node pool usage after disk full: %vGi", targetPoolUsedSizeAfterDiskFull)
+
+				dash.VerifyFatal(sourcePoolUsedSizeAfterDiskFull > usedNodePoolSizeMap[vmNodeName], true, "Pool size usage increased on source node?")
+				dash.VerifyFatal(sourcePoolUsedSizeAfterDiskFull > usedNodePoolSizeMap[targetNodeName], true, "Pool size usage increased on replica node?")
+			}
+		})
+
+		stepLog = "Live migrate the kubevirt VM"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, appCtx := range appCtxs {
+				wg.Add(1)
+				go func(appCtx *scheduler.Context) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					err := StartAndWaitForVMIMigration(appCtx, context1.TODO())
+					log.FailOnError(err, "Failed to live migrate kubevirt VM")
+				}(appCtx)
+			}
+		})
+		wg.Wait()
+
+		ValidateFioInVMs(appCtxs, canSsh)
+		ValidateVMUptime(appCtxs, canSsh, initialUptime)
+
+		stepLog = "Destroy Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Infof("Resetting applist and removing the custom app config")
+			delete(Inst().CustomAppConfig, app)
+			err := Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+			log.FailOnError(err, "Failed while rescanning specs")
+
 			DestroyApps(appCtxs, nil)
 		})
 	})

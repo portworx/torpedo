@@ -18,7 +18,7 @@ spec:
     spec:
       domain:
         cpu:
-          cores: 6
+          cores: 2
         devices:
           disks:
             - bootOrder: 1
@@ -45,8 +45,8 @@ spec:
             enabled: true
         resources:
           requests:
-            cpu: 6
-            memory: 8192M
+            cpu: 2
+            memory: 4096M
       networks:
         - name: default
           pod: {}
@@ -111,7 +111,10 @@ spec:
     - ReadWriteMany
   resources:
     requests:
-      storage: 25Gi
+      {{ if .VolumeSize }}
+      storage: {{ .VolumeSize }}
+      {{ else }}
+      storage: 25Gi{{ end }}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -127,4 +130,7 @@ spec:
     - ReadWriteMany
   resources:
     requests:
-      storage: 25Gi
+      {{ if .VolumeSize }}
+      storage: {{ .VolumeSize }}
+      {{ else }}
+      storage: 25Gi{{ end }}
