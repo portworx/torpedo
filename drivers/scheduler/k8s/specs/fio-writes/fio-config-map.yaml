@@ -8,7 +8,9 @@ data:
         name=fio-rand-RW
         directory=/scratch/
         rw=randwrite
-        randrepeat=1
+        randrepeat=0
+        norandommap=1
+        overwrite=1
         blocksize_range=4k-512k
         direct=1
         end_fsync=1
@@ -21,7 +23,7 @@ data:
         runtime=99999999
         [file1]
         filesize=25G
-        nrfiles=2
+        nrfiles=4
         ioengine=libaio
         iodepth=128
 ---

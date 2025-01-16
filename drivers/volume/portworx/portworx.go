@@ -2707,16 +2707,16 @@ func (d *portworx) InspectCurrentCluster() (*api.SdkClusterInspectCurrentRespons
 
 func (d *portworx) getStorageNodesOnStart() ([]*api.StorageNode, error) {
 	t := func() (interface{}, bool, error) {
-		cluster, err := d.InspectCurrentCluster()
+		clus, err := d.InspectCurrentCluster()
 		if err != nil {
 			return nil, true, err
 		}
-		if cluster.Cluster.Status != api.Status_STATUS_OK {
+		if clus.Cluster.Status != api.Status_STATUS_OK {
 			return nil, true, &ErrFailedToWaitForPx{
-				Cause: fmt.Sprintf("px cluster is still not up. Status: %v", cluster.Cluster.Status),
+				Cause: fmt.Sprintf("px cluster is still not up. Status: %v", clus.Cluster.Status),
 			}
 		}
-		return &cluster.Cluster, false, nil
+		return &clus.Cluster, false, nil
 	}
 
 	_, err := task.DoRetryWithTimeout(t, validateClusterStartTimeout, defaultRetryInterval)

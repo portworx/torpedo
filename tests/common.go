@@ -8831,6 +8831,9 @@ func RebootNodeAndWaitForPxDown(n node.Node) error {
 
 // GetNodeWithGivenPoolID returns node having pool id
 func GetNodeWithGivenPoolID(poolID string) (*node.Node, error) {
+	var mu sync.Mutex
+	mu.Lock()
+	defer mu.Unlock()
 	if err := Inst().V.RefreshDriverEndpoints(); err != nil {
 		return nil, err
 	}
@@ -13390,6 +13393,38 @@ func GetVolumesOnNode(nodeId string) ([]string, error) {
 	return volumes, nil
 }
 
+// GetVolumesOnPool returns the volume IDs which have repl on a give pool uuid
+func GetVolumesOnPool(poolUUID string) ([]string, error) {
+	var volumes []string
+
+	pvs, err := k8sCore.GetPersistentVolumes()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, vol := range pvs.Items {
+		volDetails, err := Inst().V.InspectVolume(vol.GetName())
+		if err != nil {
+			log.Errorf("Failed to inspect volume [%s], Err: %v", vol.GetName(), err)
+			if strings.Contains(err.Error(), "not found") {
+				continue
+			}
+			return volumes, err
+		}
+		replSets := volDetails.GetReplicaSets()
+		var replPools []string
+		for _, replSet := range replSets {
+			replPools = append(replPools, replSet.GetPoolUuids()...)
+		}
+		log.Debugf("volume [%s] has repl pools [%v]", vol.GetName(), replPools)
+		if slices.Contains(replPools, poolUUID) {
+			volumes = append(volumes, vol.GetName())
+		}
+	}
+
+	return volumes, nil
+}
+
 // IsKubevirtInstalled returns true if Kubevirt is installed else returns false
 func IsKubevirtInstalled() bool {
 	k8sApiExtensions := apiextensions.Instance()
@@ -16262,6 +16297,7 @@ func ValidateParallelBackupScheduleNonPxdVolume(backupScheduleName string, orgId
 		return err
 	}
 	return nil
+
 }
 
 func UpgradePortworxDriver(upgradeEndpoints string) error {
