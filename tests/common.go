@@ -12681,7 +12681,7 @@ func SetupProxyServer(n node.Node) error {
 	}
 	log.Infof(output)
 
-	addVersionCmd := "echo -e \"MOUNTD_NFS_V4=\"yes\"\nRPCNFSDARGS=\"-N 2 -N 4\"\" >> /etc/sysconfig/nfs"
+	addVersionCmd := "echo -e \"MOUNTD_NFS_V4=\"yes\"\nRPCNFSDARGS=\"-N 2 -N 4\"\" >> /etc/nfs.conf"
 	output, err = Inst().N.RunCommandWithNoRetry(n, addVersionCmd, node.ConnectionOpts{
 		Sudo:            true,
 		TimeBeforeRetry: defaultRetryInterval,
