@@ -10150,7 +10150,7 @@ func AddPVCsToVirtualMachine(vm kubevirtv1.VirtualMachine, pvcs []*corev1.Persis
 func CreatePVCsForVM(vm kubevirtv1.VirtualMachine, numberOfPVCs int, storageClassName, resourceStorage string) ([]*corev1.PersistentVolumeClaim, error) {
 	pvcs := make([]*corev1.PersistentVolumeClaim, 0)
 	for i := 0; i < numberOfPVCs; i++ {
-		pvcName := fmt.Sprintf("%s-%s-%d", "pvc-new", vm.Name, i)
+		pvcName := fmt.Sprintf("%s-%s-%v-%d", "pvc-new", vm.Name,time.Now().Unix(), i)
 		pvc, err := core.Instance().CreatePersistentVolumeClaim(&corev1.PersistentVolumeClaim{
 			TypeMeta: metav1.TypeMeta{
 				Kind: "PersistentVolumeClaim",

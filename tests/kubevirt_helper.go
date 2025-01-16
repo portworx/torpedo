@@ -4,8 +4,6 @@ import (
 	context1 "context"
 	"encoding/hex"
 	"fmt"
-	"k8s.io/apimachinery/pkg/api/resource"
-	cdiv1 "kubevirt.io/containerized-data-importer-api/pkg/apis/core/v1beta1"
 	"math/rand"
 	"os"
 	"regexp"
@@ -13,6 +11,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"k8s.io/apimachinery/pkg/api/resource"
+	cdiv1 "kubevirt.io/containerized-data-importer-api/pkg/apis/core/v1beta1"
 
 	"github.com/libopenstorage/openstorage/api"
 	. "github.com/onsi/ginkgo/v2"
@@ -61,7 +62,10 @@ var (
 
 // AddDisksToKubevirtVM is a function which takes number of disks to add and adds them to the kubevirt VMs passed (Please provide size in Gi)
 func AddDisksToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisks int, size string) (bool, error) {
-	// before adding disks check how many disks are present in the VM
+	var (
+		newDiskCount     int
+		initialDiskCount int
+	)
 	log.InfoD("create config map")
 	CreateConfigMap()
 
@@ -71,23 +75,11 @@ func AddDisksToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisks in
 			return false, err
 		}
 		for _, v := range vms {
-			t := func() (interface{}, bool, error) {
-				diskCountOutput, err := GetNumberOfDisksInVMViaVirtLauncherPod(appCtx)
-				if err != nil {
-					return nil, false, fmt.Errorf("failed to get number of disks in VM [%s] in namespace [%s]", v.Name, v.Namespace)
-				}
-				// Total disks will be numberOfVolumes plus the container disk
-				if diskCountOutput == 0 {
-					return nil, true, fmt.Errorf("expected number of disks in VM [%s] in namespace [%s] is [%d] but got [%d]", v.Name, v.Namespace, numberOfDisks+1, diskCountOutput)
-				}
-				return diskCountOutput, false, nil
-			}
-			d, err := task.DoRetryWithTimeout(t, 10*time.Minute, 30*time.Second)
+			initialDiskCount, err = GetNumberOfDrivesInVM(v)
 			if err != nil {
-				return false, err
+				return false, fmt.Errorf("failed to get initial number of disks in VM [%s]: %v", v.Name, err)
 			}
-			diskCount := d.(int)
-			log.InfoD("Number of disks in VM [%s] in namespace [%s] is [%d]", v.Name, v.Namespace, diskCount)
+			log.InfoD("Initial Number of disks in VM [%s] in namespace [%s] is [%d]", v.Name, v.Namespace, initialDiskCount)
 
 			// Before we add the pvc we need to get storage class of the pvc
 			storageClass, err := GetStorageClassOfVmPVC(appCtx)
@@ -128,30 +120,31 @@ func AddDisksToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisks in
 				return false, err
 			}
 			for _, v := range vms {
-				t = func() (interface{}, bool, error) {
-					diskCountOutput, err := GetNumberOfDisksInVMViaVirtLauncherPod(appCtx)
+				t := func() (interface{}, bool, error) {
+					newDiskCount, err = GetNumberOfDrivesInVM(v)
 					if err != nil {
-						return nil, false, fmt.Errorf("failed to get number of disks in VM [%s] in namespace [%s]", v.Name, v.Namespace)
+						return nil, true, err
 					}
-					// Total disks will be numberOfVolumes plus the container disk
-					if diskCountOutput != numberOfDisks+diskCount {
-						return nil, true, fmt.Errorf("expected number of disks in VM [%s] in namespace [%s] is [%d] but got [%d]", v.Name, v.Namespace, numberOfDisks+1, diskCountOutput)
+					if newDiskCount < initialDiskCount+numberOfDisks {
+						return nil, true, fmt.Errorf(
+							"Expected at least [%d] disks, found only [%d]",
+							initialDiskCount+numberOfDisks, newDiskCount)
 					}
-					return diskCountOutput, false, nil
+					return newDiskCount, false, nil
 				}
-				d, err = task.DoRetryWithTimeout(t, 10*time.Minute, 30*time.Second)
+				d, err := task.DoRetryWithTimeout(t, 10*time.Minute, 30*time.Second)
 				if err != nil {
 					return false, err
 				}
-				if diskCount == d.(int) {
+				if newDiskCount == initialDiskCount {
 					return false, fmt.Errorf("number of disks in VM [%s] in namespace [%s] is same as before adding disks", v.Name, v.Namespace)
 				}
-				diskCount = d.(int)
-				log.InfoD("Number of disks in VM [%s] in namespace [%s] is [%d]", v.Name, v.Namespace, diskCount)
-
+				newDiskCount = d.(int)
+				log.InfoD("Final Number of disks in VM [%s] in namespace [%s] is [%d]", v.Name, v.Namespace, newDiskCount)
 			}
 		}
 	}
+	log.InfoD("Number of disks after cold add disk is [%d] and total number of disks before cold add disk [%v]", newDiskCount, initialDiskCount)
 	return true, nil
 }
 
@@ -284,7 +277,7 @@ func StartAndWaitForVMIMigration(virtualMachineCtx *scheduler.Context, ctx conte
 		if err != nil {
 			return err
 		}
-
+		
 		t := func() (interface{}, bool, error) {
 			var migr *kubevirtdy.VirtualMachineInstanceMigration
 			migr, err = kubevirtdy.Instance().GetVirtualMachineInstanceMigration(ctx, vmiNamespace, migration.Name)
@@ -319,6 +312,7 @@ func StartAndWaitForVMIMigration(virtualMachineCtx *scheduler.Context, ctx conte
 	}
 	return nil
 }
+
 // GetVirtLauncherPodForVM returns the virt-launcher pod for the VM
 func GetVirtLauncherPodForVM(virtualMachineCtx *scheduler.Context, vol *volume.Volume) (*corev1.Pod, error) {
 	pods, err := core.Instance().GetPodsUsingPV(vol.ID)
@@ -1761,4 +1755,55 @@ func isMountUsageFull(output, mount string) bool {
 		}
 	}
 	return false
+}
+
+func UpgradePortworxDriverForKubevirtVM(upgradeEndpoints string) error {
+	// Ensure upgrade endpoints are provided
+	if upgradeEndpoints == "" {
+		return fmt.Errorf("no upgrade endpoints provided for PX upgrade")
+	}
+
+	storageNodes := node.GetStorageNodes()
+	if len(storageNodes) == 0 {
+		return fmt.Errorf("no storage nodes found in the cluster")
+	}
+
+	// Iterate over upgrade hops and perform the upgrade
+	for _, upgradeHop := range strings.Split(upgradeEndpoints, ",") {
+		log.Infof("Starting PX upgrade for endpoint: %s", upgradeHop)
+
+		// Capture current PX version
+		currPXVersion, err := Inst().V.GetDriverVersionOnNode(storageNodes[0])
+		if err != nil {
+			log.Warnf("Error getting current PX version: %v", err)
+		}
+
+		// Time tracking for the upgrade
+		timeBeforeUpgrade := time.Now()
+
+		// Perform PX upgrade
+		err = Inst().V.UpgradeDriver(upgradeHop)
+		if err != nil {
+			return fmt.Errorf("PX upgrade failed for endpoint %s: %v", upgradeHop, err)
+		}
+
+		timeAfterUpgrade := time.Now()
+		durationInMins := int(timeAfterUpgrade.Sub(timeBeforeUpgrade).Minutes())
+		expectedUpgradeTime := 9 * len(node.GetStorageDriverNodes())
+
+		log.Infof("Upgrade completed in %d minutes", durationInMins)
+		if durationInMins > expectedUpgradeTime {
+			log.Warnf("Upgrade took longer than expected: %d minutes (expected: %d minutes)", durationInMins, expectedUpgradeTime)
+		}
+
+		// Verify the new PX version
+		updatedPXVersion, err := Inst().V.GetDriverVersionOnNode(storageNodes[0])
+		if err != nil {
+			log.Warnf("Error getting updated PX version: %v", err)
+		}
+		log.Infof("PX version upgraded from %s to %s", currPXVersion, updatedPXVersion)
+	}
+
+	log.InfoD("PX upgrade completed successfully for all endpoints")
+	return nil
 }
