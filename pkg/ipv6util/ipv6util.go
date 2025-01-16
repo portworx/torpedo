@@ -247,6 +247,19 @@ func parseIPAddressInPxctlServiceKvdbEndpoints(kvdbEndpointsOutput string) ([]st
 	return kvdbEndPtsIPs, nil
 }
 
+// Process 'service kvdb enpoints output' consisting of lines 'http://<ip>:<port>'
+func ParseIPAddressInPxctlServiceKvdbEndpointsWithPort(kvdbEndpointsOutput string) []string {
+	// Parse out all <ip>:<port> strings from URLs "http(s)://<ip>:<port>" in the line
+	kvdbEndPts := kvdbEndPtsRgx.FindAllSubmatch([]byte(kvdbEndpointsOutput), -1)
+
+	kvdbEndPtsIPs := []string{}
+	for _, endPt := range kvdbEndPts {
+		ip := string(bytes.TrimSpace(endPt[1]))
+		kvdbEndPtsIPs = append(kvdbEndPtsIPs, ip)
+	}
+	return kvdbEndPtsIPs
+}
+
 // Process 'service kvdb members' output consisting of lines 'ID   PEER URLS   CLIENT URLS...'
 // which contain 'http://<ip>:<port>' URLS
 func parseIPAddressInPxctlServiceKvdbMembers(kvdbMembersOutput string) ([]string, error) {

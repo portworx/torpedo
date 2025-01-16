@@ -5,12 +5,21 @@ import (
 	"strings"
 	"time"
 
+	"github.com/libopenstorage/openstorage/api"
 	pxapi "github.com/pure-px/px-operator/api/px"
+	opcorev1 "github.com/pure-px/px-operator/pkg/apis/core/v1"
+	"github.com/pure-px/sched-ops/k8s/operator"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/pkg/ipv6util"
 	"github.com/pure-px/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/pureutils"
 	"github.com/pure-px/torpedo/pkg/testrailuttils"
 	"golang.org/x/net/context"
+
+	// v1 "k8s.io/api/core/v1"
+	k8serror "k8s.io/apimachinery/pkg/api/errors"
+	apmv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -739,6 +748,452 @@ var _ = Describe("{BasicEssentialsTest}", Label("p2", "positive", "license"), fu
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+func rebootNodes(nodesToReboot ...node.Node) error {
+	for _, n := range nodesToReboot {
+		if err := Inst().N.RebootNodeAndWait(n); err != nil {
+			return err
+		}
+
+		if err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func countHealthyPxNodes(nodesToReboot ...node.Node) []node.Node {
+	healthyNodes := make([]node.Node, 0)
+	for _, n := range nodesToReboot {
+		if n.StorageNode.Status == api.Status_STATUS_OK {
+			healthyNodes = append(healthyNodes, n)
+		}
+	}
+	return healthyNodes
+}
+
+func createPxPureSecret(pureJson, ns string) error {
+	if err := Inst().S.CreateSecret(ns, pureutils.PureSecretName, pureutils.PureJSONKey, string(pureJson)); err != nil {
+		return err
+	}
+	return nil
+}
+
+func getEssentialsSecretNS(stc *opcorev1.StorageCluster) string {
+	const (
+		defaultNS       = "kube-system"
+		PxEssentialsEnv = "PXESSENTIAL_SECRET_NAMESPACE"
+	)
+	if stc == nil {
+		return defaultNS
+	}
+	for _, env := range stc.Spec.Env {
+		if env.Name == PxEssentialsEnv && env.Value != "" {
+			return env.Value
+		}
+	}
+	return defaultNS
+}
+
+func InstallStc(stc *opcorev1.StorageCluster, pureJson string) error {
+	stc.Annotations["portworx.io/misc-args"] = "--oem esse"
+	stc.Spec.DeleteStrategy = &opcorev1.StorageClusterDeleteStrategy{
+		Type: opcorev1.UninstallAndWipeStorageClusterStrategyType,
+	}
+	if len(stc.Spec.RuntimeOpts) == 0 {
+		stc.Spec.RuntimeOpts = make(map[string]string)
+	}
+	stc.Spec.RuntimeOpts["metering_interval_mins"] = "3"
+	stc.Spec.RuntimeOpts["essentials_license_expiry_timeout_hours"] = "0"
+	stc.ObjectMeta = apmv1.ObjectMeta{
+		Name:        stc.GetName(),
+		Namespace:   stc.GetNamespace(),
+		Labels:      stc.GetLabels(),
+		Annotations: stc.GetAnnotations(),
+	}
+	stc.Status = opcorev1.StorageClusterStatus{}
+	stc.Spec.Autopilot = &opcorev1.AutopilotSpec{Enabled: false}
+	stc.Spec.CSI = &opcorev1.CSISpec{Enabled: false}
+	stc.Spec.Stork = &opcorev1.StorkSpec{Enabled: false}
+	stc.Spec.Monitoring = &opcorev1.MonitoringSpec{
+		Prometheus: &opcorev1.PrometheusSpec{Enabled: false},
+		Telemetry:  &opcorev1.TelemetrySpec{Enabled: false},
+	}
+
+	err = Inst().S.DeleteSecret(getEssentialsSecretNS(stc), "px-essential")
+	if !k8serror.IsNotFound(err) && err != nil {
+		return err
+	}
+	err = Inst().S.DeleteSecret(stc.Namespace, pureutils.PureSecretName)
+	if !k8serror.IsNotFound(err) && err != nil {
+		return err
+	}
+	if stc.Spec.DeleteStrategy == nil || stc.Spec.DeleteStrategy.Type != opcorev1.UninstallAndWipeStorageClusterStrategyType {
+		stc.Spec.DeleteStrategy = &opcorev1.StorageClusterDeleteStrategy{
+			Type: opcorev1.UninstallAndWipeStorageClusterStrategyType,
+		}
+		stc, err = operator.Instance().UpdateStorageCluster(stc)
+		if err != nil {
+			return err
+		}
+	}
+
+	if err = UninstallAndValidateStorageCluster(stc); err != nil {
+		return err
+	}
+
+	if pureJson != "" {
+		log.FailOnError(createPxPureSecret(pureJson, stc.GetNamespace()), "unable to create pure secret")
+		defer func() {
+			time.Sleep(4 * time.Minute)
+		}()
+	}
+	_, err = DeployAndValidateStorageCluster(stc)
+	return err
+}
+
+/*
+1. Install px in essentials mode
+2. Create pure-px-secret after px is healthy
+3. Wait for metering cycle
+4. The license should switch to CSI
+*/
+var _ = Describe("{ConversionToCSIDelayed}", Label("p0", "positive", "license"), func() {
+	var testrailID = 0
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/84245
+	var runID int
+	var opts map[string]bool
+	JustBeforeEach(func() {
+		opts := make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+		StartTorpedoTest("ConversionToCSIDelayed", "Validate conversion to CSI license when pure-px-secret is added later", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	var contexts []*scheduler.Context
+	It("has to setup, validate px license", func() {
+		stc, err := Inst().V.GetDriver()
+		log.FailOnError(err, "unable to get stc via volume driver")
+		pureJson, err := Inst().S.GetSecretData(stc.Namespace, pureutils.PureSecretName, pureutils.PureJSONKey)
+		log.FailOnError(err, "")
+		Expect(err).ShouldNot(HaveOccurred())
+		Expect(pureJson).ShouldNot(BeEmpty())
+		err = Inst().S.DeleteSecret(getEssentialsSecretNS(stc), "px-essential")
+		if !k8serror.IsNotFound(err) {
+			Expect(err).NotTo(HaveOccurred())
+		}
+		err = Inst().S.DeleteSecret(stc.Namespace, pureutils.PureSecretName)
+		if !k8serror.IsNotFound(err) {
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		log.FailOnError(InstallStc(stc, ""), "Unable to install px")
+
+		Step(fmt.Sprintf("Add pure-px-secret"), func() {
+			log.FailOnError(createPxPureSecret(pureJson, stc.GetNamespace()), "unable to create pure secret")
+			log.FailOnError(rebootNodes(node.GetWorkerNodes()...), "unable to reboot nodes after adding pure secret")
+
+		})
+
+		Step("Wait 7 Minutes to make sure we passed the metering cycle interval mark and test if our license is mutated to CSI", func() {
+			time.Sleep(7 * time.Minute)
+
+			Step("Get SKU and compare with PX-Essentials FA/FB", func() {
+				summary, err := Inst().V.GetLicenseSummary()
+				Expect(err).NotTo(HaveOccurred(),
+					fmt.Sprintf("Failed to get license SKU. Error: [%v]", err))
+
+				Expect(summary.SKU).To(Equal(essentialsFaFbSKU),
+					fmt.Sprintf("SKU did not match: [%v]", essentialsFaFbSKU))
+			})
+		})
+
+		Step("Validate all nodes are healthy", func() {
+			workerNodes := node.GetWorkerNodes()
+			healthyNodes := countHealthyPxNodes(workerNodes...)
+			Expect(len(healthyNodes)).Should(BeEquivalentTo(len(workerNodes)))
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		for _, ctx := range contexts {
+			TearDownContext(ctx, opts)
+		}
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+/*
+1. Uninstall current PX
+2. Install PX with px-pure-secret and without px-essential secret
+3. PX should be healthy but Essentials license should show expired
+*/
+var _ = Describe("{InstallWithPurePxSecret}", Label("p0", "positive", "license"), func() {
+	var testrailID = 90837609
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/84245
+	var runID int
+	var opts map[string]bool
+
+	JustBeforeEach(func() {
+		opts = make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+
+		StartTorpedoTest("InstallWithoutSecrets", "Validtes conversion to CSI license when pure-px-secret is present at time of installation", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+	It("has to validate installation with pure-px-secret", func() {
+
+		Step("has to install PX without px-essentials and with px-pure-secret secrets", func() {
+			stc, err := Inst().V.GetDriver()
+			Expect(err).NotTo(HaveOccurred())
+			pureJson, err := Inst().S.GetSecretData(stc.Namespace, pureutils.PureSecretName, pureutils.PureJSONKey)
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(pureJson).ShouldNot(BeEmpty())
+			err = Inst().S.DeleteSecret(getEssentialsSecretNS(stc), "px-essential")
+			if !k8serror.IsNotFound(err) {
+				Expect(err).NotTo(HaveOccurred())
+			}
+			err = Inst().S.DeleteSecret(stc.Namespace, pureutils.PureSecretName)
+			if !k8serror.IsNotFound(err) {
+				Expect(err).NotTo(HaveOccurred())
+			}
+			log.FailOnError(InstallStc(stc, pureJson), "Unable to install px with pure secret")
+
+		})
+		Step("has to validate license", func() {
+
+			Step("Wait 7 Minutes to make sure we passed the metering cycle interval mark and test if our license is mutated to CSI", func() {
+				time.Sleep(7 * time.Minute)
+
+				Step("Get SKU and compare with PX-Essentials FA/FB", func() {
+					summary, err := Inst().V.GetLicenseSummary()
+					Expect(err).NotTo(HaveOccurred(),
+						fmt.Sprintf("Failed to get license SKU. Error: [%v]", err))
+
+					Expect(summary.SKU).To(Equal(essentialsFaFbSKU),
+						fmt.Sprintf("SKU did not match: [%v]", essentialsFaFbSKU))
+				})
+			})
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		for _, ctx := range contexts {
+			TearDownContext(ctx, opts)
+		}
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+/*
+1. Uninstall current PX
+2. Install PX without px-essential secret, px-pure-secret
+3. PX should be healthy but Essentials license should show expired
+*/
+var _ = Describe("{InstallWithoutSecrets}", Label("p0", "positive", "license"), func() {
+	var testrailID = 0
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/84245
+	var runID int
+	var pureJson string
+	var opts map[string]bool
+	var contexts []*scheduler.Context
+
+	JustBeforeEach(func() {
+		opts = make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+
+		StartTorpedoTest("InstallWithoutSecrets", "Validtes conversion to CSI license when pure-px-secret is added later", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	BeforeEach(func() {
+		stc, err := Inst().V.GetDriver()
+		log.FailOnError(err, "Unable to get stc from volume driver")
+		pureJson, err = Inst().S.GetSecretData(stc.Namespace, pureutils.PureSecretName, pureutils.PureJSONKey)
+		log.FailOnError(err, "Unable to get secret data from pure secret")
+		dash.VerifyFatal(pureJson != "", true, "pure json field is empty in pure secret")
+		err = Inst().S.DeleteSecret(getEssentialsSecretNS(stc), "px-essential")
+		if !k8serror.IsNotFound(err) {
+			log.FailOnError(err, "Unable to delete px-essential secret")
+		}
+		err = Inst().S.DeleteSecret(stc.Namespace, pureutils.PureSecretName)
+		if !k8serror.IsNotFound(err) {
+			log.FailOnError(err, "Unable to delete pure secret")
+		}
+	})
+	AfterEach(func() {
+		dash.VerifyFatal(pureJson != "", true, "empty pure json found")
+		stc, err := Inst().V.GetDriver()
+		log.FailOnError(err, "Unable to get stc via vol driver")
+		log.FailOnError(createPxPureSecret(pureJson, stc.GetNamespace()), "unable to create pure secret")
+	})
+	It("it validates that px can be installed without any secrets in essentials mode", func() {
+		Step("has to install PX without px-essentials and px-pure-secret secrets", func() {
+			stc, err := Inst().V.GetDriver()
+			log.FailOnError(err, "Unable to get stc via vol driver")
+			stc.Annotations["portworx.io/misc-args"] = "--oem esse"
+			stc.Spec.DeleteStrategy = &opcorev1.StorageClusterDeleteStrategy{
+				Type: opcorev1.UninstallAndWipeStorageClusterStrategyType,
+			}
+			if len(stc.Spec.RuntimeOpts) == 0 {
+				stc.Spec.RuntimeOpts = make(map[string]string)
+			}
+			stc.Spec.RuntimeOpts["metering_interval_mins"] = "3"
+			stc.Spec.RuntimeOpts["essentials_license_expiry_timeout_hours"] = "0"
+			stc.ObjectMeta = apmv1.ObjectMeta{
+				Name:        stc.GetName(),
+				Namespace:   stc.GetNamespace(),
+				Labels:      stc.GetLabels(),
+				Annotations: stc.GetAnnotations(),
+			}
+			stc.Status = opcorev1.StorageClusterStatus{}
+			stc.Spec.Autopilot = &opcorev1.AutopilotSpec{Enabled: false}
+			stc.Spec.CSI = &opcorev1.CSISpec{Enabled: false}
+			stc.Spec.Stork = &opcorev1.StorkSpec{Enabled: false}
+			stc.Spec.Monitoring = &opcorev1.MonitoringSpec{
+				Prometheus: &opcorev1.PrometheusSpec{Enabled: false},
+				Telemetry:  &opcorev1.TelemetrySpec{Enabled: false},
+			}
+
+			err = UninstallAndValidateStorageCluster(stc)
+			_, err = DeployAndValidateStorageCluster(stc)
+			log.FailOnError(err, "")
+
+		})
+		Step("has to validate license.", func() {
+			Step("Wait 7 Minutes to make sure we passed the metering cycle interval mark and test if our license is mutated to CSI", func() {
+				time.Sleep(7 * time.Minute)
+
+				Step("Get SKU and compare with PX-Essentials FA/FB", func() {
+					summary, err := Inst().V.GetLicenseSummary()
+					log.FailOnError(err, fmt.Sprintf("Failed to get license SKU. Error: [%v]", err))
+					dash.VerifyFatal(summary.SKU == pxEssentials, true, fmt.Sprintf("SKU did not match: [%v]", pxEssentials))
+				})
+			})
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		for _, ctx := range contexts {
+			TearDownContext(ctx, opts)
+		}
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+/*
+Steps
+1. Corrupt the metering/license key
+2. Wait for metering cycle to start
+3. Verify license is valid and CSI
+4. Verify metering/license key points to CSI license
+*/
+
+// This test performs basic test disabling callhome and checking if the licnse stays valid
+var _ = Describe("{CorruptMeteringLicenseKey}", Label("p1", "positive", "license"), func() {
+	var testrailID = 90837613
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/84245
+	var runID int
+	var opts map[string]bool
+
+	JustBeforeEach(func() {
+		opts = make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+		StartTorpedoTest("CorruptMeteringLicenseKey", "validates metering license key is fixed automatically", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+	It("has to setup px with with essentials fa/fb license", func() {
+		stc, err := Inst().V.GetDriver()
+		log.FailOnError(err, "")
+		pureJson, err := Inst().S.GetSecretData(stc.Namespace, pureutils.PureSecretName, pureutils.PureJSONKey)
+		log.FailOnError(err, "")
+		dash.VerifyFatal(pureJson != "", true, "pure json is empty")
+		err = Inst().S.DeleteSecret(getEssentialsSecretNS(stc), "px-essential")
+		if !k8serror.IsNotFound(err) {
+			log.FailOnError(err, "")
+		}
+		err = Inst().S.DeleteSecret(stc.Namespace, pureutils.PureSecretName)
+		if !k8serror.IsNotFound(err) {
+			log.FailOnError(err, "")
+		}
+		log.FailOnError(InstallStc(stc, pureJson), "Unable to install px with pure secret")
+
+		currNode := node.GetWorkerNodes()[0]
+		Step("Validate license is CSI", func() {
+			summary, err := Inst().V.GetLicenseSummary()
+			log.FailOnError(err, fmt.Sprintf("Failed to get license SKU. Error: [%v]", err))
+			dash.VerifyFatal(summary.SKU == essentialsFaFbSKU, true, fmt.Sprintf("SKU did not match: [%v]", essentialsFaFbSKU))
+		})
+		Step(fmt.Sprintf("Set License expiry timeout to 1 hour"), func() {
+			err := Inst().V.SetClusterRunTimeOpts(currNode, map[string]string{
+				"metering_interval_mins":       "3",
+				"license_expiry_timeout_hours": "1",
+			})
+			log.FailOnError(err, "")
+		})
+
+		Step("get all nodes and reboot one by one", func() {
+			nodesToReboot := node.GetWorkerNodes()
+
+			// Reboot node and check driver status
+			Step(fmt.Sprintf("reboot node one at a time from the node(s): %v", nodesToReboot), func() {
+				err := rebootNodes(nodesToReboot...)
+				log.FailOnError(err, "Unable to reboot nodes")
+			})
+			// allow atleast 1 metering cycle to kick in
+			time.Sleep(4 * time.Minute)
+		})
+
+		Step(fmt.Sprintf("Corrupt metering metering/license key"), func() {
+			pxctlCmd := ipv6util.PxctlServiceKvdbEndpoints
+			output, err := Inst().V.GetPxctlCmdOutput(currNode, pxctlCmd)
+			log.FailOnError(err, "")
+			ips := ipv6util.ParseIPAddressInPxctlServiceKvdbEndpointsWithPort(output)
+			csEndpoints := strings.Join(ips, ",")
+			stc, err := Inst().V.GetDriver()
+			log.FailOnError(err, "")
+			value := `"{'Duration':86400000000000,'Error':'','LicenseType':8}"`
+			corruptKeyCmd := fmt.Sprintf("/opt/pwx/bin/runc exec -t portworx etcdctl --endpoints=%s put pwx/%s/metering/license %v", csEndpoints, stc.GetName(), value)
+			output, err = runCmd(corruptKeyCmd, currNode)
+			log.FailOnError(err, output)
+			dash.VerifyFatal(strings.Contains(output, "OK"), true, "etcdctl command failed")
+		})
+
+		Step("Wait 15 Minutes to make sure we passed the metering cycle interval mark and test if our license is still valid", func() {
+			time.Sleep(15 * time.Minute)
+
+			Step("Get SKU and compare with PX-Essentials FA/FB", func() {
+				summary, err := Inst().V.GetLicenseSummary()
+				log.FailOnError(err, fmt.Sprintf("Failed to get license SKU. Error: [%v]", err))
+				dash.VerifyFatal(summary.SKU == essentialsFaFbSKU, true, fmt.Sprintf("SKU did not match: [%v]", essentialsFaFbSKU))
+			})
+		})
+
+		Step("Validate the metering/license key was corrected", func() {
+			pxctlCmd := ipv6util.PxctlServiceKvdbEndpoints
+			output, err := Inst().V.GetPxctlCmdOutput(currNode, pxctlCmd)
+			log.FailOnError(err, "")
+			ips := ipv6util.ParseIPAddressInPxctlServiceKvdbEndpointsWithPort(output)
+			csEndpoints := strings.Join(ips, ",")
+			stc, err := Inst().V.GetDriver()
+			log.FailOnError(err, "")
+			corruptKeyCmd := fmt.Sprintf("runc exec -t portworx etcdctl --endpoints=%s get pwx/%s/metering/license", csEndpoints, stc.GetName())
+			output, err = runCmd(corruptKeyCmd, currNode)
+			log.FailOnError(err, "")
+			expectedLicense := `"LicenseType":8`
+			dash.VerifyFatal(strings.Contains(output, expectedLicense), true, "metering license key doesn't reflect CSI as license type")
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		for _, ctx := range contexts {
+			TearDownContext(ctx, opts)
+		}
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })

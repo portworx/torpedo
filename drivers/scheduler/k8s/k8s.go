@@ -313,6 +313,9 @@ func (k *K8s) String() string {
 
 // Init Initialize the driver
 func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
+	if schedOpts.CollectEvents {
+		k.eventsStorage = make(map[string][]scheduler.Event)
+	}
 	k.NodeDriverName = schedOpts.NodeDriverName
 	k.VolDriverName = schedOpts.VolDriverName
 	k.secretConfigMapName = schedOpts.SecretConfigMapName
@@ -320,7 +323,6 @@ func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 	k.SecretType = schedOpts.SecretType
 	k.VaultAddress = schedOpts.VaultAddress
 	k.VaultToken = schedOpts.VaultToken
-	k.eventsStorage = make(map[string][]scheduler.Event)
 	k.PureVolumes = schedOpts.PureVolumes
 	k.PureSANType = schedOpts.PureSANType
 	k.PureFADAPod = schedOpts.PureFADAPod
@@ -343,12 +345,15 @@ func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 		return err
 	}
 
-	go func() {
-		err := k.collectEvents()
-		if err != nil {
-			log.Fatalf(fmt.Sprintf("%v", err))
-		}
-	}()
+	if schedOpts.CollectEvents {
+
+		go func() {
+			err := k.collectEvents()
+			if err != nil {
+				log.Fatalf(fmt.Sprintf("%v", err))
+			}
+		}()
+	}
 	return nil
 }
 

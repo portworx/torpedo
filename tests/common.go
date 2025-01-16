@@ -30,6 +30,7 @@ import (
 	"time"
 
 	csisnapshot "github.com/portworx/sched-ops/k8s/externalsnapshotter"
+	k8serror "k8s.io/apimachinery/pkg/api/errors"
 
 	"k8s.io/apimachinery/pkg/util/intstr"
 
@@ -71,11 +72,15 @@ import (
 	pxapi "github.com/pure-px/px-operator/api/px"
 	"github.com/pure-px/px-operator/drivers/storage/portworx/util"
 	oputil "github.com/pure-px/px-operator/drivers/storage/portworx/util"
+	opcorev1 "github.com/pure-px/px-operator/pkg/apis/core/v1"
 	optest "github.com/pure-px/px-operator/pkg/util/test"
+
+	testutil "github.com/pure-px/px-operator/pkg/util/test"
 	"github.com/pure-px/sched-ops/k8s/operator"
 	"github.com/pure-px/stork/pkg/crud/stork"
 	storkops "github.com/pure-px/stork/pkg/crud/stork"
 	"github.com/pure-px/stork/pkg/storkctl"
+
 	"go.uber.org/multierr"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/api/iterator"
@@ -347,11 +352,18 @@ const (
 	skipSystemCheckCliFlag           = "torpedo-skip-system-checks"
 	dataIntegrityValidationTestsFlag = "data-integrity-validation-tests"
 	faSecretCliFlag                  = "fa-secret"
+	pxSpecGenURLFlag                 = "px-specgen-url"
+	pureSecretFlag                   = "pure-secret"
 
 	// PSA Specific
 	kubeApiServerConfigFilePath     = "/etc/kubernetes/manifests/kube-apiserver.yaml"
 	kubeApiServerConfigFilePathBkp  = "/etc/kubernetes/kube-apiserver.yaml.bkp"
 	KubeAdmissionControllerFilePath = "/etc/kubernetes/admission/admissioncontroller.yaml"
+
+	defaultValidateDeployTimeout          = 15 * time.Minute
+	defaultValidateDeployRetryInterval    = 30 * time.Second
+	defaultValidateUninstallTimeout       = 15 * time.Minute
+	defaultValidateUninstallRetryInterval = 30 * time.Second
 )
 
 // Dashboard params
@@ -724,6 +736,16 @@ var BackupDeleteTimeMap = make(map[string]BackupDeleteInfoStruct)
 
 // InitInstance is the ginkgo spec for initializing torpedo
 func InitInstance() {
+	InitInstanceWithParams(InitParams{
+		CollectEvents: true,
+	})
+}
+
+type InitParams struct {
+	CollectEvents bool
+}
+
+func InitInstanceWithParams(params InitParams) {
 	var err error
 	var token string
 
@@ -747,6 +769,7 @@ func InitInstance() {
 		AnthosAdminWorkStationNodeIP:     Inst().AnthosAdminWorkStationNodeIP,
 		AnthosInstancePath:               Inst().AnthosInstPath,
 		UpgradeHops:                      Inst().SchedUpgradeHops,
+		CollectEvents:                    params.CollectEvents,
 	})
 
 	log.FailOnError(err, "Error occured while Scheduler Driver Initialization")
@@ -771,8 +794,10 @@ func InitInstance() {
 	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner, Inst().CsiGenericDriverConfigMap)
 	log.FailOnError(err, "Error occurred while Volume Driver Initialization")
 
-	err = Inst().M.Init(Inst().JobName, Inst().JobType)
-	log.FailOnError(err, "Error occurred while monitor Initialization")
+	if Inst().M == nil {
+		err = Inst().M.Init(Inst().JobName, Inst().JobType)
+		log.FailOnError(err, "Error occurred while monitor Initialization")
+	}
 
 	if Inst().Backup != nil {
 		err = Inst().Backup.Init(Inst().S.String(), Inst().N.String(), Inst().V.String(), token)
@@ -7898,13 +7923,15 @@ type Torpedo struct {
 	AnthosInstPath                      string
 	SkipSystemChecks                    bool
 	FaSecret                            string
+	PxSpecGenURL                        string
+	PureSecret                          string
 }
 
 // ParseFlags parses command line flags
 func ParseFlags() {
 	var err error
 
-	var s, m, n, v, backupDriverName, pdsDriverName, specDir, logLoc, logLevel, appListCSV, secureAppsCSV, repl1AppsCSV, csiAppsCSV, provisionerName, configMapName string
+	var s, m, n, v, backupDriverName, pdsDriverName, specDir, logLoc, logLevel, appListCSV, secureAppsCSV, repl1AppsCSV, csiAppsCSV, provisionerName, configMapName, pxSpecGenURL string
 
 	var schedulerDriver scheduler.Driver
 	var volumeDriver volume.Driver
@@ -8037,6 +8064,7 @@ func ParseFlags() {
 	flag.StringVar(&anthosWsNodeIp, anthosWsNodeIpCliFlag, "", "Anthos admin work station node IP")
 	flag.StringVar(&anthosInstPath, anthosInstPathCliFlag, "", "Anthos config path where all conf files present")
 	flag.StringVar(&faSecret, faSecretCliFlag, "", "comma seperated list of famanagementip=tokenValue pairs")
+	flag.StringVar(&pxSpecGenURL, pxSpecGenURLFlag, "https://install.portworx.com/3.2", "portworx spec gen url")
 
 	// System checks https://github.com/pure-px/torpedo/blob/86232cb195400d05a9f83d57856f8f29bdc9789d/tests/common.go#L2173
 	// should be skipped from AfterSuite() if this flag is set to true. This is to avoid distracting test failures due to
@@ -8276,6 +8304,7 @@ func ParseFlags() {
 				IsPDSApps:                           deployPDSApps,
 				SkipSystemChecks:                    skipSystemChecks,
 				FaSecret:                            faSecret,
+				PxSpecGenURL:                        pxSpecGenURL,
 			}
 		})
 	}
@@ -16219,4 +16248,83 @@ func ValidateParallelBackupScheduleNonPxdVolume(backupScheduleName string, orgId
 		return err
 	}
 	return nil
+}
+
+func CreateStorageCluster(cluster *opcorev1.StorageCluster) (*opcorev1.StorageCluster, error) {
+	logrus.Infof("Create StorageCluster %s in %s", cluster.Name, cluster.Namespace)
+	return operator.Instance().CreateStorageCluster(cluster)
+}
+
+// DeployStorageCluster creates StorageCluster
+func DeployStorageCluster(cluster *opcorev1.StorageCluster) (*opcorev1.StorageCluster, error) {
+	// Deploy StorageCluster
+	existingCluster, err := operator.Instance().GetStorageCluster(cluster.Name, cluster.Namespace)
+	if k8serror.IsNotFound(err) {
+		return CreateStorageCluster(cluster)
+	} else if err != nil {
+		return nil, err
+	}
+	return existingCluster, nil
+}
+
+// DeployAndValidateStorageCluster creates and validates StorageCluster
+func DeployAndValidateStorageCluster(cluster *opcorev1.StorageCluster) (*opcorev1.StorageCluster, error) {
+	// Create StorageCluster
+	cluster, err := DeployStorageCluster(cluster)
+	if err != nil {
+		return cluster, err
+	}
+	k8sVersion, err := GetK8SVersion()
+	if err != nil {
+		return cluster, err
+	}
+	pxSpecImages, err := testutil.GetImagesFromVersionURL(Inst().PxSpecGenURL, k8sVersion)
+	if err != nil {
+		return cluster, err
+	}
+	// Validate StorageCluster deployment
+	logrus.Infof("Validate StorageCluster %s", cluster.Name)
+	err = testutil.ValidateStorageCluster(pxSpecImages, cluster, defaultValidateDeployTimeout, defaultValidateDeployRetryInterval, true, "")
+	if err != nil {
+		return cluster, err
+	}
+
+	InitInstanceWithParams(InitParams{
+		CollectEvents: false,
+	})
+
+	// Get the latest version of StorageCluster
+	liveCluster, err := operator.Instance().GetStorageCluster(cluster.Name, cluster.Namespace)
+	if err != nil {
+		return liveCluster, err
+	}
+	return liveCluster, nil
+}
+
+func UninstallAndValidateStorageCluster(cluster *opcorev1.StorageCluster) error {
+	// Delete cluster
+	logrus.Infof("Delete StorageCluster [%s]", cluster.Name)
+	if err := testutil.UninstallStorageCluster(cluster); err != nil {
+		return err
+	}
+
+	// Validate cluster deletion
+	logrus.Infof("Validate StorageCluster [%s] deletion", cluster.Name)
+	if err := testutil.ValidateUninstallStorageCluster(cluster, defaultValidateUninstallTimeout, defaultValidateUninstallRetryInterval); err != nil {
+		return err
+	}
+	return nil
+}
+
+func GetK8SVersion() (string, error) {
+	kbVerRegex := regexp.MustCompile(`^(v\d+\.\d+\.\d+).*`)
+	k8sVersion, err := core.Instance().GetVersion()
+	if err != nil {
+		return "", fmt.Errorf("unable to get kubernetes version: %v", err)
+	}
+	matches := kbVerRegex.FindStringSubmatch(k8sVersion.GitVersion)
+	if len(matches) < 2 {
+		return "", fmt.Errorf("invalid kubernetes version received: %v", k8sVersion.GitVersion)
+	}
+	return matches[1], nil
 }

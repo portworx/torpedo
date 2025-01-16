@@ -141,6 +141,8 @@ type InitOptions struct {
 	AnthosInstancePath string
 	// UpgradeHops needed for a scheduler like Anthos to decide whether to upgrade admin cluster
 	UpgradeHops string
+	// CollectEvents is needed to identify if we want to collect namespace events or skip it
+	CollectEvents bool
 }
 
 // ScheduleOptions are options that callers to pass to influence the apps that get schduled
