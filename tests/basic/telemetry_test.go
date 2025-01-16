@@ -9,10 +9,12 @@ import (
 	"time"
 
 	"github.com/portworx/sched-ops/task"
+	"github.com/pure-px/torpedo/pkg/kvdbutils"
 	"github.com/pure-px/torpedo/pkg/log"
 
 	"github.com/pure-px/torpedo/pkg/testrailuttils"
 
+	opsapi "github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/pkg/dbg"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -814,5 +816,171 @@ var _ = Describe("{DiagsSpecificNode}", Label("p1", "positive", "telemetry"), fu
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{GenerateDiagsDuringNoKvdbQuorumState}", Label("staging", "kvdb_ops", "p1", "negative", "telemetry"), func() {
+	/*
+	   https://purestorage.atlassian.net/browse/HAZEL-1054
+	   1. Create apps
+	   2. Bring down entire kvdb cluster
+	   3. While cluster is down, trigger diags collection
+	   4. Validate diags collection is successful
+	   5. Bring up kvdb cluster
+	   6. Validate application
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("GenerateDiagsDuringNoKvdbQuorumState",
+			"Bring down the entire KVDB cluster and trigger diags collection during the downtime", nil, 0)
+		curNode := node.GetWorkerNodes()[0]
+		if !TelemetryEnabled(curNode) {
+			Skip("Skip test because telemetry is not enabled...")
+		}
+	})
+	var (
+		contexts          []*scheduler.Context
+		selectedKvdbNodes []KvdbNode
+		pxNode            node.Node
+		kvdbSet           = make(map[string]bool)
+	)
+
+	itLog := "Trigger diags collection during entire KVDB cluster down"
+	It(itLog, func() {
+		log.InfoD(itLog)
+
+		cleanup := func() {
+			log.Infof("Perform cleanup task")
+			for _, n := range selectedKvdbNodes {
+				nodeDetails, err := node.GetNodeDetailsByNodeID(n.ID)
+				log.FailOnError(err, "Failed to retrieve node details for NodeID [%v]", n.ID)
+
+				nodeStatus, err := Inst().V.GetNodeStatus(nodeDetails)
+				log.FailOnError(err, "Failed to retrieve node status for NodeID [%v]", n.ID)
+				if *nodeStatus != opsapi.Status_STATUS_OK {
+					err = Inst().V.StartDriver(nodeDetails)
+					log.FailOnError(err, "Failed to start Portworx driver on node %s", nodeDetails.Name)
+					err = Inst().V.WaitDriverUpOnNode(nodeDetails, 15*time.Minute)
+					log.FailOnError(err, "Failed to waiting for Portworx driver to start on node %s", nodeDetails.Name)
+				}
+			}
+			DestroyApps(contexts, nil)
+		}
+		defer cleanup()
+
+		stepLog = "Schedule and validate application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("kvdbdowndiags-%d", i))...)
+			}
+			ValidateApplications(contexts)
+		})
+
+		stepLog = "Stopping Portworx service on selected KVDB nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			selectedKvdbNodes, err = GetAllKvdbNodes()
+			log.FailOnError(err, "Failed to retrieve KVDB nodes")
+
+			log.InfoD("Selected KVDB nodes for PX service stop: %v", selectedKvdbNodes)
+			for _, kvdbNode := range selectedKvdbNodes {
+				nodeDetails, err := node.GetNodeDetailsByNodeID(kvdbNode.ID)
+				log.FailOnError(err, "Unable to retrieve node details for NodeID [%v]", kvdbNode.ID)
+
+				err = Inst().V.StopDriver([]node.Node{nodeDetails}, false, nil)
+				log.InfoD("PX service successfully stopped on node: %v", nodeDetails)
+			}
+		})
+
+		stepLog = "Verify kvdb cluster is down"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, kvdbNode := range selectedKvdbNodes {
+				kvdbSet[kvdbNode.ID] = true
+			}
+
+			for _, node := range node.GetStorageNodes() {
+				if !kvdbSet[node.Id] {
+					pxNode = node
+					break
+				}
+			}
+			output, err := runCmd("pxctl status", pxNode)
+			log.FailOnError(err, "Failed to execute 'pxctl status' on node: %v", pxNode.Name)
+
+			log.Infof("pxctl status output: %v\n", output)
+			expect_out := "KVDB connection failed, either node has networking issues or KVDB is down or unhealthy."
+			dash.VerifySafely(strings.Contains(output, expect_out), true, "Is kvdb cluster is down?")
+		})
+
+		stepLog = "Collect diags and validate during no-kvdb quorum state"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			if IsPKS() {
+				pxDiagDir = PksPxDiagDir
+				pxDir = PksPxDir
+				log.Infof("This is PKS cluster based on the StorageCluster annotation, will change diag directory to [%s] and PX directory to [%s]", pxDiagDir, pxDir)
+			}
+
+			for _, currNode := range node.GetWorkerNodes() {
+				if !kvdbSet[currNode.Id] {
+					stepLog = fmt.Sprintf("collect diags on node: %s | %s", currNode.Name, currNode.Type)
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
+						config := &torpedovolume.DiagRequestConfig{
+							DockerHost:    "unix:///var/run/docker.sock",
+							OutputFile:    fmt.Sprintf("%s%s-diags-%s.tar.gz", pxDiagDir, currNode.Name, dbg.GetTimeStamp()),
+							ContainerName: "",
+							OnHost:        true,
+							Live:          true,
+						}
+						err := Inst().V.CollectDiags(currNode, config, torpedovolume.DiagOps{Validate: true, PxStopped: true})
+						log.FailOnError(err, "Failed to collect diags on the node: %v", currNode.Name)
+						log.Infof("Diags collected and validated for the node: %v", currNode.Name)
+					})
+				}
+			}
+		})
+
+		stepLog = "Starting Portworx on selected KVDB nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, n := range selectedKvdbNodes {
+				nodeDetails, err := node.GetNodeDetailsByNodeID(n.ID)
+				log.FailOnError(err, "Failed to retrieve node details for NodeID [%v]", n.ID)
+				err = Inst().V.StartDriver(nodeDetails)
+				log.FailOnError(err, "Failed to start Portworx driver on node %s", nodeDetails.Name)
+				log.InfoD("Successfully started Portworx on KVDB node: %v", nodeDetails.Name)
+			}
+		})
+
+		stepLog = "Verify all KVDB nodes are running and in a healthy state"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, kvdbNode := range selectedKvdbNodes {
+				nodeInfo, err := node.GetNodeDetailsByNodeID(kvdbNode.ID)
+				log.FailOnError(err, "Failed to get details for KVDB node ID: %s", kvdbNode.ID)
+
+				err = Inst().V.WaitDriverUpOnNode(nodeInfo, 15*time.Minute)
+				log.FailOnError(err, "Failed to waiting for Portworx driver to start on node %s", nodeInfo.Name)
+
+				nodeStatus, err := Inst().V.GetNodeStatus(nodeInfo)
+				log.FailOnError(err, "Failed to get px status on node %s", nodeInfo.Name)
+				dash.VerifyFatal(*nodeStatus, opsapi.Status_STATUS_OK, fmt.Sprintf("validate PX status on node %s", kvdbNode.ID))
+			}
+
+			kvdbMembers, err := Inst().V.GetKvdbMembers(pxNode)
+			log.FailOnError(err, "Failed to retrieve KVDB members list")
+
+			err = kvdbutils.ValidateKVDBMembers(kvdbMembers)
+			log.FailOnError(err, "Failed to validate KVDB members")
+
+			ValidateApplications(contexts)
+		})
+
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+		AfterEachTest(contexts)
 	})
 })
