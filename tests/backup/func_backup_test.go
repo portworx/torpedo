@@ -1842,3 +1842,131 @@ var _ = Describe("{RestoreSingleAppFromBackuppAppsInNamespace}", Label(TestCaseL
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
+
+// Bring down the token manager while starting a backup.
+var _ = Describe("{TestBackupResilienceToKeycloakScale}", Label(TestCaseLabelsMap[PxBackupLabel]...), func() {
+	var (
+		scheduledAppContexts   []*scheduler.Context
+		bkpNamespaces          []string
+		clusterUid             string
+		clusterStatus          api.ClusterInfo_StatusInfo_Status
+		backupName             string
+		backupLocationUID      string
+		cloudCredName          string
+		cloudCredUID           string
+		bkpLocationName        string
+		backupNames            []string
+		providers              []string
+		ctx                    context.Context
+		backupLocationMap      map[string]string
+		err                    error
+		numOfBackup            int
+		scaledDownReplicaCount int32
+		originalReplicaCount   int32
+		pxbNamespace           string
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("VerifyTestBackupResilienceToKeycloakScale", "Bring down the token manager while starting a backup.", nil, 300698, Pingle, Q3FY25)
+
+		backupLocationMap = make(map[string]string)
+		bkpNamespaces = make([]string, 0)
+		backupNames = make([]string, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		numOfBackup = 1
+		scaledDownReplicaCount = 0
+		originalReplicaCount = 1
+		ctx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		providers = GetBackupProviders()
+
+		// Schedule an Application
+		appContexts := ScheduleApplications(TaskNamePrefix)
+		for _, ctx := range appContexts {
+			ctx.ReadinessTimeout = AppReadinessTimeout
+			namespace := GetAppNamespace(ctx, TaskNamePrefix)
+			bkpNamespaces = append(bkpNamespaces, namespace)
+			scheduledAppContexts = append(scheduledAppContexts, ctx)
+		}
+	})
+
+	//Bring down the token manager while starting a backup.
+	It("Bring down the token manager while starting a backup", func() {
+
+		// 1. Validate Application
+		Step("Validate applications", func() {
+			log.InfoD("Validating applications")
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		// 2. Create cloud credentials and backup location
+		Step("Creating cloud credentials and backup location", func() {
+			log.InfoD("Creating cloud credentials and backup location")
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, time.Now().Unix())
+				bkpLocationName = fmt.Sprintf("%s-%s-%v-bl", provider, getGlobalBucketName(provider), time.Now().Unix())
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = bkpLocationName
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				err = CreateBackupLocation(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", bkpLocationName))
+			}
+		})
+
+		// 3. Create application cluster for backup
+		Step("Register cluster for backup", func() {
+			err := CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			clusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			log.InfoD("Uid of [%s] cluster is %s", SourceClusterName, clusterUid)
+		})
+
+		// 4. Scale down pxcentral-keycloak
+		Step("Scale down pxcentral-keycloak", func() {
+			log.Infof("Scaling down %s to %d replicas in namespace %s", KeyCloakStateFulSet, scaledDownReplicaCount, pxbNamespace)
+			pxbNamespace, err = backup.GetPxBackupNamespace()
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Get px-backup namespace:%s", pxbNamespace))
+			err = ScaleStatefulSetReplicas(KeyCloakStateFulSet, pxbNamespace, scaledDownReplicaCount, 0, PodStatusTimeOut, PodStatusRetryTime)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Scale of: %s with scale count: %d", KeyCloakStateFulSet, scaledDownReplicaCount))
+		})
+
+		// 5. Take backup of app
+		Step("Taking backup of applications", func() {
+			for i := 0; i < numOfBackup; i++ {
+				backupName = fmt.Sprintf("%s-%s", BackupNamePrefix, RandomString(6))
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+				_, err = CreateBackupWithoutCheck(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, nil, BackupOrgID, clusterUid, "", "", "", "")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
+				backupNames = append(backupNames, backupName)
+			}
+		})
+
+		// 6. Check backup status
+		Step("Checking success of backup", func() {
+			log.Infof("Checking success state for the backup %s", backupName)
+			err = BackupSuccessCheck(backupName, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+			log.FailOnError(err, "Success check failed for the backup [%s]", backupName)
+		})
+
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+
+		log.Infof("Scaling up %s to %d replicas in namespace %s", KeyCloakStateFulSet, originalReplicaCount, pxbNamespace)
+		err = ScaleStatefulSetReplicas(KeyCloakStateFulSet, pxbNamespace, originalReplicaCount, 1, PodStatusTimeOut, PodStatusRetryTime)
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Scale of: %s with scale count: %d", KeyCloakStateFulSet, originalReplicaCount))
+
+		DeleteAllBackups(ctx, BackupOrgID)
+		dash.VerifySafely(err, nil, "Verifying backup deletion")
+
+		// Clean up the cluster
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
+})
