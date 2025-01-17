@@ -735,6 +735,9 @@ const (
 
 	//Add Hot Pluggable Disk to live kubevirt VM
 	AddHotPlugDiskToVMAndLiveMigrate = "addHotPlugDiskToVMAndLiveMigrate"
+
+	// Bring down the node with max storage drives associated with it, verify the drives and pools on the new node.
+	RebootNodeWithMaxPools = "rebootNodeWithMaxPools"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -15345,5 +15348,121 @@ func TriggerAddHotPlugDiskToVMAndLiveMigrate(contexts *[]*scheduler.Context, rec
 		if isSSIERun() {
 			validateContexts(event, contexts)
 		}
+	})
+}
+
+// TriggerRebootNodesWithMaxPools reboot node on which has max storage drives associated
+func TriggerRebootNodesWithMaxPools(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(RebootNodeWithMaxPools)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: RebootNodeWithMaxPools,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+	stepLog := "get nodes with Max pools and reboot"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		var (
+			nodeToReboot    node.Node
+			maxPoolsPerNode = 0
+		)
+		for _, node := range node.GetStorageDriverNodes() {
+			if maxPoolsPerNode < len(node.StoragePools) {
+				maxPoolsPerNode = len(node.StoragePools)
+				nodeToReboot = node
+			}
+		}
+
+		// Reboot node and check driver status
+		stepLog = fmt.Sprintf("reboot node with Max Pools associated")
+		Step(stepLog, func() {
+			// TODO: Below is the same code from existing nodeReboot test
+			log.InfoD(stepLog)
+			nodeContexts := make([]*scheduler.Context, 0)
+			if nodeToReboot.IsStorageDriverInstalled {
+				err := isNodeHealthy(nodeToReboot, event.Event.Type)
+				if err != nil {
+					log.Errorf("Error while fetching isNodeHealthy, err: [%v]", err)
+					UpdateOutcome(event, err)
+					return
+				}
+				stepLog = fmt.Sprintf("reboot node: %s", nodeToReboot.Name)
+				appNodeContexts, err := GetContextsOnNode(contexts, &nodeToReboot)
+				if err != nil {
+					log.Errorf("Error while getting the GetContextsOnNode, err: [%v]", err)
+					UpdateOutcome(event, err)
+					return
+				}
+				nodeContexts = append(nodeContexts, appNodeContexts...)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					taskStep := fmt.Sprintf("reboot node: %s.", nodeToReboot.Name)
+					event.Event.Type += "<br>" + taskStep
+					dashStats := make(map[string]string)
+					dashStats["node"] = nodeToReboot.Name
+					updateLongevityStats(RebootNode, stats.NodeRebootEventName, dashStats)
+					err := Inst().N.RebootNode(nodeToReboot, node.RebootNodeOpts{
+						Force: true,
+						ConnectionOpts: node.ConnectionOpts{
+							Timeout:         1 * time.Minute,
+							TimeBeforeRetry: 5 * time.Second,
+						},
+					})
+					if err != nil {
+						log.Errorf("Error while rebooting node %v, err: %v", nodeToReboot.Name, err.Error())
+						UpdateOutcome(event, err)
+						return
+					}
+				})
+				stepLog = fmt.Sprintf("wait for node: %s to be back up", nodeToReboot.Name)
+				Step(stepLog, func() {
+					err := Inst().N.TestConnection(nodeToReboot, node.ConnectionOpts{
+						Timeout:         15 * time.Minute,
+						TimeBeforeRetry: 10 * time.Second,
+					})
+					if err != nil {
+						log.Errorf("Error while testing node status %v, err: %v", nodeToReboot.Name, err.Error())
+						UpdateOutcome(event, err)
+					}
+				})
+
+				stepLog = fmt.Sprintf("wait to scheduler: %s and volume driver: %s to start",
+					Inst().S.String(), Inst().V.String())
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					err := Inst().S.IsNodeReady(nodeToReboot)
+					if err != nil {
+						log.Errorf("Error while checking IsNodeReady, err %v", err)
+						UpdateOutcome(event, err)
+						return
+					}
+
+					err = Inst().V.WaitDriverUpOnNode(nodeToReboot, Inst().DriverStartTimeout)
+					if err != nil {
+						log.Errorf("Error while WaitDriverUpOnNode, err %v", err)
+						UpdateOutcome(event, err)
+					}
+				})
+				validateContexts(event, contexts)
+			}
+			err := ValidateDataIntegrity(&nodeContexts)
+			if err != nil {
+				log.Errorf("Error while ValidateDataIntegrity, err %v", err)
+				UpdateOutcome(event, err)
+			}
+			updateMetrics(*event)
+		})
 	})
 }

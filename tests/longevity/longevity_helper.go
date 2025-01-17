@@ -403,6 +403,7 @@ func populateTriggerFuncs() {
 		TestPxCSIFadaAttachLimit:          TriggerPxCSIFadaAttachLimit,
 		PowerOffNBy2PlusOneNodes:          TriggerPowerOffNBy2PlusOneNodes,
 		AddHotPlugDiskToVMAndLiveMigrate:  TriggerAddHotPlugDiskToVMAndLiveMigrate,
+		RebootNodeWithMaxPools:            TriggerRebootNodesWithMaxPools,
 	}
 
 	//Creating a distinct trigger to make sure email triggers at regular intervals
@@ -937,6 +938,7 @@ func populateIntervals() {
 	triggerInterval[FadaSimultaneousSnapshots] = make(map[int]time.Duration)
 	triggerInterval[PowerOffNBy2PlusOneNodes] = make(map[int]time.Duration)
 	triggerInterval[AddHotPlugDiskToVMAndLiveMigrate] = make(map[int]time.Duration)
+	triggerInterval[RebootNodeWithMaxPools] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -2212,6 +2214,17 @@ func populateIntervals() {
 	triggerInterval[AddHotPlugDiskToVMAndLiveMigrate][2] = 24 * baseInterval
 	triggerInterval[AddHotPlugDiskToVMAndLiveMigrate][1] = 27 * baseInterval
 
+	triggerInterval[RebootNodeWithMaxPools][10] = 1 * baseInterval
+	triggerInterval[RebootNodeWithMaxPools][9] = 3 * baseInterval
+	triggerInterval[RebootNodeWithMaxPools][8] = 6 * baseInterval
+	triggerInterval[RebootNodeWithMaxPools][7] = 9 * baseInterval
+	triggerInterval[RebootNodeWithMaxPools][6] = 12 * baseInterval
+	triggerInterval[RebootNodeWithMaxPools][5] = 15 * baseInterval
+	triggerInterval[RebootNodeWithMaxPools][4] = 18 * baseInterval
+	triggerInterval[RebootNodeWithMaxPools][3] = 21 * baseInterval
+	triggerInterval[RebootNodeWithMaxPools][2] = 24 * baseInterval
+	triggerInterval[RebootNodeWithMaxPools][1] = 27 * baseInterval
+
 	// Chaos Level of 0 means disable test trigger
 	triggerInterval[DeployApps][0] = 0
 	triggerInterval[RebootNode][0] = 0
@@ -2323,6 +2336,7 @@ func populateIntervals() {
 	triggerInterval[FadaSimultaneousSnapshots][0] = 0
 	triggerInterval[PowerOffNBy2PlusOneNodes][0] = 0
 	triggerInterval[AddHotPlugDiskToVMAndLiveMigrate][0] = 0
+	triggerInterval[RebootNodeWithMaxPools][0] = 0
 
 }
 
