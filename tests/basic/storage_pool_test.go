@@ -6858,10 +6858,6 @@ var _ = Describe("{PoolDeleteRebalancePxState}", Label("p0", "positive", "pool_o
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 
-		if IsEksCluster() != true {
-			log.FailOnError(fmt.Errorf("DeletePool is currently supported for EKS and LocalDrives"), "Pool deletion supported?")
-		}
-
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pooldeleterebalanceid-%d", i))...)
