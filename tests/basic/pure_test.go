@@ -11156,3 +11156,176 @@ var _ = Describe("{ValidatePoolExpansionHybridPoolwithPod}", Label("p0", "positi
 		EndTorpedoTest()
 	})
 })
+
+var _ = Describe("{FACDMultiPoolExpandFaultyDeviceValidation}", Label("p1", "negative", "px_pool_ops", "faulty_device"), func() {
+
+	/*
+		https://purestorage.atlassian.net/browse/PTX-27939
+		1. Identify a node & label it as fada
+		2. Provision a fada pod
+		3. Create a new pool on the node where the pod is deployed
+		4. Make FA interface down (Simulate faulty path)
+		5. Resize the pool & look for faulty error
+		6. Make FA interface up
+		7. Resize the pool again & validate
+	*/
+
+	var (
+		poolToResize     *api.StoragePool
+		randomInterfaces = make(map[string][]string)
+		podNode          node.Node
+		contexts         []*scheduler.Context
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest(
+			"FACDMultiPoolExpandFaultyDeviceValidation",
+			"On a multipool node with a faulty multipath device, attempt to expand pool should fail",
+			nil, 0,
+		)
+	})
+
+	stepLog := "Pool expansion should fail when the device is detached, and succeed after reattaching"
+	It(stepLog, func() {
+		stepLog = "Get a PX node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pxNodes, err := GetStorageNodes()
+			log.FailOnError(err, "Unable to get the storage nodes")
+			podNode = GetRandomNode(pxNodes)
+			log.InfoD("Selected node: %s", podNode.Name)
+		})
+
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		Inst().AppList = []string{"nginx-fada-deploy"}
+
+		defer func() {
+			err = Inst().S.RemoveLabelOnNode(podNode, "apptype")
+			log.FailOnError(err, fmt.Sprintf("error removing label apptype=fada on node [%s]", podNode.Name))
+		}()
+		defer appsValidateAndDestroy(contexts)
+
+		stepLog = "Deploy nginx pod and with RWO FADA Volumes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().S.AddLabelOnNode(podNode, "apptype", "fada")
+			contexts = append(contexts, ScheduleApplications("fadavol")...)
+			ValidateApplications(contexts)
+		})
+
+		// Create a new pool on pod node
+		stepLog = "Create a new pool on pod node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			// Get all pools in given node
+			pools, err := GetAllPoolsOnNode(podNode.Id)
+			log.FailOnError(err, "failed to get all pools on node [%s]", podNode.Id)
+
+			// Pick a pool to resize from the list of pools
+			poolToResize, err = GetStoragePoolByUUID(pools[0])
+			log.FailOnError(err, "failed to get pool with UUID [%s]", pools[0])
+
+			err = addNewPools(podNode, 1)
+			log.FailOnError(err, "Error creating new pool on node [%s]", podNode.Name)
+		})
+
+		// Make FA interface down
+		stepLog = "Make FA interface down"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			// Get Details of iscsi ports present in the cluster
+			flashArrays, err := FlashArrayGetIscsiPorts()
+			log.FailOnError(err, "Failed to Get Details on Flasharray iscsi ports that are in Use ")
+
+			// Pick up random interfaces from each node leaving one interface to work
+			for MgmtIp, ifaces := range flashArrays {
+				if len(ifaces) == 1 {
+					Skip(fmt.Sprintf("only 1 interface present in the Backend FA. Skipping the test [%v]", "FACDMultiPoolExpandFaultyDeviceValidation"))
+				} else {
+					randomInterfaces[MgmtIp] = pickRandomElementsFromArray(ifaces, len(ifaces)-1)
+				}
+			}
+
+			// Block Iptable Ports on each element
+			disableInterfaces(randomInterfaces)
+		})
+
+		defer enableInterfaces(randomInterfaces)
+
+		// Attempt to expand the pool, which should fail
+		stepLog = fmt.Sprintf("Attempting to expand pool [%v] on node [%v]", poolToResize.Uuid, podNode.Name)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			currentSizeGiB := poolToResize.TotalSize / units.GiB
+			log.InfoD("Current Pool Size (GiB): %d", currentSizeGiB)
+
+			expectedSize := currentSizeGiB + 100
+			err = Inst().V.ExpandPool(
+				poolToResize.Uuid,
+				api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK,
+				expectedSize,
+				true,
+			)
+			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+
+			isjournal, err := IsJournalEnabled()
+			log.FailOnError(err, "Failed to check if Journal enabled")
+
+			err = WaitForExpansionToStart(poolToResize.Uuid)
+			log.FailOnError(err, "pool expansion not started")
+
+			resizeErr := waitForPoolToBeResized(expectedSize, poolToResize.Uuid, isjournal)
+
+			containsCloudDriveError := strings.Contains(
+				resizeErr.Error(),
+				"drive set has unhealthy connections in multipath",
+			)
+			dash.VerifyFatal(containsCloudDriveError, true,
+				"Pool expansion error message must indicate faulty multipath",
+			)
+			log.InfoD("Pool expand failed as expected with error: %v", resizeErr.Error())
+		})
+
+		// Make FA interface up
+		stepLog = "Make FA interface up"
+		Step(stepLog, func() {
+			enableInterfaces(randomInterfaces)
+		})
+
+		// Expand the pool again, which should now succeed
+		stepLog = "Expand the pool again after reattaching the volume"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			currentSizeGiB := poolToResize.TotalSize / units.GiB
+			log.InfoD("Current Pool Size (GiB): %d", currentSizeGiB)
+
+			expectedSize := currentSizeGiB + 100
+			err = Inst().V.ExpandPool(
+				poolToResize.Uuid,
+				api.SdkStoragePool_RESIZE_TYPE_ADD_DISK,
+				expectedSize,
+				true,
+			)
+			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+
+			isjournal, err := IsJournalEnabled()
+			log.FailOnError(err, "Failed to check if Journal enabled")
+
+			err = WaitForExpansionToStart(poolToResize.Uuid)
+			log.FailOnError(err, "pool expansion not started")
+
+			resizeErr := waitForPoolToBeResized(expectedSize, poolToResize.Uuid, isjournal)
+			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s expansion using add-disk", poolToResize.Uuid))
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
