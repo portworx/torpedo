@@ -708,9 +708,9 @@ func (d *portworx) validateNodeIDMigration(delNode *api.StorageNode, newNode *ap
 	// delNode is a deleted node and newNode is a node which picked the NodeId from delNode
 
 	// Validate that nodeID is picked up by the storage-less node
-	if len(storagelessNodes) != 0 && !d.Contains(storagelessNodes, newNode) {
-		log.Errorf("Delete NodeId [%s] is not pick up by storageless node", delNode.Id)
-		return false
+	//With new changes, newly created node can pick up the deleted node ID
+	if len(storagelessNodes) != 0 && d.Contains(storagelessNodes, newNode) {
+		log.InfoD("Delete NodeId [%s] is picked up by storageless node", delNode.Id)
 	}
 
 	// Validate that dirves and pool IDs are same after picking up by storage-less node
