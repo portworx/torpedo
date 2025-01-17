@@ -3693,7 +3693,7 @@ var _ = Describe("{UninstallPxBackupAndRestoreFromTheBackup}", func() {
 		})
 
 		Step("Uninstalling PX-Backup", func() {
-			err = UninstallPxBackup(destinationKubeConfigPath)
+			err = UninstallPxBackup()
 			if err != nil {
 				log.InfoD("PX-Backup is already uninstalled for [%s]", destinationKubeConfigPath)
 			} else {

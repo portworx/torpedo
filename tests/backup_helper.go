@@ -4,6 +4,7 @@ import (
 	"bytes"
 	context1 "context"
 	"fmt"
+	"helm.sh/helm/v3/pkg/release"
 
 	"encoding/csv"
 	"io/ioutil"
@@ -13007,6 +13008,109 @@ func InstallPxBackup(kubeConfigPath, namespace, scName, releaseName string) erro
 	return nil
 }
 
+// UninstallPxBackup uninstalls px-backup by performing helm delete and then deletes the px-backup namespace
+func UninstallPxBackup() error {
+	// 1. Early check to see if we can find a valid PX Backup namespace
+	namespace, err := backup.GetPxBackupNamespace()
+	if err != nil {
+		// If the error says "can't find PxBackup service", skip Helm actions
+		if strings.Contains(err.Error(), "can't find PxBackup service") {
+			log.Infof("PX Backup service not found. Checking for any stale PX Backup-related PVCs...")
+			return deleteIfStalePVCFound()
+		}
+		return err
+	}
+
+	// 2. Initialize Helm configuration
+	cfg := new(action.Configuration)
+	if err := cfg.Init(
+		kube.GetConfig(CurrentClusterConfigPath, "", namespace),
+		namespace,
+		os.Getenv("HELM_DRIVER"),
+		func(format string, v ...interface{}) {
+			fmt.Printf(format, v...)
+		},
+	); err != nil {
+		return fmt.Errorf("error initializing Helm action configuration: %w", err)
+	}
+
+	// 3. Add/Update Helm repos
+	settings := cli.New()
+	if err := addAndUpdateRepo(settings); err != nil {
+		return fmt.Errorf("failed to add/update repo: %w", err)
+	}
+
+	// 4. Uninstall px-backup release if it is deployed
+	if err := uninstallPxBackupRelease(cfg); err != nil {
+		return err
+	}
+
+	// 5. Delete the PX Backup namespace
+	if err := DeleteAppNamespace(namespace); err != nil {
+		return fmt.Errorf("failed to delete namespace %s: %v", namespace, err)
+	}
+
+	return nil
+}
+
+// uninstallPxBackupRelease checks if the px-backup Helm release exists and uninstalls it if it does.
+func uninstallPxBackupRelease(cfg *action.Configuration) error {
+	list := action.NewList(cfg)
+	list.AllNamespaces = true
+	list.SetStateMask()
+
+	releases, err := list.Run()
+	if err != nil {
+		return fmt.Errorf("failed to list Helm releases: %w", err)
+	}
+
+	for _, rel := range releases {
+		// Check if this is the px-backup release and if it’s in a “deployed” state
+		if rel.Name == pxCentralReleaseName &&
+			rel.Info != nil &&
+			rel.Info.Status.String() == release.StatusDeployed.String() {
+			log.InfoD("Release %s found and is deployed. Uninstalling...", rel.Name)
+			uninstall := action.NewUninstall(cfg)
+			uninstall.Wait = true
+			uninstall.Timeout = 10 * time.Minute
+
+			resp, err := uninstall.Run(pxCentralReleaseName)
+			if err != nil {
+				return fmt.Errorf("failed to uninstall release: %w", err)
+			}
+			log.Infof("Successfully uninstalled release: %s", resp.Release.Name)
+			return nil
+		}
+	}
+
+	log.Infof("Release %s does not exist or is not deployed. Skipping Helm delete.", pxCentralReleaseName)
+	return nil
+}
+
+// deleteIfStalePVCFound looks for any known px-backup-related PVC in all namespaces
+// and deletes its namespace if found.
+func deleteIfStalePVCFound() error {
+	pvcs, err := core.Instance().GetPersistentVolumeClaims("", nil)
+	if err != nil {
+		return fmt.Errorf("failed to list PVCs in the cluster: %v", err)
+	}
+
+	for _, pvc := range pvcs.Items {
+		for _, p := range PxBackupPVCs {
+			if pvc.Name == p {
+				log.Infof("Found stale PVC %s in namespace %s, deleting namespace...", pvc.Name, pvc.Namespace)
+				if err := DeleteAppNamespace(pvc.Namespace); err != nil {
+					return fmt.Errorf("failed to delete namespace %s: %v", pvc.Namespace, err)
+				}
+				return nil
+			}
+		}
+	}
+
+	log.Infof("No stale PX Backup PVCs found. Nothing to delete.")
+	return nil
+}
+
 // RestoreFailCheck inspects restore task to check for status being "fail". NOTE: If the status is different, it retries every `retryInterval` for `retryDuration` before returning `err`
 func RestoreFailCheck(restoreName string, orgID string, retryDuration time.Duration, retryInterval time.Duration, ctx context1.Context) error {
 	log.InfoD("RestoreFailCheck started:")
@@ -13497,59 +13601,6 @@ func addAndUpdateRepo(settings *cli.EnvSettings) error {
 		}
 	}
 	log.InfoD("Successfully added or updated Portworx repository")
-	return nil
-}
-
-// Uninstall px-backup
-func UninstallPxBackup(kubeConfigPath string) error {
-	pxBackupNamespace, err := backup.GetPxBackupNamespace()
-	if err != nil {
-		return err
-	}
-	log.InfoD("px backup namespace from %s: %s", destinationClusterName, pxBackupNamespace)
-
-	cfg := new(action.Configuration)
-	if err := cfg.Init(kube.GetConfig(kubeConfigPath, "", ""), pxBackupNamespace, os.Getenv("HELM_DRIVER"), func(format string, v ...interface{}) {
-		fmt.Sprintf(format, v)
-	}); err != nil {
-		return fmt.Errorf("error initializing Helm action configuration: %w", err)
-	}
-
-	// Create a new uninstall action
-	uninstall := action.NewUninstall(cfg)
-
-	// Perform the uninstall action
-	rel, err := uninstall.Run("px-central")
-	if err != nil {
-		return err
-	}
-	log.InfoD("Successfully uninstalled release: %s", rel.Release.Name)
-
-	// kubectl command for delete namespace
-	err = DeleteNamespaces([]string{pxBackupNamespace})
-	if err != nil {
-		return err
-	}
-
-	waitForNamespaceToBeDeleted := func() (interface{}, bool, error) {
-		ns, err := core.Instance().GetNamespace(pxBackupNamespace)
-		if err != nil {
-			if errors.IsNotFound(err) {
-				return nil, false, nil
-			}
-			return nil, true, fmt.Errorf("error checking namespace status: %v", err)
-		}
-
-		log.InfoD("namespace %s status: %s", pxBackupNamespace, ns.Status.Phase)
-		return nil, true, fmt.Errorf("namespace %s not deleted", pxBackupNamespace)
-	}
-
-	_, err = task.DoRetryWithTimeout(waitForNamespaceToBeDeleted, NameSpaceDeletionTimeout, 10*time.Second)
-	if err != nil {
-		return err
-	}
-	// Log the namesapce status as it has been deleted successfully before returning
-	log.InfoD("Successfully deleted the namespace %s", pxBackupNamespace)
 	return nil
 }
 

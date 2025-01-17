@@ -314,6 +314,7 @@ const (
 	pxbackupDeploymentNamespace        = "px-backup"
 	pxbackupMongodbDeploymentName      = "pxc-backup-mongodb"
 	pxbackupMongodbDeploymentNamespace = "px-backup"
+	pxCentralReleaseName               = "px-central"
 	defaultnamespace                   = "default"
 
 	milestoneFlag               = "testrail-milestone"
@@ -733,6 +734,19 @@ type BackupDeleteInfoStruct struct {
 }
 
 var BackupDeleteTimeMap = make(map[string]BackupDeleteInfoStruct)
+
+var PxBackupPVCs = []string{
+	"pxcentral-mysql-pvc",
+	"theme-pxcentral",
+	"pvc-quick-maintenance-repo",
+	"pvc-full-maintenance-repo",
+	"pvc-nfs",
+	"pre-upgrade-data-pvc",
+	"alertmanager-px-backup-alertmanager-db-alertmanager-px-backup-alertmanager",
+	"prometheus-px-backup-dashboard-prometheus-db-prometheus-px-backup-dashboard-prometheus",
+	"pxc-mongodb-data-pxc-backup-mongodb",
+	"pxcentral-keycloak-data",
+}
 
 // InitInstance is the ginkgo spec for initializing torpedo
 func InitInstance() {
