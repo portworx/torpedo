@@ -834,6 +834,14 @@ spec:
       value: "${CLUSTER_ID}"
     - name: "IS_HCP"
       value: "${IS_HCP}"
+    - name: ROSA_TOKEN
+      value: "${ROSA_TOKEN}"
+    - name: NODEPOOL_MAX_UNAVAILABLE
+      value: "${NODEPOOL_MAX_UNAVAILABLE}"
+    - name: NODEPOOL_MAX_SURGE
+      value: "${NODEPOOL_MAX_SURGE}"
+    - name: NODEPOOL_NODE_DRAIN_GRACE_PERIOD
+      value: "${NODEPOOL_NODE_DRAIN_GRACE_PERIOD}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
