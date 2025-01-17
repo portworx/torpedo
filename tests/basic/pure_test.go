@@ -5825,13 +5825,19 @@ var _ = Describe("{CreateCloneOfTheFADAVolume}", Label("p0", "positive", "px_ops
 				log.FailOnError(err, "Failed to get volumes for app %s", context.App.Key)
 				log.InfoD("Starting the Clone of the Volume")
 				for _, vol := range appsvols[:1] {
-					cloneVolumeId, err = Inst().V.CloneVolume(vol.ID)
-					log.FailOnError(err, "Failed to clone volume [%v]", vol.ID)
-					clonevol, err := Inst().V.InspectVolume(cloneVolumeId)
-					log.FailOnError(err, "Failed to inspect volume [%v]", cloneVolumeId)
-					log.InfoD("Get the corresponding volume name for the volId")
-					ClonevolumeName = clonevol.Locator.Name
-					log.InfoD("Clone Volume Name [%v] for parent volume [%v]", ClonevolumeName, vol.ID)
+					proxySpec, err := Inst().V.GetProxySpecForAVolume(vol)
+					log.FailOnError(err, "Failed to get proxy spec for volume [%v]", vol.ID)
+					if proxySpec.ProxyProtocol == api.ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK {
+						cloneVolumeId, err = Inst().V.CloneVolume(vol.ID)
+						log.FailOnError(err, "Failed to clone volume [%v]", vol.ID)
+						clonevol, err := Inst().V.InspectVolume(cloneVolumeId)
+						log.FailOnError(err, "Failed to inspect volume [%v]", cloneVolumeId)
+						log.InfoD("Get the corresponding volume name for the volId")
+						ClonevolumeName = clonevol.Locator.Name
+						log.InfoD("Clone Volume Name [%v] for parent volume [%v]", ClonevolumeName, vol.ID)
+					} else {
+						log.InfoD("Volume [%v] is not a pure block volume, skipping Clone", vol.ID)
+					}
 				}
 			}
 		})

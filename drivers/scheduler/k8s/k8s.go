@@ -7976,17 +7976,28 @@ func (k *K8s) snapshotAndVerify(size resource.Quantity, data, snapName, namespac
 		if err != nil {
 			return fmt.Errorf("failed to parse version: %s", err)
 		}
-		unsupportedCsiVersion, err := version.NewVersion("25.1.0")
-		if err != nil {
-			return fmt.Errorf("failed to parse version: %s", err)
-		}
+		var unsupportedCsiVersions []*version.Version
+		unsupportedCsiVersions = append(unsupportedCsiVersions,
+			version.Must(version.NewVersion("25.1.0")),
+			version.Must(version.NewVersion("25.2.0")),
+		)
 		pxVersion, err := k.GetPortworxVersionFromCli()
 		if err != nil {
 			return fmt.Errorf("failed to get portworx version: %s", err)
 		}
-
+		allowedVersion := false
+		if pxVersion.GreaterThanOrEqual(supportedPxVersion) {
+			for _, unsupportedVersion := range unsupportedCsiVersions {
+				if pxVersion.Equal(unsupportedVersion) {
+					allowedVersion = false
+					break
+				} else {
+					allowedVersion = true
+				}
+			}
+		}
 		// Perform this test for PX versions above 3.2.2 excluding PX-CSI 25.1.0
-		if pxVersion.GreaterThanOrEqual(supportedPxVersion) && !pxVersion.Equal(unsupportedCsiVersion) {
+		if allowedVersion {
 			log.InfoD("Validating inspect output for restored volume")
 			pxPodList, err := k.GetPortworxPodList()
 			if err != nil {
@@ -8114,17 +8125,28 @@ func (k *K8s) cloneAndVerify(size resource.Quantity, data, namespace, storageCla
 		if err != nil {
 			return fmt.Errorf("failed to parse version: %s", err)
 		}
-		unsupportedCsiVersion, err := version.NewVersion("25.1.0")
-		if err != nil {
-			return fmt.Errorf("failed to parse version: %s", err)
-		}
+		var unsupportedCsiVersions []*version.Version
+		unsupportedCsiVersions = append(unsupportedCsiVersions,
+			version.Must(version.NewVersion("25.1.0")),
+			version.Must(version.NewVersion("25.2.0")),
+		)
 		pxVersion, err := k.GetPortworxVersionFromCli()
 		if err != nil {
 			return fmt.Errorf("failed to get portworx version: %s", err)
 		}
-
+		allowedVersion := false
+		if pxVersion.GreaterThanOrEqual(supportedPxVersion) {
+			for _, unsupportedVersion := range unsupportedCsiVersions {
+				if pxVersion.Equal(unsupportedVersion) {
+					allowedVersion = false
+					break
+				} else {
+					allowedVersion = true
+				}
+			}
+		}
 		// Perform this test for PX versions above 3.2.2 excluding PX-CSI 25.1.0
-		if pxVersion.GreaterThanOrEqual(supportedPxVersion) && !pxVersion.Equal(unsupportedCsiVersion) {
+		if allowedVersion {
 			log.InfoD("Validating inspect output for cloned volume")
 			pxPodList, err := k.GetPortworxPodList()
 			if err != nil {
