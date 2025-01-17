@@ -11329,3 +11329,198 @@ var _ = Describe("{FACDMultiPoolExpandFaultyDeviceValidation}", Label("p1", "neg
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{ValidateNewCloudDriveNotCreated}", Label("p1", "negative", "px_vol_ops", "pure_ops"), func() {
+	/*
+	   https://purestorage.atlassian.net/browse/PTX-27953
+	   1. Deploy fio application on non KVDB nodes
+	   2. Get Pool With IO on non KVDB node
+	   3. Get Host and Volume from Pool UUID
+	   4. Detach Volume from Host
+	   5. Validate that PX is up on the selected Host, if not then enter and exit maintenance mode to bring it up
+	   6. Validate that detached volume is attached back on selected Host
+	*/
+	var (
+		selectedNode       node.Node
+		poolIDWithIO       string
+		cloudDriveName     string
+		cloudDriveFullName string
+		hostName           string
+		FAclient           *flasharray.Client
+		host               *flasharray.Host
+		contexts           []*scheduler.Context
+		nonKvdbNodes       []node.Node
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("ValidateNewCloudDriveNotCreated",
+			"Validate New Cloud Drives are not getting created after detachment of Cloud Drive", nil, 0)
+	})
+
+	itLog := "ValidateNewCloudDriveNotCreated"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		pxNodes := node.GetStorageNodes()
+
+		appList := Inst().AppList
+		Inst().AppList = []string{"fio"}
+
+		for _, n := range pxNodes {
+			kvdbFlag, err := IsKVDBNode(n)
+			log.FailOnError(err, "Failed to check if node is kvdb node")
+			if !kvdbFlag {
+				err = Inst().S.AddLabelOnNode(n, "apptype", "fio")
+				log.FailOnError(err, "Failed to add labels to node : %s", n.Name)
+				nonKvdbNodes = append(nonKvdbNodes, n)
+			}
+		}
+
+		defer func() {
+			Inst().AppList = appList
+			for _, n := range nonKvdbNodes {
+				err := Inst().S.RemoveLabelOnNode(n, "apptype")
+				log.FailOnError(err, "Failed to remove labels from node : %s", n.Name)
+			}
+		}()
+
+		stepLog = "Deploy fio application on non KVDB nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				taskName := "new-cloud-drive-not-created" + Inst().InstanceID
+				context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+					AppKeys: Inst().AppList,
+					Nodes:   nonKvdbNodes,
+					Labels:  map[string]string{"apptype": "fio"},
+				})
+				log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+				contexts = append(contexts, context...)
+			}
+			ValidateApplications(contexts)
+		})
+
+		defer DestroyApps(contexts, nil)
+
+		stepLog = "Get Pool with IO on non KVDB node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			poolIDs, err := GetPoolIDWithIOs(contexts)
+			log.FailOnError(err, "Failed to get pools with io")
+
+			for _, poolID := range poolIDs {
+				node, err := GetNodeFromPoolUUID(poolID)
+				log.FailOnError(err, "Failed to get node from pool uuid %v", poolID)
+				for _, n := range nonKvdbNodes {
+					if n.Name == node.Name {
+						selectedNode = *node
+						poolIDWithIO = poolID
+						break
+					}
+				}
+			}
+		})
+
+		stepLog = "Get Host and Volume from Pool UUID"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			iqn, err := GetIQNOfNode(selectedNode)
+			log.FailOnError(err, "Failed to get iqn of the node %v", selectedNode.Name)
+			log.InfoD("Iqn of the node: %v", iqn)
+
+			volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+			log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
+
+			pxPureSecret, err := pureutils.GetPXPureSecret(volDriverNamespace)
+			log.FailOnError(err, "Failed to get secret %v", pxPureSecret)
+			flashArraysInSecret := pxPureSecret.Arrays
+
+			for _, eachFA := range flashArraysInSecret {
+				log.Info("Connecting to FA [%v]", eachFA.MgmtEndPoint)
+				FAclient, err = pureutils.PureCreateClientAndConnect(eachFA.MgmtEndPoint, eachFA.APIToken)
+				log.FailOnError(err, "Failed to connect to FA")
+
+				host, err = pureutils.GetHostFromIqn(FAclient, iqn)
+				if err == nil {
+					log.InfoD("Host recived from FA: %v", host.Name)
+					hostName = host.Name
+					break
+				}
+			}
+
+			cloudDriveMap, err := GetCloudDrivesOnSpecificNode(&selectedNode)
+			log.FailOnError(err, "Failed to get cloud drives attached to node [%v]", selectedNode.Name)
+
+			for cloudrivevol, config := range cloudDriveMap.Configs {
+				if config.PoolID == poolIDWithIO {
+					cloudDriveName = cloudrivevol
+					break
+				}
+			}
+
+			cloudDriveFullName, err = GetVolumeCompleteNameOnFA(FAclient, cloudDriveName)
+			log.FailOnError(err, "Failed to get cloud drive full name for cloud drive id [%v]", cloudDriveName)
+		})
+
+		stepLog = fmt.Sprintf("Detach volume [%v] from host [%v] ", cloudDriveFullName, hostName)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			_, err = pureutils.DisConnectVolumeFromHost(FAclient, hostName, cloudDriveFullName)
+			log.FailOnError(err, "Failed to disconnect volume from host")
+			log.InfoD("Volume [%v] disconnected from host : [%v]", cloudDriveFullName, hostName)
+			err = Inst().V.WaitDriverUpOnNode(selectedNode, addDriveUpTimeOut)
+			log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", selectedNode.Name))
+		})
+
+		stepLog = "Validate PX is up on the selected host, if not then enter and exit maintenance mode to bring it up"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			px_status, err := Inst().V.GetPxctlStatus(selectedNode)
+			log.FailOnError(err, fmt.Sprintf("failed to get pxctl status on node [%s]", selectedNode.Name))
+			if px_status == api.Status_STATUS_STORAGE_DOWN.String() {
+				err = Inst().V.EnterMaintenance(selectedNode)
+				log.FailOnError(err, fmt.Sprintf("fail to enter node %s in maintenance mode", selectedNode.Name))
+				status, err := Inst().V.GetNodeStatus(selectedNode)
+				log.FailOnError(err, fmt.Sprintf("Error getting PX status of node %s", selectedNode.Name))
+				dash.VerifyFatal(*status, api.Status_STATUS_MAINTENANCE, fmt.Sprintf("Node %s Status not Online", selectedNode.Name))
+				// Wait for two minutes before exiting node maintenance
+				time.Sleep(2 * time.Minute)
+				err = Inst().V.ExitMaintenance(selectedNode)
+				log.FailOnError(err, fmt.Sprintf("fail to exit node %s in maintenance mode", selectedNode.Name))
+				status, err = Inst().V.GetNodeStatus(selectedNode)
+				log.FailOnError(err, fmt.Sprintf("Error getting PX status of node %s", selectedNode.Name))
+				dash.VerifyFatal(*status, api.Status_STATUS_OK, fmt.Sprintf("Node %s Status not Online", selectedNode.Name))
+				err = Inst().V.WaitDriverUpOnNode(selectedNode, Inst().DriverStartTimeout)
+				log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", selectedNode.Name))
+				log.InfoD("Driver is up")
+				px_status, err = Inst().V.GetPxctlStatus(selectedNode)
+				log.FailOnError(err, fmt.Sprintf("failed to get pxctl status on node [%s]", selectedNode.Name))
+			}
+			dash.VerifyFatal(px_status == api.Status_STATUS_OK.String(), true, fmt.Sprintf("node [%s] status is up but PX cluster is not ok. Expected: %v Actual: %v", selectedNode.Name, api.Status_STATUS_OK, px_status))
+			log.InfoD("px status %v", px_status)
+		})
+
+		stepLog = fmt.Sprintf("Validate volume [%s] is attached on the same host [%s]", cloudDriveFullName, hostName)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			waitForVolumeReattachment := func() (interface{}, bool, error) {
+				volumeMap, err := pureutils.ListVolumesFromHosts(FAclient)
+				if err != nil {
+					return false, true, err
+				}
+				for _, volumes := range volumeMap[hostName] {
+					if volumes.Vol == cloudDriveFullName {
+						return true, false, nil
+					}
+				}
+				return false, true, fmt.Errorf("detached volume [%s] is not attached back in host [%s]", cloudDriveFullName, hostName)
+			}
+			isVolumeReattached, err := task.DoRetryWithTimeout(waitForVolumeReattachment, 10*time.Minute, 10*time.Second)
+			log.FailOnError(err, "failed to wait for volume reattachment")
+			dash.VerifyFatal(isVolumeReattached.(bool), true, fmt.Sprintf("Verify detached volume [%s] is attached back in host [%s]", cloudDriveFullName, hostName))
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
