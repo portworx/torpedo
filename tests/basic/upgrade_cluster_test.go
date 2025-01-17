@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/hashicorp/go-version"
+	"github.com/libopenstorage/openstorage/api"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -23,6 +25,7 @@ import (
 	"github.com/pure-px/torpedo/drivers/scheduler/oke"
 	"github.com/pure-px/torpedo/drivers/scheduler/rke"
 	"github.com/pure-px/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/units"
 	. "github.com/pure-px/torpedo/tests"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -346,3 +349,102 @@ func waitForAnthosClusterStable() {
 	log.Infof("Sleeping for %d minutes to let px node to pull images after the upgrade..", waitTime)
 	time.Sleep(time.Duration(waitTime) * time.Minute)
 }
+
+var _ = Describe("{UpgradeClusterAndPoolResize}", Label("p0", "positive", "node_ops", "Upgrade"), func() {
+	/*
+		    https://purestorage.atlassian.net/browse/HAZEL-1056
+			1.Have 2 different tthreads in the test case
+			2.One thread should trigger and monitor upgrade Px operation
+			3.Another thread should keep on selecting pools on nodes one by one and keep on resizing them.
+			4.After upgrade operation is completed, the pool expansion thread stops as well
+	*/
+	var (
+		pxUpgradeDone             chan struct{}
+		pxUpgradeErrChan, errChan chan error
+		closeOnce                 sync.Once
+		wg                        sync.WaitGroup
+	)
+	JustBeforeEach(func() {
+		StartTorpedoTest("UpgradeClusterAndPoolResize", "Upgrade the PX cluster with latest build while resize is going on for few pools in multiple nodes", nil, 0)
+		pxUpgradeDone = make(chan struct{})
+		pxUpgradeErrChan = make(chan error, 1)
+		errChan = make(chan error, 1)
+	})
+
+	itLog := "Upgrade the PX cluster with latest build while resize is going on for few pools in multiple nodes"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		isjournal, err := IsJournalEnabled()
+		log.FailOnError(err, "Failed to check is journal enabled")
+		closeOnce = sync.Once{}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			log.InfoD("Starting PX upgrade")
+			err := UpgradePortworxDriver(Inst().UpgradeStorageDriverEndpointList)
+			if err != nil {
+				err = fmt.Errorf("PX upgrade failed due to err : %v", err)
+				pxUpgradeErrChan <- err
+				return
+			}
+			log.InfoD("PX upgrade completed successfully")
+			closeOnce.Do(func() {
+				close(pxUpgradeDone)
+			})
+		}()
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				select {
+				case err := <-pxUpgradeErrChan:
+					errChan <- err
+					return
+				case <-pxUpgradeDone:
+					log.Infof("PX upgrade completed, stopping pool resize operations.")
+					return
+				default:
+					nodes, err := GetStorageNodes()
+					if err != nil {
+						err = fmt.Errorf("error getting storage nodes %v", err)
+						errChan <- err
+						return
+					}
+					for _, node := range nodes {
+						for _, nodePool := range node.GetPools() {
+							originalSizeInBytes := nodePool.TotalSize
+							targetSizeInBytes := originalSizeInBytes + 10*units.GiB
+							targetSizeGiB := targetSizeInBytes / units.GiB
+							log.InfoD("Current Size of pool %s is %d GiB. Expand to %v GiB with type add-disk...", nodePool.Uuid, originalSizeInBytes/units.GiB, targetSizeGiB)
+							err = Inst().V.ExpandPool(nodePool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, targetSizeGiB, true)
+							if err != nil {
+								err = fmt.Errorf("pool resize request using type RESIZE DISK , err %v", err)
+								errChan <- err
+								return
+							}
+							resizeErr := waitForPoolToBeResized(targetSizeGiB, nodePool.Uuid, isjournal)
+							if resizeErr != nil {
+								resizeErr = fmt.Errorf("pool resize failed due to err - %v", resizeErr)
+								errChan <- resizeErr
+								return
+							}
+						}
+					}
+				}
+			}
+		}()
+
+		wg.Wait()
+
+		close(errChan)
+		close(pxUpgradeErrChan)
+
+		for err := range errChan {
+			log.FailOnError(err, "verify px upgrade and pool resize complete")
+		}
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})

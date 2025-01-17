@@ -16264,6 +16264,50 @@ func ValidateParallelBackupScheduleNonPxdVolume(backupScheduleName string, orgId
 	return nil
 }
 
+func UpgradePortworxDriver(upgradeEndpoints string) error {
+	if upgradeEndpoints == "" {
+		return fmt.Errorf("no upgrade endpoints provided for PX upgrade")
+	}
+
+	storageNodes := node.GetStorageNodes()
+	if len(storageNodes) == 0 {
+		return fmt.Errorf("no storage nodes found in the cluster")
+	}
+
+	for _, upgradeHop := range strings.Split(upgradeEndpoints, ",") {
+		log.Infof("Starting PX upgrade for endpoint: %s", upgradeHop)
+
+		currPXVersion, err := Inst().V.GetDriverVersionOnNode(storageNodes[0])
+		if err != nil {
+			log.Warnf("Error getting current PX version: %v", err)
+		}
+
+		timeBeforeUpgrade := time.Now()
+
+		err = Inst().V.UpgradeDriver(upgradeHop)
+		if err != nil {
+			return fmt.Errorf("PX upgrade failed for endpoint %s: %v", upgradeHop, err)
+		}
+
+		timeAfterUpgrade := time.Now()
+		durationInMins := int(timeAfterUpgrade.Sub(timeBeforeUpgrade).Minutes())
+		expectedUpgradeTime := 9 * len(node.GetStorageDriverNodes())
+
+		log.Infof("Upgrade completed in %d minutes", durationInMins)
+		if durationInMins > expectedUpgradeTime {
+			log.Warnf("Upgrade took longer than expected: %d minutes (expected: %d minutes)", durationInMins, expectedUpgradeTime)
+		}
+
+		updatedPXVersion, err := Inst().V.GetDriverVersionOnNode(storageNodes[0])
+		if err != nil {
+			log.Warnf("Error getting updated PX version: %v", err)
+		}
+		log.Infof("PX version upgraded from %s to %s", currPXVersion, updatedPXVersion)
+	}
+
+	log.InfoD("PX upgrade completed successfully for all endpoints")
+	return nil
+}
 func CreateStorageCluster(cluster *opcorev1.StorageCluster) (*opcorev1.StorageCluster, error) {
 	logrus.Infof("Create StorageCluster %s in %s", cluster.Name, cluster.Namespace)
 	return operator.Instance().CreateStorageCluster(cluster)
