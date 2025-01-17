@@ -7531,7 +7531,6 @@ var _ = Describe("{FillPoolOnSourceAndTargetNodeAndLiveMigrateVM}", Label("p1", 
 	})
 })
 
-
 var _ = Describe("{UpgradePXWhileAddingColdDiskHotDiskAndLiveMigrationInProgress}", Label("p0", "positive", "kubevirt"), func() {
 	/*
 		JIRA ID : https://purestorage.atlassian.net/browse/HAZEL-1786
@@ -7673,7 +7672,7 @@ var _ = Describe("{UpgradePXWhileAddingColdDiskHotDiskAndLiveMigrationInProgress
 			for appCtx := range hotAddChannel {
 				contexts = append(contexts, appCtx)
 			}
-		
+
 			for _, appCtx := range contexts {
 				select {
 				case <-pxUpgradeDone:
@@ -7695,16 +7694,16 @@ var _ = Describe("{UpgradePXWhileAddingColdDiskHotDiskAndLiveMigrationInProgress
 			}
 			for {
 				select {
-					case <-pxUpgradeDone:
-						log.Infof("PX upgrade completed, stopping cold-add operation.")
+				case <-pxUpgradeDone:
+					log.Infof("PX upgrade completed, stopping cold-add operation.")
 					return
-					default:
-						for _,appCtx := range contexts {
-							log.Infof("VMs for cold-add operation: [%v]", appCtx)
-							coldAddDisk([]*scheduler.Context{appCtx},volType)
-						}
-						log.Infof("Completed one cycle of cold-add operations, checking PX upgrade status.")
-						time.Sleep(10 * time.Second)
+				default:
+					for _, appCtx := range contexts {
+						log.Infof("VMs for cold-add operation: [%v]", appCtx)
+						coldAddDisk([]*scheduler.Context{appCtx}, volType)
+					}
+					log.Infof("Completed one cycle of cold-add operations, checking PX upgrade status.")
+					time.Sleep(10 * time.Second)
 				}
 			}
 		}()
@@ -7716,17 +7715,17 @@ var _ = Describe("{UpgradePXWhileAddingColdDiskHotDiskAndLiveMigrationInProgress
 				contexts = append(contexts, appCtx)
 			}
 			for {
-				select{
-					case <-pxUpgradeDone:
-						log.InfoD("PX upgrade completed, stopping live migration operation.")
-						return	
-					default:
-						for _, appCtx := range contexts {
-							log.Infof("VMs for live-migrate operation: [%v]", appCtx)
-							liveMigrateVM([]*scheduler.Context{appCtx})
-						}
-						log.Infof("Completed one cycle of live migration of VM operations, checking PX upgrade status.")
-						time.Sleep(10 * time.Second)
+				select {
+				case <-pxUpgradeDone:
+					log.InfoD("PX upgrade completed, stopping live migration operation.")
+					return
+				default:
+					for _, appCtx := range contexts {
+						log.Infof("VMs for live-migrate operation: [%v]", appCtx)
+						liveMigrateVM([]*scheduler.Context{appCtx})
+					}
+					log.Infof("Completed one cycle of live migration of VM operations, checking PX upgrade status.")
+					time.Sleep(10 * time.Second)
 				}
 			}
 		}()
@@ -7760,7 +7759,7 @@ var _ = Describe("{UpgradePXWhileAddingColdDiskHotDiskAndLiveMigrationInProgress
 			log.Infof("Performing cold add disk operation post PX upgrade")
 			coldAddIndex := rng.Intn(len(appCtxs))
 			log.Infof("Selected random index for cold add disk: [%d]", coldAddIndex)
-			coldAddDisk([]*scheduler.Context{appCtxs[coldAddIndex]},volType)
+			coldAddDisk([]*scheduler.Context{appCtxs[coldAddIndex]}, volType)
 			log.FailOnError(err, "Failed to add cold disk to KubeVirt VM")
 
 			log.Infof("Performing live migrate VM operation post PX upgrade")
@@ -7783,15 +7782,15 @@ func hotAddDisk(appCtxs []*scheduler.Context) {
 	dash.VerifyFatal(isHotPlugged, true, "Successfully hot-plugged disk to KubeVirt VM ?")
 }
 
-func coldAddDisk(appCtxs []*scheduler.Context,volType string) {
+func coldAddDisk(appCtxs []*scheduler.Context, volType string) {
 	var isColdAddDisk bool
 	numberOfVolumes := 1
 	for _, appCtx := range appCtxs {
 		if volType == "pxe-raw" || volType == "fada-raw" {
-			isRawColdAddDisk,err := AddRawBlockDriveToKubevirtVM([]*scheduler.Context{appCtx}, numberOfVolumes, "10Gi")
+			isRawColdAddDisk, err := AddRawBlockDriveToKubevirtVM([]*scheduler.Context{appCtx}, numberOfVolumes, "10Gi")
 			log.FailOnError(err, "Failed to add raw cold disk to KubeVirt VM")
 			dash.VerifyFatal(isRawColdAddDisk, true, "Successfully added raw cold disk to KubeVirt VM ?")
-		}else{
+		} else {
 			isColdAddDisk, err = AddDisksToKubevirtVM([]*scheduler.Context{appCtx}, numberOfVolumes, "10Gi")
 			log.FailOnError(err, "Failed to add cold disk to KubeVirt VM")
 			dash.VerifyFatal(isColdAddDisk, true, "Successfully added cold disk to KubeVirt VM ?")
@@ -7806,3 +7805,138 @@ func liveMigrateVM(appCtxs []*scheduler.Context) {
 	}
 }
 
+var _ = Describe("{SingleVMLiveMigrationPostCopy}", Label("p1", "positive", "kubevirt", "MiniScale", "LiveMigration"), func() {
+	var (
+		app, volType  string
+		appCtxs       []*scheduler.Context
+		namespace     string
+		wg            sync.WaitGroup
+		canSsh        bool
+		initialUptime map[string]time.Duration
+		vm            kubevirtv1.VirtualMachine
+		vmNodeName    string
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("SingleVMLiveMigrationPostCopy", "Live migrate single kubevirt VM in post-copy mode", nil, 0)
+		volType, _ = os.LookupEnv("KUBEVIRT_VOL_TYPE")
+		if volType == "pxe-raw" || volType == "fada-raw" {
+			Skip("This test is not applicable for PXE and FADA as of now")
+		} else {
+			app = "kubevirt-fill-vm-disk-high-resource"
+		}
+		log.InfoD("Setting app for this test to be : %s", app)
+	})
+
+	itLog := "Live migrate single kubevirt VM"
+	It(itLog, func() {
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+		canSsh = false
+		stepLog := "Schedule a KubeVirt VM"
+		log.InfoD(stepLog)
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		Inst().AppList = []string{app}
+		Inst().CsiAppList = []string{app}
+
+		stepLog = "Schedule a kubevirt VM"
+		Step(stepLog, func() {
+			namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
+			appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
+		})
+		ValidateApplications(appCtxs)
+
+		for _, appCtx := range appCtxs {
+			bindMount, err := IsVMBindMounted(appCtx, false)
+			log.FailOnError(err, "Failed to verify bind mount")
+			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+		}
+
+		log.Infof("Hard Sleep for 2 minutes to let VMs come up")
+		time.Sleep(2 * time.Minute)
+
+		canSsh = CreateSSHPodAndSetCanSsh()
+		ValidateFioInVMs(appCtxs, canSsh)
+
+		initialUptime = make(map[string]time.Duration)
+		stepLog = "Get initial uptime of VMs and current node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			var wg sync.WaitGroup
+			for _, appCtx := range appCtxs {
+				wg.Add(1)
+				go func(appCtx *scheduler.Context) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+					log.FailOnError(err, "Failed to get VMs from appCtx")
+					for _, vm := range vms {
+						uptime, err := GetVMUptime(vm)
+						log.FailOnError(err, "Failed to get uptime from VM %s", vm.Name)
+						vmKey := fmt.Sprintf("%s/%s", vm.Namespace, vm.Name)
+						initialUptime[vmKey] = uptime
+						log.Infof("Initial uptime for VM %s is %v", vmKey, uptime)
+
+						vmNodeName, err = GetNodeOfVM(vm)
+						log.FailOnError(err, "Failed to get node of VM %v", vm.Name)
+						log.Infof("VM %s is currently running on node %s", vm.Name, vmNodeName)
+					}
+				}(appCtx)
+			}
+			wg.Wait()
+		})
+
+		vms, err := GetAllVMsFromScheduledContexts(appCtxs)
+		log.FailOnError(err, "Failed to get VMs from context")
+
+		if len(vms) == 0 {
+			log.FailOnError(fmt.Errorf("No VMs found"), "No VMs found in context")
+		} else {
+			vm = vms[0]
+		}
+
+		stepLog = "Check if disks are completely full for resources to be high and making switch to post-copy chances higher"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			diskSize, err := CheckIsDiskSizeFullInVM(vm)
+			if err != nil {
+				log.FailOnError(err, "Failed to get disk size from VM [%s]: %v", vm.Name, err)
+			}
+			dash.VerifyFatal(diskSize, true, "Is disk size full in VM ?")
+
+		})
+
+		stepLog = "Live migrate the kubevirt VM"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, appCtx := range appCtxs {
+				wg.Add(1)
+				go func(appCtx *scheduler.Context) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					err := StartAndWaitForPostCopyVMIMigration(appCtx, context1.TODO())
+					log.FailOnError(err, "Failed to live migrate kubevirt VM")
+				}(appCtx)
+			}
+		})
+		wg.Wait()
+
+		ValidateVMUptime(appCtxs, canSsh, initialUptime)
+
+		ValidateFioInVMs(appCtxs, canSsh)
+
+		stepLog = "Destroy Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
+	})
+})

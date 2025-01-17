@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubevirtv1 "kubevirt.io/api/core/v1"
+	v1alpha1 "kubevirt.io/api/migrations/v1alpha1"
 )
 
 const (
@@ -40,6 +41,7 @@ const (
 	kubevirtCDIStorageConditionAnnotation = "cdi.kubevirt.io/storage.condition.running.reason"
 	kubevirtCDIStoragePodPhaseAnnotation  = "cdi.kubevirt.io/storage.pod.phase"
 	sshUserName                           = "root"
+	postCopyMigrationPolicy               = "allow-post-copy-migration"
 )
 
 var (
@@ -252,7 +254,7 @@ func StartAndWaitForVMIMigration(virtualMachineCtx *scheduler.Context, ctx conte
 	if len(vms) == 0 {
 		return fmt.Errorf("No VMs found for VM [%s] in namespace [%s]", virtualMachineCtx.App.Key, virtualMachineCtx.App.NameSpace)
 	}
-	log.Infof("Total number of VMs [%v] in namespace [%s]",len(vms), virtualMachineCtx.App.NameSpace)
+	log.Infof("Total number of VMs [%v] in namespace [%s]", len(vms), virtualMachineCtx.App.NameSpace)
 
 	for _, vm := range vms {
 		vmiNamespace := vm.Namespace
@@ -277,7 +279,7 @@ func StartAndWaitForVMIMigration(virtualMachineCtx *scheduler.Context, ctx conte
 		if err != nil {
 			return err
 		}
-		
+
 		t := func() (interface{}, bool, error) {
 			var migr *kubevirtdy.VirtualMachineInstanceMigration
 			migr, err = kubevirtdy.Instance().GetVirtualMachineInstanceMigration(ctx, vmiNamespace, migration.Name)
@@ -1805,5 +1807,207 @@ func UpgradePortworxDriverForKubevirtVM(upgradeEndpoints string) error {
 	}
 
 	log.InfoD("PX upgrade completed successfully for all endpoints")
+	return nil
+}
+
+// StartAndWaitForPostCopyVMIMigration starts the VM migration in post-copy mode
+func StartAndWaitForPostCopyVMIMigration(virtualMachineCtx *scheduler.Context, ctx context1.Context) error {
+	log.InfoD("Initiating VM migration for VM [%s] in namespace [%s]", virtualMachineCtx.App.Key, virtualMachineCtx.App.NameSpace)
+	vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{virtualMachineCtx})
+	if err != nil {
+		return err
+	}
+	if len(vms) == 0 {
+		return fmt.Errorf("No VMs found for VM [%s] in namespace [%s]", virtualMachineCtx.App.Key, virtualMachineCtx.App.NameSpace)
+	}
+	log.Infof("Total number of VMs [%v] in namespace [%s]", len(vms), virtualMachineCtx.App.NameSpace)
+
+	for _, vm := range vms {
+		vmiNamespace := vm.Namespace
+		vmiName := vm.Name
+
+		//Get the node where the vm is scheduled before the migration
+		nodeName, err := GetNodeOfVM(vm)
+		if err != nil {
+			return err
+		}
+		log.Infof("VM [%s] in namespace [%s] is scheduled on node [%s]", vmiName, vmiNamespace, nodeName)
+
+		// Enable post copy
+		log.Infof("Enabling post copy")
+		err = EnablePostCopy(ctx, vmiNamespace, vmiName)
+		if err != nil {
+			return err
+		}
+
+		// Start the VM migration
+		migration, err := kubevirtdy.Instance().CreateVirtualMachineInstanceMigration(ctx, vmiNamespace, vmiName)
+		if err != nil {
+			return err
+		}
+		log.Infof("VM migration created for VM [%s] in namespace [%s]", vmiName, vmiNamespace)
+
+		// get volumes from app context
+		vols, err := Inst().S.GetVolumes(virtualMachineCtx)
+		if err != nil {
+			return err
+		}
+
+		t := func() (interface{}, bool, error) {
+			var migr *kubevirtdy.VirtualMachineInstanceMigration
+			migr, err = kubevirtdy.Instance().GetVirtualMachineInstanceMigration(ctx, vmiNamespace, migration.Name)
+			if err != nil {
+				log.InfoD("Error: %v", err)
+				return "", false, fmt.Errorf("failed to get migration for VM [%s] in namespace [%s]", vmiName, vmiNamespace)
+			}
+
+			if !(migr.Phase == "Succeeded") {
+				return "", true, fmt.Errorf("waiting for migration to complete for VM [%s] in namespace [%s]", vmiName, vmiNamespace)
+			}
+
+			err = validatePostCopyMigration(vmiNamespace, migration.Name)
+			if err != nil {
+				return "", false, fmt.Errorf("failed to validate post copy migration for VM [%s] in namespace [%s]. Error : %v", vmiName, vmiNamespace, err)
+			}
+
+			// wait until there is only one pod in the running state
+			//TODO https://purestorage.atlassian.net/browse/PTX-23166 - This is a temporary fix to get the pod of the VM
+			testPod, err := GetVirtLauncherPodForVM(virtualMachineCtx, vols[0])
+			if err != nil {
+				return "", true, err
+			}
+
+			//Get the node where the vm is scheduled after the migration
+			nodeNameAfterMigration := testPod.Spec.NodeName
+
+			if nodeName == nodeNameAfterMigration {
+				return "", false, fmt.Errorf("VM pod live migrated [%s] in namespace [%s] but is still on the same node [%s]", testPod.Name, testPod.Namespace, nodeName)
+			}
+			log.InfoD("VM pod live migrated to node: [%s]", nodeNameAfterMigration)
+			return "", false, nil
+		}
+		_, err = task.DoRetryWithTimeout(t, defaultMigrationTimeout, defaultMigrationRetryInterval)
+		if err != nil {
+			return err
+		}
+
+	}
+	kvClient := k8sKubevirt.GetKubevirtClient()
+	err = kvClient.MigrationPolicy().Delete(ctx, postCopyMigrationPolicy, metav1.DeleteOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to delete migration policy: %v", err)
+	}
+	return nil
+}
+
+func EnablePostCopy(ctx context1.Context, vmiNamespace, vmiName string) error {
+	kvClient := k8sKubevirt.GetKubevirtClient()
+	kvClient.MigrationPolicy()
+	// AllowPostCopy enables post-copy live migrations. If set to true, migrations will still start in pre-copy,
+	// but switch to post-copy when CompletionTimeoutPerGiB triggers.
+	allowPostCopy := true
+	// To make likelihood of migration to become post-copy more, set CompletionTimeoutPerGiB to a low value
+	var completionTimeoutPerGiB int64 = 1
+
+	// Define the MigrationPolicy with allowPostCopy enabled
+	migrationPolicy := v1alpha1.MigrationPolicy{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "migrations.kubevirt.io/v1alpha1",
+			Kind:       "MigrationPolicy",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      postCopyMigrationPolicy,
+			Namespace: vmiNamespace,
+		},
+		Spec: v1alpha1.MigrationPolicySpec{
+			AllowPostCopy:           &allowPostCopy,
+			CompletionTimeoutPerGiB: &completionTimeoutPerGiB,
+			Selectors: &v1alpha1.Selectors{
+				VirtualMachineInstanceSelector: v1alpha1.LabelSelector{
+					"postCopyMigrate": "true",
+				},
+			},
+		},
+	}
+
+	// check if migration policy is present
+	migrationPolicyResult, err := kvClient.MigrationPolicy().Get(ctx, postCopyMigrationPolicy, metav1.GetOptions{})
+
+	if err != nil {
+		if errors.IsNotFound(err) {
+			log.Infof("Migration policy not found, creating new...")
+		} else {
+			return fmt.Errorf("failed to get migration policy: %v", err)
+		}
+	} else {
+		log.Infof("Migration policy name found: %s. Deleting the migration policy", migrationPolicyResult.Name)
+		err := kvClient.MigrationPolicy().Delete(ctx, postCopyMigrationPolicy, metav1.DeleteOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to delete migration policy: %v", err)
+		}
+	}
+
+	_, err = kvClient.MigrationPolicy().Create(ctx, &migrationPolicy, metav1.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to create migration policy: %v", err)
+	}
+
+	log.Infof("Successfully created MigrationPolicy to enable post-copy for VMs with label postCopyMigrate=true")
+
+	// label the VMI to apply the migration policy
+	err = labelVMI(vmiNamespace, vmiName, "postCopyMigrate", "true")
+	if err != nil {
+		return fmt.Errorf("failed to label VMI: %v", err)
+	}
+
+	log.Infof("Successfully labeled VMI [%s] in namespace [%s] to apply migration policy", vmiName, vmiNamespace)
+
+	return nil
+}
+
+func labelVMI(vmiNamespace, vmiName, labelKey, labelValue string) error {
+	// Prepare the label in the form of a map
+	labels := map[string]string{
+		labelKey: labelValue,
+	}
+
+	kvClient := k8sKubevirt.GetKubevirtClient()
+	vmi, err := kvClient.VirtualMachineInstance(vmiNamespace).Get(context1.TODO(), vmiName, &metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get VMI %s in namespace %s: %v", vmiName, vmiNamespace, err)
+	}
+
+	// Set the label on the VMI
+	if vmi.GetLabels() == nil {
+		vmi.SetLabels(labels)
+	} else {
+		// If labels already exist, update the label map
+		vmiLabels := vmi.GetLabels()
+		vmiLabels[labelKey] = labelValue
+		vmi.SetLabels(vmiLabels)
+	}
+
+	// Update the VMI with the new label
+	updateResult, err := kvClient.VirtualMachineInstance(vmiNamespace).Update(context1.TODO(), vmi)
+	if err != nil {
+		return fmt.Errorf("failed to label VMI %s in namespace %s: %v", vmiName, vmiNamespace, err)
+	}
+	log.Infof("Labels are updated. Result : %v", updateResult)
+
+	return nil
+}
+
+func validatePostCopyMigration(vmiNamespace, migrationName string) error {
+	kvClient := k8sKubevirt.GetKubevirtClient()
+	migrationResult, err := kvClient.VirtualMachineInstanceMigration(vmiNamespace).Get(migrationName, &metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+	log.Infof("Migration result : %+v", migrationResult)
+	log.Infof("Migration policy:%v", *migrationResult.Status.MigrationState.MigrationPolicyName)
+	if migrationResult.Status.MigrationState.Mode != "PostCopy" {
+		return fmt.Errorf("Migration mode - Expected: PostCopy, Actual: %v", migrationResult.Status.MigrationState.Mode)
+	}
+	log.Infof("Migration mode - Expected: PostCopy, Actual: %v", migrationResult.Status.MigrationState.Mode)
 	return nil
 }

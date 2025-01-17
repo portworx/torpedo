@@ -1,0 +1,136 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  labels:
+    app: fio-vm-multi-disk
+  name: fio-vm-multi-disk
+  annotations:
+    pvc.source: "cloned"
+    username: "ubuntu"
+spec:
+  running: true
+  template:
+    metadata:
+      annotations:
+        vm.kubevirt.io/workload: server
+      labels:
+        username: "ubuntu"
+    spec:
+      domain:
+        cpu:
+          cores: 6
+        devices:
+          disks:
+            - bootOrder: 1
+              disk:
+                bus: virtio
+              name: rootdisk
+            - name: fio-data-disk-1
+              disk:
+                bus: virtio
+            - name: fio-data-disk-2
+              disk:
+                bus: virtio
+            - name: cloudinitvolume
+              disk:
+                bus: virtio
+          interfaces:
+            - name: default
+              masquerade: {}
+          networkInterfaceMultiqueue: true
+          rng: {}
+        features:
+          acpi: {}
+          smm:
+            enabled: true
+        resources:
+          requests:
+            cpu: 6
+            memory: 8192M
+      networks:
+        - name: default
+          pod: {}
+      tolerations:
+        - effect: NoSchedule
+          key: node-role.kubernetes.io/master
+          operator: Exists
+      evictionStrategy: LiveMigrate
+      terminationGracePeriodSeconds: 180
+      volumes:
+        - dataVolume:
+            name: fio-root-disk
+          name: rootdisk
+        - name: fio-data-disk-1
+          persistentVolumeClaim:
+            claimName: fio-data-disk-1
+        - name: fio-data-disk-2
+          persistentVolumeClaim:
+            claimName: fio-data-disk-2
+        - cloudInitNoCloud:
+            #cloud-config
+            userData: |-
+              chpasswd:
+                list: |
+                  ubuntu:ubuntu
+                expire: False
+              runcmd:
+                - while true; do
+                    sleep 60
+                  done
+          name: cloudinitvolume
+  dataVolumeTemplates:
+    - metadata:
+        name: fio-root-disk
+        annotations:
+          cdi.kubevirt.io/storage.usePopulator: "false"
+      spec:
+        source:
+          pvc:
+            name: pvc-fill-vm-disk-high-resource
+            namespace: openshift-virtualization-os-images
+        pvc:
+          accessModes:
+            - ReadWriteMany
+          resources:
+            requests:
+              storage: 100Gi
+          storageClassName: fill-vm-disk-high-resource-sc
+          volumeMode: Filesystem
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fio-data-disk-1
+  labels:
+    portworx.io/kubevirt: "true"
+  annotations:
+    cdi.kubevirt.io/storage.usePopulator: "false"
+spec:
+  storageClassName: fill-vm-disk-high-resource-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      {{ if .VolumeSize }}
+      storage: {{ .VolumeSize }}
+      {{ else }}
+      storage: 25Gi{{ end }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fio-data-disk-2
+  labels:
+    portworx.io/kubevirt: "true"
+  annotations:
+    cdi.kubevirt.io/storage.usePopulator: "false"
+spec:
+  storageClassName: fill-vm-disk-high-resource-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      {{ if .VolumeSize }}
+      storage: {{ .VolumeSize }}
+      {{ else }}
+      storage: 25Gi{{ end }}
