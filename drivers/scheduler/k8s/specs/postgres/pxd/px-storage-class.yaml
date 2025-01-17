@@ -3,7 +3,7 @@ kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
   name: postgres-sc
-provisioner: kubernetes.io/portworx-volume
+provisioner: pxd.portworx.com
 parameters:
   {{ if .Repl }}
   repl: "{{ .Repl }}"

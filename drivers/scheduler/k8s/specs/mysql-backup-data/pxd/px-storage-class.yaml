@@ -3,7 +3,7 @@ kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
   name: mysql-sc
-provisioner: kubernetes.io/portworx-volume
+provisioner: pxd.portworx.com
 parameters:
   repl: "3"
   priority_io: "high"
@@ -14,7 +14,7 @@ kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
   name: mysql-sc-aggr
-provisioner: kubernetes.io/portworx-volume
+provisioner: pxd.portworx.com
 parameters:
   fs: "ext4"
   block_size: "512b"
@@ -30,7 +30,7 @@ kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
   name: mysql-sc-seq
-provisioner: kubernetes.io/portworx-volume
+provisioner: pxd.portworx.com
 parameters:
   fs: "xfs"
   repl: "3"
