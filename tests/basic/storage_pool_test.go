@@ -13653,3 +13653,158 @@ var _ = Describe("{AddDriveWithNodeRebootAndNodeMaintenanceMode}", Label("p1", "
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
+
+var _ = Describe("{AddDriveWithPXRestartForMultipleIterations}", Label("p0", "staging", "negative", "error_injection", "px_ops", "pool_ops", "PoolExpand", "px_restart", "AddDrive"), func() {
+	/*
+	   ticket id: https://purestorage.atlassian.net/browse/HAZEL-1019
+	   1) Deploy PX with cloud drive.
+	   2) Create apps
+	   3) Expand pool by adding cloud drives.
+	   4) Restart PX service where the pool expansion is in-progress
+	   5) Keep on checking if PX is up
+	   6) As soon as PX has come up, check if pool got expanded or not
+	   7) If pool didn't expand yet, kill PX again
+	   8) If pool got expanded, trigger another resize and repeat steps 4 to 8 at least 5 times
+	   9) Do this for 5 iterations (Steps 3 to 8) on same pool
+	   10) Verify total pool count after addition of cloud drive of same spec with PX restart
+	*/
+
+	var (
+		testrailID       = 0
+		runID            int
+		contexts         []*scheduler.Context
+		initialPoolCount int
+		driveSpecs       []string
+		deviceSpec       string
+		deviceSpecParams []string
+		finalPoolCount   int
+		specSize         uint64
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("AddDriveWithPXRestartForMultipleIterations", "Initiate pool expansion using add-drive and restart PX while it is in progress for multiple iterations", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	itLog := "Expand pool and restart PX in multiple iterations"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		stepLog := "Schedule application"
+		Step("Setup applications and get a random storage node", func() {
+			log.InfoD(stepLog)
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("adddrivewithpxrestart-%d", i))...)
+			}
+		})
+		ValidateApplications(contexts)
+		defer DestroyApps(contexts, nil)
+
+		get_current_poolsize_currentsize := func() uint64 {
+			var currentpoolSize uint64
+			pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+			log.FailOnError(err, "Error getting pools list")
+			for _, pool := range pools {
+				currentpoolSize += pool.GetTotalSize() / units.GiB
+			}
+			return currentpoolSize
+		}
+
+		stNode, err := getRandomNodeWithPoolIOs(contexts)
+		log.FailOnError(err, "Error identifying node to run test")
+		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+		log.FailOnError(err, "Error getting pools list")
+		initialPoolCount = len(pools)
+		log.Infof("Initial pool count: %d", initialPoolCount)
+
+		stepLog = "Loop through iterations to expand pool and restart PX"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < 5; i++ {
+				currentTotalPoolSize := get_current_poolsize_currentsize()
+				log.Infof("Current total pool size: %d GiB", currentTotalPoolSize)
+				driveSpecs, err = GetCloudDriveDeviceSpecs()
+				log.FailOnError(err, "Error getting cloud drive specs")
+				deviceSpec = driveSpecs[0]
+				deviceSpecParams = strings.Split(deviceSpec, ",")
+				for _, param := range deviceSpecParams {
+					if strings.Contains(param, "size") {
+						val := strings.Split(param, "=")[1]
+						specSize, err = strconv.ParseUint(val, 10, 64)
+						log.FailOnError(err, "Error converting size to uint64")
+					}
+				}
+				currentpoolsize := get_current_poolsize_currentsize()
+				expectedTotalPoolSize := currentpoolsize + specSize
+				log.Infof("Expected  total pool size: %d GiB", expectedTotalPoolSize)
+				log.Infof("Iteration %d of pool expansion and PX restart", i+1)
+				err = Inst().V.AddCloudDrive(&stNode, deviceSpec, -1)
+				log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", stNode.Name))
+				time.Sleep(5 * time.Second)
+				log.Infof(fmt.Sprintf("Restarting volume drive on node [%s]", stNode.Name))
+				err = Inst().V.RestartDriver(stNode, nil)
+				log.FailOnError(err, fmt.Sprintf("Error restarting PX on node %s", stNode.Name))
+				err = Inst().V.WaitDriverUpOnNode(stNode, addDriveUpTimeOut)
+				log.FailOnError(err, fmt.Sprintf("PX driver is down on node %s", stNode.Name))
+				pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+				log.FailOnError(err, "Error getting pools list")
+				dash.VerifyFatal(len(pools) > 0, true, "Verify pools exist")
+				var newTotalPoolSize uint64
+				for _, pool := range pools {
+					newTotalPoolSize += pool.GetTotalSize() / units.GiB
+				}
+				log.Infof("New total pool size after killing and restarting PX: %d GiB", newTotalPoolSize)
+				if newTotalPoolSize == currentTotalPoolSize {
+					for i := 0; i < 5; i++ {
+						currentTotalPoolSize := get_current_poolsize_currentsize()
+						log.Infof("Current total pool size: %d GiB", currentTotalPoolSize)
+						log.Infof("Pool expansion not complete yet. Killing PX service and retrying...")
+						err = Inst().V.RestartDriver(stNode, nil)
+						log.FailOnError(err, fmt.Sprintf("Error restarting PX on node: %s", stNode.Name))
+						time.Sleep(5 * time.Second)
+						err = Inst().V.WaitDriverUpOnNode(stNode, addDriveUpTimeOut)
+						pools, err = Inst().V.ListStoragePools(metav1.LabelSelector{})
+						log.FailOnError(err, "Error getting pools list")
+						for _, pool := range pools {
+							newTotalPoolSize += pool.GetTotalSize() / units.GiB
+						}
+						log.Infof("New total pool size after killing and restarting PX: %d GiB", newTotalPoolSize)
+						if newTotalPoolSize > currentTotalPoolSize {
+							break
+						}
+					}
+				}
+				poolExpand := func() (interface{}, bool, error) {
+					currentTotalPoolSize := get_current_poolsize_currentsize()
+					if currentTotalPoolSize == expectedTotalPoolSize {
+						return nil, false, nil
+					}
+					return nil, true, fmt.Errorf("retrying pool not expand %d with expected size %d ", currentTotalPoolSize, expectedTotalPoolSize)
+				}
+				_, err = task.DoRetryWithTimeout(poolExpand, 15*time.Minute, 1*time.Minute)
+				log.FailOnError(err, "retrying is failed for pool expand")
+
+				log.Infof("Expected total pool size: %d GiB", expectedTotalPoolSize)
+				dash.VerifyFatal(newTotalPoolSize == expectedTotalPoolSize, true,
+					fmt.Sprintf("Validate total pool size after adding cloud drive on node %s", stNode.Name))
+
+			}
+		})
+
+		stepLog = "Final validation of pool count"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+			log.FailOnError(err, "Error getting pools list")
+			dash.VerifyFatal(len(pools) > 0, true, "Verify pools exist")
+			finalPoolCount = len(pools)
+			log.Infof("Final pool count: %d", finalPoolCount)
+			dash.VerifyFatal(finalPoolCount == initialPoolCount+5, true, fmt.Sprintf("Total pool count after 5 iterations Expected:[%d] Got:[%d]", initialPoolCount+5, finalPoolCount))
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
