@@ -7173,3 +7173,164 @@ var _ = Describe("{VolumeRelaxedReclaimLimitEnforcement}", Label("p0", "positive
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
+
+var _ = Describe("{CreateCloudSnapAndDeleteKvdbLeaderNode}", Label("p0", "negative", "staging", "px_ops"), func() {
+	/*
+			1. Create apps
+			2. Create cloudsnap
+		    3. While cloudsnap in progress, reboot kvdb leader node
+			4. Validate cloudsnap is still successful
+			5. Validate apps
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("CreateCloudSnapAndDeleteKvdbLeaderNode", "While cloudsnap in progress fail the Leader etcd node in etcd cluster", nil, 0)
+	})
+
+	var (
+		contexts         []*scheduler.Context
+		kvdbLeaderNode   node.Node
+		appVolumes       []*volume.Volume
+		retain, interval int
+	)
+	itLog := "While cloudsnap in progress fail the Leader etcd node in etcd cluster"
+	It(stepLog, func() {
+		log.InfoD(itLog)
+
+		err := CreatePXCloudCredential()
+		log.FailOnError(err, "failed to create cloud credential")
+		defer func() {
+			err = DeletePXCloudCredential()
+			log.FailOnError(err, "failed to cloud credential")
+		}()
+
+		contexts = make([]*scheduler.Context, 0)
+		policyName := "intervalpolicy"
+
+		stepLog = fmt.Sprintf("create schedule policy %s", policyName)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			schedPolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
+			if err != nil {
+				retain = 3
+				interval = 1
+				log.InfoD("Creating a interval schedule policy %v with interval %v minutes", policyName, interval)
+				schedPolicy = &storkv1.SchedulePolicy{
+					ObjectMeta: meta_v1.ObjectMeta{
+						Name: policyName,
+					},
+					Policy: storkv1.SchedulePolicyItem{
+						Interval: &storkv1.IntervalPolicy{
+							Retain:          storkv1.Retain(retain),
+							IntervalMinutes: interval,
+						},
+					}}
+
+				_, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
+				log.FailOnError(err, fmt.Sprintf("error creating a SchedulePolicy [%s]", policyName))
+			}
+		})
+		defer func() {
+			err := storkops.Instance().DeleteSchedulePolicy(policyName)
+			log.FailOnError(err, fmt.Sprintf("error deleting a SchedulePolicy [%s]", policyName))
+		}()
+
+		applist := Inst().AppList
+		defer func() {
+			Inst().AppList = applist
+		}()
+		stepLog = "Schedule app"
+		Step(stepLog, func() {
+			Inst().AppList = []string{"fio-cloudsnap"}
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("fio-cloudsnap-%d", i))...)
+			}
+			ValidateApplications(contexts)
+		})
+		defer appsValidateAndDestroy(contexts)
+
+		allkvdbNodes, err := GetAllKvdbNodes()
+		log.FailOnError(err, "Failed to get list of KVDB nodes from the cluster")
+
+		for _, each := range allkvdbNodes {
+			if each.Leader {
+				kvdbLeaderNode, err = node.GetNodeDetailsByNodeID(each.ID)
+				log.FailOnError(err, "Unable to get the node details from NodeID [%v]", each.ID)
+				break
+			}
+		}
+
+		for _, ctx := range contexts {
+			stepLog = fmt.Sprintf("Getting app volumes for volume %s", ctx.App.Key)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				appVolumes, err = Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "error getting volumes for [%s]", ctx.App.Key)
+
+				dash.VerifyFatal(len(appVolumes) >= 1, true, "There should be atleast one volume to proceed with taking snapshot")
+			})
+			log.Infof("Got volume count : %v", len(appVolumes))
+
+			appNamespace := ctx.App.Key + "-" + ctx.UID
+			log.Infof("Namespace: %v", appNamespace)
+
+			stepLog = fmt.Sprintf("reboot the kvdb leader node %s", kvdbLeaderNode.Name)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				err = Inst().N.RebootNodeAndWait(kvdbLeaderNode)
+				log.FailOnError(err, fmt.Sprintf("Failed to reboot node %s and wait till it is up", kvdbLeaderNode.Name))
+				log.Info("Verified reboot succeed on kvdb leader node - %s", kvdbLeaderNode.Name)
+			})
+
+			rebootEndTime := time.Now().UTC()
+			log.Infof("KVDB leader node reboot end time - %v ", rebootEndTime)
+
+			stepLog = "Get the latest snapshot after kvdb leader node reboot"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, v := range appVolumes {
+					var newSnapShot *storkv1.ScheduledVolumeSnapshotStatus
+					isPureVol, err := Inst().V.IsPureVolume(v)
+					log.FailOnError(err, "error checking if volume is pure volume")
+					if isPureVol {
+						log.Warnf("Cloud snapshot is not supported for Pure DA volumes: [%s],Skipping cloud snapshot trigger for pure volume.", v.Name)
+						continue
+					}
+					snapshotScheduleName := v.Name + "-interval-schedule"
+					log.InfoD("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
+					_, err = task.DoRetryWithTimeout(func() (interface{}, bool, error) {
+						resp, err := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
+						if err != nil {
+							return nil, false, fmt.Errorf("error getting snapshot schedule for %s, volume:%s in namespace %s", snapshotScheduleName, v.Name, v.Namespace)
+						}
+						if len(resp.Status.Items) == 0 {
+							return nil, true, fmt.Errorf("waiting for new snapshot schedules for %s, volume:%s in namespace %s", snapshotScheduleName, v.Name, v.Namespace)
+						}
+
+						// Find the latest snapshot
+						for _, item := range resp.Status.Items {
+							for _, status := range item {
+								log.Infof("last found snap at %v", status.CreationTimestamp.Time)
+								if status.CreationTimestamp.Time.After(rebootEndTime) {
+									newSnapShot = status
+								}
+							}
+						}
+
+						if newSnapShot != nil {
+							return newSnapShot, false, nil
+						}
+						return nil, true, fmt.Errorf("latest snapshot not found")
+					}, time.Duration(15*interval)*defaultCommandTimeout, 30*time.Second)
+					log.FailOnError(err, fmt.Sprintf("Failed to get a latest snapshot after %v", rebootEndTime))
+					log.Infof("Volume snap taken for volume %s after KVDB leader node reboot %s at %v", v.Name, newSnapShot.Name, newSnapShot.CreationTimestamp)
+				}
+			})
+		}
+	})
+
+	AfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
