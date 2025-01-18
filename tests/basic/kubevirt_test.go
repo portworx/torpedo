@@ -7224,7 +7224,7 @@ var _ = Describe("{AddAndRemoveNewHotPlugDiskToKubevirtVM}", Label("p0", "positi
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			persist := false
-			_, err := HotPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "50Gi", volumeMode, persist)
+			_, err := HotPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "50Gi", volumeMode,persist)
 			log.FailOnError(err, "Failed to hot-plug DataVolume to KubeVirt VM")
 			dash.VerifyFatal(true, true, "Successfully hot-plugged disk to KubeVirt VM ?")
 		})
@@ -7935,6 +7935,165 @@ var _ = Describe("{SingleVMLiveMigrationPostCopy}", Label("p1", "positive", "kub
 			DestroyApps(appCtxs, nil)
 		})
 	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
+	})
+})
+var _ = Describe("{LMAfterAddingHotAndColdDiskToKubevirtVMMultipleTimes}", Label("p0", "positive", "kubevirt"), func() {
+	/*
+		JIRA ID : https://purestorage.atlassian.net/browse/HAZEL-1784
+		Step 1 : Schedule a VM
+		Step 2 : Add a new Hot Pluggable disk to VM
+		Step 3 : Add a new Cold Pluggable disk to VM
+		Step 4 : Live migrate VM
+		Step 5 : Repeat the entire process for multiple times
+	*/
+	var (
+		app, volType  string
+		present       bool
+		appCtxs       []*scheduler.Context
+		namespace     string
+		canSsh        bool
+		volumeMode    string
+		initialUptime map[string]time.Duration
+		vmNodeName    string
+	)
+	JustBeforeEach(func() {
+		StartTorpedoTest("LMAfterAddingHotAndColdDiskToKubevirtVM", "Live migrate VM after adding hot pluggable disk and cold add disk", nil, 0)
+		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
+		if !present {
+			app = "kubevirt-debian-fio-minimal"
+		}
+		if volType == "pxe-raw" {
+			app = "kubevirt-raw-vol"
+		} else if volType == "fada-raw" {
+			app = "kubevirt-fada-raw-fio"
+		} else {
+			app = "kubevirt-debian-fio-minimal"
+		}
+		log.InfoD("Setting app for this test to be : %s", app)
+	})
+
+	It("LM after adding hot and cold add disk to kubevirt VM", func() {
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+
+		numberOfVolumes := 1
+
+		Inst().AppList = []string{app}
+		Inst().CsiAppList = []string{app}
+
+		stepLog := "Schedule a kubevirt VM"
+		Step(stepLog, func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
+				appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
+			}
+		})
+		ValidateApplications(appCtxs)
+
+		if !present {
+			for _, appCtx := range appCtxs {
+				bindMount, err := IsVMBindMounted(appCtx, false)
+				log.FailOnError(err, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+			}
+		}
+
+		if app == "kubevirt-debian-fio-minimal" {
+			volumeMode = ""
+		} else {
+			volumeMode = "Block"
+		}
+
+		log.Infof("Sleeping for 2 minutes to let VMs come up fully")
+		time.Sleep(2 * time.Minute)
+
+		canSsh = CreateSSHPodAndSetCanSsh()
+		ValidateFioInVMs(appCtxs, canSsh)
+		initialUptime = make(map[string]time.Duration)
+		stepLog = "Get initial uptime of VMs and current node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			var wg sync.WaitGroup
+			for _, appCtx := range appCtxs {
+				wg.Add(1)
+				go func(appCtx *scheduler.Context) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+					log.FailOnError(err, "Failed to get VMs from appCtx")
+					for _, vm := range vms {
+						uptime, err := GetVMUptime(vm)
+						log.FailOnError(err, "Failed to get uptime from VM %s", vm.Name)
+						vmKey := fmt.Sprintf("%s/%s", vm.Namespace, vm.Name)
+						initialUptime[vmKey] = uptime
+						log.Infof("Initial uptime for VM %s is %v", vmKey, uptime)
+
+						vmNodeName, err = GetNodeOfVM(vm)
+						log.FailOnError(err, "Failed to get node of VM %v", vm.Name)
+						log.Infof("VM %s is currently running on node %s", vm.Name, vmNodeName)
+					}
+				}(appCtx)
+			}
+			wg.Wait()
+		})
+		repeat := 2
+
+		for i := 0; i < repeat; i++ {
+			log.Infof("Running the iteration [%d]", i)
+			
+			numberOfVolumes = 1
+			stepLog = "Hot-plug one  disk (DataVolume) to the running KubeVirt VM"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				isHotPluggable, err := HotPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "50Gi", volumeMode, true)
+				log.FailOnError(err, "Failed to hot-plug DataVolume to KubeVirt VM")
+				dash.VerifyFatal(isHotPluggable, true, "Successfully hot-plugged disk to KubeVirt VM ?")
+			})
+
+			ValidateFioInVMs(appCtxs, canSsh)
+			ValidateVMUptime(appCtxs, canSsh, initialUptime)
+
+			log.Infof("Sleeping for 2 minutes before adding cold disk")
+			time.Sleep(2 * time.Minute)
+
+			stepLog = "Cold add disk to kubevirt VM"
+			Step(stepLog, func() {
+				isColdAddDisk, err := AddDisksToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
+				log.FailOnError(err, "Failed to add cold disk to KubeVirt VM")
+				dash.VerifyFatal(isColdAddDisk, true, "Successfully added cold disk KubeVirt VM ?")
+
+			})
+
+			ValidateFioInVMs(appCtxs, canSsh)
+
+			stepLog = "Live migrate the kubevirt VM"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, appCtx := range appCtxs {
+					err := StartAndWaitForVMIMigration(appCtx, context1.TODO())
+					log.FailOnError(err, "Failed to live migrate kubevirt VM")
+				}
+			})
+
+			stepLog = "Destroy Applications"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				DestroyApps(appCtxs, nil)
+				err = DeleteNamespaces([]string{namespace})
+				log.FailOnError(err, "failed to delete namespaces")
+			})
+		}
+	})
+
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(appCtxs)

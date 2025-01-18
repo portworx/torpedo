@@ -150,6 +150,7 @@ func AddDisksToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisks in
 	return true, nil
 }
 
+
 // RunCmdInVirtLauncherPod runs a command in the virt-launcher pod of the VM
 func RunCmdInVirtLauncherPod(virtualMachineCtx *scheduler.Context, cmd []string) (string, error) {
 	vols, err := Inst().S.GetVolumes(virtualMachineCtx)
