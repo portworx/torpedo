@@ -24,21 +24,21 @@ const (
 	validateReplicationUpdateTimeout = 4 * time.Hour
 )
 
-var _ = Describe("{HaIncreaseRebootTarget}",Label("p1","negative","error_injection","px_vol_ops","HA_Increase_Decrease","node_reboot"), func() {
+var _ = Describe("{HaIncreaseRebootTarget}", Label("p1", "negative", "error_injection", "px_vol_ops", "HA_Increase_Decrease", "node_reboot"), func() {
 	testName := "ha-inc-reboot-tgt"
 	performHaIncreaseRebootTest(testName)
 })
 
-var _ = Describe("{HaIncreaseRebootSource}",Label("p1","negative","error_injection","px_vol_ops","HA_Increase_Decrease","node_reboot"), func() {
+var _ = Describe("{HaIncreaseRebootSource}", Label("p1", "negative", "error_injection", "px_vol_ops", "HA_Increase_Decrease", "node_reboot"), func() {
 	testName := "ha-inc-reboot-src"
 	performHaIncreaseRebootTest(testName)
 })
-var _ = Describe("{HaIncreaseRestartPXSource}",Label("p1","negative","error_injection","px_vol_ops","px_restart","HA_Incease_Decrease"), func() {
+var _ = Describe("{HaIncreaseRestartPXSource}", Label("p1", "negative", "error_injection", "px_vol_ops", "px_restart", "HA_Incease_Decrease"), func() {
 	testName := "ha-inc-restartpx-src"
 	performHaIncreaseRebootTest(testName)
 })
 
-var _ = Describe("{HaIncreaseRestartPXTarget}",Label("p1","negative","error_injection","px_vol_ops","px_restart","HA_Incease_Decrease"), func() {
+var _ = Describe("{HaIncreaseRestartPXTarget}", Label("p1", "negative", "error_injection", "px_vol_ops", "px_restart", "HA_Incease_Decrease"), func() {
 	testName := "ha-inc-restartpx-tgt"
 	performHaIncreaseRebootTest(testName)
 })
@@ -165,7 +165,7 @@ func performHaIncreaseRebootTest(testName string) {
 
 }
 
-var _ = Describe("{VolResizeAllVolumes}",Label("p0","positive","px_vol_ops","HA_Increase_Decrease","MiniScale"), func() {
+var _ = Describe("{VolResizeAllVolumes}", Label("p0", "positive", "px_vol_ops", "HA_Increase_Decrease", "MiniScale"), func() {
 
 	/*
 		PTX-23576
@@ -420,7 +420,7 @@ var _ = Describe("{VolResizeAllVolumes}",Label("p0","positive","px_vol_ops","HA_
 
 })
 
-var _ = Describe("{VolHAIncreaseAllVolumes}",Label("p0","positive","px_vol_ops","MiniScale","HA_Increase_Decrease"), func() {
+var _ = Describe("{VolHAIncreaseAllVolumes}", Label("p0", "positive", "px_vol_ops", "MiniScale", "HA_Increase_Decrease"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("VolHAIncreaseAllVolumes", "Trigger vol HA Increase on all volumes at once", nil, 0)
 	})
@@ -541,6 +541,138 @@ var _ = Describe("{VolHAIncreaseAllVolumes}",Label("p0","positive","px_vol_ops",
 			}
 		}
 
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+// Verify HA decrease works even when storage pool is offline
+var _ = Describe("{HAUpdateWhenReplPoolIsDown}", Label("p1", "negative", "px_vol_ops", "HA_Increase_Decrease", "staging"), func() {
+
+	/*
+		Jira ID: https://purestorage.atlassian.net/browse/HAZEL-1005
+		1) Create an app with repl=3 in a 5 node setup
+		2) Identify one node acting as a target node
+		3) Put pool on this node in maintenance mode
+		4) Decrease HA of all PVCs in this app to 2
+		5) Exit maintenance mode
+		6) Increase HA of all PVCs in this app to 3
+		7) Validate app
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("HAUpdateWhenReplPoolIsDown", "Verify HA decrease works even when storage pool is offline", nil, 0)
+	})
+	var (
+		contexts     []*scheduler.Context
+		nodeSelected node.Node
+	)
+
+	itLog := "HAUpdateWhenReplPoolIsDown"
+	It(itLog, func() {
+		isPoolAddDiskSupported := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			Skip("Add disk operation is not supported for DMThin Setup")
+		}
+		stepLog := "schedule Application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ { // using elasticsearch app with repl = 3 in appList
+				for _, app := range Inst().AppList {
+					contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%s", app, "ha-decrease"))...)
+				}
+			}
+		})
+		ValidateApplications(contexts)
+		defer DestroyApps(contexts, nil)
+
+		exitPoolMaintenanceMode := func(nodeSelected node.Node) {
+			err = ExitPoolMaintenance(nodeSelected)
+			log.FailOnError(err, "Failed to exit maintenance mode")
+		}
+
+		defer exitPoolMaintenanceMode(nodeSelected)
+
+		for _, ctx := range contexts {
+			volumes, err := Inst().S.GetVolumes(ctx)
+			log.FailOnError(err, "Failed while listing the volume with error")
+			log.InfoD("Vol details %v", volumes)
+
+			if len(volumes) == 0 {
+				msg := fmt.Sprintf("There are no volumes associated with the app %v", ctx.App.Key)
+				log.InfoD(msg)
+				Skip(msg)
+			}
+			volumeSelected := volumes[0]
+
+			stepLog = "Identify one node acting as a target node"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				log.InfoD("Select the volume replica node")
+				rsDetails, err := Inst().V.GetReplicaSets(volumeSelected)
+				log.FailOnError(err, fmt.Sprintf("error getting replica sets for vol %s", volumeSelected.Name))
+				log.InfoD("Volume Replica info %v", rsDetails)
+				volReplicaNodeID := rsDetails[0].GetNodes()[0]
+
+				nodeSelected, err = node.GetNodeDetailsByNodeID(volReplicaNodeID)
+				log.FailOnError(err, fmt.Sprintf("error getting node details for vol %s", volumeSelected.Name))
+			})
+
+			stepLog = "Put pool on this node in maintenance mode"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				err = EnterPoolMaintenance(nodeSelected)
+				log.FailOnError(err, "Failed to enter maintenance mode")
+				log.Info("enter pool maintenance mode succeed")
+			})
+
+			stepLog = "Decrease HA of all PVCs in this app to (current repl - 1)"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				// Check if volumes are Pure FA/FB DA volumes
+				isPureVol, err := Inst().V.IsPureVolume(volumeSelected)
+				log.FailOnError(err, "Failed to check is PURE volume")
+				dash.VerifyFatal(isPureVol, false, fmt.Sprintf("Repl increase on Pure DA Volume [%s] not supported.Skiping this operation", volumeSelected.Name))
+
+				currRep, err := Inst().V.GetReplicationFactor(volumeSelected)
+				log.FailOnError(err, "Failed to get Repl factor for vol %s", volumeSelected.Name)
+				if currRep != 1 {
+					opts := volume.Options{
+						ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
+					}
+					err = Inst().V.SetReplicationFactor(volumeSelected, currRep-1, nil, nil, true, opts)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Validate set repl factor to %d", currRep-1))
+				} else {
+					log.InfoD("The current repl factor is 1, Skipping the HA Decrease of the PVC!")
+				}
+			})
+
+			stepLog = "Exit pool maintenance mode"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				exitPoolMaintenanceMode(nodeSelected)
+				log.Info("exit pool maintenance mode succeed")
+			})
+
+			stepLog = "Increase HA of all PVCs in this app to (current repl + 1)"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				currRep, err := Inst().V.GetReplicationFactor(volumeSelected)
+				log.FailOnError(err, "Failed to get Repl factor for vol %s", volumeSelected.Name)
+				if currRep != 3 {
+					opts := volume.Options{
+						ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
+					}
+					err = Inst().V.SetReplicationFactor(volumeSelected, currRep+1, nil, nil, true, opts)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Validate set repl factor to %d", currRep+1))
+				} else {
+					log.InfoD("The current repl factor is 3, Skipping the HA Increase of the PVC!")
+				}
+			})
+			ValidateApplications(contexts)
+		}
 	})
 
 	JustAfterEach(func() {
