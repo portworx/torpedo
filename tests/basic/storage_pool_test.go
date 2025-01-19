@@ -13383,6 +13383,342 @@ var _ = Describe("{StoragePoolMultipleExpandDiskResize}", Label("p0", "negative"
 	})
 })
 
+var _ = Describe("{PoolDeleteWithNodeRebootAndKillPxInProgress}", Label("p0", "negative", "pool_ops", "PoolDelete", "staging"), func() {
+	/*
+		    https://purestorage.atlassian.net/browse/HAZEL-1015
+			1. Identify 2 pools to delete
+			2. Trigger delete of 2 pools in parallel
+			3. While both Pools deletion is in progress, reboot the nodes on which these 2 pools are deleted
+			4. Once nodes are up, validate pool deletion was successful
+			5. Select 2 more pools
+			6. Trigger delete of these 2 pools in parallel
+			7. While both pools deletion is in progress, kill Px on both the nodes on which these 2 pools are deleted
+			8. Once Px is up, validate pool deletion was successful
+	*/
+	type poolToDelete struct {
+		poolIDToDelete string
+		node           node.Node
+	}
+
+	var (
+		nodes, nodesNotInKvdbNodes       []node.Node
+		poolIDsToDelete                  []poolToDelete
+		wg, wg1                          sync.WaitGroup
+		poolsMap                         map[string][]volume.DiskResource
+		rebootFlag                       chan struct{}
+		rebootErrChan, deletePoolErrChan chan error
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolDeleteWithNodeRebootAndKillPxInProgress", "Shutdown the node while pool delete and bring it back online", nil, 0)
+	})
+
+	itLog := "Shutdown the node while pool delete and bring it back online"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		ErrorInjectionList := []string{"node_reboot", "px_restart"}
+
+		for _, errInj := range ErrorInjectionList {
+			stepLog := "Select two pools to delete"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				poolIDsToDelete = nil
+				dash.VerifyFatal(len(poolIDsToDelete) == 0, true, "verify pool list empty before selecting pool to delete")
+				nodes, err = GetStorageNodes()
+				log.FailOnError(err, "failed to get storage nodes")
+
+				log.InfoD("Get all KVDB nodes")
+				kvdbNodes, err := GetAllKvdbNodes()
+				log.FailOnError(err, "Unable to retrieve KVDB nodes")
+				log.Infof("Initally kvdb node in the cluster: [%v]", kvdbNodes)
+				stepLog = "Getting non KVDB nodes in the cluster"
+				Step(stepLog, func() {
+					kvdbNodeMap := make(map[string]bool)
+					for _, kvdbNode := range kvdbNodes {
+						kvdbNodeMap[kvdbNode.ID] = true
+					}
+					for _, storageNode := range nodes {
+						if _, exists := kvdbNodeMap[storageNode.Id]; !exists {
+							nodesNotInKvdbNodes = append(nodesNotInKvdbNodes, storageNode)
+						}
+					}
+					log.Infof("All storage nodes which are not part of KVDB members: [%v]", nodesNotInKvdbNodes)
+
+				})
+
+				log.InfoD("Selecting pool to delete which doesn't contains journal device on it")
+				for _, node := range nodesNotInKvdbNodes {
+					jDev, err := Inst().V.GetJournalDevicePath(&node)
+					log.FailOnError(err, fmt.Sprintf("error getting journal device path from node %s", node.Name))
+					log.Infof("JournalDev: %s", jDev)
+					if jDev != "" {
+						drivesMap, err := Inst().V.GetPoolDrives(&node)
+						log.FailOnError(err, "failed to get the pool drives on the node %s", node.Name)
+						jPath := jDev[:len(jDev)-1]
+						log.Infof("JournalDev path: %s", jPath)
+						for k, v := range drivesMap {
+							isPoolInvalid := false
+							for _, dv := range v {
+								if dv.Device == "" {
+									isPoolInvalid = true
+									break
+								}
+							}
+
+							if isPoolInvalid {
+								continue
+							}
+
+							isPoolContainsJournal := false
+							for _, dv := range v {
+								if strings.Contains(dv.Device, jPath) {
+									isPoolContainsJournal = true
+									break
+								}
+							}
+
+							if !isPoolContainsJournal {
+								log.Infof("pool selected for deletion [%s]", k)
+								poolIDsToDelete = append(poolIDsToDelete, poolToDelete{poolIDToDelete: k, node: node})
+								break
+							}
+						}
+					} else {
+						drivesMap, err := Inst().V.GetPoolDrives(&node)
+						log.FailOnError(err, "failed to get the pool drives on the node %s", node.Name)
+
+						for k, v := range drivesMap {
+							isPoolInvalid := false
+							for _, dv := range v {
+								if dv.Device == "" {
+									isPoolInvalid = true
+									break
+								}
+							}
+
+							if !isPoolInvalid {
+								poolIDsToDelete = append(poolIDsToDelete, poolToDelete{poolIDToDelete: k, node: node})
+								break
+							}
+						}
+					}
+
+					if len(poolIDsToDelete) >= 2 {
+						break
+					}
+				}
+			})
+
+			rebootFlag = make(chan struct{}, 1)
+			rebootErrChan = make(chan error, 2)
+
+			if errInj == "node_reboot" {
+				stepLog = "Perform node reboot"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					wg.Add(1)
+					go func() {
+						defer wg.Done()
+						defer GinkgoRecover()
+						<-rebootFlag
+						for _, pool := range poolIDsToDelete {
+							wg.Add(1)
+							go func() {
+								defer wg.Done()
+								defer GinkgoRecover()
+								err = Inst().N.RebootNodeAndWait(pool.node)
+								if err != nil {
+									err = fmt.Errorf("Failed to reboot node and wait till it is up , err - %v", err)
+									rebootErrChan <- err
+								}
+							}()
+						}
+					}()
+				})
+			}
+
+			if errInj == "px_restart" {
+				stepLog = "Perform px restart"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					wg.Add(1)
+					go func() {
+						defer wg.Done()
+						defer GinkgoRecover()
+						<-rebootFlag
+						for _, pool := range poolIDsToDelete {
+							wg.Add(1)
+							go func() {
+								defer wg.Done()
+								defer GinkgoRecover()
+								log.Info(stepLog)
+								err := Inst().V.RestartDriver(pool.node, nil)
+								if err != nil {
+									err = fmt.Errorf("Error occured while Restart PX on node: %s , err - %v", pool.node.Name, err)
+									rebootErrChan <- err
+									return
+								}
+
+								//wait for 5 mins
+								time.Sleep(5 * time.Minute)
+
+								log.InfoD("Verify px is restarted")
+								for startTime := time.Now(); time.Since(startTime) <= time.Duration(20*time.Minute); time.Sleep(30 * time.Second) {
+									status, err := Inst().V.GetPxctlStatus(pool.node)
+									if err != nil {
+										err = fmt.Errorf("failed to get pxctl status on node [%s]", pool.node.Name)
+										rebootErrChan <- err
+										return
+									}
+
+									if status == api.Status_STATUS_OFFLINE.String() {
+										continue
+									} else {
+										log.Infof("driver status is %s on node %s ", status, pool.node.Name)
+										return
+									}
+								}
+
+								err = fmt.Errorf("driver status remained offline on node %s until 25 mins", pool.node.Name)
+								rebootErrChan <- err
+							}()
+						}
+					}()
+				})
+			}
+
+			deletePoolErrChan = make(chan error, 2)
+			stepLog = fmt.Sprintf("Delete the  pools [%v] ", poolIDsToDelete)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+
+				stepLog := "Enter maintenance mode"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					for _, pool := range poolIDsToDelete {
+						err = EnterPoolMaintenance(pool.node)
+						log.FailOnError(err, "Failed to enter in maintenance mode")
+						log.Info("enter pool maintenance mode succeed")
+					}
+				})
+
+				for _, pool := range poolIDsToDelete {
+					wg1.Add(1)
+					go func() {
+						defer wg1.Done()
+						defer GinkgoRecover()
+						err := Inst().V.DeletePool(pool.node, pool.poolIDToDelete, true)
+						if err != nil {
+							err = fmt.Errorf("Failed to delete pool [%v] due to err - %v", pool.poolIDToDelete, err)
+							deletePoolErrChan <- err
+						}
+					}()
+					rebootFlag <- struct{}{}
+				}
+			})
+
+			wg.Wait()
+			close(rebootErrChan)
+
+			for err := range rebootErrChan {
+				log.FailOnError(err, "Failed to reboot node and wait till it is up")
+			}
+
+			wg1.Wait()
+			close(deletePoolErrChan)
+
+			for err := range deletePoolErrChan {
+				log.FailOnError(err, "Failed to delete pool")
+			}
+
+			stepLog = "Exit pool maintenance mode"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, pool := range poolIDsToDelete {
+					err = ExitPoolMaintenance(pool.node)
+					log.FailOnError(err, "Failed to exit maintenance mode")
+					log.Info("exit pool maintenance mode succeed")
+				}
+			})
+
+			// portworx status
+			stepLog = "Check px status"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, pool := range poolIDsToDelete {
+					status, err := Inst().V.GetPxctlStatus(pool.node)
+					log.FailOnError(err, fmt.Sprintf("failed to get pxctl status on node [%s]", pool.node.Name))
+					dash.VerifyFatal(status == api.Status_STATUS_OK.String(), true, fmt.Sprintf("node [%s] status is up but PX cluster is not ok. Expected: %v Actual: %v",
+						pool.node.Name, api.Status_STATUS_OK, status))
+					log.InfoD("px status %v", status)
+				}
+			})
+
+			// Verify pool delete
+			stepLog = "Verify pool delete"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, pool := range poolIDsToDelete {
+					poolsMap, err = Inst().V.GetPoolDrives(&pool.node)
+					log.FailOnError(err, fmt.Sprintf("error getting pool drive from the node [%s] after pool deletion,Err: %v", pool.node.Name, err))
+					if _, ok := poolsMap[pool.poolIDToDelete]; ok {
+						log.FailOnError(fmt.Errorf("pool [%s] still exists on the node [%s]", pool.poolIDToDelete, pool.node.Name), fmt.Sprintf("pool [%s] still exists on the node [%s]", pool.poolIDToDelete, pool.node.Name))
+					}
+					log.InfoD("verify pool delete [%s] succeed", pool.poolIDToDelete)
+				}
+			})
+
+			///creating a spec to perform add  drive
+			driveSpecs, err := GetCloudDriveDeviceSpecs()
+			log.FailOnError(err, "Error getting cloud drive specs")
+			deviceSpec := driveSpecs[0]
+			deviceSpecParams := strings.Split(deviceSpec, ",")
+			paramsArr := make([]string, 0)
+			for _, param := range deviceSpecParams {
+				if strings.Contains(param, "size") {
+					paramsArr = append(paramsArr, fmt.Sprintf("size=%d,", 500))
+				} else {
+					paramsArr = append(paramsArr, param)
+				}
+			}
+			newSpec := strings.Join(paramsArr, ",")
+
+			stepLog = "create 2 new pools"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, pool := range poolIDsToDelete {
+					stepLog = fmt.Sprintf("Adding cloud drive to node %s with size %s", pool.node.Name, newSpec)
+					err = Inst().V.AddCloudDrive(&pool.node, newSpec, -1)
+					log.FailOnError(err, "error adding new drive to node %s", pool.node.Name)
+					err = Inst().V.RefreshDriverEndpoints()
+					log.FailOnError(err, "error refreshing driver end points")
+					log.InfoD("Validate pool rebalance after drive add to the node %s", pool.node.Name)
+					err = ValidateDriveRebalance(pool.node)
+					log.FailOnError(err, "pool re-balance failed on node %s", pool.node.Name)
+					err = Inst().V.WaitDriverUpOnNode(pool.node, addDriveUpTimeOut)
+					log.FailOnError(err, "volume drive down on node %s", pool.node.Name)
+					log.InfoD("pool created succeed")
+				}
+			})
+
+			stepLog = "Verify pool created"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, pool := range poolIDsToDelete {
+					poolsMapAfr, err := Inst().V.GetPoolDrives(&pool.node)
+					log.FailOnError(err, "Failed to list storage pools")
+					dash.VerifyFatal((len(poolsMap)+1) == len(poolsMapAfr), true, "verify new pool is created")
+					log.InfoD("verify new pool created succeed")
+				}
+			})
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
 // RebootKVDBLeaderDuringPoolResize tests the behavior of Portworx when the KVDB leader node
 // is rebooted during a pool resize operation.
 var _ = Describe("{RebootKVDBLeaderDuringPoolResize}", Label("p0", "positive", "kvdb_ops", "pool_ops", "node_ops", "interruptions"), func() {
