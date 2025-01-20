@@ -25,11 +25,6 @@ import (
 	"time"
 )
 
-// var WgDelete sync.WaitGroup
-var DeleteDoneChannel = make(chan struct{})
-var errorChannel = make(chan error, 100)
-var IsBackupDeleteCheckAlive bool
-
 func getBucketNameSuffix() string {
 	bucketNameSuffix, present := os.LookupEnv("BUCKET_NAME")
 	if present && bucketNameSuffix != "" {
@@ -303,7 +298,7 @@ var _ = BeforeSuite(func() {
 				currentBackups, err := Inst().Backup.EnumerateBackup(ctx, backupEnumerateReq)
 				if err != nil {
 					log.Errorf("Failed to enumerate backup: %v", err)
-					errorChannel <- fmt.Errorf("failed to enumerate backup: %v", err)
+					ErrorChannel <- fmt.Errorf("failed to enumerate backup: %v", err)
 					return
 				}
 				testCaseName := GetTestcaseName()
@@ -409,8 +404,8 @@ var _ = AfterSuite(func() {
 		if IsBackupDeleteCheckAlive {
 			DeleteDoneChannel <- struct{}{}
 		}
-		close(errorChannel)
-		for err := range errorChannel {
+		close(ErrorChannel)
+		for err := range ErrorChannel {
 			log.Errorf("failed to enumerate backup : %v", err)
 		}
 

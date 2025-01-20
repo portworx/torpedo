@@ -4,6 +4,8 @@ import (
 	"bytes"
 	context1 "context"
 	"fmt"
+	"gopkg.in/yaml.v3"
+	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/release"
 
 	"encoding/csv"
@@ -28,7 +30,6 @@ import (
 	optest "github.com/pure-px/px-operator/pkg/util/test"
 	"k8s.io/apimachinery/pkg/watch"
 
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -80,7 +81,6 @@ import (
 	kubevirtv1 "kubevirt.io/api/core/v1"
 
 	"helm.sh/helm/v3/pkg/action"
-	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/cli"
 	"helm.sh/helm/v3/pkg/getter"
 	"helm.sh/helm/v3/pkg/kube"
@@ -173,8 +173,8 @@ const (
 	BackupLocationDeleteRetryTime         = 30 * time.Second
 	RebootNodeTimeout                     = 1 * time.Minute
 	RebootNodeTimeBeforeRetry             = 5 * time.Second
-	LatestPxBackupVersion                 = "2.7.2"
-	defaultPxBackupHelmBranch             = "2.7.2"
+	LatestPxBackupVersion                 = "2.8.3"
+	DefaultPxBackupHelmBranch             = "2.8.3"
 	pxCentralPostInstallHookJobName       = "pxcentral-post-install-hook"
 	quickMaintenancePod                   = "quick-maintenance-repo"
 	fullMaintenancePod                    = "full-maintenance-repo"
@@ -587,6 +587,11 @@ var CloudProviderProvisionerSnapshotMap = map[string]map[string]struct {
 		},
 	},
 }
+
+// Variables required for backup delete monitoring go routine
+var DeleteDoneChannel = make(chan struct{})
+var ErrorChannel = make(chan error, 100)
+var IsBackupDeleteCheckAlive bool
 
 // GetProvisionerDefaultSnapshotMap returns a map with provisioner to default volumeSnapshotClass mappings for the specified cloud provider
 func GetProvisionerDefaultSnapshotMap(cloudProvider string) map[string]string {
@@ -2767,7 +2772,7 @@ func ValidateSharedBackupWithUsers(user string, access BackupAccess, backupName 
 
 func GetEnv(environmentVariable string, defaultValue string) string {
 	value, present := os.LookupEnv(environmentVariable)
-	if !present {
+	if !present || value == "" {
 		value = defaultValue
 	}
 	return value
@@ -4889,7 +4894,7 @@ func PxBackupUpgrade(versionToUpgrade string) error {
 	// Get the tarball required for helm upgrade
 	helmBranch, isPresent := os.LookupEnv("PX_BACKUP_HELM_REPO_BRANCH")
 	if !isPresent || helmBranch == "" {
-		helmBranch = defaultPxBackupHelmBranch
+		helmBranch = DefaultPxBackupHelmBranch
 	}
 	cmd = fmt.Sprintf("curl -O  https://raw.githubusercontent.com/portworx/helm/%s/stable/px-central-%s.tgz", helmBranch, versionToUpgrade)
 	log.Infof("curl command to get tarball: %v ", cmd)
@@ -10151,7 +10156,7 @@ func AddPVCsToVirtualMachine(vm kubevirtv1.VirtualMachine, pvcs []*corev1.Persis
 func CreatePVCsForVM(vm kubevirtv1.VirtualMachine, numberOfPVCs int, storageClassName, resourceStorage string) ([]*corev1.PersistentVolumeClaim, error) {
 	pvcs := make([]*corev1.PersistentVolumeClaim, 0)
 	for i := 0; i < numberOfPVCs; i++ {
-		pvcName := fmt.Sprintf("%s-%s-%v-%d", "pvc-new", vm.Name,time.Now().Unix(), i)
+		pvcName := fmt.Sprintf("%s-%s-%v-%d", "pvc-new", vm.Name, time.Now().Unix(), i)
 		pvc, err := core.Instance().CreatePersistentVolumeClaim(&corev1.PersistentVolumeClaim{
 			TypeMeta: metav1.TypeMeta{
 				Kind: "PersistentVolumeClaim",
@@ -12894,118 +12899,275 @@ func GetAllCustomRoles() ([]string, error) {
 	return roles, nil
 }
 
-// Install px-backup
-func InstallPxBackup(kubeConfigPath, namespace, scName, releaseName string) error {
-	// Initialize Helm configuration
-	cfg := new(action.Configuration)
-	if err := cfg.Init(kube.GetConfig(kubeConfigPath, "", namespace), namespace, os.Getenv("HELM_DRIVER"), func(format string, v ...interface{}) {
-		fmt.Printf(format, v...)
-	}); err != nil {
-		return fmt.Errorf("error initializing Helm action configuration: %w", err)
-	}
-	settings := cli.New()
-	if err := addAndUpdateRepo(settings); err != nil {
-		return fmt.Errorf("failed to add and update Portworx repository: %w", err)
-	}
-	// Check if the release already exists
-	list := action.NewList(cfg)
-	list.AllNamespaces = false // Only list releases in the current namespace
-	list.SetStateMask()        // Set to fetch all release states
-
-	listNamespaceReleases, err := list.Run()
+// InstallPxBackup installs Px-Backup through helm and waits for all the pods to be ready
+func InstallPxBackup(version, branch, namespace string, vals map[string]interface{}) (*release.Release, error) {
+	cfg, err := initHelmActionConfig(namespace)
 	if err != nil {
-		return fmt.Errorf("failed to list Helm releases: %w", err)
+		return nil, err
 	}
 
-	for _, rel := range listNamespaceReleases {
-		if rel.Name == releaseName && rel.Info != nil && rel.Info.Status == "deployed" {
-			log.InfoD("Release %s already exists and is deployed. Skipping installation.\n", releaseName)
-			return nil
+	// Make sure the repo is available/updated
+	if err := addAndUpdateRepo(cli.New()); err != nil {
+		return nil, fmt.Errorf("failed to add/update Portworx repository: %w", err)
+	}
+
+	// Skip installation if the release already exists and is deployed
+	exists, err := isReleaseDeployed(cfg, pxCentralReleaseName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check release status: %w", err)
+	}
+	if exists {
+		log.InfoD("Release %s already exists and is deployed. Skipping installation.", pxCentralReleaseName)
+		return nil, nil
+	}
+
+	// Install the Helm chart
+	installStart := time.Now()
+	rel, err := installPxBackupChart(version, branch, cfg, vals, namespace)
+	if err != nil {
+		return nil, fmt.Errorf("px-backup chart installation failed: %w", err)
+	}
+	log.InfoD("Release notes:\n%s\n", rel.Info.Notes)
+	log.InfoD("Successfully installed release: %s\n", rel.Name)
+
+	// Wait for post-install hook job to complete
+	if err = waitForPostInstallHookJob(namespace); err != nil {
+		return rel, err
+	}
+
+	// Ensure pods in px-backup namespace are running
+	if err = ValidateAllPodsInPxBackupNamespace(); err != nil {
+		return rel, err
+	}
+
+	// Measure the time taken for installation and px-backup readiness
+	duration := time.Since(installStart)
+	log.InfoD("Time taken for Px-Backup to be ready: %02d:%02d:%02d (hh:mm:ss)",
+		int(duration.Hours()),
+		int(duration.Minutes())%60,
+		int(duration.Seconds())%60,
+	)
+
+	// Refresh admin password
+	if err = RefreshAdminPassword(); err != nil {
+		return rel, err
+	}
+
+	// Initialize backup driver
+	if err = initBackupDriver(); err != nil {
+		return rel, err
+	}
+
+	// Log final installed version
+	installedVersion, err := GetPxBackupVersionSemVer()
+	if err != nil {
+		return rel, err
+	}
+	log.InfoD("Px-Backup installation complete. Version: %s", installedVersion)
+
+	return rel, nil
+}
+
+// initHelmActionConfig initializes the Helm action configuration for the given namespace.
+func initHelmActionConfig(namespace string) (*action.Configuration, error) {
+	cfg := new(action.Configuration)
+	if err := cfg.Init(
+		kube.GetConfig(CurrentClusterConfigPath, "", namespace),
+		namespace,
+		os.Getenv("HELM_DRIVER"),
+		func(format string, v ...interface{}) {
+			fmt.Printf(format, v...)
+		},
+	); err != nil {
+		return nil, fmt.Errorf("error initializing Helm action configuration: %w", err)
+	}
+	return cfg, nil
+}
+
+// isReleaseDeployed returns true if the given release name is found and is currently in "deployed" status.
+func isReleaseDeployed(cfg *action.Configuration, releaseName string) (bool, error) {
+	list := action.NewList(cfg)
+	list.AllNamespaces = true
+	list.SetStateMask()
+
+	releases, err := list.Run()
+	if err != nil {
+		return false, fmt.Errorf("failed to list Helm releases: %w", err)
+	}
+
+	for _, r := range releases {
+		if r.Name == releaseName && r.Info != nil && r.Info.Status == "deployed" {
+			return true, nil
 		}
 	}
-	helmBranchVersion := GetEnv("PX_BACKUP_HELM_REPO_BRANCH", defaultPxBackupHelmBranch)
+	return false, nil
+}
 
-	// Create a new Helm install client
+// installPxBackupChart handles the actual Helm installation logic for px-backup.
+func installPxBackupChart(
+	version, branch string,
+	cfg *action.Configuration, vals map[string]interface{},
+	namespace string) (*release.Release, error) {
+
+	// Build chart URL from environment-based version
+	chartURL := fmt.Sprintf("https://github.com/portworx/helm/raw/%s/stable/px-central-%s.tgz",
+		branch, version,
+	)
+
 	install := action.NewInstall(cfg)
-	install.ReleaseName = releaseName
+	install.ReleaseName = pxCentralReleaseName
 	install.Namespace = namespace
 	install.CreateNamespace = true
-	install.Version = helmBranchVersion
+	install.Version = version
+	install.Wait = false
 
-	// Define the chart name and repository location
-	chartName := "portworx/px-central"
-	// Set custom values equivalent to --set options
-	vals := map[string]interface{}{
-		"persistentStorage": map[string]interface{}{
-			"enabled":          true,
-			"storageClassName": scName,
-		},
-		"pxbackup": map[string]interface{}{
-			"enabled": true,
-		},
-	}
-	// Locate and load the Helm chart
-	chartPath, err := install.ChartPathOptions.LocateChart(chartName, settings)
+	settings := cli.New()
+	chartPath, err := install.ChartPathOptions.LocateChart(chartURL, settings)
 	if err != nil {
-		return fmt.Errorf("failed to locate chart: %w", err)
+		return nil, fmt.Errorf("failed to locate chart at %s: %w", chartURL, err)
 	}
+
 	chart, err := loader.Load(chartPath)
 	if err != nil {
-		return fmt.Errorf("failed to load chart: %w", err)
+		return nil, fmt.Errorf("failed to load chart: %w", err)
 	}
-	// Run the Helm install action
-	release, err := install.Run(chart, vals)
+
+	installStart := time.Now()
+	log.Infof("Values used for helm install:\n%v", vals)
+	log.Infof("Chart URL used for helm install - %s", chartURL)
+
+	rel, err := install.Run(chart, vals)
 	if err != nil {
-		return fmt.Errorf("failed to install chart: %w", err)
+		return nil, fmt.Errorf("failed to install chart: %w", err)
 	}
-	log.InfoD("Successfully installed release: %s\n", release.Name)
-	// Function to wait for the namespace to be created
-	waitForNamespaceToBeCreated := func() (interface{}, bool, error) {
-		ns, err := core.Instance().GetNamespace(namespace)
+
+	duration := time.Since(installStart)
+	log.InfoD("Time taken for Px-Backup helm install: %02d:%02d:%02d (hh:mm:ss)",
+		int(duration.Hours()),
+		int(duration.Minutes())%60,
+		int(duration.Seconds())%60,
+	)
+
+	return rel, nil
+}
+
+// waitForPostInstallHookJob polls until the post-install hook job has succeeded or times out.
+func waitForPostInstallHookJob(namespace string) error {
+	// Retry settings can be adjusted as needed
+	const timeout = 10 * time.Minute
+	const interval = 30 * time.Second
+
+	check := func() (interface{}, bool, error) {
+		job, err := batch.Instance().GetJob(pxCentralPostInstallHookJobName, namespace)
 		if err != nil {
-			if errors.IsNotFound(err) {
-				return nil, false, nil // Namespace not found, keep waiting
-			}
-			return nil, true, fmt.Errorf("error checking namespace status: %v", err) // Unexpected error
+			// Retry on error
+			return nil, true, err
 		}
-
-		log.InfoD("Namespace %s status: %s", namespace, ns.Status.Phase)
-
-		// Check if the namespace is active
-		if ns.Status.Phase == "Active" {
-			return nil, true, nil // Namespace created and ready
+		if job.Status.Succeeded > 0 {
+			log.Infof("Job %s completed successfully. Active: %d, Succeeded: %d, Failed: %d",
+				job.Name, job.Status.Active, job.Status.Succeeded, job.Status.Failed)
+			return nil, false, nil
 		}
-
-		return nil, false, fmt.Errorf("waiting for namespace %s to be created", namespace) // Keep waiting
-	}
-	_, err = task.DoRetryWithTimeout(waitForNamespaceToBeCreated, NameSpaceDeletionTimeout, 10*time.Second)
-	if err != nil {
-		return err
-	}
-	// Function to wait for all pods in the namespace to be ready
-	waitForPodsToBeReady := func() (interface{}, bool, error) {
-		pods, err := core.Instance().GetPods(namespace, nil)
-		if err != nil {
-			return nil, true, fmt.Errorf("error fetching pods in namespace %s: %v", namespace, err)
-		}
-		for _, pod := range pods.Items {
-			if pod.Status.Phase != corev1.PodRunning {
-				log.Warnf("Pod %s in namespace %s is not Running. Current phase: %s", pod.Name, namespace, pod.Status.Phase)
-				return nil, false, nil // Pod is not running, keep waiting
-			}
-		}
-
-		log.InfoD("All pods in namespace %s are up and running", namespace)
-		return nil, true, nil // All pods are ready
+		return nil, true, fmt.Errorf(
+			"job %s not yet in desired state. Active: %d, Succeeded: %d, Failed: %d",
+			job.Name, job.Status.Active, job.Status.Succeeded, job.Status.Failed,
+		)
 	}
 
-	_, err = task.DoRetryWithTimeout(waitForPodsToBeReady, PodReadinessTimeout, 10*time.Second)
-	if err != nil {
+	if _, err := task.DoRetryWithTimeout(check, timeout, interval); err != nil {
 		return err
 	}
 
-	log.InfoD("Successfully installed release: %s\n", release.Name)
 	return nil
+}
+
+// initBackupDriver initializes the backup driver.
+func initBackupDriver() error {
+	var token string
+	if Inst().ConfigMap != "" {
+		log.Infof("Using Config Map: %s", Inst().ConfigMap)
+		cfgToken, err := Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+		if err != nil {
+			return fmt.Errorf("failed to get token from config map: %w", err)
+		}
+		token = cfgToken
+		log.Infof("Token used for initializing: %s", token)
+	}
+
+	// Actually initialize the backup driver
+	if err := Inst().Backup.Init(Inst().S.String(), Inst().N.String(), Inst().V.String(), token); err != nil {
+		return fmt.Errorf("backup driver initialization error: %w", err)
+	}
+	return nil
+}
+
+// RefreshAdminPassword refreshes the admin password from the backup server required to fetch the token from keycloak
+func RefreshAdminPassword() error {
+	str, err := backup.GetPxCentralAdminPwd()
+	if err != nil {
+		return err
+	}
+	backup.PxCentralAdminPwd = str
+	return nil
+}
+
+// ParseValuesFromFile reads a YAML file located in a fixed directory and unmarshals it into
+// a map[string]interface{}. The 'key' parameter is the filename in that directory.
+func ParseValuesFromFile(key string) (map[string]interface{}, error) {
+	// Build the full path using the fixed directory and the filename
+	filePath := fmt.Sprintf("../drivers/backup/configs/%s.yaml", key)
+
+	// Read the file
+	data, err := ioutil.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file: %w", err)
+	}
+
+	// First unmarshal into a generic map[interface{}]interface{}
+	genericMap := make(map[interface{}]interface{})
+	if err := yaml.Unmarshal(data, &genericMap); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal YAML: %w", err)
+	}
+
+	// Convert map[interface{}]interface{} to map[string]interface{}
+	stringMap, err := toStringMap(genericMap)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert to map[string]interface{}: %w", err)
+	}
+
+	return stringMap, nil
+}
+
+// toStringMap recursively converts a map[interface{}]interface{} to map[string]interface{}.
+func toStringMap(m map[interface{}]interface{}) (map[string]interface{}, error) {
+	log.InfoD("Entering toStringMap")
+	out := make(map[string]interface{})
+	for k, v := range m {
+		ks, ok := k.(string)
+		if !ok {
+			return nil, fmt.Errorf("key %#v is not a string", k)
+		}
+		out[ks] = convertValue(v)
+	}
+	return out, nil
+}
+
+// convertValue checks if the value is itself a map[interface{}]interface{}, a slice, etc.
+// Then does recursive conversions for nested structures.
+func convertValue(v interface{}) interface{} {
+	log.InfoD("Entering convertValue")
+	switch v := v.(type) {
+	case map[interface{}]interface{}:
+		strMap, _ := toStringMap(v) // ignoring error for brevity
+		return strMap
+	case []interface{}:
+		for i, u := range v {
+			v[i] = convertValue(u)
+		}
+		return v
+	default:
+		return v
+	}
 }
 
 // UninstallPxBackup uninstalls px-backup by performing helm delete and then deletes the px-backup namespace
@@ -13022,16 +13184,9 @@ func UninstallPxBackup() error {
 	}
 
 	// 2. Initialize Helm configuration
-	cfg := new(action.Configuration)
-	if err := cfg.Init(
-		kube.GetConfig(CurrentClusterConfigPath, "", namespace),
-		namespace,
-		os.Getenv("HELM_DRIVER"),
-		func(format string, v ...interface{}) {
-			fmt.Printf(format, v...)
-		},
-	); err != nil {
-		return fmt.Errorf("error initializing Helm action configuration: %w", err)
+	cfg, err := initHelmActionConfig(namespace)
+	if err != nil {
+		return err
 	}
 
 	// 3. Add/Update Helm repos
@@ -13039,6 +13194,10 @@ func UninstallPxBackup() error {
 	if err := addAndUpdateRepo(settings); err != nil {
 		return fmt.Errorf("failed to add/update repo: %w", err)
 	}
+
+	// Terminating the backup deletion monitoring go routine because px-backup will be unreachable
+	// This is being done because the backup enumerate call is taking a long time to timeout when the backup server is unreachable
+	DeleteDoneChannel <- struct{}{}
 
 	// 4. Uninstall px-backup release if it is deployed
 	if err := uninstallPxBackupRelease(cfg); err != nil {

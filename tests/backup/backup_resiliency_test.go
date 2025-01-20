@@ -3635,8 +3635,10 @@ var _ = Describe("{UninstallPxBackupAndRestoreFromTheBackup}", func() {
 			log.InfoD("Storage class %s already exists", scName)
 		}
 
-		// Skipping Install PX-Backup as per the ticket
-		err = InstallPxBackup(destinationKubeConfigPath, namespace, scName, releaseName)
+		valuesMap, err := ParseValuesFromFile("values1")
+		log.FailOnError(err, "Failed to parse values file")
+		_, err = InstallPxBackup(LatestPxBackupVersion, DefaultPxBackupHelmBranch, namespace, valuesMap)
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Installing PX-Backup with release %s", "px-central"))
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Installing PX-Backup with release %s on %s", releaseName, DestinationClusterName))
 	})
 
