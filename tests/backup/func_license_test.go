@@ -430,3 +430,82 @@ var _ = Describe("{LicensingCountBeforeAndAfterBackupNodeRestart}", Label(TestCa
 		CleanupCloudSettingsAndClusters(nil, "", "", ctx)
 	})
 })
+
+// This test case verifies the license parameters per organization
+var _ = Describe("{VerifyGetLicensePerOrganization}", Label(TestCaseLabelsMap[VerifyLicenseParameters]...), func() {
+	var (
+		licenseConsumedFlag         int64
+		licenseStatus               string
+		licenseType                 string
+		licenseExpiryTime           int64
+		licenseStartTime            int64
+		licenseExpiryDelta          int64
+		backupNodeCount             int64
+		expectedLicenseStatus       string
+		expectedLicenseConsumedFlag int64
+		expectedLicenseExpiryDelta  int64
+		expectedbackupNodeCount     int64
+		expectedLicenseType         string
+	)
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("VerifyGetLicensePerOrganization",
+			"Verify Get License Per Organization", nil, 300747, ABadgujar, Q2FY24)
+	})
+	It("verify get license per organization", func() {
+		//1.Define Expected License Parameters
+		Step("Define Expected License Parameters", func() {
+			log.InfoD("Define Expected License Parameters")
+			expectedLicenseStatus = "Active"
+			expectedLicenseConsumedFlag = 0
+			expectedLicenseExpiryDelta = 30
+			expectedbackupNodeCount = 1000
+			expectedLicenseType = "Trial"
+
+		})
+		//2.Verify Get Actual License Parameters Per Organization
+		Step("Verify Get Actual License Parameters Per Organization", func() {
+			log.InfoD("Verify Get Actual License Parameters Per Organization")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			licenseInspectRequestObject := &api.LicenseInspectRequest{
+				OrgId: BackupOrgID,
+			}
+			licenseInspectResponse, err := Inst().Backup.InspectLicense(ctx, licenseInspectRequestObject)
+			if err != nil {
+				log.FailOnError(err, "Couldn't get Backup License object")
+			}
+			licenseDetails, err := GetLicenseInfo(licenseInspectResponse)
+			if err != nil {
+				log.Fatalf("Error extracting license details: %v", err)
+			}
+			log.InfoD("License Type: %s", licenseDetails.LicenseType)
+			log.InfoD("Consumed Flag: %v", licenseDetails.ConsumedFlag)
+			log.InfoD("Status: %s", licenseDetails.Status)
+			log.InfoD("Expiry Time: %v", time.Unix(licenseDetails.ExpiryTime, 0)) // Convert seconds to time
+			log.InfoD("Start Time: %v", time.Unix(licenseDetails.StartTime, 0))   // Convert seconds to time
+			log.InfoD("Backup Node Count: %d", licenseDetails.NodeCount)
+
+			licenseConsumedFlag = licenseDetails.ConsumedFlag
+			licenseStatus = licenseDetails.Status
+			licenseType = licenseDetails.LicenseType
+			licenseExpiryTime = licenseDetails.ExpiryTime
+			licenseStartTime = licenseDetails.StartTime
+			backupNodeCount = licenseDetails.NodeCount
+		})
+		//3.Verify Different Parameters of License
+		Step("Verify Different Parameters of License", func() {
+			log.InfoD("Verify Different Parameters of License")
+			licenseExpiryDelta = licenseExpiryTime/86400 - licenseStartTime/86400
+			if licenseType == expectedLicenseType {
+				log.InfoD("Verify if backupNode Count is matching")
+				Inst().Dash.VerifyFatal(backupNodeCount, expectedbackupNodeCount, fmt.Sprintf("Actual and Expected Values for backupNode are matching - %v", backupNodeCount))
+				log.InfoD("Verify if Expiry and Start time Difference is matching")
+				Inst().Dash.VerifyFatal(licenseExpiryDelta, expectedLicenseExpiryDelta, fmt.Sprintf("Actual and Expected Values for Expiry and Start time Difference are matching - %v", licenseExpiryDelta))
+				log.InfoD("Verify if License Consumed Flag is matching")
+				Inst().Dash.VerifyFatal(licenseConsumedFlag, expectedLicenseConsumedFlag, fmt.Sprintf("Actual and Expected Values for License Consumed Flag are matching - %v", licenseConsumedFlag))
+				log.InfoD("Verify if License Status is matching")
+				Inst().Dash.VerifyFatal(licenseStatus, expectedLicenseStatus, fmt.Sprintf("Actual and Expected Values for License Status are matching - %v", licenseStatus))
+			}
+		})
+	})
+})

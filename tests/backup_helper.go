@@ -300,6 +300,15 @@ type UserAccessContext struct {
 	Context  context1.Context
 }
 
+type LicenseDetails struct {
+	ConsumedFlag int64  // Indicates if the license is consumed
+	Status       string // License status (e.g., Active, Expired)
+	LicenseType  string // Type of the license (Trial or Enterprise)
+	ExpiryTime   int64  // License expiry time in seconds
+	StartTime    int64  // License start time in seconds
+	NodeCount    int64  // Number of backup nodes
+}
+
 var BackupAccessKeyValue = map[BackupAccess]string{
 	1: "ViewOnlyAccess",
 	2: "RestoreAccess",
@@ -14101,4 +14110,21 @@ func GetTotalBackupSize(ctx context1.Context, backupName, BackupOrgID string) ui
 	resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
 	dash.VerifyFatal(err, nil, "inspect total backup size in namespace")
 	return resp.Backup.BackupInfo.GetTotalSize()
+}
+
+func GetLicenseInfo(licenseInspectResponse *api.LicenseInspectResponse) (*LicenseDetails, error) {
+	// Extract relevant information
+	licenseRespInfo := licenseInspectResponse.LicenseRespInfo
+	featureInfo := licenseRespInfo.FeatureInfo[0]     // Assuming the first feature
+	entitlementInfo := featureInfo.EntitlementInfo[0] // Assuming the first entitlement
+	licenseDetails := &LicenseDetails{
+		ConsumedFlag: featureInfo.Consumed,
+		Status:       licenseInspectResponse.GetLicenseRespInfo().GetStatus().Status,
+		LicenseType:  entitlementInfo.Type.String(), // Assuming it returns a string like "Trial" or "Enterprise"
+		ExpiryTime:   entitlementInfo.Expires.Seconds,
+		StartTime:    entitlementInfo.Starts.Seconds,
+		NodeCount:    entitlementInfo.Count,
+	}
+
+	return licenseDetails, nil
 }

@@ -178,6 +178,7 @@ const (
 	VerifySoftLicensingPeriodInDeploymentSpec                                          TestCaseName = "VerifySoftLicensingPeriodInDeploymentSpec"
 	PxUpgradeWithBackupAndRestore                                                      TestCaseName = "PxUpgradeWithBackupAndRestore"
 	LicensingCountBeforeAndAfterBackupNodeRestart                                      TestCaseName = "LicensingCountBeforeAndAfterBackupNodeRestart"
+	VerifyLicenseParameters                                                            TestCaseName = "VerifyLicenseParameters"
 )
 
 // Test case labels
@@ -353,6 +354,7 @@ const (
 	PxUpgradeWithBackupAndRestoreLabel                                                      TestCaseLabel = "PxUpgradeWithBackupAndRestore"
 	ParallelBackupScheduleTestSuiteLabel                                                    TestCaseLabel = "ParallelBackupScheduleTestSuite"
 	ParallelBackupScheduleNonPxdTestSuiteLabel                                              TestCaseLabel = "ParallelBackupScheduleNonPxdTestSuite"
+	VerifyLicenseParametersLabel                                                            TestCaseLabel = "VerifyLicenseParameters"
 )
 
 // Common Labels
