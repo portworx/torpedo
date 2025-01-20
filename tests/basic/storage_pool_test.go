@@ -3,7 +3,6 @@ package tests
 import (
 	"errors"
 	"fmt"
-	"github.com/pure-px/torpedo/drivers/volume/portworx"
 	"math"
 	"math/rand"
 	"reflect"
@@ -14,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/pure-px/torpedo/drivers/volume/portworx"
 
 	"github.com/Masterminds/semver/v3"
 
@@ -13384,6 +13385,209 @@ var _ = Describe("{StoragePoolMultipleExpandDiskResize}", Label("p0", "negative"
 	})
 })
 
+var _ = Describe("{PoolResizeAndPXRestartWithVolumeResync}", Label("p0", "negative", "staging", "hal_ops_disruption", "HA_Increase_Decrease", "PoolDelete", "functional"), func() {
+	/*
+	   **Do not execute this case in the production pipeline.**
+	   This test failed in staging pipeline as HA Did not get updated to desired value . The HA update gets struck in Resync state even after 4 hours of timeout . Below are the reference to the Staging pipeline run
+	   https://jenkins.pwx.dev.purestorage.com/job/project-hazel/job/users/job/Pvenkatesan/job/PXE-QA/job/FACD-DMTHIN/25/consoleFull
+	   https://jenkins.pwx.dev.purestorage.com/job/project-hazel/job/users/job/Pvenkatesan/job/PXE-QA/job/tp_facd/153/consoleFull
+
+	   https://purestorage.atlassian.net/browse/HAZEL-1014
+	   1. Create apps/volumes atleast 50 in number
+	   2. Trigger resync
+	   3. While resync is ongoing , resize a randomly selected pool
+	   4. Once resize is complete, kill px on a randomly selected node
+	   5. Wait for px to come up
+	   6. Repeat steps 3 to 5 atleast 5 times while resync is ongoing
+	   7. Validate apps
+	*/
+	var (
+		contexts   []*scheduler.Context
+		fioVolList []*volume.Volume
+		allVolList []*volume.Volume
+		wg         sync.WaitGroup
+	)
+
+	BeforeEach(func() {
+		StartTorpedoTest("PoolResizeAndPXRestartWithVolumeResync", "Pool resize and px restart when volumes are in resync state", nil, 0)
+	})
+
+	ItLog := "Pool deletion when volumes are in resync state"
+	It(ItLog, func() {
+		log.InfoD(ItLog)
+		applist := Inst().AppList
+		defer func() {
+			Inst().AppList = applist
+		}()
+		stepLog := "Create nginx and fio apps"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			//create app nginx
+			Inst().AppList = []string{"nginx"}
+			for i := 0; i < 45; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("createmultiplevols-nginx-%d", i))...)
+			}
+			//create app fio
+			Inst().AppList = []string{"fio"}
+			for i := 0; i < 1; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("createmultiplevols-fio-%d", i))...)
+			}
+			ValidateApplications(contexts)
+		})
+		defer DestroyApps(contexts, nil)
+
+		//Get list of all volumes present in the cluster
+		log.InfoD("Listing all the volumes present in the cluster")
+		allVolumeIds, err := Inst().V.ListAllVolumes()
+		log.FailOnError(err, "failed to list all the volume")
+		log.Info(fmt.Sprintf("total number of volumes present in the cluster [%v]", len(allVolumeIds)))
+		dash.VerifyFatal(len(allVolumeIds) >= 50, true, "verify 50 volumes are present on the cluster")
+
+		isjournal, err := IsJournalEnabled()
+		log.FailOnError(err, "Failed to check is journal enabled")
+
+		// Get Storage nodes
+		nodes, err := GetStorageNodes()
+		log.FailOnError(err, fmt.Sprintf("error getting storage nodes"))
+
+		for _, eachCtx := range contexts {
+			vols, err := Inst().S.GetVolumes(eachCtx)
+			log.FailOnError(err, "Failed to get list of Volumes in the cluster")
+
+			for _, eachVol := range vols {
+				if strings.Contains(eachVol.Name, "fio") {
+					if strings.Contains(eachVol.Name, "log") {
+						continue
+					}
+					fioVolList = append(fioVolList, eachVol)
+				}
+				allVolList = append(allVolList, eachVol)
+			}
+		}
+
+		setReplOnVolumes := func(vol *volume.Volume, wait bool, wg *sync.WaitGroup, setReplErrChan chan error) {
+			defer wg.Done()
+			defer GinkgoRecover()
+			setRepl := 3
+			if strings.Contains(vol.Name, "nginx") {
+				setRepl = 2
+			}
+			log.Infof("Setting Replication factor on Volume [%v] with ID [%v] to [%v]", vol.Name, vol.ID, setRepl)
+			err = Inst().V.SetReplicationFactor(vol, int64(setRepl), nil, nil, wait)
+			if err != nil {
+				err = fmt.Errorf("err setting repl factor  to %d for  vol : %s", setRepl, vol.Name)
+				setReplErrChan <- err
+			}
+		}
+
+		stepLog = "perform HA update on Volumes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			batchSize := 5
+			// Set Repl Factor on all the volumes at ones
+			for i := 0; i < len(allVolList); i += batchSize {
+				n := i + batchSize
+				if n > len(allVolList) {
+					n = len(allVolList)
+				}
+				setReplErrChan := make(chan error, batchSize)
+				for _, eachVol := range allVolList[i:n] {
+					wg.Add(1)
+					go setReplOnVolumes(eachVol, false, &wg, setReplErrChan)
+				}
+				wg.Wait()
+				close(setReplErrChan)
+
+				for err := range setReplErrChan {
+					log.FailOnError(err, "failed to set repl factor to 3")
+				}
+			}
+		})
+
+		stepLog = "Verify volume replica are in resync state"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			replicaStatusErrChan := make(chan error, len(fioVolList))
+			//Check volume repl status is in resync state
+			for _, eachVol := range fioVolList {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					defer GinkgoRecover()
+					replStatus := ""
+					timeOutForResyncState := 30 * time.Minute
+					var waitTime time.Duration
+					for startTime := time.Now(); replStatus != "Resync"; time.Sleep(1 * time.Minute) {
+						if waitTime = time.Since(startTime); waitTime > timeOutForResyncState {
+							err = fmt.Errorf("getting replication status %s after %f mins , but expected state 'Resync'", replStatus, waitTime.Minutes())
+							replicaStatusErrChan <- err
+							return
+						}
+						replStatus, err = GetVolumeReplicationStatus(eachVol)
+						if err != nil {
+							replicaStatusErrChan <- err
+							return
+						}
+					}
+				}()
+			}
+			go func() {
+				wg.Wait()
+				close(replicaStatusErrChan)
+			}()
+			for err := range replicaStatusErrChan {
+				log.FailOnError(err, "failed to check volume in resync state")
+			}
+		})
+
+		//repeat pool resize and px restart for atleast 5 iterations
+		for i := 0; i < 5; i++ {
+			stepLog = "Perform pool resize on a random pool"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				poolIDToResize := pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, 100)
+				log.Infof("Picked pool %s to resize", poolIDToResize)
+				poolToResize := getStoragePool(poolIDToResize)
+				originalSizeInBytes := poolToResize.TotalSize
+				targetSizeInBytes := originalSizeInBytes + 100*units.GiB
+				targetSizeGiB := targetSizeInBytes / units.GiB
+				log.InfoD("Current Size of pool %s is %d GiB. Expand to %v GiB with type add-disk...", poolToResize.Uuid, originalSizeInBytes/units.GiB, targetSizeGiB)
+				err = Inst().V.ExpandPool(poolToResize.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, targetSizeGiB, true)
+				log.FailOnError(err, "verify pool expansion request is succesfful using type RESIZE DISK")
+				resizeErr := waitForPoolToBeResized(targetSizeGiB, poolToResize.Uuid, isjournal)
+				dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d' if pool has journal", targetSizeGiB, targetSizeGiB-3))
+			})
+
+			stepLog = "Perform px restart on a random node"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				pxRestartNode := nodes[rand.Intn(len(nodes))]
+				log.FailOnError(Inst().V.RestartDriver(pxRestartNode, nil), fmt.Sprintf("Error restarting px on node [%s]", pxRestartNode.Name))
+				log.FailOnError(Inst().V.WaitForPxPodsToBeUp(pxRestartNode), fmt.Sprintf("Error occured while Validating PX restart is done on node:%v", pxRestartNode.Name))
+			})
+		}
+
+		stepLog = "Verify HA update is successful"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, vol := range fioVolList {
+				err = ValidateReplFactorUpdate(vol, 3)
+				if err != nil {
+					replStatus, err1 := GetVolumeReplicationStatus(vol)
+					log.FailOnError(err1, fmt.Sprintf("failed to get repl status for the vol %s", vol.Name))
+					log.Infof("got replication status for the vol %s as %s", vol.Name, replStatus)
+					log.FailOnError(err, "error in ha-increase after pool resize")
+				}
+				log.Infof("verified HA update for the vol %s", vol.ID)
+			}
+		})
+	})
+
+	AfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
 var _ = Describe("{PoolDeleteWithNodeRebootAndKillPxInProgress}", Label("p0", "negative", "pool_ops", "PoolDelete", "staging"), func() {
 	/*
 		    https://purestorage.atlassian.net/browse/HAZEL-1015
@@ -13838,7 +14042,6 @@ var _ = Describe("{RebootKVDBLeaderDuringPoolResize}", Label("p0", "positive", "
 		defer EndTorpedoTest()
 	})
 })
-
 
 // Restart px during pool deletion process
 var _ = Describe("{RestartPxDuringPoolDeletion}", Label("p1", "hal_ops_disruption", "px_restart", "PoolDelete", "staging"), func() {
@@ -14360,4 +14563,3 @@ var _ = Describe("{AddDriveWithPXRestartForMultipleIterations}", Label("p0", "st
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
-
