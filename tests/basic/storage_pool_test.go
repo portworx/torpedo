@@ -3,6 +3,17 @@ package tests
 import (
 	"errors"
 	"fmt"
+	"github.com/portworx/sched-ops/k8s/talisman"
+	"github.com/portworx/talisman/pkg/apis/portworx/v1beta1"
+	talisman_v1beta2 "github.com/portworx/talisman/pkg/apis/portworx/v1beta2"
+	"github.com/pure-px/sched-ops/k8s/apps"
+	"github.com/pure-px/sched-ops/k8s/core"
+	"github.com/pure-px/sched-ops/k8s/storage"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	storageApi "k8s.io/api/storage/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"math"
 	"math/rand"
 	"reflect"
@@ -1014,6 +1025,11 @@ func waitForPoolToBeResized(expectedSize uint64, poolIDToResize string, isJourna
 	n, terr := GetNodeWithGivenPoolID(poolIDToResize)
 	if terr == nil {
 		PrintSvPoolStatus(*n)
+		if err != nil {
+			log.InfoD(fmt.Sprintf("------Printing the px logs on the node:%s ----------", n.Name))
+			PrintCommandOutput("journalctl -lu portworx* -n 200 --no-pager ", *n)
+			log.InfoD(fmt.Sprintf("------Finished Printing the px logs on the node:%s ----------", n.Name))
+		}
 	} else {
 		log.Warnf("error getting node for pool uuid [%s]. Cause: %v", poolIDToResize, terr)
 	}
@@ -1646,6 +1662,30 @@ func GetNodeWithLeastSize() *node.Node {
 	}
 	log.Infof(fmt.Sprintf("Node %s has least total size %d", selectedNode.Name, currLowestSize))
 	return &selectedNode
+}
+
+func GetPoolWithLeastSize() (*api.StoragePool, error) {
+
+	var currLowestSize uint64
+	currLowestSize = 54975581388800 / units.GiB
+	var currPool *api.StoragePool
+	pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+	if err != nil {
+		return nil, err
+	}
+
+	for _, p := range pools {
+		currPoolSize := p.TotalSize / units.GiB
+		if currPoolSize < currLowestSize {
+			currLowestSize = currPoolSize
+			currPool = p
+		}
+	}
+	log.Infof(fmt.Sprintf("Pool %s has least total size %d", currPool, currLowestSize))
+	if currPool == nil {
+		return nil, fmt.Errorf("no pool found with size less than [%d]", currLowestSize)
+	}
+	return currPool, nil
 }
 
 func waitForVolMinimumSize(volID string, size uint64) (bool, error) {
@@ -4804,7 +4844,11 @@ var _ = Describe("{StorageFullPoolResize}", Label("p0", "positive", "px_ops", "p
 	stepLog := "Create vols and make pool full"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		selectedNode := GetNodeWithLeastSize()
+
+		selectedPool, err := GetPoolWithLeastSize()
+		log.FailOnError(err, "error getting pool with least size")
+		selectedNode, err := GetNodeWithGivenPoolID(selectedPool.Uuid)
+		log.FailOnError(err, "error getting node with pool id %s", selectedPool.Uuid)
 
 		stNodes := node.GetStorageNodes()
 		var secondReplNode node.Node
@@ -4814,33 +4858,236 @@ var _ = Describe("{StorageFullPoolResize}", Label("p0", "positive", "px_ops", "p
 			}
 		}
 
-		applist := Inst().AppList
-		var err error
-		defer func() {
-			Inst().AppList = applist
-			err = Inst().S.RemoveLabelOnNode(*selectedNode, k8s.NodeType)
-			log.FailOnError(err, "error removing label on node [%s]", selectedNode.Name)
-			err = Inst().S.RemoveLabelOnNode(secondReplNode, k8s.NodeType)
-			log.FailOnError(err, "error removing label on node [%s]", secondReplNode.Name)
-		}()
-		err = Inst().S.AddLabelOnNode(*selectedNode, k8s.NodeType, k8s.FastpathNodeType)
-		log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedNode.Name))
-		err = Inst().S.AddLabelOnNode(secondReplNode, k8s.NodeType, k8s.FastpathNodeType)
-		log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", secondReplNode.Name))
-
 		isjournal, err := IsJournalEnabled()
 		log.FailOnError(err, "is journal enabled check failed")
 
 		err = adjustReplPools(*selectedNode, secondReplNode, isjournal)
 		log.FailOnError(err, "Error setting pools for clean volumes")
 
-		Inst().AppList = []string{"fio-fastpath"}
-		contexts = make([]*scheduler.Context, 0)
-		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("sfullrz-%d", i))...)
+		currMax := secondReplNode.Pools[0].TotalSize / units.GiB
+		secondReplPoolUUID := secondReplNode.Pools[0].Uuid
+		//Selecting pool with max size in second node
+		for _, p := range secondReplNode.StoragePools {
+			currSize := p.TotalSize / units.GiB
+			if currSize > currMax {
+				currMax = currSize
+				secondReplPoolUUID = p.Uuid
+			}
 		}
-		defer appsValidateAndDestroy(contexts)
+		err = addPooLabel(selectedPool.Uuid, map[string]string{"full": "yes"})
+		log.FailOnError(err, "error adding label on pool [%s]", selectedPool.Uuid)
+		err = addPooLabel(secondReplPoolUUID, map[string]string{"full": "yes"})
+		log.FailOnError(err, "error adding label on pool [%s]", secondReplPoolUUID)
 
+		defer func() {
+			err = addPooLabel(selectedPool.Uuid, map[string]string{"full": ""})
+			log.FailOnError(err, "error removing label on pool [%s]", selectedPool.Uuid)
+			err = addPooLabel(secondReplPoolUUID, map[string]string{"full": ""})
+			log.FailOnError(err, "error removing label on pool [%s]", secondReplPoolUUID)
+		}()
+
+		vpsName := "storagefull-vps"
+		nsName := "storagefull-ns"
+		scName := "storagefull-sc"
+		pvcName := "storagefull-pvc"
+
+		//Createing VPS
+		matchExpression := []*v1beta1.LabelSelectorRequirement{
+			{
+				Key:      "full",
+				Operator: v1beta1.LabelSelectorOpIn,
+				Values:   []string{"yes"},
+			},
+		}
+
+		vpsSpec := talisman_v1beta2.VolumePlacementStrategy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: vpsName,
+			},
+			Spec: talisman_v1beta2.VolumePlacementSpec{
+				ReplicaAffinity: []*talisman_v1beta2.ReplicaPlacementSpec{
+					{
+						AffectedReplicas: 2,
+						CommonPlacementSpec: talisman_v1beta2.CommonPlacementSpec{
+							Enforcement:      v1beta1.EnforcementRequired,
+							MatchExpressions: matchExpression,
+						},
+					},
+				},
+			},
+		}
+
+		_, err = talisman.Instance().CreateVolumePlacementStrategy(&vpsSpec)
+		if err != nil {
+			if apierrors.IsAlreadyExists(err) {
+				log.Infof("VPS %s already exists. Skipping creation.", vpsName)
+			} else {
+				log.FailOnError(err, "error creating volume placement strategy")
+			}
+		}
+
+		//Creating Storage class
+		createSC := func(scName string) {
+			params := make(map[string]string)
+			params["repl"] = "2"
+			params["priority_io"] = "high"
+
+			params["placement_strategy"] = vpsName
+
+			v1obj := metav1.ObjectMeta{
+				Name: scName,
+			}
+			reclaimPolicyDelete := corev1.PersistentVolumeReclaimDelete
+			bindMode := storageApi.VolumeBindingImmediate
+			scObj := storageApi.StorageClass{
+				ObjectMeta:        v1obj,
+				Provisioner:       k8s.CsiProvisioner,
+				Parameters:        params,
+				ReclaimPolicy:     &reclaimPolicyDelete,
+				VolumeBindingMode: &bindMode,
+			}
+
+			k8sStorage := storage.Instance()
+			_, err = k8sStorage.CreateStorageClass(&scObj)
+			if err != nil {
+				if apierrors.IsAlreadyExists(err) {
+					log.Infof("SC %s already exists. Skipping creation.", scName)
+				} else {
+					log.FailOnError(err, fmt.Sprintf("error creating sc [%s]", scName))
+				}
+			}
+		}
+
+		//Create Namespace
+		createNs := func(nsName string) {
+			ns := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: nsName,
+				},
+			}
+			log.InfoD("Creating namespace %v", nsName)
+			_, err = core.Instance().CreateNamespace(ns)
+
+			if err != nil {
+				if apierrors.IsAlreadyExists(err) {
+					log.Infof("Namespace %s already exists. Skipping creation.", ns.Name)
+				} else {
+					log.FailOnError(err, fmt.Sprintf("error creating namespace [%s]", nsName))
+				}
+			}
+		}
+
+		//Create PVC
+		createPVC := func(pvcName, scName, appNs string) {
+
+			log.InfoD("creating PVC [%s] in namespace [%s]", pvcName, appNs)
+
+			pvcObj := &corev1.PersistentVolumeClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      pvcName,
+					Namespace: appNs,
+				},
+				Spec: corev1.PersistentVolumeClaimSpec{
+					AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteMany},
+					StorageClassName: &scName,
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							corev1.ResourceStorage: resource.MustParse("2000Gi"),
+						},
+					},
+				},
+			}
+			_, err = core.Instance().CreatePersistentVolumeClaim(pvcObj)
+			log.FailOnError(err, fmt.Sprintf("error creating PVC [%s] in namespace [%s]", pvcName, appNs))
+
+		}
+
+		createSC(scName)
+		createNs(nsName)
+		createPVC(pvcName, scName, nsName)
+
+		sizeForFio := selectedPool.TotalSize / units.GiB
+
+		var depRepl int32
+		depRepl = 1
+
+		// Define the deployment spec
+		deployment := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "fio-test-deployment",
+				Namespace: nsName,
+				Labels: map[string]string{
+					"app": "fio-test",
+				},
+			},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: &depRepl,
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"app": "fio-test",
+					},
+				},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"app": "fio-test",
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:    "fio",
+								Image:   "xridge/fio:latest",
+								Command: []string{"fio"},
+								Args: []string{
+									"--name=fio-test",
+									"--rw=write",
+									fmt.Sprintf("--size=%dG", sizeForFio),
+									"--bs=1M",
+									"--iodepth=4",
+									"--numjobs=4",
+									"--runtime=99999999",
+									"--time_based=1",
+									"--directory=/data",
+									"--direct=1",
+									"--ioengine=libaio",
+								},
+								Resources: corev1.ResourceRequirements{
+									Limits: corev1.ResourceList{
+										"memory": resource.MustParse("4Gi"),
+										"cpu":    resource.MustParse("2"),
+									},
+									Requests: corev1.ResourceList{
+										"memory": resource.MustParse("4Gi"),
+										"cpu":    resource.MustParse("2"),
+									},
+								},
+								VolumeMounts: []corev1.VolumeMount{
+									{
+										Name:      "fio-data",
+										MountPath: "/data",
+									},
+								},
+							},
+						},
+						Volumes: []corev1.Volume{
+							{
+								Name: "fio-data",
+								VolumeSource: corev1.VolumeSource{
+									PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+										ClaimName: pvcName,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		dep, err := apps.Instance().CreateDeployment(deployment, metav1.CreateOptions{})
+		log.FailOnError(err, "error creating fio deployment")
+		log.InfoD(fmt.Sprintf("fio deployment created with name [%s]", dep.Name))
 		err = WaitForPoolOffline(*selectedNode)
 		log.FailOnError(err, fmt.Sprintf("Failed to make node %s storage down", selectedNode.Name))
 
@@ -4854,7 +5101,7 @@ var _ = Describe("{StorageFullPoolResize}", Label("p0", "positive", "px_ops", "p
 				break
 			}
 		}
-		selectedPool, err := GetStoragePoolByUUID(offlinePoolUUID)
+		selectedPool, err = GetStoragePoolByUUID(offlinePoolUUID)
 		log.FailOnError(err, "error getting pool with UUID [%s]", offlinePoolUUID)
 
 		var expandedExpectedPoolSize uint64
@@ -4888,6 +5135,11 @@ var _ = Describe("{StorageFullPoolResize}", Label("p0", "positive", "px_ops", "p
 			log.FailOnError(err, fmt.Sprintf("Error getting PX status of node %s", selectedNode.Name))
 			dash.VerifySafely(*status, api.Status_STATUS_OK, fmt.Sprintf("validate PX status on node %s", selectedNode.Name))
 		})
+		err = core.Instance().DeleteNamespace(nsName)
+		if err != nil {
+			log.Errorf("error deleting namespace [%s], Err: %v", nsName, err)
+		}
+
 	})
 
 	JustAfterEach(func() {
@@ -4895,6 +5147,39 @@ var _ = Describe("{StorageFullPoolResize}", Label("p0", "positive", "px_ops", "p
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
+
+func addPooLabel(poolUUID string, labels map[string]string) error {
+
+	n, err := GetNodeWithGivenPoolID(poolUUID)
+
+	if err != nil {
+		return err
+	}
+
+	labelString := ""
+	for k, v := range labels {
+		labelString = fmt.Sprintf("%s=%s,", k, v)
+	}
+	lastComma := strings.LastIndex(labelString, ",")
+	if lastComma != -1 {
+		labelString = labelString[:lastComma] + labelString[lastComma+1:]
+	}
+
+	cmd := fmt.Sprintf("pxctl sv pool update -u %s --labels %s", poolUUID, labelString)
+	out, err := Inst().N.RunCommand(
+		*n,
+		cmd,
+		node.ConnectionOpts{
+			Timeout:         1 * time.Minute,
+			TimeBeforeRetry: 10 * time.Second,
+		})
+	if err != nil {
+		return fmt.Errorf("updating labels failed on Node [%s], Err: [%v]", n.Name, err)
+	}
+	log.Infof("Updated labels [%s] successfully to pool [%s], output: [%s]", labelString, poolUUID, out)
+
+	return nil
+}
 
 var _ = Describe("{StorageFullPoolAddDisk}", Label("p0", "positive", "px_ops", "pool_ops", "PoolExpand", "AddDrive", "Throttling"), func() {
 
@@ -5762,8 +6047,21 @@ var _ = Describe("{ResizePoolDrivesInDifferentSize}", Label("p1", "positive", "p
 		log.FailOnError(err, "Getting NodeID from the given poolUUID [%v] Failed", poolUUID)
 		log.InfoD("Node Details %v", nodeDetails)
 
+		drvM, err := Inst().V.GetPoolDrives(nodeDetails)
+		log.FailOnError(err, "Failed to get pool drives")
+		poolDriveDetails, ok := drvM[fmt.Sprintf("%d", poolID)]
+		if ok {
+			diskSize = poolDriveDetails[0].SizeInGib
+		} else {
+			log.FailOnError(fmt.Errorf("failed to get pool drive details with pool id %d on node %s", poolID, nodeDetails.Name), "Failed to get pool drive details")
+		}
+
 		log.InfoD("Adding New Disk with Size [%v] which is greater than the pool size available", diskSize)
-		response, err := addDiskToSpecificPool(*nodeDetails, diskSize, poolID)
+		response, err := addDiskToSpecificPool(*nodeDetails, diskSize+10, poolID)
+		dash.VerifySafely(err != nil, true, fmt.Sprintf("validate error while adding disk with greater size same as pool disk size. Err: %v", err))
+		dash.VerifySafely(response, false,
+			fmt.Sprintf("Validate pool adding new drive with disk size greater than pool disk size [%v GiB] is failed", diskSize))
+
 		if err != nil {
 			driveCompatibleErr := strings.Contains(err.Error(), "Drive not compatible with specified pool")
 			if driveCompatibleErr {
@@ -5778,10 +6076,11 @@ var _ = Describe("{ResizePoolDrivesInDifferentSize}", Label("p1", "positive", "p
 			fmt.Sprintf("Pool expansion with Disk Resize with Disk size [%v GiB] Succeeded?", diskSize))
 
 		log.InfoD("Attempt Adding Disk with size same as pool size")
-		response, err = addDiskToSpecificPool(*nodeDetails, 0, poolID)
+		response, err = addDiskToSpecificPool(*nodeDetails, diskSize, poolID)
 		log.FailOnError(err, "Error while adding Disk to the pool")
+
 		dash.VerifyFatal(response, true,
-			fmt.Sprintf("Pool expansion with Disk size same as pool size [%v GiB] Succeeded?", diskSize))
+			fmt.Sprintf("Validate pool expansion with Disk size same as pool size [%v GiB] is successful", diskSize))
 	})
 
 	JustAfterEach(func() {

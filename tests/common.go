@@ -848,7 +848,7 @@ func InitInstanceWithParams(params InitParams) {
 }
 
 func PrintPxctlStatus() {
-	PrintCommandOutput("pxctl status")
+	PrintCommandOutput("pxctl status", node.Node{})
 }
 
 // TriggerCleanup returns if cleanup should happen or not based on ENVs set in torpedo
@@ -864,17 +864,19 @@ func TriggerCleanup() bool {
 }
 
 func PrintInspectVolume(volID string) {
-	PrintCommandOutput(fmt.Sprintf("pxctl volume inspect %s", volID))
+	PrintCommandOutput(fmt.Sprintf("pxctl volume inspect %s", volID), node.Node{})
 }
 
-func PrintCommandOutput(cmnd string) {
-	// For px-lite there will be no storage nodes so command can be invoked from any node
-	pxNodes := node.GetStorageDriverNodes()
-	if len(pxNodes) == 0 {
-		log.Errorf("nodes not available to invoke pxctl command ")
+func PrintCommandOutput(cmnd string, pxNode node.Node) {
 
+	if pxNode.Name == "" {
+		pxNodes := node.GetStorageDriverNodes()
+		if len(pxNodes) == 0 {
+			log.FailOnError(fmt.Errorf("failed to run command [%s]", cmnd), "nodes not available to invoke pxctl command ")
+		}
+		pxNode = pxNodes[0]
 	}
-	output, err := Inst().N.RunCommand(pxNodes[0], cmnd, node.ConnectionOpts{
+	output, err := Inst().N.RunCommand(pxNode, cmnd, node.ConnectionOpts{
 		IgnoreError:     false,
 		TimeBeforeRetry: defaultRetryInterval,
 		Timeout:         defaultTimeout,
@@ -16681,7 +16683,6 @@ func ValidateLocalSnapshotCompleted(backupName string, orgID string, localSnapsh
 	}
 	return nil
 }
-
 
 // CreateNamespaceAndResourceQuota creates a namespace and a resource quota that limits
 // storage requests for persistent volume claims (PVCs).

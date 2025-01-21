@@ -5975,6 +5975,9 @@ func (d *portworx) GetPoolDrives(n *node.Node) (map[string][]torpedovolume.DiskR
 	nodePoolResources := make([]torpedovolume.DiskResource, 0)
 
 	for _, match := range matches {
+		if !strings.Contains(match, "/") {
+			continue
+		}
 		log.Debugf("Extracting pool details from [%s]", match)
 		poolDiskResource := torpedovolume.DiskResource{}
 		tempVals := strings.Fields(match)
@@ -6003,7 +6006,13 @@ func (d *portworx) GetPoolDrives(n *node.Node) (map[string][]torpedovolume.DiskR
 	for _, res := range nodePoolResources {
 		poolDrives[res.PoolId] = append(poolDrives[res.PoolId], res)
 	}
-	log.Debugf("Pool drives for node [%s]: %#v", n.Name, poolDrives)
+	log.Debugf("Pool drives for node [%s]:", n.Name)
+	for poolID, drives := range poolDrives {
+		for _, drive := range drives {
+			log.Debugf("Pool ID: %s, Device: %s, MediaType: %s, SizeInGib: %d",
+				poolID, drive.Device, drive.MediaType, drive.SizeInGib)
+		}
+	}
 	return poolDrives, nil
 }
 
