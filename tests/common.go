@@ -12700,28 +12700,6 @@ func SetupProxyServer(n node.Node) error {
 	}
 	log.Infof(output)
 
-	addVersionCmd := "echo -e \"MOUNTD_NFS_V4=\"yes\"\nRPCNFSDARGS=\"-N 2 -N 4\"\" >> /etc/nfs.conf"
-	output, err = Inst().N.RunCommandWithNoRetry(n, addVersionCmd, node.ConnectionOpts{
-		Sudo:            true,
-		TimeBeforeRetry: defaultRetryInterval,
-		Timeout:         defaultTimeout,
-	})
-	if err != nil {
-		return err
-	}
-	log.Infof(output)
-
-	updateExportsCmd := "echo \"/exports/testnfsexportdir *(rw,sync,no_root_squash)\" > /etc/exports"
-	output, err = Inst().N.RunCommandWithNoRetry(n, updateExportsCmd, node.ConnectionOpts{
-		Sudo:            true,
-		TimeBeforeRetry: defaultRetryInterval,
-		Timeout:         defaultTimeout,
-	})
-	if err != nil {
-		return err
-	}
-	log.Infof(output)
-
 	checkExportfsCmd := "which exportfs"
 	output, err = Inst().N.RunCommandWithNoRetry(n, checkExportfsCmd, node.ConnectionOpts{
 		Sudo:            true,
@@ -12745,8 +12723,8 @@ func SetupProxyServer(n node.Node) error {
 
 		switch strings.TrimSpace(output) {
 		case "ubuntu", "debian":
-			log.Infof("Installing nfs-common")
-			installNfsUtilsCmd = "apt-get update && apt-get install -y nfs-common"
+			log.Infof("Installing nfs-common and nfs-kernel-server")
+			installNfsUtilsCmd = "apt-get update && apt-get install -y nfs-common nfs-kernel-server"
 		case "centos", "rhel", "fedora":
 			log.Infof("Installing nfs-utils")
 			installNfsUtilsCmd = "yum install -y nfs-utils"
@@ -12766,6 +12744,28 @@ func SetupProxyServer(n node.Node) error {
 	} else {
 		log.Infof(output)
 	}
+
+	addVersionCmd := "echo -e \"MOUNTD_NFS_V4=\"yes\"\nRPCNFSDARGS=\"-N 2 -N 4\"\" >> /etc/nfs.conf"
+	output, err = Inst().N.RunCommandWithNoRetry(n, addVersionCmd, node.ConnectionOpts{
+		Sudo:            true,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+	})
+	if err != nil {
+		return err
+	}
+	log.Infof(output)
+
+	updateExportsCmd := "echo \"/exports/testnfsexportdir *(rw,sync,no_root_squash)\" > /etc/exports"
+	output, err = Inst().N.RunCommandWithNoRetry(n, updateExportsCmd, node.ConnectionOpts{
+		Sudo:            true,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+	})
+	if err != nil {
+		return err
+	}
+	log.Infof(output)
 
 	exportCmd := "exportfs -a"
 	output, err = Inst().N.RunCommandWithNoRetry(n, exportCmd, node.ConnectionOpts{
