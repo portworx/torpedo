@@ -179,6 +179,7 @@ const (
 	PxUpgradeWithBackupAndRestore                                                      TestCaseName = "PxUpgradeWithBackupAndRestore"
 	LicensingCountBeforeAndAfterBackupNodeRestart                                      TestCaseName = "LicensingCountBeforeAndAfterBackupNodeRestart"
 	VerifyLicenseParameters                                                            TestCaseName = "VerifyLicenseParameters"
+	BasicBackupAndRestoreWithParallelBackupSchedule                                    TestCaseName = "BasicBackupAndRestoreWithParallelBackupSchedule"
 )
 
 // Test case labels
@@ -355,6 +356,7 @@ const (
 	ParallelBackupScheduleTestSuiteLabel                                                    TestCaseLabel = "ParallelBackupScheduleTestSuite"
 	ParallelBackupScheduleNonPxdTestSuiteLabel                                              TestCaseLabel = "ParallelBackupScheduleNonPxdTestSuite"
 	VerifyLicenseParametersLabel                                                            TestCaseLabel = "VerifyLicenseParameters"
+	BasicBackupAndRestoreWithParallelBackupScheduleLabel                                    TestCaseLabel = "BasicBackupAndRestoreWithParallelBackupSchedule"
 )
 
 // Common Labels
@@ -679,4 +681,5 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	VerifyRBACForLargeUserSet:                                              {VerifyRBACForLargeUserSetLabel, vanillaPipeline, ScaleTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
 	CrashKopiaToolWhenBackUpRestoreInProgress:                              {CrashKopiaToolWhenBackUpRestoreInProgressLabel, ocpPipeline, SystemTest, PxBackupLabel, P2, NonPxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FBDALabel, KDMPLabel},
 	PxUpgradeWithBackupAndRestore:                                          {PxUpgradeWithBackupAndRestoreLabel, SystemTest, PxBackupLabel},
+	BasicBackupAndRestoreWithParallelBackupSchedule:                        {BasicBackupAndRestoreWithParallelBackupScheduleLabel, SystemTest, PxBackupLabel},
 }
