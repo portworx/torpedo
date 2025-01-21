@@ -514,6 +514,9 @@ type Driver interface {
 
 	// ValidateCsiSnap validate CSI snapshot for a given PVC
 	ValidateCsiSnap(pvcName string, namespace string, snapshot volsnapv1.VolumeSnapshot) error
+
+	// CreateResourceQuota creates a resource quota
+	CreateResourceQuota(rq *corev1.ResourceQuota) error
 }
 
 var (

@@ -180,6 +180,7 @@ const (
 	LicensingCountBeforeAndAfterBackupNodeRestart                                      TestCaseName = "LicensingCountBeforeAndAfterBackupNodeRestart"
 	VerifyLicenseParameters                                                            TestCaseName = "VerifyLicenseParameters"
 	BasicBackupAndRestoreWithParallelBackupSchedule                                    TestCaseName = "BasicBackupAndRestoreWithParallelBackupSchedule"
+	InstallPxBackupResourceQuotaCheck                                                  TestCaseName = "InstallPxBackupResourceQuotaCheck"
 )
 
 // Test case labels
@@ -357,6 +358,7 @@ const (
 	ParallelBackupScheduleNonPxdTestSuiteLabel                                              TestCaseLabel = "ParallelBackupScheduleNonPxdTestSuite"
 	VerifyLicenseParametersLabel                                                            TestCaseLabel = "VerifyLicenseParameters"
 	BasicBackupAndRestoreWithParallelBackupScheduleLabel                                    TestCaseLabel = "BasicBackupAndRestoreWithParallelBackupSchedule"
+	InstallPxBackupResourceQuotaCheckLabel                                                  TestCaseLabel = "InstallPxBackupResourceQuotaCheck"
 )
 
 // Common Labels
@@ -486,6 +488,7 @@ const (
 	DiffK8sVersionLabel            TestCaseLabel = "diff-k8s-version"
 	ClusterShareAndSuperAdminLabel TestCaseLabel = "cluster-share"
 	LargeResourceLabel             TestCaseLabel = "large-resource"
+	HealthCheckLabel               TestCaseLabel = "health-check"
 )
 
 /*
@@ -682,4 +685,5 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	CrashKopiaToolWhenBackUpRestoreInProgress:                              {CrashKopiaToolWhenBackUpRestoreInProgressLabel, ocpPipeline, SystemTest, PxBackupLabel, P2, NonPxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FBDALabel, KDMPLabel},
 	PxUpgradeWithBackupAndRestore:                                          {PxUpgradeWithBackupAndRestoreLabel, SystemTest, PxBackupLabel},
 	BasicBackupAndRestoreWithParallelBackupSchedule:                        {BasicBackupAndRestoreWithParallelBackupScheduleLabel, SystemTest, PxBackupLabel},
+	InstallPxBackupResourceQuotaCheck:                                      {InstallPxBackupResourceQuotaCheckLabel, FunctionalTest, PxBackupLabel, P0, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
 }

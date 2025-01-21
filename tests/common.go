@@ -16681,3 +16681,76 @@ func ValidateLocalSnapshotCompleted(backupName string, orgID string, localSnapsh
 	}
 	return nil
 }
+
+
+// CreateNamespaceAndResourceQuota creates a namespace and a resource quota that limits
+// storage requests for persistent volume claims (PVCs).
+func CreateNamespaceAndResourceQuota(namespace string, storageLimit string) error {
+
+	// Create the Namespace object
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: namespace,
+		},
+	}
+
+	// Create Namespace
+	if _, err := k8sCore.CreateNamespace(ns); err != nil {
+		return fmt.Errorf("failed to create namespace %q: %w", namespace, err)
+	}
+
+	// Create the ResourceQuota object to limit PVC storage
+	quota := &corev1.ResourceQuota{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "pxb-pvc-storage-quota",
+			Namespace: namespace,
+		},
+		Spec: corev1.ResourceQuotaSpec{
+			Hard: corev1.ResourceList{
+				// ResourceRequestsStorage is typically used to limit PVC storage requests
+				corev1.ResourceRequestsStorage: resource.MustParse(storageLimit),
+			},
+		},
+	}
+
+	// Create ResourceQuota
+	if err := Inst().S.CreateResourceQuota(quota); err != nil {
+		return fmt.Errorf("failed to create resource quota in namespace %q: %w", namespace, err)
+	}
+
+	return nil
+}
+
+// SearchPodLogs retrieves logs from the first pod with the podLabelSelector in the given namespace,
+// then checks whether the logs contain the specified searchString. It returns (true, nil) if found, (false, nil) if not found,
+// or an error if something goes wrong during the process.
+func SearchPodLogs(podLabelSelector map[string]string, namespace, searchString string) (bool, error) {
+
+	podList, err := k8sCore.ListPods(podLabelSelector)
+	if err != nil {
+		return false, fmt.Errorf("error listing pods for job 'pre-install-check': %w", err)
+	}
+
+	// Make sure we found at least one pod
+	if len(podList.Items) == 0 {
+		return false, fmt.Errorf("no pods found for job 'pre-install-check' in namespace %q", namespace)
+	}
+
+	// Get logs from the first pod found
+	podName := podList.Items[0].Name
+	logOpts := &corev1.PodLogOptions{}
+	logs, err := k8sCore.GetPodLog(podName, namespace, logOpts)
+	if err != nil {
+		return false, fmt.Errorf("error getting log stream for pod %q: %w", podName, err)
+	}
+
+	// Print the full log
+	log.Infof("Logs from pod %q in namespace %q:\n%s", podName, namespace, logs)
+
+	// Check if logs contain the search string
+	if strings.Contains(logs, searchString) {
+		return true, nil
+	}
+
+	return false, nil
+}

@@ -13149,7 +13149,6 @@ func ParseValuesFromFile(key string) (map[string]interface{}, error) {
 
 // toStringMap recursively converts a map[interface{}]interface{} to map[string]interface{}.
 func toStringMap(m map[interface{}]interface{}) (map[string]interface{}, error) {
-	log.InfoD("Entering toStringMap")
 	out := make(map[string]interface{})
 	for k, v := range m {
 		ks, ok := k.(string)
@@ -13164,7 +13163,6 @@ func toStringMap(m map[interface{}]interface{}) (map[string]interface{}, error) 
 // convertValue checks if the value is itself a map[interface{}]interface{}, a slice, etc.
 // Then does recursive conversions for nested structures.
 func convertValue(v interface{}) interface{} {
-	log.InfoD("Entering convertValue")
 	switch v := v.(type) {
 	case map[interface{}]interface{}:
 		strMap, _ := toStringMap(v) // ignoring error for brevity

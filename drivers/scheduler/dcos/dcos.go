@@ -1263,6 +1263,15 @@ func (k *dcos) ValidateCsiSnap(pvcName string, namespace string, snapshot volsna
 	}
 }
 
+// CreateResourceQuota creates a resource quota
+func (k *dcos) CreateResourceQuota(rq *corev1.ResourceQuota) error {
+	// CreateResourceQuota is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "CreateResourceQuota()",
+	}
+}
+
 func init() {
 	d := &dcos{}
 	scheduler.Register(SchedName, d)

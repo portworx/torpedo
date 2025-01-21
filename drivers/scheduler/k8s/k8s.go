@@ -9387,3 +9387,15 @@ func (k *K8s) GetPodMetrics(podName, namespace string) (*v1beta1.PodMetrics, err
 	}
 	return podMetrics, nil
 }
+
+// CreateResourceQuota creates a resource quota
+func (k *K8s) CreateResourceQuota(rq *v1.ResourceQuota) error {
+	clientset, err := k.getKubeClient("")
+	if err != nil {
+		return err
+	}
+	if _, err := clientset.CoreV1().ResourceQuotas(rq.Namespace).Create(context.TODO(), rq, metav1.CreateOptions{}); err != nil {
+		return fmt.Errorf("failed to create resource quota in namespace %q: %w", rq.Namespace, err)
+	}
+	return nil
+}
