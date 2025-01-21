@@ -776,6 +776,8 @@ spec:
       value: "${ORACLE_API_KEY}"
     - name: INSTANCE_GROUP
       value: "${INSTANCE_GROUP}"
+    - name: NODE_POOL_LIST
+      value: "${NODE_POOL_LIST}"
     - name: LOGGLY_API_TOKEN
       value: "${LOGGLY_API_TOKEN}"
     - name: PODMETRIC_METERING_INTERVAL_MINUTES

@@ -3,6 +3,7 @@ package gke
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/libopenstorage/cloudops"
@@ -26,6 +27,7 @@ type Gke struct {
 	kube.K8s
 	ops           cloudops.Ops
 	instanceGroup string
+	nodePoolList  []string
 }
 
 func (g *Gke) String() string {
@@ -58,9 +60,16 @@ func (g *Gke) UpgradeScheduler(version string) error {
 
 	instanceGroup := os.Getenv("INSTANCE_GROUP")
 	if len(instanceGroup) != 0 {
-		g.instanceGroup = instanceGroup
+		g.nodePoolList = append(g.nodePoolList, instanceGroup)
 	} else {
-		g.instanceGroup = "default-pool"
+		g.nodePoolList = append(g.nodePoolList, "default-pool")
+	}
+
+	// If NODE_POOL_LIST is passed, will use this list instead of INSTANCE_GROUP or default-pool to perform upgrades
+	nodePoolList := os.Getenv("NODE_POOL_LIST")
+	if len(nodePoolList) != 0 {
+		g.nodePoolList = strings.Split(nodePoolList, ",")
+		log.Infof("Got list of node pools to upgrade %v from NODE_POOL_LIST env var passed to torpedo", g.nodePoolList)
 	}
 
 	// Upgrade GKE Control Plane version
@@ -68,7 +77,7 @@ func (g *Gke) UpgradeScheduler(version string) error {
 		return err
 	}
 
-	// Update GKE Node Group Upgrade Strategy
+	// Update GKE node pool(s) upgrade strategy
 	upgradeStrategy := os.Getenv("GKE_UPGRADE_STRATEGY")
 	surgeSetting := os.Getenv("GKE_SURGE_VALUE")
 	if upgradeStrategy == "" {
@@ -78,13 +87,13 @@ func (g *Gke) UpgradeScheduler(version string) error {
 		surgeSetting = "default"
 	}
 
-	if err := g.updateGkeNodeGroupUpgradeStrategy(g.instanceGroup,
+	if err := g.updateGkeNodeGroupUpgradeStrategy(g.nodePoolList,
 		upgradeStrategy, defaultGkeUpgradeTimeout, surgeSetting); err != nil {
 		return err
 	}
 
-	// Upgrade GKE Node Group version
-	if err := g.upgradeGkeNodeGroupVersion(g.instanceGroup, version, defaultGkeUpgradeTimeout); err != nil {
+	// Upgrade GKE node pool(s) version
+	if err := g.upgradeGkeNodeGroupVersion(g.nodePoolList, version, defaultGkeUpgradeTimeout); err != nil {
 		return err
 	}
 
@@ -93,7 +102,6 @@ func (g *Gke) UpgradeScheduler(version string) error {
 }
 
 func (g *Gke) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error {
-
 	instanceGroup := os.Getenv("INSTANCE_GROUP")
 	if len(instanceGroup) != 0 {
 		g.instanceGroup = instanceGroup
@@ -109,7 +117,6 @@ func (g *Gke) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error
 }
 
 func (g *Gke) GetASGClusterSize() (int64, error) {
-
 	instanceGroup := os.Getenv("INSTANCE_GROUP")
 	if len(instanceGroup) != 0 {
 		g.instanceGroup = instanceGroup
@@ -124,9 +131,9 @@ func (g *Gke) GetASGClusterSize() (int64, error) {
 	return nodeCount, nil
 }
 
-// upgradeGkeControlPlaneVersion upgrade GKE Control Plane to a specified version
+// upgradeGkeControlPlaneVersion upgrades GKE Control Plane to a specified version
 func (g *Gke) upgradeGkeControlPlaneVersion(version string, timeout time.Duration) error {
-	log.Infof("Upgrade GKE Control Plane version to [%s]", version)
+	log.Infof("Upgrade GKE Control Plane version to [%s]..", version)
 	if err := g.ops.SetClusterVersion(version, timeout); err != nil {
 		return fmt.Errorf("failed to set version for GKE Control Plane to [%s], Err: %v", version, err)
 	}
@@ -134,24 +141,31 @@ func (g *Gke) upgradeGkeControlPlaneVersion(version string, timeout time.Duratio
 	return nil
 }
 
-// upgradeGkeNodeGroupVersion upgrade specified GKE Node Group to a specified version
-func (g *Gke) upgradeGkeNodeGroupVersion(nodeGroup, version string, timeout time.Duration) error {
-	log.Infof("Upgrade GKE Node Group [%s] version to [%s]", nodeGroup, version)
-	if err := g.ops.SetInstanceGroupVersion(nodeGroup, version, timeout); err != nil {
-		return fmt.Errorf("failed to set version for GKE Node Group [%s] to [%s], Err: %v", nodeGroup, version, err)
+// upgradeGkeNodeGroupVersion upgrades GKE node pool(s) to a specified version
+func (g *Gke) upgradeGkeNodeGroupVersion(nodePoolList []string, version string, timeout time.Duration) error {
+	log.Infof("Preparing to upgrade [%d] GKE node pool(s) %v..", len(nodePoolList), nodePoolList)
+	for _, nodePool := range nodePoolList {
+		log.Infof("Upgrade GKE node pool [%s] version to [%s]", nodePool, version)
+		if err := g.ops.SetInstanceGroupVersion(nodePool, version, timeout); err != nil {
+			return fmt.Errorf("failed to set version for GKE node pool [%s] to [%s], Err: %v", nodePool, version, err)
+		}
+		log.Infof("GKE node pool [%s] version was successfully set to [%s]", nodePool, version)
 	}
-	log.Infof("GKE Node Group [%s] version was successfully set to [%s]", nodeGroup, version)
+	log.Infof("Successfully upgraded [%d] GKE node pool(s) %v", len(nodePoolList), nodePoolList)
 	return nil
 }
 
-// updateGkeNodeGroupUpgradeStrategy updates specified GKE Node Group's upgrade strategy
-func (g *Gke) updateGkeNodeGroupUpgradeStrategy(nodeGroup, upgradeStrategy string, timeout time.Duration, surgeSetting string) error {
-	log.Infof("Updating GKE Node Group's [%s] Upgrade Strategy to [%s]", nodeGroup, upgradeStrategy)
-
-	if err := g.ops.SetInstanceUpgradeStrategy(nodeGroup, upgradeStrategy, timeout, surgeSetting); err != nil {
-		return fmt.Errorf("failed to set upgrade strategy for GKE Node Group [%s] to [%s], Err: %v", nodeGroup, upgradeStrategy, err)
+// updateGkeNodeGroupUpgradeStrategy updates GKE node pool(s) upgrade strategy
+func (g *Gke) updateGkeNodeGroupUpgradeStrategy(nodePoolList []string, upgradeStrategy string, timeout time.Duration, surgeSetting string) error {
+	log.Infof("Preparing to update [%d] GKE node pool(s) %v..", len(nodePoolList), nodePoolList)
+	for _, nodePool := range nodePoolList {
+		log.Infof("Updating GKE node pool [%s] upgrade strategy to [%s]", nodePool, upgradeStrategy)
+		if err := g.ops.SetInstanceUpgradeStrategy(nodePool, upgradeStrategy, timeout, surgeSetting); err != nil {
+			return fmt.Errorf("failed to set upgrade strategy for GKE Node Group [%s] to [%s], Err: %v", nodePool, upgradeStrategy, err)
+		}
+		log.Infof("GKE node pool [%s] upgrade strategy was successfully set to [%s]", nodePool, upgradeStrategy)
 	}
-	log.Infof("GKE Node Group [%s] upgrade strategy was successfully set to [%s]", nodeGroup, upgradeStrategy)
+	log.Infof("Successfully updated [%d] GKE node pool(s) %v", len(nodePoolList), nodePoolList)
 	return nil
 }
 
