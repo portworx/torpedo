@@ -71,6 +71,11 @@ func AddDisksToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisks in
 	log.InfoD("create config map")
 	CreateConfigMap()
 
+	canSSH := CreateSSHPodAndSetCanSsh()
+	if !canSSH {
+		return canSSH, fmt.Errorf("Could not create SSH Pod. Exiting.")
+	}
+
 	for _, appCtx := range virtualMachines {
 		vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
 		if err != nil {
