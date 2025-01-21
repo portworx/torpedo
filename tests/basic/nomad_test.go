@@ -8,7 +8,7 @@ import (
 
 	"github.com/hashicorp/nomad/api"
 	. "github.com/onsi/ginkgo/v2"
-	"github.com/portworx/sched-ops/task"
+	"github.com/pure-px/sched-ops/task"
 	"github.com/pure-px/torpedo/drivers/nomad"
 	"github.com/pure-px/torpedo/pkg/log"
 	. "github.com/pure-px/torpedo/tests"

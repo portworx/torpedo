@@ -2,7 +2,7 @@ package hammerdb
 
 import (
 	"fmt"
-	"github.com/portworx/sched-ops/task"
+	"github.com/pure-px/sched-ops/task"
 	k8utils "github.com/pure-px/torpedo/drivers/utilities"
 	"github.com/pure-px/torpedo/pkg/log"
 	corev1 "k8s.io/api/core/v1"

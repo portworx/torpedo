@@ -3,8 +3,8 @@ package ibm
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/task"
+	"github.com/pure-px/sched-ops/k8s/core"
+	"github.com/pure-px/sched-ops/task"
 	"github.com/pure-px/torpedo/pkg/osutils"
 	"os"
 	"strings"

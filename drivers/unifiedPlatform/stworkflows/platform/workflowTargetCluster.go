@@ -2,8 +2,8 @@ package platform
 
 import (
 	"fmt"
-	"github.com/portworx/sched-ops/k8s/apps"
-	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/pure-px/sched-ops/k8s/apps"
+	"github.com/pure-px/sched-ops/k8s/core"
 	k8sutils "github.com/pure-px/torpedo/drivers/pds/lib"
 	"github.com/pure-px/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/pure-px/torpedo/drivers/unifiedPlatform/platformLibs"

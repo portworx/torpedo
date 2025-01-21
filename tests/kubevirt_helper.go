@@ -17,10 +17,10 @@ import (
 
 	"github.com/libopenstorage/openstorage/api"
 	. "github.com/onsi/ginkgo/v2"
-	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/k8s/kubevirt"
 	kubevirtdy "github.com/portworx/sched-ops/k8s/kubevirt-dynamic"
-	"github.com/portworx/sched-ops/task"
+	"github.com/pure-px/sched-ops/k8s/core"
+	"github.com/pure-px/sched-ops/k8s/kubevirt"
+	"github.com/pure-px/sched-ops/task"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/scheduler"
 	"github.com/pure-px/torpedo/drivers/volume"
@@ -149,7 +149,6 @@ func AddDisksToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisks in
 	log.InfoD("Number of disks after cold add disk is [%d] and total number of disks before cold add disk [%v]", newDiskCount, initialDiskCount)
 	return true, nil
 }
-
 
 // RunCmdInVirtLauncherPod runs a command in the virt-launcher pod of the VM
 func RunCmdInVirtLauncherPod(virtualMachineCtx *scheduler.Context, cmd []string) (string, error) {

@@ -13,10 +13,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/portworx/sched-ops/task"
+	"github.com/pure-px/sched-ops/task"
 
-	"github.com/portworx/sched-ops/k8s/apps"
-	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/pure-px/sched-ops/k8s/apps"
+	"github.com/pure-px/sched-ops/k8s/core"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/scheduler"
 	"github.com/pure-px/torpedo/drivers/volume"

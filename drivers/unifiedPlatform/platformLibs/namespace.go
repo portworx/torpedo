@@ -2,7 +2,7 @@ package platformLibs
 
 import (
 	"fmt"
-	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/pure-px/sched-ops/k8s/core"
 	"github.com/pure-px/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/pure-px/torpedo/pkg/log"
 	corev1 "k8s.io/api/core/v1"

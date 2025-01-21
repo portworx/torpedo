@@ -16,9 +16,9 @@ import (
 	"github.com/pure-px/torpedo/pkg/testrailuttils"
 
 	"github.com/libopenstorage/openstorage/api"
-	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/k8s/errors"
-	"github.com/portworx/sched-ops/task"
+	"github.com/pure-px/sched-ops/k8s/core"
+	"github.com/pure-px/sched-ops/k8s/errors"
+	"github.com/pure-px/sched-ops/task"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/scheduler"
 	"github.com/pure-px/torpedo/drivers/volume"

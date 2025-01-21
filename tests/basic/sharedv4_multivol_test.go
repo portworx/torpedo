@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/k8s/storage"
-	"github.com/portworx/sched-ops/task"
+	"github.com/pure-px/sched-ops/k8s/core"
+	"github.com/pure-px/sched-ops/k8s/storage"
+	"github.com/pure-px/sched-ops/task"
 	"github.com/pure-px/torpedo/pkg/log"
 	corev1 "k8s.io/api/core/v1"
 	storageApi "k8s.io/api/storage/v1"

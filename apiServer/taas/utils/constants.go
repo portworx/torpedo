@@ -3,7 +3,7 @@ package utils
 import (
 	"time"
 
-	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/pure-px/sched-ops/k8s/core"
 )
 
 type HelmPayload struct {

@@ -16,12 +16,12 @@ import (
 
 	"github.com/onsi/ginkgo/v2"
 
-	k8s "github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/task"
+	k8s "github.com/pure-px/sched-ops/k8s/core"
+	"github.com/pure-px/sched-ops/task"
 	"github.com/pure-px/torpedo/pkg/log"
 	"google.golang.org/grpc/metadata"
 
-	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/pure-px/sched-ops/k8s/core"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )

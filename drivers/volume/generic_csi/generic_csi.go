@@ -5,7 +5,7 @@ import (
 
 	"github.com/libopenstorage/openstorage/api"
 
-	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/pure-px/sched-ops/k8s/core"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/volume"
 	torpedovolume "github.com/pure-px/torpedo/drivers/volume"

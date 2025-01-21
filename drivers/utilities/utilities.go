@@ -10,7 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/jinzhu/copier"
-	"github.com/portworx/sched-ops/k8s/kubevirt"
+	"github.com/pure-px/sched-ops/k8s/kubevirt"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/pkg/log"
 	"io/ioutil"
@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/pure-px/sched-ops/k8s/core"
 	"github.com/pure-px/torpedo/drivers/scheduler"
 	corev1 "k8s.io/api/core/v1"
 )

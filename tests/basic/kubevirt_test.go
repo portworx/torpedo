@@ -10,7 +10,7 @@ import (
 	"time"
 
 	kubevirtdy "github.com/portworx/sched-ops/k8s/kubevirt-dynamic"
-	"github.com/portworx/sched-ops/task"
+	"github.com/pure-px/sched-ops/task"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,7 +19,7 @@ import (
 	"k8s.io/client-go/rest"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 
-	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/pure-px/sched-ops/k8s/core"
 
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	oputil "github.com/pure-px/px-operator/pkg/util/test"
@@ -7224,7 +7224,7 @@ var _ = Describe("{AddAndRemoveNewHotPlugDiskToKubevirtVM}", Label("p0", "positi
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			persist := false
-			_, err := HotPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "50Gi", volumeMode,persist)
+			_, err := HotPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "50Gi", volumeMode, persist)
 			log.FailOnError(err, "Failed to hot-plug DataVolume to KubeVirt VM")
 			dash.VerifyFatal(true, true, "Successfully hot-plugged disk to KubeVirt VM ?")
 		})
@@ -8049,7 +8049,7 @@ var _ = Describe("{LMAfterAddingHotAndColdDiskToKubevirtVMMultipleTimes}", Label
 
 		for i := 0; i < repeat; i++ {
 			log.Infof("Running the iteration [%d]", i)
-			
+
 			numberOfVolumes = 1
 			stepLog = "Hot-plug one  disk (DataVolume) to the running KubeVirt VM"
 			Step(stepLog, func() {

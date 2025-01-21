@@ -8,8 +8,8 @@ import (
 	"github.com/libopenstorage/openstorage/api"
 
 	lclient "github.com/LINBIT/golinstor/client"
-	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/task"
+	"github.com/pure-px/sched-ops/k8s/core"
+	"github.com/pure-px/sched-ops/task"
 	driver_api "github.com/pure-px/torpedo/drivers/api"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/volume"

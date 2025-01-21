@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/libopenstorage/openstorage/pkg/sched"
-	"github.com/portworx/sched-ops/task"
+	"github.com/pure-px/sched-ops/task"
 	tp_errors "github.com/pure-px/torpedo/pkg/errors"
 	"github.com/pure-px/torpedo/pkg/log"
 )

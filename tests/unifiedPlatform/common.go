@@ -3,21 +3,21 @@ package unifiedPlatform
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/portworx/sched-ops/k8s/apps"
+	"github.com/pure-px/sched-ops/k8s/apps"
 	"io/ioutil"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/portworx/sched-ops/task"
+	"github.com/pure-px/sched-ops/task"
 	"github.com/pure-px/torpedo/drivers/volume"
 	"github.com/pure-px/torpedo/pkg/units"
 	"k8s.io/apimachinery/pkg/api/resource"
 
 	"github.com/pure-px/torpedo/drivers/node"
 
-	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/pure-px/sched-ops/k8s/core"
 	"github.com/pure-px/torpedo/drivers/pds/parameters"
 	"github.com/pure-px/torpedo/drivers/unifiedPlatform/automationModels"
 	dslibs "github.com/pure-px/torpedo/drivers/unifiedPlatform/pdsLibs"

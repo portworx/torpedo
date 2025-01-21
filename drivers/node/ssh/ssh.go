@@ -16,9 +16,9 @@ import (
 	torpedotask "github.com/pure-px/torpedo/pkg/task"
 
 	docker_types "github.com/docker/docker/api/types"
-	"github.com/portworx/sched-ops/k8s/apps"
-	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/task"
+	"github.com/pure-px/sched-ops/k8s/apps"
+	"github.com/pure-px/sched-ops/k8s/core"
+	"github.com/pure-px/sched-ops/task"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/scheduler"
 	k8s_driver "github.com/pure-px/torpedo/drivers/scheduler/k8s"

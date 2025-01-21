@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/pure-px/sched-ops/k8s/core"
+	"github.com/pure-px/sched-ops/task"
 	storkv1 "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
-	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/pure-px/stork/pkg/crud/stork"
-	"github.com/portworx/sched-ops/task"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/pure-px/torpedo/pkg/log"

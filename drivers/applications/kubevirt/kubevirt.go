@@ -2,8 +2,8 @@ package kubevirt
 
 import (
 	"fmt"
-	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/task"
+	"github.com/pure-px/sched-ops/k8s/core"
+	"github.com/pure-px/sched-ops/task"
 	"github.com/pure-px/torpedo/drivers/node"
 	. "github.com/pure-px/torpedo/drivers/utilities"
 	"github.com/pure-px/torpedo/pkg/log"

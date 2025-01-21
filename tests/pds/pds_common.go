@@ -2,8 +2,8 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/sched-ops/k8s/apiextensions"
-	"github.com/portworx/sched-ops/k8s/storage"
+	"github.com/pure-px/sched-ops/k8s/apiextensions"
+	"github.com/pure-px/sched-ops/k8s/storage"
 	"github.com/pure-px/torpedo/drivers/node"
 	pdsbkp "github.com/pure-px/torpedo/drivers/pds/pdsbackup"
 	restoreBkp "github.com/pure-px/torpedo/drivers/pds/pdsrestore"
@@ -23,9 +23,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	"github.com/portworx/sched-ops/k8s/apps"
-	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/task"
+	"github.com/pure-px/sched-ops/k8s/apps"
+	"github.com/pure-px/sched-ops/k8s/core"
+	"github.com/pure-px/sched-ops/task"
 	pdslib "github.com/pure-px/torpedo/drivers/pds/lib"
 	"github.com/pure-px/torpedo/drivers/pds/parameters"
 	tc "github.com/pure-px/torpedo/drivers/pds/targetcluster"

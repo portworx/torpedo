@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/portworx/sched-ops/task"
+	"github.com/pure-px/sched-ops/task"
 	storkv1 "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
 	storkops "github.com/pure-px/stork/pkg/crud/stork"
 	"github.com/pure-px/stork/pkg/storkctl"

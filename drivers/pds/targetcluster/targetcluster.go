@@ -15,9 +15,9 @@ import (
 	pdsapi "github.com/pure-px/torpedo/drivers/pds/api"
 	"github.com/pure-px/torpedo/drivers/pds/parameters"
 
-	apps "github.com/portworx/sched-ops/k8s/apps"
-	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/task"
+	apps "github.com/pure-px/sched-ops/k8s/apps"
+	"github.com/pure-px/sched-ops/k8s/core"
+	"github.com/pure-px/sched-ops/task"
 	"github.com/pure-px/torpedo/pkg/log"
 	"github.com/pure-px/torpedo/pkg/osutils"
 	corev1 "k8s.io/api/core/v1"

@@ -7,7 +7,7 @@ import (
 	. "github.com/onsi/gomega"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	_ "github.com/portworx/px-backup-api/pkg/kubeauth/gcp"
-	"github.com/portworx/sched-ops/task"
+	"github.com/pure-px/sched-ops/task"
 	"github.com/pure-px/torpedo/drivers"
 	"github.com/pure-px/torpedo/drivers/backup"
 	"github.com/pure-px/torpedo/drivers/node"

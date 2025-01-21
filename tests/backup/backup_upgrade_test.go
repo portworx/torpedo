@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-version"
-	k8score "github.com/portworx/sched-ops/k8s/core"
+	k8score "github.com/pure-px/sched-ops/k8s/core"
 	"github.com/pure-px/torpedo/drivers"
 	"github.com/pure-px/torpedo/drivers/backup/portworx"
 	"github.com/pure-px/torpedo/drivers/node"

@@ -11,7 +11,7 @@ import (
 	"github.com/libopenstorage/openstorage/pkg/mount"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/portworx/sched-ops/k8s/apps"
+	"github.com/pure-px/sched-ops/k8s/apps"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/scheduler"
 	"github.com/pure-px/torpedo/pkg/testrailuttils"

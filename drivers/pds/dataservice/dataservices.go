@@ -7,9 +7,9 @@ import (
 	"time"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	"github.com/portworx/sched-ops/k8s/apps"
-	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/k8s/rbac"
+	"github.com/pure-px/sched-ops/k8s/apps"
+	"github.com/pure-px/sched-ops/k8s/core"
+	"github.com/pure-px/sched-ops/k8s/rbac"
 	pdsdriver "github.com/pure-px/torpedo/drivers/pds"
 	pdsapi "github.com/pure-px/torpedo/drivers/pds/api"
 	pdscontrolplane "github.com/pure-px/torpedo/drivers/pds/controlplane"

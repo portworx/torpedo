@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/portworx/sched-ops/task"
+	"github.com/pure-px/sched-ops/task"
 	"github.com/pure-px/torpedo/drivers/unifiedPlatform/automationModels"
 	pdslibs "github.com/pure-px/torpedo/drivers/unifiedPlatform/pdsLibs"
 	"github.com/pure-px/torpedo/drivers/unifiedPlatform/stworkflows"

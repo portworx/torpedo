@@ -9,7 +9,7 @@ import (
 	"time"
 
 	marathon "github.com/gambol99/go-marathon"
-	"github.com/portworx/sched-ops/task"
+	"github.com/pure-px/sched-ops/task"
 )
 
 const (

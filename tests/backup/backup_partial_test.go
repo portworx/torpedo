@@ -2,7 +2,7 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/pure-px/sched-ops/k8s/core"
 	corev1 "k8s.io/api/core/v1"
 	"os"
 	"strings"
@@ -12,7 +12,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
-	k8score "github.com/portworx/sched-ops/k8s/core"
+	k8score "github.com/pure-px/sched-ops/k8s/core"
 	"github.com/pure-px/torpedo/drivers/backup"
 	"github.com/pure-px/torpedo/drivers/scheduler"
 	"github.com/pure-px/torpedo/pkg/log"

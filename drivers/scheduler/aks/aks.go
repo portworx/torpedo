@@ -8,7 +8,7 @@ import (
 
 	"github.com/libopenstorage/cloudops"
 	"github.com/libopenstorage/cloudops/azure"
-	"github.com/portworx/sched-ops/task"
+	"github.com/pure-px/sched-ops/task"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/scheduler"
 	kube "github.com/pure-px/torpedo/drivers/scheduler/k8s"

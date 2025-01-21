@@ -4,7 +4,7 @@ import (
 	"cloud.google.com/go/storage"
 	"context"
 	"fmt"
-	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/pure-px/sched-ops/k8s/core"
 	"github.com/pure-px/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/pure-px/torpedo/drivers/utilities"
 	"github.com/pure-px/torpedo/pkg/log"

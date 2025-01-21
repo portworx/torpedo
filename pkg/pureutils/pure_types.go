@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/pure-px/sched-ops/k8s/core"
 )
 
 const (

@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/pure-px/sched-ops/task"
 	stork_api "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
 	stork_objectstore "github.com/pure-px/stork/pkg/objectstore"
-	"github.com/portworx/sched-ops/task"
 	"gocloud.dev/blob"
 )
 

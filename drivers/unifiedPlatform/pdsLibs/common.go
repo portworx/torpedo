@@ -2,10 +2,10 @@ package pdslibs
 
 import (
 	"context"
-	"github.com/portworx/sched-ops/k8s/apps"
-	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/k8s/rbac"
-	"github.com/portworx/sched-ops/k8s/storage"
+	"github.com/pure-px/sched-ops/k8s/apps"
+	"github.com/pure-px/sched-ops/k8s/core"
+	"github.com/pure-px/sched-ops/k8s/rbac"
+	"github.com/pure-px/sched-ops/k8s/storage"
 	pdsdriver "github.com/pure-px/torpedo/drivers/pds"
 	"github.com/pure-px/torpedo/drivers/unifiedPlatform"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

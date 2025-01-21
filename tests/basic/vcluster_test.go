@@ -9,7 +9,7 @@ import (
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
-	"github.com/portworx/sched-ops/k8s/storage"
+	"github.com/pure-px/sched-ops/k8s/storage"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/scheduler/k8s"
 	"github.com/pure-px/torpedo/drivers/vcluster"

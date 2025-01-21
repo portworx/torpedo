@@ -13,14 +13,14 @@ import (
 
 	"go.uber.org/multierr"
 
-	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/pure-px/sched-ops/k8s/core"
 	"github.com/pure-px/torpedo/pkg/kvdbutils"
 	"github.com/pure-px/torpedo/pkg/osutils"
 
 	"github.com/pure-px/torpedo/pkg/log"
 
 	optest "github.com/pure-px/px-operator/pkg/util/test"
-	"github.com/portworx/sched-ops/k8s/apps"
+	"github.com/pure-px/sched-ops/k8s/apps"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/scheduler/k8s"
 

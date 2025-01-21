@@ -3,7 +3,7 @@ package oke
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/portworx/sched-ops/task"
+	"github.com/pure-px/sched-ops/task"
 	"github.com/pure-px/torpedo/drivers/scheduler"
 	"github.com/pure-px/torpedo/drivers/volume"
 	"github.com/pure-px/torpedo/pkg/log"

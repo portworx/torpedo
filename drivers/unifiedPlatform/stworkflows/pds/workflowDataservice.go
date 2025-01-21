@@ -8,11 +8,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/portworx/sched-ops/task"
+	"github.com/pure-px/sched-ops/task"
 	"github.com/pure-px/torpedo/drivers/applications/databases"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/portworx/sched-ops/k8s/apps"
+	"github.com/pure-px/sched-ops/k8s/apps"
 	"github.com/pure-px/torpedo/drivers/node"
 
 	"github.com/pure-px/torpedo/drivers/unifiedPlatform/stworkflows"

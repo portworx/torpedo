@@ -10,8 +10,8 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/task"
+	"github.com/pure-px/sched-ops/k8s/core"
+	"github.com/pure-px/sched-ops/task"
 	portworx2 "github.com/pure-px/torpedo/drivers/backup/portworx"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/scheduler"

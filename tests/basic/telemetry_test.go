@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/portworx/sched-ops/task"
+	"github.com/pure-px/sched-ops/task"
 	"github.com/pure-px/torpedo/pkg/kvdbutils"
 	"github.com/pure-px/torpedo/pkg/log"
 
