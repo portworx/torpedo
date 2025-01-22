@@ -1505,12 +1505,13 @@ var _ = Describe("{CheckPoolLabelsAfterResizeDisk}", Label("p0", "positive", "po
 
 	It("Initiate pool expansion and Newly set pool labels should persist post pool expand resize-disk operation", func() {
 		log.InfoD("set pool label, before pool expand")
-		labelBeforeExpand := poolToResize.Labels
 		poolLabelToUpdate := make(map[string]string)
 		poolLabelToUpdate["cust-type"] = "test-label"
 		// Update the pool label
 		err = Inst().V.UpdatePoolLabels(*storageNode, poolIDToResize, poolLabelToUpdate)
 		dash.VerifyFatal(err, nil, "Check if able to update the label on the pool")
+		poolToResize = getStoragePool(poolIDToResize)
+		labelBeforeExpand := poolToResize.Labels
 
 		log.InfoD("expand pool using resize-disk")
 		originalSizeInBytes = poolToResize.TotalSize
@@ -1528,6 +1529,7 @@ var _ = Describe("{CheckPoolLabelsAfterResizeDisk}", Label("p0", "positive", "po
 		log.InfoD("check pool label, after pool expand")
 		poolToResize = getStoragePool(poolIDToResize)
 		labelAfterExpand := poolToResize.Labels
+
 		result := reflect.DeepEqual(labelBeforeExpand, labelAfterExpand)
 		dash.VerifyFatal(result, true, "Check if labels changed after pool expand")
 	})
