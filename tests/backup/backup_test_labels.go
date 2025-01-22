@@ -1,7 +1,9 @@
 package tests
 
-type TestCaseLabel = string
-type TestCaseName = string
+type (
+	TestCaseLabel = string
+	TestCaseName  = string
+)
 
 // Test case names
 const (
@@ -181,6 +183,8 @@ const (
 	VerifyLicenseParameters                                                            TestCaseName = "VerifyLicenseParameters"
 	BasicBackupAndRestoreWithParallelBackupSchedule                                    TestCaseName = "BasicBackupAndRestoreWithParallelBackupSchedule"
 	InstallPxBackupResourceQuotaCheck                                                  TestCaseName = "InstallPxBackupResourceQuotaCheck"
+	InstallPxBackupWithSkipValidationsFlagTrue                                         TestCaseName = "InstallPxBackupWithSkipValidationsFlagTrue"
+	UpgradePxBackupWithSkipValidationsFlagTrue                                         TestCaseName = "UpgradePxBackupWithSkipValidationsFlagTrue"
 	InstallPxBackupHelmNotesCheck                                                      TestCaseName = "InstallPxBackupHelmNotesCheck"
 	InstallPxBackupPvcCheck                                                            TestCaseName = "InstallPxBackupPvcCheck"
 	InstallPxBackupK8sVersionCheck                                                     TestCaseName = "InstallPxBackupK8sVersionCheck"
@@ -191,6 +195,8 @@ const (
 	RestartMultipleComponentsWhenParallelBackupScheduleInProgress                      TestCaseName = "RestartMultipleComponentsWhenParallelBackupScheduleInProgress"
 	ParallelScheduleWithPartialBackup                                                  TestCaseName = "ParallelScheduleWithPartialBackup"
 	ValidateParallelScheduleWithNetworkLatency                                         TestCaseName = "ValidateParallelScheduleWithNetworkLatency"
+	UpgradePxBackupWhenInstallVersionIsInValid                                         TestCaseName = "UpgradePxBackupWhenInstallVersionIsInValid"
+	InstallPxBackupInNamespaceOtherThanPxBackup                                        TestCaseName = "InstallPxBackupInNamespaceOtherThanPxBackup"
 	InstallPxBackupStorageClassAndImagesCheck                                          TestCaseName = "InstallPxBackupStorageClassAndImagesCheck"
 	InstallPxBackupHelmRollbackCheck                                                   TestCaseName = "InstallPxBackupHelmRollbackCheck"
 	UpgradePxBackupStorageClassAndImagesCheck                                          TestCaseName = "UpgradePxBackupStorageClassAndImagesCheck"
@@ -384,6 +390,10 @@ const (
 	RestartMultipleComponentsWhenParallelBackupScheduleInProgressLabel                      TestCaseLabel = "RestartMultipleComponentsWhenParallelBackupScheduleInProgress"
 	ParallelScheduleWithPartialBackupLabel                                                  TestCaseLabel = "ParallelScheduleWithPartialBackup"
 	ValidateParallelScheduleWithNetworkLatencyLabel                                         TestCaseLabel = "ValidateParallelScheduleWithNetworkLatency"
+	UpgradePxBackupWhenInstallVersionIsInValidLabel                                         TestCaseLabel = "UpgradePxBackupWhenInstallVersionIsInValid"
+	InstallPxBackupWithSkipValidationsFlagTrueLabel                                         TestCaseLabel = "InstallPxBackupWithSkipValidationsFlagTrue"
+	UpgradePxBackupWithSkipValidationsFlagTrueLabel                                         TestCaseLabel = "UpgradePxBackupWithSkipValidationsFlagTrue"
+	InstallPxBackupInNamespaceOtherThanPxBackupLabel                                        TestCaseLabel = "InstallPxBackupInNamespaceOtherThanPxBackup"
 	InstallPxBackupStorageClassAndImagesCheckLabel                                          TestCaseLabel = "InstallPxBackupStorageClassAndImagesCheck"
 	InstallPxBackupHelmRollbackCheckLabel                                                   TestCaseLabel = "InstallPxBackupHelmRollbackCheck"
 	UpgradePxBackupStorageClassAndImagesCheckLabel                                          TestCaseLabel = "UpgradePxBackupStorageClassAndImagesCheck"
@@ -716,6 +726,8 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	PxUpgradeWithBackupAndRestore:                                          {PxUpgradeWithBackupAndRestoreLabel, SystemTest, PxBackupLabel},
 	BasicBackupAndRestoreWithParallelBackupSchedule:                        {BasicBackupAndRestoreWithParallelBackupScheduleLabel, SystemTest, PxBackupLabel},
 	InstallPxBackupResourceQuotaCheck:                                      {InstallPxBackupResourceQuotaCheckLabel, FunctionalTest, PxBackupLabel, P0, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
+	InstallPxBackupWithSkipValidationsFlagTrue:                             {InstallPxBackupWithSkipValidationsFlagTrueLabel, FunctionalTest, PxBackupLabel, P0, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
+	UpgradePxBackupWithSkipValidationsFlagTrue:                             {UpgradePxBackupWithSkipValidationsFlagTrueLabel, FunctionalTest, PxBackupLabel, P0, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
 	InstallPxBackupHelmNotesCheck:                                          {InstallPxBackupHelmNotesCheckLabel, FunctionalTest, PxBackupLabel, P0, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
 	InstallPxBackupPvcCheck:                                                {InstallPxBackupPvcCheckLabel, FunctionalTest, PxBackupLabel, P0, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
 	InstallPxBackupK8sVersionCheck:                                         {InstallPxBackupK8sVersionCheckLabel, FunctionalTest, PxBackupLabel, P2, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
@@ -726,6 +738,8 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	RestartMultipleComponentsWhenParallelBackupScheduleInProgress:          {RestartMultipleComponentsWhenParallelBackupScheduleInProgressLabel, SystemTest, PxBackupLabel},
 	ParallelScheduleWithPartialBackup:                                      {ParallelScheduleWithPartialBackupLabel, SystemTest, PxBackupLabel},
 	ValidateParallelScheduleWithNetworkLatency:                             {ValidateParallelScheduleWithNetworkLatencyLabel, SystemTest, PxBackupLabel},
+	UpgradePxBackupWhenInstallVersionIsInValid:                             {UpgradePxBackupWhenInstallVersionIsInValidLabel, FunctionalTest, PxBackupLabel, P0, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
+	InstallPxBackupInNamespaceOtherThanPxBackup:                            {InstallPxBackupInNamespaceOtherThanPxBackupLabel, FunctionalTest, PxBackupLabel, P0, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
 	InstallPxBackupStorageClassAndImagesCheck:                              {InstallPxBackupStorageClassAndImagesCheckLabel, FunctionalTest, PxBackupLabel, P0, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
 	InstallPxBackupHelmRollbackCheck:                                       {InstallPxBackupHelmRollbackCheckLabel, FunctionalTest, PxBackupLabel, P0, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
 	UpgradePxBackupStorageClassAndImagesCheck:                              {UpgradePxBackupStorageClassAndImagesCheckLabel, FunctionalTest, PxBackupLabel, P0, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},

@@ -1,0 +1,10 @@
+persistentStorage:
+  enabled: true
+  storageClassName: "px-csi-db"
+pxbackup:
+  enabled: true
+  skipValidations: true
+images:
+  pullSecrets:
+    - docregistry-secret
+  pullPolicy: Always

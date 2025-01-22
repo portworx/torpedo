@@ -114,6 +114,7 @@ const (
 	Shkumari       TestcaseAuthor = "shkumari-px"
 	Nvettaiyan     TestcaseAuthor = "nvettaiyan-px"
 	SS             TestcaseAuthor = "ss-px"
+	Kgarg          TestcaseAuthor = "kgarg-px"
 )
 
 // TestcaseQuarter List
@@ -13530,8 +13531,8 @@ func uninstallPxBackupRelease(cfg *action.Configuration) error {
 		// Check if this is the px-backup release and if it’s in a “deployed” state
 		if rel.Name == PxCentralReleaseName &&
 			rel.Info != nil &&
-			rel.Info.Status.String() == release.StatusDeployed.String() {
-			log.InfoD("Release %s found and is deployed in namespace %s. Uninstalling...", rel.Name, rel.Namespace)
+			rel.Info.Status.String() == release.StatusDeployed.String() || rel.Info.Status.String() == release.StatusFailed.String() {
+			log.InfoD("Release %s found and is deployed. Uninstalling...", rel.Name)
 			uninstall := action.NewUninstall(cfg)
 			uninstall.Wait = true
 			uninstall.Timeout = 10 * time.Minute

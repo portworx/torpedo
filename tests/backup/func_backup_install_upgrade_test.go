@@ -2,6 +2,10 @@ package tests
 
 import (
 	"fmt"
+
+	"strings"
+	"time"
+
 	"github.com/Masterminds/semver/v3"
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/pborman/uuid"
@@ -16,15 +20,11 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubevirtv1 "kubevirt.io/api/core/v1"
-	"strings"
-	"time"
 )
 
 // Test case to check resource quota for namespace
 var _ = Describe("{InstallPxBackupResourceQuotaCheck}", Label(TestCaseLabelsMap[InstallPxBackupResourceQuotaCheck]...), func() {
-	var (
-		namespace string
-	)
+	var namespace string
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("InstallPxBackupResourceQuotaCheck", "Installing Px Backup and checking if resource quota satisfies the min requirement", nil, 304868, Mkoppal, Q4FY25)
 		log.InfoD("Uninstalling Px-Backup...")
@@ -33,7 +33,6 @@ var _ = Describe("{InstallPxBackupResourceQuotaCheck}", Label(TestCaseLabelsMap[
 		namespace = "px-backup"
 	})
 	It("Should check resource quota for namespace", func() {
-
 		Step("Create namespace with insufficient resource quota", func() {
 			log.InfoD("Create namespace with insufficient resource quota")
 			err := CreateNamespaceAndResourceQuota(namespace, "300Gi")
@@ -932,6 +931,279 @@ var _ = Describe("{UpgradePxBackupPortInfoCheck}", Label(TestCaseLabelsMap[Upgra
 		})
 	})
 
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(make([]*scheduler.Context, 0))
+		log.Infof("No cleanup required for this testcase")
+	})
+})
+
+var _ = Describe("{InstallPxBackupWithSkipValidationsFlagTrue}", Label(TestCaseLabelsMap[InstallPxBackupWithSkipValidationsFlagTrue]...), func() {
+	var namespace string
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("InstallPxBackupWithSkipValidationsFlagTrue", "Installing Px Backup with skip validations flag set to true", nil, 304875, Kgarg, Q4FY25)
+		log.InfoD("Uninstalling Px-Backup...")
+		err := UninstallPxBackup()
+		log.FailOnError(err, "Failed to delete px-backup")
+		namespace = "px-backup"
+	})
+
+	It("Fail Px Backup installation with insufficient namespace quota", func() {
+		Step("Create namespace with insufficient resource quota", func() {
+			log.InfoD("Create namespace with insufficient resource quota")
+			err := CreateNamespaceAndResourceQuota(namespace, "300Gi")
+			log.FailOnError(err, "Failed to create namespace and resource quota")
+		})
+
+		Step("Install Px-Backup and validate the failure message", func() {
+			log.InfoD("Install Px-Backup and validate the failure message")
+			valuesMap, err := ParseValuesFromFile("values1")
+			log.FailOnError(err, "Failed to parse values file")
+			_, err = InstallPxBackup(LatestPxBackupVersion, DefaultPxBackupHelmBranch, namespace, valuesMap)
+			log.InfoD("Install Px-Backup error - %s", err.Error())
+			dash.VerifyFatal(strings.Contains(err.Error(), "px-backup chart installation failed"), true, "Failed to install px-backup")
+		})
+
+		Step("Validate the pre-install job pods logs", func() {
+			searchString := "Insufficient resource quota"
+			present, err := SearchPodLogs(map[string]string{"job-name": "pre-install-check"}, namespace, searchString)
+			log.FailOnError(err, "Failed to search pod logs")
+			dash.VerifyFatal(present, true, "Found the expected string in the pod logs")
+		})
+
+		Step("Delete namespace and resource quota", func() {
+			log.InfoD("Delete namespace and resource quota")
+			err := DeleteAppNamespace(namespace)
+			log.FailOnError(err, "Failed to delete namespace and resource quota")
+		})
+	})
+
+	It("Install Px Backup with skipValidations flag set to true and validate the successful installation", func() {
+		Step("Create namespace with insufficient resource quota", func() {
+			log.InfoD("Create namespace with insufficient resource quota")
+			err := CreateNamespaceAndResourceQuota(namespace, "300Gi")
+			log.FailOnError(err, "Failed to create namespace and resource quota")
+		})
+
+		Step("Install Px Backup with skipValidations flag set to true", func() {
+			log.InfoD("Installing Px-Backup with skipValidations flag set to true")
+			valuesMap, err := ParseValuesFromFile("skipValidationsTrue")
+			log.FailOnError(err, "Failed to parse configuration file skipValidations")
+			_, err = InstallPxBackup(LatestPxBackupVersion, DefaultPxBackupHelmBranch, namespace, valuesMap)
+			log.FailOnError(err, "Failed to install px-backup")
+		})
+
+		Step("Retrieve values.yaml from helm release and make sure skipValidations flag was set to true", func() {
+			log.InfoD("Retrieve values.yaml from helm release and make sure skipValidations flag was set to true")
+			valuesMap, err := GetHelmReleaseValues("px-backup", PxCentralReleaseName, false)
+			log.FailOnError(err, "Failed to get helm release values")
+			log.InfoD("Info message, checking what is retrieved in the valuesMap: %v", valuesMap)
+			// Navigate through the nested map to get the `skipValidations` value
+			pxBackupValues, ok := valuesMap["pxbackup"].(map[string]interface{})
+			dash.VerifyFatal(ok, true, "Able to parse pxbackup values from Helm release")
+			skipValidations, ok := pxBackupValues["skipValidations"].(bool)
+			dash.VerifyFatal(ok, true, "skipValidations flag is present")
+			dash.VerifyFatal(skipValidations, true, "skipValidations flag is set to true")
+		})
+
+		Step("Check if the Px-Backup report says that the validations were skipped", func() {
+			log.InfoD("Check if the Px-Backup report says that the validations were skipped")
+			searchString := "Validations were skipped"
+			configMap, err := core.Instance().GetConfigMap("px-central-report", namespace)
+			log.FailOnError(err, "Failed to get configmap px-central-report")
+			// Check for keys starting with "report" in the ConfigMap data
+			var reportContent string
+			found := false
+			for key, value := range configMap.Data {
+				if strings.HasPrefix(key, "report") {
+					log.InfoD("Found report key: %s", key)
+					reportContent = value
+					found = true
+					break
+				}
+			}
+			// Fail the test if no report key is found
+			dash.VerifyFatal(found, true, "Found the report key in the configmap")
+			// Check if the expected string is present in the report content
+			present := strings.Contains(reportContent, searchString)
+			log.InfoD("Report Content: %s", reportContent)
+			dash.VerifyFatal(present, true, "Found the expected string in the report")
+		})
+	})
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(make([]*scheduler.Context, 0))
+		log.Infof("No cleanup required for this testcase")
+	})
+})
+
+var _ = Describe("{UpgradePxBackupWithSkipValidationsFlagTrue}", Label(TestCaseLabelsMap[UpgradePxBackupWithSkipValidationsFlagTrue]...), func() {
+	var namespace string
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("UpgradePxBackupWithSkipValidationsFlagTrue", "Upgrading Px-Backup and checking if skipValidations flag works as intended.", nil, 304876, Kgarg, Q4FY25)
+		log.InfoD("Uninstalling Px-Backup...")
+		err := UninstallPxBackup()
+		log.FailOnError(err, "Failed to delete px-backup")
+		namespace = "px-backup"
+
+		log.InfoD("Installing Px-Backup...")
+		valuesMap, err := ParseValuesFromFile("values1")
+		log.FailOnError(err, "Failed to parse values file")
+		_, err = InstallPxBackup("2.5.0", "master", namespace, valuesMap)
+		log.FailOnError(err, "Failed to install px-backup")
+	})
+	// Upgrade with skipValidations flag set to false and verify that the report has the string "Issues detected during validations."
+	It("Should upgrade Px Backup with skipValidations flag set to false and validate the report has the string Some validations have failed.", func() {
+		Step("Upgrade Px Backup with skipValidations flag set to false", func() {
+			log.InfoD("Upgrade Px Backup with skipValidations flag set to false")
+			valuesMap, err := ParseValuesFromFile("values1")
+			log.FailOnError(err, "Failed to parse configuration file skipValidations")
+			_, err = HelmUpgradePxBackup(LatestPxBackupVersion, DefaultPxBackupHelmBranch, namespace, valuesMap)
+			dash.VerifySafely(strings.Contains(err.Error(), "px-backup chart upgrade failed: failed to upgrade chart: pre-upgrade hooks failed"), true, "there needs to error saying upgrade has failed")
+			//dash.VerifySafely(err, "px-backup chart upgrade failed: failed to upgrade chart: pre-upgrade hooks failed: job failed: BackoffLimitExceeded", "there needs to error saying upgrade has failed")
+			//log.FailOnError(err, "Failed to upgrade px-backup")
+			//"Err: px-backup chart upgrade failed: failed to upgrade chart: pre-upgrade hooks failed: job failed: BackoffLimitExceeded"
+		})
+
+		Step("Retrieve values.yaml from helm release and make sure skipValidations flag was set to false", func() {
+			log.InfoD("Retrieve values.yaml from helm release and make sure skipValidations flag was set to false")
+			valuesMap, err := GetHelmReleaseValues("px-backup", PxCentralReleaseName, false)
+			log.FailOnError(err, "Failed to get helm release values")
+			log.InfoD("Info message, checking what is retrieved in the valuesMap: %v", valuesMap)
+			// Navigate through the nested map to get the `skipValidations` value
+			pxBackupValues, ok := valuesMap["pxbackup"].(map[string]interface{})
+			dash.VerifyFatal(ok, true, "Able to parse pxbackup values from Helm release")
+			skipValidations, ok := pxBackupValues["skipValidations"].(bool)
+			dash.VerifyFatal(ok, true, "skipValidations flag is found")
+			// Verify that skipValidations is set to false
+			dash.VerifyFatal(skipValidations, false, "skipValidations flag is set to false")
+		})
+
+		Step("Check if the Px-Backup report says that Some validations have failed", func() {
+			log.InfoD("Check if the Px-Backup report says that Some validations have failed")
+			searchString := "Some validations have failed"
+			configMap, err := core.Instance().GetConfigMap("px-central-report", namespace)
+			log.FailOnError(err, "Failed to get configmap px-central-report")
+			// Check for keys starting with "report" in the ConfigMap data
+			var reportContent string
+			found := false
+			for key, value := range configMap.Data {
+				if strings.HasPrefix(key, "report") {
+					log.InfoD("Found report key: %s", key)
+					reportContent = value
+					found = true
+					break
+				}
+			}
+			// Fail the test if no report key is found
+			dash.VerifyFatal(found, true, "Found the report key in the configmap")
+			// Check if the expected string is present in the report content
+			present := strings.Contains(reportContent, searchString)
+			log.InfoD("Report Content: %s", reportContent)
+			dash.VerifyFatal(present, true, "Found the expected string in the report")
+		})
+	})
+	// Upgrade Px Backup with skipValidations flag set to true and validate the report has the string validations were skipped
+	It("Should upgrade Px Backup with skipValidations flag set to true and validate the report has the string validations were skipped", func() {
+		Step("Upgrade Px Backup with skipValidations flag set to true", func() {
+			log.InfoD("Upgrade Px Backup with skipValidations flag set to true")
+			valuesMap, err := ParseValuesFromFile("skipValidationsTrue")
+			log.FailOnError(err, "Failed to parse configuration file skipValidations")
+			_, err = HelmUpgradePxBackup(LatestPxBackupVersion, DefaultPxBackupHelmBranch, namespace, valuesMap)
+			dash.VerifySafely(strings.Contains(err.Error(), "px-backup chart upgrade failed: failed to upgrade chart: pre-upgrade hooks failed"), true, "there needs to error saying upgrade has failed")
+		})
+
+		Step("Retrieve values.yaml from helm release and make sure skipValidations flag was set to true", func() {
+			log.InfoD("Retrieve values.yaml from helm release and make sure skipValidations flag was set to true")
+			valuesMap, err := GetHelmReleaseValues("px-backup", PxCentralReleaseName, false)
+			log.FailOnError(err, "Failed to get helm release values")
+			log.InfoD("Info message, checking what is retrieved in the valuesMap: %v", valuesMap)
+			// Navigate through the nested map to get the `skipValidations` value
+			pxBackupValues, ok := valuesMap["pxbackup"].(map[string]interface{})
+			dash.VerifyFatal(ok, true, "Able to parse pxbackup values from Helm release")
+			skipValidations, ok := pxBackupValues["skipValidations"].(bool)
+			dash.VerifyFatal(ok, true, "skipValidations flag is found")
+			// Verify that skipValidations is set to true
+			dash.VerifyFatal(skipValidations, true, "skipValidations flag is set to true")
+		})
+
+		Step("Check if the Px-Backup report says that Validations were skipped due to the skipValidations flag", func() {
+			log.InfoD("Check if the Px-Backup report says that Validations were skipped due to the skipValidations flag")
+			searchString := "Validations were skipped due to the skipValidations flag"
+			configMap, err := core.Instance().GetConfigMap("px-central-report", namespace)
+			log.FailOnError(err, "Failed to get configmap px-central-report")
+			// Check for keys starting with "report" in the ConfigMap data
+			var reportContent string
+			found := false
+			for key, value := range configMap.Data {
+				if strings.HasPrefix(key, "report") {
+					log.InfoD("Found report key: %s", key)
+					reportContent = value
+					found = true
+					break
+				}
+			}
+			// Fail the test if no report key is found
+			dash.VerifyFatal(found, true, "Found the report key in the configmap")
+			// Check if the expected string is present in the report content
+			present := strings.Contains(reportContent, searchString)
+			log.InfoD("Report Content: %s", reportContent)
+			dash.VerifyFatal(present, true, "Found the expected string in the report")
+		})
+	})
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(make([]*scheduler.Context, 0))
+		log.Infof("No cleanup required for this testcase")
+	})
+})
+
+var _ = Describe("{UpgradePxBackupWhenInstallVersionIsInValid}", Label(TestCaseLabelsMap[UpgradePxBackupWhenInstallVersionIsInValid]...), func() {
+	var namespace string
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("UpgradePxBackupWhenInstallVersionIsInValid", "Upgrading Px-Backup when the current installed version is lesser than n-2 of target version", nil, 304877, Kgarg, Q4FY25)
+		log.InfoD("Uninstalling Px-Backup...")
+		err := UninstallPxBackup()
+		log.FailOnError(err, "Failed to delete px-backup")
+		namespace = "px-backup"
+
+		log.InfoD("Installing Px-Backup...")
+		valuesMap, err := ParseValuesFromFile("values1")
+		log.FailOnError(err, "Failed to parse values file")
+		_, err = InstallPxBackup("2.5.0", "master", namespace, valuesMap)
+		log.FailOnError(err, "Failed to install px-backup")
+	})
+
+	It("Should upgrade Px Backup when the current installed version is lesser than n-2 of target version", func() {
+		Step("Upgrade Px Backup to a version greater than n-2 of the target version and validate that the upgradatation fails", func() {
+			log.InfoD("Upgrade to latest Px Backup with skipValidations flag set to true")
+			valuesMap, err := ParseValuesFromFile("values1")
+			log.FailOnError(err, "Failed to parse configuration file values1")
+			_, err = HelmUpgradePxBackup(LatestPxBackupVersion, DefaultPxBackupHelmBranch, namespace, valuesMap)
+			dash.VerifySafely(strings.Contains(err.Error(), "px-backup chart upgrade failed: failed to upgrade chart: pre-upgrade hooks failed"), true, "there needs to error saying upgrade has failed")
+		})
+	})
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(make([]*scheduler.Context, 0))
+		log.Infof("No cleanup required for this testcase")
+	})
+})
+
+var _ = Describe("{InstallPxBackupInNamespaceOtherThanPxBackup}", Label(TestCaseLabelsMap[InstallPxBackupInNamespaceOtherThanPxBackup]...), func() {
+	var namespace string
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("InstallPxBackupInNamespaceOtherThanPxBackup", "Installing Px-Backup in a namespace other than px-backup", nil, 305165, Kgarg, Q4FY25)
+		log.InfoD("Uninstalling Px-Backup...")
+		err := UninstallPxBackup()
+		log.FailOnError(err, "Failed to delete px-backup")
+		namespace = "central"
+	})
+	It("Should install Px Backup in a namespace other than px-backup", func() {
+		Step("Install Px-Backup in central namespace", func() {
+			log.InfoD("Install Px-Backup in central namespace")
+			valuesMap, err := ParseValuesFromFile("values1")
+			log.FailOnError(err, "Failed to parse values file")
+			_, err = InstallPxBackup(LatestPxBackupVersion, DefaultPxBackupHelmBranch, namespace, valuesMap)
+			log.FailOnError(err, "Failed to install px-backup")
+		})
+	})
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(make([]*scheduler.Context, 0))
 		log.Infof("No cleanup required for this testcase")
