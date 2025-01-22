@@ -181,6 +181,8 @@ const (
 	VerifyLicenseParameters                                                            TestCaseName = "VerifyLicenseParameters"
 	BasicBackupAndRestoreWithParallelBackupSchedule                                    TestCaseName = "BasicBackupAndRestoreWithParallelBackupSchedule"
 	InstallPxBackupResourceQuotaCheck                                                  TestCaseName = "InstallPxBackupResourceQuotaCheck"
+	InstallPxBackupHelmNotesCheck                                                      TestCaseName = "InstallPxBackupHelmNotesCheck"
+	InstallPxBackupPvcCheck                                                            TestCaseName = "InstallPxBackupPvcCheck"
 )
 
 // Test case labels
@@ -359,6 +361,8 @@ const (
 	VerifyLicenseParametersLabel                                                            TestCaseLabel = "VerifyLicenseParameters"
 	BasicBackupAndRestoreWithParallelBackupScheduleLabel                                    TestCaseLabel = "BasicBackupAndRestoreWithParallelBackupSchedule"
 	InstallPxBackupResourceQuotaCheckLabel                                                  TestCaseLabel = "InstallPxBackupResourceQuotaCheck"
+	InstallPxBackupHelmNotesCheckLabel                                                      TestCaseLabel = "InstallPxBackupHelmNotesCheck"
+	InstallPxBackupPvcCheckLabel                                                            TestCaseLabel = "InstallPxBackupPvcCheck"
 )
 
 // Common Labels
@@ -686,4 +690,6 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	PxUpgradeWithBackupAndRestore:                                          {PxUpgradeWithBackupAndRestoreLabel, SystemTest, PxBackupLabel},
 	BasicBackupAndRestoreWithParallelBackupSchedule:                        {BasicBackupAndRestoreWithParallelBackupScheduleLabel, SystemTest, PxBackupLabel},
 	InstallPxBackupResourceQuotaCheck:                                      {InstallPxBackupResourceQuotaCheckLabel, FunctionalTest, PxBackupLabel, P0, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
+	InstallPxBackupHelmNotesCheck:                                          {InstallPxBackupHelmNotesCheckLabel, FunctionalTest, PxBackupLabel, P0, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
+	InstallPxBackupPvcCheck:                                                {InstallPxBackupPvcCheckLabel, FunctionalTest, PxBackupLabel, P0, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
 }

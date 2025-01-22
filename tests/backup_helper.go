@@ -13353,7 +13353,9 @@ func UninstallPxBackup() error {
 
 	// Terminating the backup deletion monitoring go routine because px-backup will be unreachable
 	// This is being done because the backup enumerate call is taking a long time to timeout when the backup server is unreachable
-	DeleteDoneChannel <- struct{}{}
+	if IsBackupDeleteCheckAlive {
+		DeleteDoneChannel <- struct{}{}
+	}
 
 	// 4. Uninstall px-backup release if it is deployed
 	if err := uninstallPxBackupRelease(cfg); err != nil {

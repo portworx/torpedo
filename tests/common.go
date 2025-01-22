@@ -736,7 +736,6 @@ type BackupDeleteInfoStruct struct {
 var BackupDeleteTimeMap = make(map[string]BackupDeleteInfoStruct)
 
 var PxBackupPVCs = []string{
-	"pxcentral-mysql-pvc",
 	"theme-pxcentral",
 	"pvc-quick-maintenance-repo",
 	"pvc-full-maintenance-repo",
@@ -16754,4 +16753,27 @@ func SearchPodLogs(podLabelSelector map[string]string, namespace, searchString s
 	}
 
 	return false, nil
+}
+
+// GetDefaultStorageClass attempts to find the default StorageClass. If no default is found,
+// it returns the first StorageClass from the list. If none exist, it returns an error.
+func GetDefaultStorageClass() (*storageapi.StorageClass, error) {
+
+	scList, err := schedstorage.Instance().GetDefaultStorageClasses()
+	if err != nil {
+		return nil, err
+	}
+	if len(scList.Items) > 0 {
+		return &scList.Items[0], nil
+	}
+	log.Infof("No default storage class found. Returning the first storage class from the list")
+
+	allScList, err := schedstorage.Instance().GetAllStorageClasses()
+	if err != nil {
+		return nil, err
+	}
+	if len(allScList.Items) == 0 {
+		return nil, fmt.Errorf("no storage classes found")
+	}
+	return &allScList.Items[0], err
 }
