@@ -6682,7 +6682,7 @@ var _ = Describe("{RebootNodeDuringAddNewHotPlugDiskToKubevirtVM}", Label("p1", 
 				defer wg.Done()
 				defer GinkgoRecover()
 				log.InfoD("Starting hot-plug disk operation")
-				hotPlugDisk, err = HotPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "50Gi", volumeMode, true)
+				hotPlugDisk, err = HotPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "50Gi", volumeMode, false)
 				dash.VerifyFatal(err != nil, true, "Error on hot plug addition during reboot node")
 				log.Infof("Failed to hot-plug DataVolume to KubeVirt VM with error: %v", err)
 				dash.VerifyFatal(hotPlugDisk, false, "DataVolume hot-plugged to KubeVirt VM")
