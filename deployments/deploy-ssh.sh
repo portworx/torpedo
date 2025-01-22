@@ -324,6 +324,12 @@ if [ -n "${ORACLE_API_KEY}" ]; then
 fi
 
 TESTRESULTS_VOLUME="{ \"name\": \"testresults\", \"hostPath\": { \"path\": \"/mnt/testresults/\", \"type\": \"DirectoryOrCreate\" } }"
+
+# Change mnt path if using SLEMicro / SL Micro triggered with  IS_SLMICRO
+if [ -n "$IS_SLMICRO" ]; then
+  TESTRESULTS_VOLUME="{ \"name\": \"testresults\", \"hostPath\": { \"path\": \"/var/testresults/\", \"type\": \"DirectoryOrCreate\" } }"
+fi
+
 TESTRESULTS_MOUNT="{ \"name\": \"testresults\", \"mountPath\": \"/testresults/\" }"
 
 AWS_VOLUME="{ \"name\": \"aws-volume\", \"configMap\": { \"name\": \"aws-cm\", \"items\": [{\"key\": \"credentials\", \"path\": \"credentials\"}, {\"key\": \"config\", \"path\": \"config\"}]} }"
