@@ -49,7 +49,7 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 		}()
 
 		namespaceCount := 2
-		for range namespaceCount {
+		for i := 0; i < namespaceCount; i++ {
 			namespace := fmt.Sprintf("%s-%s", parallelScheduledBackupNamespacePrefix, RandomString(10))
 			log.InfoD("Creating namespace %v", namespace)
 			_, err := core.Instance().CreateNamespace(&corev1.Namespace{

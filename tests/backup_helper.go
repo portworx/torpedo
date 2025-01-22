@@ -4,6 +4,7 @@ import (
 	"bytes"
 	context1 "context"
 	"fmt"
+
 	"gopkg.in/yaml.v3"
 	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/release"
@@ -13088,6 +13089,154 @@ func waitForPostInstallHookJob(namespace string) error {
 	}
 
 	return nil
+}
+
+// HelmUpgradePxBackup upgrades Px Backup through helm and waits for all the pods to be ready
+func HelmUpgradePxBackup(targetVersion, helmBranchVersion, namespace string, customValues map[string]interface{}) (*release.Release, error) {
+
+	// Initialize Helm action configuration
+	cfg, err := initHelmActionConfig(namespace)
+	if err != nil {
+		return nil, err
+	}
+	// Make sure the repo is available/updated
+	if err := addAndUpdateRepo(cli.New()); err != nil {
+		return nil, fmt.Errorf("failed to add/update Portworx repository: %w", err)
+	}
+	// Verify installation of the release already exists and is deployed
+	exists, err := isReleaseDeployed(cfg, pxCentralReleaseName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check release status: %w", err)
+	}
+	if exists {
+		log.InfoD("Release %s exists and is deployed in namespace %s. Proceeding with upgrade.", pxCentralReleaseName, namespace)
+	} else {
+		return nil, fmt.Errorf("release %s does not exist in namespace %s or is not deployed. Cannot upgrade.", pxCentralReleaseName, namespace)
+	}
+
+	// Upgrade the Helm chart
+	upgradeStart := time.Now()
+	rel, err := UpgradePxBackupChart(cfg, customValues, namespace, targetVersion, helmBranchVersion)
+	if err != nil {
+		return nil, fmt.Errorf("px-backup chart upgrade failed: %w", err)
+	}
+	log.InfoD("Release notes: %s ", rel.Info.Notes)
+	log.InfoD("Successfully upgraded release: %s", rel.Name)
+	// Wait for post-install hook job to complete
+	if err = waitForPostInstallHookJob(namespace); err != nil {
+		return rel, err
+	}
+	// Ensure px-backup pods in the namespace are running
+	if err = ValidateAllPodsInPxBackupNamespace(); err != nil {
+		return rel, err
+	}
+	// Measure the time taken for upgrade and px-backup readiness
+	duration := time.Since(upgradeStart)
+	log.InfoD("Time taken for Px-Backup to be ready: %02d:%02d:%02d (hh:mm:ss)",
+		int(duration.Hours()),
+		int(duration.Minutes())%60,
+		int(duration.Seconds())%60,
+	)
+	// Log final upgraded version
+	upgradedVersion, err := GetPxBackupVersionSemVer()
+	if err != nil {
+		return rel, err
+	}
+	log.InfoD("Px-Backup upgrade complete. Version: %s", upgradedVersion)
+	return rel, nil
+}
+func UpgradePxBackupChart(cfg *action.Configuration, customValues map[string]interface{}, namespace, targetVersion, helmBranchVersion string) (*release.Release, error) {
+	// Build chart URL from environment-based version
+	chartURL := fmt.Sprintf("https://github.com/portworx/helm/raw/%s/stable/px-central-%s.tgz",
+		helmBranchVersion, targetVersion,
+	)
+	upgrade := action.NewUpgrade(cfg)
+	upgrade.Namespace = namespace
+	upgrade.Wait = false
+	upgrade.Timeout = 30 * time.Minute
+	upgrade.Version = targetVersion
+	settings := cli.New()
+	chartPath, err := upgrade.ChartPathOptions.LocateChart(chartURL, settings)
+	if err != nil {
+		return nil, fmt.Errorf("failed to locate chart at %s: %w", chartURL, err)
+	}
+	chart, err := loader.Load(chartPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load chart: %w", err)
+	}
+
+	// Start with the default values of the new chart
+	defaultValues := chart.Values
+	log.Infof("Default Values for helm upgrade: %v", defaultValues)
+
+	// Retrieve user-supplied values from the current release
+	userValues, err := GetHelmReleaseValues(namespace, pxCentralReleaseName, false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch user-supplied values: %w", err)
+	}
+	log.Infof("Fetched values previously set by user for helm upgrade: %v", userValues)
+
+	// Merge user-supplied values into the new chart's defaults
+	mergeCustomOverrides(defaultValues, userValues)
+
+	// Merge custom values if provided
+	if customValues != nil {
+		mergeCustomOverrides(defaultValues, customValues)
+		log.Infof(("Updated custom values for helm upgrade: %v"), customValues)
+	}
+
+	upgradeStart := time.Now()
+	log.Infof("Values used for helm upgrade: %v", defaultValues)
+	log.Infof("Chart URL used for helm upgrade: %s", chartURL)
+	rel, err := upgrade.Run(pxCentralReleaseName, chart, defaultValues)
+	if err != nil {
+		return nil, fmt.Errorf("failed to upgrade chart: %w", err)
+	}
+	duration := time.Since(upgradeStart)
+	log.InfoD("Time taken for Px-Backup helm upgrade: %02d:%02d:%02d (hh:mm:ss)",
+		int(duration.Hours()),
+		int(duration.Minutes())%60,
+		int(duration.Seconds())%60,
+	)
+	return rel, nil
+}
+
+// GetHelmReleaseValues retrieves the applied values for a Helm release.
+func GetHelmReleaseValues(namespace, releaseName string, allValues bool) (map[string]interface{}, error) {
+	// Initialize Helm action configuration
+	actionConfig, err := initHelmActionConfig(namespace)
+	if err != nil {
+		return nil, err
+	}
+	// Create a Helm GetValues client
+	client := action.NewGetValues(actionConfig)
+	client.AllValues = allValues // Fetch all values including defaults
+	// Get release values
+	values, err := client.Run(releaseName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get release values: %w", err)
+	}
+	return values, nil
+}
+
+// mergeCustomOverrides merges custom overrides into the default values recursively
+func mergeCustomOverrides(defaultValues, customOverrides map[string]interface{}) {
+	for key, customValue := range customOverrides {
+		if existingValue, exists := defaultValues[key]; exists {
+			// If the value is a nested map, merge recursively
+			if customMap, isMap := customValue.(map[string]interface{}); isMap {
+				if existingMap, isExistingMap := existingValue.(map[string]interface{}); isExistingMap {
+					mergeCustomOverrides(existingMap, customMap)
+				} else {
+					defaultValues[key] = customValue // Replace if types don't match
+				}
+			} else {
+				defaultValues[key] = customValue // Overwrite scalar values
+			}
+		} else {
+			defaultValues[key] = customValue // Add new keys
+		}
+	}
 }
 
 // initBackupDriver initializes the backup driver.
