@@ -136,12 +136,15 @@ const (
 	storagePDBMinAvailable       = "portworx.io/storage-pdb-min-available"
 	clusterNameSpace             = "default"
 	skipFlagCheckVersion         = "1.29.0"
+	versionsKey                  = "versions"
+	versionKey                   = "version"
 )
 
 var (
-	versionReg  = regexp.MustCompile(`\w.\w+.\w+-gke.\w+`)
-	k8sCore     = k8s.Instance()
-	cmdExecLock sync.Mutex
+	versionReg     = regexp.MustCompile(`\w.\w+.\w+-gke.\w+`)
+	partialVersion = regexp.MustCompile(`\w.\w+`)
+	k8sCore        = k8s.Instance()
+	cmdExecLock    sync.Mutex
 )
 
 type AnthosInstance struct {
@@ -285,10 +288,19 @@ func (anth *anthos) getVersion() error {
 // UpgradeScheduler upgrade anthos scheduler and return time taken by user-cluster to upgrade
 func (anth *anthos) UpgradeScheduler(version string) error {
 	log.Info("Upgrading Anthos user cluster")
+	upgradeVersion := version
 	if !versionReg.MatchString(version) {
-		return fmt.Errorf("incorrect upgrade version: [%s] is provided", version)
+		if !partialVersion.MatchString(version) {
+			return fmt.Errorf("incorrect upgrade version: [%s] is provided", version)
+		}
+		// Get latest version from the partial version
+		version, err := anth.getLatestVersion(version)
+		if err != nil {
+			return err
+		}
+		upgradeVersion = version
 	}
-	if err := anth.VerifyUpgradeVersion(version); err != nil {
+	if err := anth.VerifyUpgradeVersion(upgradeVersion); err != nil {
 		return err
 	}
 	if err := anth.loadInstances(); err != nil {
@@ -297,11 +309,11 @@ func (anth *anthos) UpgradeScheduler(version string) error {
 	if err := downloadAndInstallGsutils(); err != nil {
 		return err
 	}
-	if err := anth.upgradeAdminWorkstation(version); err != nil {
+	if err := anth.upgradeAdminWorkstation(upgradeVersion); err != nil {
 		return err
 	}
 	startTime := time.Now()
-	if err := anth.upgradeUserCluster(version); err != nil {
+	if err := anth.upgradeUserCluster(upgradeVersion); err != nil {
 		return err
 	}
 	timeTaken := time.Since(startTime)
@@ -1201,6 +1213,42 @@ func (anth *anthos) startDisablingIPv6(DisableIPv6Chan chan bool) *time.Ticker {
 		}
 	}()
 	return ticker
+}
+
+// FetchVMwareClusterVersions fectes all available VMware versions
+func (anth *anthos) FetchVMwareClusterVersions() (map[string]interface{}, error) {
+	versions, getVersionErr := anth.Ops.GetVMwareVersionInfo(project, location)
+	if getVersionErr != nil {
+		return nil, fmt.Errorf("failed to get version info. Err: %v", getVersionErr)
+	}
+	var jsonData map[string]interface{}
+	unmarshalErr := json.Unmarshal(versions, &jsonData)
+	if unmarshalErr != nil {
+		return jsonData, fmt.Errorf("failed to unmarshal string. Err: %v", unmarshalErr)
+	}
+	log.Debugf("Available Anthos VMware cluster versions are: %v", string(versions))
+	return jsonData, nil
+}
+
+// getLatestVersion returns the latest version based on the partial version provided
+func (anth *anthos) getLatestVersion(partialVersion string) (string, error) {
+	latestVersion := ""
+	allVersions, err := anth.FetchVMwareClusterVersions()
+	if err != nil {
+		return "", err
+	}
+	versionList := allVersions[versionsKey].([]interface{})
+	log.Info(versionList)
+
+	for _, v := range versionList {
+		vmap := v.(map[string]interface{})
+		if val, ok := vmap[versionKey]; ok {
+			if strings.Contains(val.(string), partialVersion) {
+				latestVersion = val.(string)
+			}
+		}
+	}
+	return latestVersion, nil
 }
 
 // init registering anthos sheduler
