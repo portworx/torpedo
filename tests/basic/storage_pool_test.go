@@ -1022,6 +1022,9 @@ func waitForPoolToBeResized(expectedSize uint64, poolIDToResize string, isJourna
 	}
 
 	_, err := task.DoRetryWithTimeout(f, poolResizeTimeout, retryTimeout)
+	//https://purestorage.atlassian.net/browse/PTX-29019
+	log.Infof("waiting for 20 secs for pool data update in px before refeshing pool data")
+	time.Sleep(20 * time.Second)
 	n, terr := GetNodeWithGivenPoolID(poolIDToResize)
 	if terr == nil {
 		PrintSvPoolStatus(*n)

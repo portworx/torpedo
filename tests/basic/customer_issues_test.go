@@ -449,13 +449,15 @@ var _ = Describe("{ValidateZombieReplicas}", Label("p0", "positive", "CustomerIs
 			}()
 			cmd := "/opt/pwx/bin/runc exec -t portworx ls -l /var/.px/"
 
+			log.Infof("Getting node contents before creating local snaps")
 			nodeContentsMap := make(map[string][]string)
 			for _, n := range node.GetStorageDriverNodes() {
 				for _, p := range n.GetPools() {
 					rCmd := fmt.Sprintf("%s%d", cmd, p.ID)
-					log.Infof("Running command [%s]", rCmd)
+					log.Infof("Running command [%s] on node [%s] and pool [%d/%s]", rCmd, n.Name, p.ID, p.Uuid)
 					output, err := runCmd(rCmd, n)
 					log.FailOnError(err, fmt.Sprintf("error running command [%s] on node [%s]", cmd, n.Name))
+					log.Infof(output)
 					dirContents := strings.Split(output, "\n")
 					nodeContentsMap[n.Name] = append(nodeContentsMap[n.Name], dirContents...)
 				}
@@ -565,9 +567,10 @@ var _ = Describe("{ValidateZombieReplicas}", Label("p0", "positive", "CustomerIs
 				for _, n := range node.GetStorageDriverNodes() {
 					for _, p := range n.GetPools() {
 						rCmd := fmt.Sprintf("%s%d", cmd, p.ID)
-						log.Infof("Running command [%s]", rCmd)
+						log.Infof("Running command [%s] on node [%s] and pool [%d/%s]", rCmd, n.Name, p.ID, p.Uuid)
 						output, err := runCmd(rCmd, n)
 						log.FailOnError(err, fmt.Sprintf("error running command [%s] on node [%s]", cmd, n.Name))
+						log.Infof(output)
 						dirContents := strings.Split(output, "\n")
 						postNodeContentsMap[n.Name] = append(postNodeContentsMap[n.Name], dirContents...)
 					}
