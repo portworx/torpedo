@@ -16728,12 +16728,12 @@ func SearchPodLogs(podLabelSelector map[string]string, namespace, searchString s
 
 	podList, err := k8sCore.ListPods(podLabelSelector)
 	if err != nil {
-		return false, fmt.Errorf("error listing pods for job 'pre-install-check': %w", err)
+		return false, fmt.Errorf("error listing pods for job with labels %v : %w", podLabelSelector, err)
 	}
 
 	// Make sure we found at least one pod
 	if len(podList.Items) == 0 {
-		return false, fmt.Errorf("no pods found for job 'pre-install-check' in namespace %q", namespace)
+		return false, fmt.Errorf("no pods found for job with labels %v in namespace %q", podLabelSelector, namespace)
 	}
 
 	// Get logs from the first pod found

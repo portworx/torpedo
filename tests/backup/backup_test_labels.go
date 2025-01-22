@@ -183,6 +183,11 @@ const (
 	InstallPxBackupResourceQuotaCheck                                                  TestCaseName = "InstallPxBackupResourceQuotaCheck"
 	InstallPxBackupHelmNotesCheck                                                      TestCaseName = "InstallPxBackupHelmNotesCheck"
 	InstallPxBackupPvcCheck                                                            TestCaseName = "InstallPxBackupPvcCheck"
+	InstallPxBackupK8sVersionCheck                                                     TestCaseName = "InstallPxBackupK8sVersionCheck"
+	UpgradePxBackupK8sVersionCheck                                                     TestCaseName = "UpgradePxBackupK8sVersionCheck"
+	UpgradePxBackupPortInfoCheck                                                       TestCaseName = "UpgradePxBackupPortInfoCheck"
+	UpgradePxBackupPodReadinessCheck                                                   TestCaseName = "UpgradePxBackupPodReadinessCheck"
+	UpgradePxBackupPostInstallJobCheck                                                 TestCaseName = "UpgradePxBackupPostInstallJobCheck"
 )
 
 // Test case labels
@@ -363,6 +368,11 @@ const (
 	InstallPxBackupResourceQuotaCheckLabel                                                  TestCaseLabel = "InstallPxBackupResourceQuotaCheck"
 	InstallPxBackupHelmNotesCheckLabel                                                      TestCaseLabel = "InstallPxBackupHelmNotesCheck"
 	InstallPxBackupPvcCheckLabel                                                            TestCaseLabel = "InstallPxBackupPvcCheck"
+	InstallPxBackupK8sVersionCheckLabel                                                     TestCaseLabel = "InstallPxBackupK8sVersionCheck"
+	UpgradePxBackupK8sVersionCheckLabel                                                     TestCaseLabel = "UpgradePxBackupK8sVersionCheck"
+	UpgradePxBackupPortInfoCheckLabel                                                       TestCaseLabel = "UpgradePxBackupPortInfoCheck"
+	UpgradePxBackupPodReadinessCheckLabel                                                   TestCaseLabel = "UpgradePxBackupPodReadinessCheck"
+	UpgradePxBackupPostInstallJobCheckLabel                                                 TestCaseLabel = "UpgradePxBackupPostInstallJobCheck"
 )
 
 // Common Labels
@@ -692,4 +702,9 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	InstallPxBackupResourceQuotaCheck:                                      {InstallPxBackupResourceQuotaCheckLabel, FunctionalTest, PxBackupLabel, P0, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
 	InstallPxBackupHelmNotesCheck:                                          {InstallPxBackupHelmNotesCheckLabel, FunctionalTest, PxBackupLabel, P0, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
 	InstallPxBackupPvcCheck:                                                {InstallPxBackupPvcCheckLabel, FunctionalTest, PxBackupLabel, P0, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
+	InstallPxBackupK8sVersionCheck:                                         {InstallPxBackupK8sVersionCheckLabel, FunctionalTest, PxBackupLabel, P2, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
+	UpgradePxBackupK8sVersionCheck:                                         {UpgradePxBackupK8sVersionCheckLabel, FunctionalTest, PxBackupLabel, P2, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
+	UpgradePxBackupPortInfoCheck:                                           {UpgradePxBackupPortInfoCheckLabel, FunctionalTest, PxBackupLabel, P2, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
+	UpgradePxBackupPodReadinessCheck:					{UpgradePxBackupPodReadinessCheckLabel, FunctionalTest, PxBackupLabel, P0, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
+	UpgradePxBackupPostInstallJobCheck:                                     {UpgradePxBackupPostInstallJobCheckLabel, FunctionalTest, PxBackupLabel, P1, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
 }

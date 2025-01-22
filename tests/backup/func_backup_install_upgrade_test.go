@@ -208,3 +208,47 @@ var _ = Describe("{InstallPxBackupPvcCheck}", Label(TestCaseLabelsMap[InstallPxB
 		log.Infof("No cleanup required for this testcase")
 	})
 })
+
+// Test case to check port info in the release notes for upgrade
+var _ = Describe("{UpgradePxBackupPortInfoCheck}", Label(TestCaseLabelsMap[UpgradePxBackupPortInfoCheck]...), func() {
+	var (
+		namespace string
+	)
+	rel := &release.Release{}
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("UpgradePxBackupPortInfoCheck", "Upgrading Px-Backup and checking if desired port information is displayed in the helm release notes", nil, 304871, SS, Q4FY25)
+		log.InfoD("Uninstalling Px-Backup...")
+		err := UninstallPxBackup()
+		log.FailOnError(err, "Failed to delete px-backup")
+		namespace = "px-backup"
+
+		log.InfoD("Installing Px-Backup...")
+		valuesMap, err := ParseValuesFromFile("values1")
+		log.FailOnError(err, "Failed to parse values file")
+		rel, err = InstallPxBackup("2.8.0", "master", namespace, valuesMap)
+		log.FailOnError(err, "Failed to install px-backup")
+	})
+	It("Should check port info in the release notes for upgrade", func() {
+
+		Step("Upgrade Px-Backup and validate the helm notes", func() {
+			log.InfoD("Upgrade Px-Backup and validate the helm notes")
+			valuesMap, err := ParseValuesFromFile("values1")
+			log.FailOnError(err, "Failed to parse values file")
+			rel, err = HelmUpgradePxBackup(LatestPxBackupVersion, DefaultPxBackupHelmBranch, namespace, valuesMap)
+			log.FailOnError(err, "Failed to upgrade px-backup")
+			log.InfoD("Helm notes - \n%s", rel.Info.Notes)
+		})
+
+		Step("Validate the helm notes", func() {
+			searchString := "For more information on network pre-requisites: " +
+				"https://docs.portworx.com/portworx-backup-on-prem/install/install-prereq/nw-prereqs.html"
+			dash.VerifyFatal(strings.Contains(rel.Info.Notes, searchString), true,
+				"Found the expected string in the helm notes")
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(make([]*scheduler.Context, 0))
+		log.Infof("No cleanup required for this testcase")
+	})
+})
