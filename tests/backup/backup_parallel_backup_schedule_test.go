@@ -2,6 +2,8 @@ package tests
 
 import (
 	"fmt"
+	storagev1 "k8s.io/api/storage/v1"
+	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"math"
 	"time"
 
@@ -325,7 +327,19 @@ var _ = Describe("{BasicBackupAndRestoreWithParallelBackupSchedule}", Label(Test
 					storageClass.Name))
 				oldScName := storageClass.Name
 				storageClass.Name += fmt.Sprintf("-new-sc-%s", RandomString(4))
-				_, err = storage.Instance().CreateStorageClass(storageClass)
+				v1obj := metaV1.ObjectMeta{
+					Name: storageClass.Name,
+				}
+				scObj := &storagev1.StorageClass{
+					ObjectMeta:           v1obj,
+					Provisioner:          storageClass.Provisioner,
+					Parameters:           storageClass.Parameters,
+					ReclaimPolicy:        storageClass.ReclaimPolicy,
+					VolumeBindingMode:    storageClass.VolumeBindingMode,
+					MountOptions:         storageClass.MountOptions,
+					AllowVolumeExpansion: storageClass.AllowVolumeExpansion,
+				}
+				_, err = storage.Instance().CreateStorageClass(scObj)
 				log.FailOnError(err, "Creating sc on dest cluster")
 				storageClassMapping[oldScName] = storageClass.Name
 			}
