@@ -13092,6 +13092,19 @@ func installPxBackupChart(
 		return nil, fmt.Errorf("failed to load chart: %w", err)
 	}
 
+	// Update custom repo and registry
+	customRepo := os.Getenv("CUSTOM_REPO")
+	customRegistry := os.Getenv("CUSTOM_REGISTRY")
+
+	if customRepo != "" && customRegistry != "" {
+		imageNames := []string{}
+		for key := range vals["images"].(map[string]interface{}) {
+			imageNames = append(imageNames, key)
+		}
+		updateCustomRepoAndRegistry(vals, imageNames, customRepo, customRegistry)
+		log.Infof("Applied custom registry and repo: registry=%s, repo=%s", customRegistry, customRepo)
+	}
+
 	installStart := time.Now()
 	log.Infof("Values used for helm install:\n%v", vals)
 	log.Infof("Chart URL used for helm install - %s", chartURL)
@@ -13235,6 +13248,19 @@ func UpgradePxBackupChart(cfg *action.Configuration, customValues map[string]int
 		log.Infof(("Updated custom values for helm upgrade: %v"), customValues)
 	}
 
+	// Update repo and registry for cloud environments after merging custom and default values
+	customRepo := os.Getenv("CUSTOM_REPO")
+	customRegistry := os.Getenv("CUSTOM_REGISTRY")
+
+	if customRepo != "" && customRegistry != "" {
+		imageNames := []string{}
+		for key := range defaultValues["images"].(map[string]interface{}) {
+			imageNames = append(imageNames, key)
+		}
+		updateCustomRepoAndRegistry(defaultValues, imageNames, customRepo, customRegistry)
+		log.Infof("Applied custom registry and repo: registry=%s, repo=%s", customRegistry, customRepo)
+	}
+
 	upgradeStart := time.Now()
 	log.Infof("Values used for helm upgrade: %v", defaultValues)
 	log.Infof("Chart URL used for helm upgrade: %s", chartURL)
@@ -13249,6 +13275,24 @@ func UpgradePxBackupChart(cfg *action.Configuration, customValues map[string]int
 		int(duration.Seconds())%60,
 	)
 	return rel, nil
+}
+
+// updateCustomRepoAndRegistry updates the custom repo and registry for the given image names
+func updateCustomRepoAndRegistry(customValues map[string]interface{}, imageNames []string, customRepo, customRegistry string) {
+
+	images := customValues["images"].(map[string]interface{})
+
+	for _, imageName := range imageNames {
+		// Check if the image entry already exists in the map
+		if image, exists := images[imageName]; exists {
+			// If the entry exists, cast it to a map and update repo and registry
+			if imageMap, isMap := image.(map[string]interface{}); isMap {
+				imageMap["repo"] = customRepo
+				imageMap["registry"] = customRegistry
+				log.Infof("Updated repo and registry for existing image: %s", imageName)
+			}
+		}
+	}
 }
 
 // GetHelmReleaseValues retrieves the applied values for a Helm release.
