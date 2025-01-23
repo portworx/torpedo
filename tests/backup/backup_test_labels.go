@@ -189,6 +189,7 @@ const (
 	UpgradePxBackupPodReadinessCheck                                                   TestCaseName = "UpgradePxBackupPodReadinessCheck"
 	UpgradePxBackupPostInstallJobCheck                                                 TestCaseName = "UpgradePxBackupPostInstallJobCheck"
 	RestartMultipleComponentsWhenParallelBackupScheduleInProgress                      TestCaseName = "RestartMultipleComponentsWhenParallelBackupScheduleInProgress"
+	ParallelScheduleWithPartialBackup                                                  TestCaseName = "ParallelScheduleWithPartialBackup"
 )
 
 // Test case labels
@@ -375,6 +376,7 @@ const (
 	UpgradePxBackupPodReadinessCheckLabel                                                   TestCaseLabel = "UpgradePxBackupPodReadinessCheck"
 	UpgradePxBackupPostInstallJobCheckLabel                                                 TestCaseLabel = "UpgradePxBackupPostInstallJobCheck"
 	RestartMultipleComponentsWhenParallelBackupScheduleInProgressLabel                      TestCaseLabel = "RestartMultipleComponentsWhenParallelBackupScheduleInProgress"
+	ParallelScheduleWithPartialBackupLabel                                                  TestCaseLabel = "ParallelScheduleWithPartialBackup"
 )
 
 // Common Labels
@@ -707,7 +709,8 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	InstallPxBackupK8sVersionCheck:                                         {InstallPxBackupK8sVersionCheckLabel, FunctionalTest, PxBackupLabel, P2, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
 	UpgradePxBackupK8sVersionCheck:                                         {UpgradePxBackupK8sVersionCheckLabel, FunctionalTest, PxBackupLabel, P2, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
 	UpgradePxBackupPortInfoCheck:                                           {UpgradePxBackupPortInfoCheckLabel, FunctionalTest, PxBackupLabel, P2, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
-	UpgradePxBackupPodReadinessCheck:					{UpgradePxBackupPodReadinessCheckLabel, FunctionalTest, PxBackupLabel, P0, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
+	UpgradePxBackupPodReadinessCheck:                                       {UpgradePxBackupPodReadinessCheckLabel, FunctionalTest, PxBackupLabel, P0, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
 	UpgradePxBackupPostInstallJobCheck:                                     {UpgradePxBackupPostInstallJobCheckLabel, FunctionalTest, PxBackupLabel, P1, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
 	RestartMultipleComponentsWhenParallelBackupScheduleInProgress:          {RestartMultipleComponentsWhenParallelBackupScheduleInProgressLabel, SystemTest, PxBackupLabel},
+	ParallelScheduleWithPartialBackup:                                      {ParallelScheduleWithPartialBackupLabel, SystemTest, PxBackupLabel},
 }

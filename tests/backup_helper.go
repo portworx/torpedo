@@ -10722,7 +10722,7 @@ func StopCloudsnapBackup(pvcName, namespace string) error {
 				case "Done":
 					return "", false, fmt.Errorf("cloudsnap for PVC [%s] in namespace [%s] is in %s status, not retrying", pvcName, namespace, value.Status)
 				case "Stopped":
-					return "", false, nil
+					continue
 				default:
 					if value.ID == "" {
 						return "", true, fmt.Errorf("waiting to get the cs id for PVC [%s] in namespace [%s]", pvcName, namespace)
@@ -14183,7 +14183,7 @@ func WaitTillScheduleBackupInDesiredState(backupScheduleName string, orgId strin
 		}
 		return "", false, nil
 	}
-	_, err := task.DoRetryWithTimeout(t, 30*time.Minute, 2*time.Minute)
+	_, err := task.DoRetryWithTimeout(t, 30*time.Minute, 15*time.Second)
 	if err != nil {
 		return err
 	}
@@ -14214,4 +14214,32 @@ func GetSnapshotCount(backupScheduleName string, orgId string, ctx context1.Cont
 		}
 	}
 	return snapshotCount, nil
+}
+
+// ValidateLocalSnapshotCompletedForSuccessfulVolumes Check if a fixed number of local Snapshots are completed for volumes which snapshots are taken.
+func ValidateLocalSnapshotCompletedForSuccessfulVolumes(backupName string, orgID string, localSnapshotCount int, failedPvcs []*corev1.PersistentVolumeClaim, ctx context1.Context) error {
+	backupDriver := Inst().Backup
+	failedVolumeMap := make(map[string]bool, 0)
+	backupUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   backupUid,
+		OrgId: orgID,
+	}
+	resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
+	if err != nil {
+		return err
+	}
+	for _, failedVol := range failedPvcs {
+		failedVolumeMap[failedVol.Spec.VolumeName] = true
+	}
+	for _, bkpVolume := range resp.GetBackup().GetVolumes() {
+		if _, ok := failedVolumeMap[bkpVolume.Name]; !ok {
+			err = CheckLocalSnapshotCount(bkpVolume.Name, localSnapshotCount)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

@@ -16647,20 +16647,25 @@ func GetAllLocalSnapshotStatus(pvcName string) ([]PXSnapshotStatus, error) {
 // CheckLocalSnapshotCount checks if the number of Local snapshots matches the expected count
 func CheckLocalSnapshotCount(pvcName string, expectedCount int) error {
 	// Call GetLocalSnapshotStatus to retrieve the snapshot statuses
-	snapshots, err := GetAllLocalSnapshotStatus(pvcName)
+	t := func() (interface{}, bool, error) {
+		snapshots, err := GetAllLocalSnapshotStatus(pvcName)
+		if err != nil {
+			return "", false, fmt.Errorf("failed to get snapshot status for PVC %s: %s", pvcName, err)
+		}
+		if len(snapshots) > expectedCount {
+			return "", false, nil
+		}
+		// Compare the count of snapshots with the expected count
+		if len(snapshots) != expectedCount {
+			return "", true, fmt.Errorf("snapshot count mismatch: expected %d, found %d", expectedCount, len(snapshots))
+		}
+		log.InfoD("Snapshot count for PVC %s is as expected: %d.", pvcName, expectedCount)
+		return "", false, nil
+	}
+	_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 2*time.Second)
 	if err != nil {
-		return fmt.Errorf("failed to get snapshot status for PVC %s: %s", pvcName, err)
+		return err
 	}
-
-	// Compare the count of snapshots with the expected count
-	if len(snapshots) > expectedCount {
-		return nil
-	}
-	if len(snapshots) != expectedCount {
-		return fmt.Errorf("snapshot count mismatch: expected %d, found %d", expectedCount, len(snapshots))
-	}
-
-	log.InfoD("Snapshot count for PVC %s is as expected: %d.", pvcName, expectedCount)
 	return nil
 }
 
