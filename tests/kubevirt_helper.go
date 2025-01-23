@@ -2016,3 +2016,64 @@ func validatePostCopyMigration(vmiNamespace, migrationName string) error {
 	log.Infof("Migration mode - Expected: PostCopy, Actual: %v", migrationResult.Status.MigrationState.Mode)
 	return nil
 }
+
+// GetUptimeForAllVMs retrieves the uptimes of all the VMs returning a map of VM uptimes and any errors encountered.
+func GetUptimeForAllVMs(appCtxs []*scheduler.Context) (map[string]time.Duration, error) {
+
+	// Rename the map to vmUptimes
+	vmUptimes := make(map[string]time.Duration)
+
+	canSsh := CreateSSHPodAndSetCanSsh() // Ensure SSH pod is created
+	if !canSsh {
+		return vmUptimes, fmt.Errorf("failed to create ssh pod")
+	}
+
+	log.Infof("Get initial uptime of VMs")
+	var wg sync.WaitGroup
+	var mu sync.Mutex // to synchronize access to the vmUptimes map and errors
+
+	// Channel to signal an error
+	errChan := make(chan error, 10)
+
+	for _, appCtx := range appCtxs {
+		wg.Add(1)
+		go func(appCtx *scheduler.Context) {
+			defer GinkgoRecover()
+			defer wg.Done()
+			vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+			if err != nil {
+				mu.Lock()
+				errChan <- fmt.Errorf("failed to get VMs from appCtx: %v", err) // Send error to channel
+				mu.Unlock()
+				return
+			}
+			for _, vm := range vms {
+				uptime, err := GetVMUptime(vm)
+				if err != nil {
+					mu.Lock()
+					errChan <- fmt.Errorf("failed to get uptime from VM %s with err %v", vm.Name, err) // Send error to channel
+					mu.Unlock()
+					return
+				}
+				vmKey := fmt.Sprintf("%s/%s", vm.Namespace, vm.Name)
+				mu.Lock()
+				vmUptimes[vmKey] = uptime
+				mu.Unlock()
+				log.Infof("Initial uptime for VM %s is %v", vmKey, uptime)
+			}
+		}(appCtx)
+	}
+
+	// Wait for all goroutines to finish
+	wg.Wait()
+
+	// Check if there was an error from the goroutines
+	select {
+	case err := <-errChan:
+		// Return the first error encountered
+		return vmUptimes, err
+	default:
+		// No errors, proceed as normal
+		return vmUptimes, nil
+	}
+}

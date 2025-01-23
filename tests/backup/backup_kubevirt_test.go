@@ -1310,6 +1310,8 @@ var _ = Describe("{KubevirtVMWithFreezeUnfreeze}", Label(TestCaseLabelsMap[Kubev
 		unfreezeRuleName     string
 		freezeRuleUid        string
 		unfreezeRuleUid      string
+		initialUptime        map[string]time.Duration
+		canSsh               bool
 	)
 
 	JustBeforeEach(func() {
@@ -1398,13 +1400,12 @@ var _ = Describe("{KubevirtVMWithFreezeUnfreeze}", Label(TestCaseLabelsMap[Kubev
 			log.FailOnError(err, "Failed to create unfreeze rule %s for VMs - %v", unfreezeRuleName, allVMNames)
 		})
 
-		Step("SSH into the kubevirt VM to check pre-backup VM health", func() {
-			log.InfoD("SSH into the kubevirt VM to check pre-backup VM health")
-			for _, vm := range allVMs {
-				log.Infof("Running command for VM [%s]", vm.Name)
-				output, err := RunCmdInVM(vm, "uname -a", context1.TODO())
-				log.InfoD("Output of command in step - [%s]", output)
-				log.FailOnError(err, "Failed to run command in VM")
+		Step("SSH into the kubevirt VM to capture the all the VMs uptime before backup", func() {
+			log.InfoD("SSH into the kubevirt VM to capture the all the VMs uptime before backup")
+			var err error
+			initialUptime, err = GetUptimeForAllVMs(scheduledAppContexts)
+			if err != nil {
+				log.FailOnError(err, "Failed to capture the uptime")
 			}
 		})
 
@@ -1426,14 +1427,13 @@ var _ = Describe("{KubevirtVMWithFreezeUnfreeze}", Label(TestCaseLabelsMap[Kubev
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of VM backup [%s]", backupName))
 		})
 
-		Step("SSH into the kubevirt VM to check VM health after freeze rule", func() {
-			log.InfoD("SSH into the kubevirt VM to check VM health after freeze rule")
-			for _, vm := range allVMs {
-				log.Infof("Running command for VM [%s]", vm.Name)
-				output, err := RunCmdInVM(vm, "uname -a", context1.TODO())
-				log.InfoD("Output of command in step - [%s]", output)
-				log.FailOnError(err, "Failed to run command in VM")
+		Step("SSH into the kubevirt VM to make sure VM has not rebooted after freeze rule", func() {
+			log.InfoD("SSH into the kubevirt VM to make sure VM has not rebooted after freeze rule")
+			canSsh = CreateSSHPodAndSetCanSsh()
+			if !canSsh {
+				log.FailOnError(fmt.Errorf("failed to create ssh pod"), "failed to create ssh pod to validate VM uptime")
 			}
+			ValidateVMUptime(scheduledAppContexts, canSsh, initialUptime)
 		})
 
 		Step("Taking backup of kubevirt VM without freeze rule and with unfreeze rule", func() {
@@ -1454,14 +1454,9 @@ var _ = Describe("{KubevirtVMWithFreezeUnfreeze}", Label(TestCaseLabelsMap[Kubev
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of VM backup [%s]", backupName))
 		})
 
-		Step("SSH into the kubevirt VM to check VM health after unfreeze rule", func() {
-			log.InfoD("SSH into the kubevirt VM to check VM health after unfreeze rule")
-			for _, vm := range allVMs {
-				log.Infof("Running command for VM [%s]", vm.Name)
-				output, err := RunCmdInVM(vm, "uname -a", context1.TODO())
-				log.InfoD("Output of command in step - [%s]", output)
-				log.FailOnError(err, "Failed to run command in VM")
-			}
+		Step("SSH into the kubevirt VM to make sure VM has not rebooted after unfreeze rule", func() {
+			log.InfoD("SSH into the kubevirt VM to make sure VM has not rebooted after unfreeze rule")
+			ValidateVMUptime(scheduledAppContexts, canSsh, initialUptime)
 		})
 	})
 
@@ -2603,6 +2598,7 @@ var _ = Describe("{KubevirtScheduledVMDelete}", Label(TestCaseLabelsMap[Kubevirt
 	)
 
 	JustBeforeEach(func() {
+
 		StartPxBackupTorpedoTest("KubevirtScheduledVMDelete", "verifies scheduled backup status when Kubevirt VMs are deleted and recreated from namespace in between schedules", nil, 296428, Ak, Q1FY25)
 
 		backupLocationMap = make(map[string]string)
@@ -2624,7 +2620,6 @@ var _ = Describe("{KubevirtScheduledVMDelete}", Label(TestCaseLabelsMap[Kubevirt
 	})
 
 	It("verifies scheduled backup status when Kubevirt VMs are deleted and recreated in a namespace.", func() {
-
 		Step("Validating applications", func() {
 			// TODO: Add Data validation for this test case
 			log.InfoD("Validating applications")
@@ -3343,6 +3338,8 @@ var _ = Describe("{KubevirtVMMigrationTest}", Label(TestCaseLabelsMap[KubevirtVM
 		wg                   sync.WaitGroup
 		mu                   sync.RWMutex
 		scheduledAppContexts []*scheduler.Context
+		initialUptime        map[string]time.Duration
+		canSsh               bool
 	)
 
 	JustBeforeEach(func() {
@@ -3424,6 +3421,15 @@ var _ = Describe("{KubevirtVMMigrationTest}", Label(TestCaseLabelsMap[KubevirtVM
 			defer mu.Unlock()
 		}
 
+		Step("SSH into the kubevirt VM to capture the all the VMs uptime before backup", func() {
+			log.InfoD("SSH into the kubevirt VM to capture the all the VMs uptime before backup")
+			var err error
+			initialUptime, err = GetUptimeForAllVMs(scheduledAppContexts)
+			if err != nil {
+				log.FailOnError(err, "Failed to capture the uptime")
+			}
+		})
+
 		Step("Take backups during cordoning and draining the nodes in which VM is running", func() {
 			log.InfoD("Take backups during cordoning and draining the nodes in which VM is running")
 			k8sCore := core.Instance()
@@ -3468,6 +3474,15 @@ var _ = Describe("{KubevirtVMMigrationTest}", Label(TestCaseLabelsMap[KubevirtVM
 			}
 		})
 
+		Step("SSH into the kubevirt VM to make sure VM has not rebooted after cordoning and draining the nodes in which VM is running", func() {
+			log.InfoD("SSH into the kubevirt VM to make sure VM has not rebooted after cordoning and draining the nodes in which VM is running")
+			canSsh = CreateSSHPodAndSetCanSsh()
+			if !canSsh {
+				log.FailOnError(fmt.Errorf("failed to create ssh pod"), "failed to create ssh pod to validate VM uptime")
+			}
+			ValidateVMUptime(scheduledAppContexts, canSsh, initialUptime)
+		})
+
 		Step("Take backups during Live migration of the VM", func() {
 			log.InfoD("Take backups during Live migration of the VM")
 			for _, appCtx := range scheduledAppContexts {
@@ -3492,6 +3507,11 @@ var _ = Describe("{KubevirtVMMigrationTest}", Label(TestCaseLabelsMap[KubevirtVM
 					wg.Wait()
 				}
 			}
+		})
+
+		Step("SSH into the kubevirt VM to make sure VM has not rebooted after backups during Live migration of the VM", func() {
+			log.InfoD("SSH into the kubevirt VM to make sure VM has not rebooted after backups during Live migration of the VM")
+			ValidateVMUptime(scheduledAppContexts, canSsh, initialUptime)
 		})
 
 		Step("Take backups during rebooting the node in which VM is running", func() {

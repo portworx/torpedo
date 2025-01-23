@@ -67,7 +67,6 @@ spec:
               chpasswd:
                 list: |
                   ubuntu:ubuntu
-                  root:toor
                 expire: False
               runcmd:
                 - while true; do
