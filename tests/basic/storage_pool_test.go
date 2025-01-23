@@ -5887,10 +5887,11 @@ var _ = Describe("{PoolIncreaseSize20TB}", Label("p1", "positive", "pool_ops", "
 		var expectedSize uint64
 		var expectedSizeWithJournal uint64
 
-		// Marking the expected size to be 20TB
-		expectedSize = (2048 * 1024 * 1024 * 1024 * 1024 * 1024) / units.TiB
+		// Marking the expected size to be 20TiB
+		expectedSize = ((2048 * 1024 * 1024 * 1024 * 1024) / units.TiB) * 10
 		if IsEksCluster() {
-			expectedSize = (15 * 1024 * 1024 * 1024 * 1024) / units.TiB
+			// Marking the expected size to be 15TiB
+			expectedSize = (15 * 1024 * 1024 * 1024 * 1024 * 1024) / units.TiB
 		}
 
 		stepLog = "Calculate expected pool size and trigger pool resize"
