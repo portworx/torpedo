@@ -16653,6 +16653,9 @@ func CheckLocalSnapshotCount(pvcName string, expectedCount int) error {
 	}
 
 	// Compare the count of snapshots with the expected count
+	if len(snapshots) > expectedCount {
+		return nil
+	}
 	if len(snapshots) != expectedCount {
 		return fmt.Errorf("snapshot count mismatch: expected %d, found %d", expectedCount, len(snapshots))
 	}

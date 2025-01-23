@@ -188,6 +188,7 @@ const (
 	UpgradePxBackupPortInfoCheck                                                       TestCaseName = "UpgradePxBackupPortInfoCheck"
 	UpgradePxBackupPodReadinessCheck                                                   TestCaseName = "UpgradePxBackupPodReadinessCheck"
 	UpgradePxBackupPostInstallJobCheck                                                 TestCaseName = "UpgradePxBackupPostInstallJobCheck"
+	RestartMultipleComponentsWhenParallelBackupScheduleInProgress                      TestCaseName = "RestartMultipleComponentsWhenParallelBackupScheduleInProgress"
 )
 
 // Test case labels
@@ -373,6 +374,7 @@ const (
 	UpgradePxBackupPortInfoCheckLabel                                                       TestCaseLabel = "UpgradePxBackupPortInfoCheck"
 	UpgradePxBackupPodReadinessCheckLabel                                                   TestCaseLabel = "UpgradePxBackupPodReadinessCheck"
 	UpgradePxBackupPostInstallJobCheckLabel                                                 TestCaseLabel = "UpgradePxBackupPostInstallJobCheck"
+	RestartMultipleComponentsWhenParallelBackupScheduleInProgressLabel                      TestCaseLabel = "RestartMultipleComponentsWhenParallelBackupScheduleInProgress"
 )
 
 // Common Labels
@@ -707,4 +709,5 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	UpgradePxBackupPortInfoCheck:                                           {UpgradePxBackupPortInfoCheckLabel, FunctionalTest, PxBackupLabel, P2, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
 	UpgradePxBackupPodReadinessCheck:					{UpgradePxBackupPodReadinessCheckLabel, FunctionalTest, PxBackupLabel, P0, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
 	UpgradePxBackupPostInstallJobCheck:                                     {UpgradePxBackupPostInstallJobCheckLabel, FunctionalTest, PxBackupLabel, P1, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
+	RestartMultipleComponentsWhenParallelBackupScheduleInProgress:          {RestartMultipleComponentsWhenParallelBackupScheduleInProgressLabel, SystemTest, PxBackupLabel},
 }

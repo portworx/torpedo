@@ -3137,6 +3137,55 @@ func BackupSuccessCheck(backupName string, orgID string, retryDuration time.Dura
 	return nil
 }
 
+// backupSuccessCheckOrPartialSuccessCheck inspects backup task and check if it's success or partial success state
+func BackupSuccessCheckPartialSuccessCheck(backupName string, orgID string, retryDuration time.Duration, retryInterval time.Duration, ctx context1.Context) error {
+	bkpUid, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return err
+	}
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   bkpUid,
+		OrgId: orgID,
+	}
+	statusesExpected := [...]api.BackupInfo_StatusInfo_Status{
+		api.BackupInfo_StatusInfo_Success,
+		api.BackupInfo_StatusInfo_PartialSuccess,
+	}
+	statusesUnexpected := [...]api.BackupInfo_StatusInfo_Status{
+		api.BackupInfo_StatusInfo_Invalid,
+		api.BackupInfo_StatusInfo_Aborted,
+		api.BackupInfo_StatusInfo_Failed,
+	}
+	backupSuccessCheckFunc := func() (interface{}, bool, error) {
+		resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+		if err != nil {
+			return "", false, err
+		}
+		actual := resp.GetBackup().GetStatus().Status
+		reason := resp.GetBackup().GetStatus().Reason
+		for _, status := range statusesExpected {
+			if actual == status {
+				return "", false, nil
+			}
+		}
+		for _, status := range statusesUnexpected {
+			if actual == status {
+				return "", false, fmt.Errorf("backup status for [%s] expected was [%s] but got [%s] because of [%s]", backupName, statusesExpected, actual, reason)
+			}
+		}
+
+		return "", true, fmt.Errorf("backup status for [%s] expected was [%s] but got [%s] because of [%s]", backupName, statusesExpected, actual, reason)
+
+	}
+	_, err = task.DoRetryWithTimeout(backupSuccessCheckFunc, retryDuration, retryInterval)
+	log.InfoD("Backup success check for backup %s finished at [%s]", backupName, time.Now().Format("2006-01-02 15:04:05"))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // BackupWithPartialSuccessCheck inspects backup task
 func BackupWithPartialSuccessCheck(backupName string, orgID string, retryDuration time.Duration, retryInterval time.Duration, ctx context1.Context) error {
 	bkpUid, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
