@@ -8767,7 +8767,7 @@ func WaitForExpansionToStart(poolID string) error {
 			if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_IN_PROGRESS ||
 				expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_PENDING {
 				// storage pool resize has been triggered
-				log.InfoD("Pool %s expansion started", poolID)
+				log.InfoD("Pool %s expansion started has status %v", poolID, expandedPool.LastOperation.Status)
 				return nil, false, nil
 			}
 

@@ -593,7 +593,7 @@ func nodePoolsExpansion(testName string) {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			for _, poolToBeResized := range poolsToBeResized {
-				poolIDToResize := poolToBeResized.Uuid
+				poolIDToResize = poolToBeResized.Uuid
 				if val, err := poolResizeIsInProgress(poolToBeResized); val {
 					// wait until resize is completed and get the updated pool again
 					poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
@@ -642,6 +642,8 @@ func nodePoolsExpansion(testName string) {
 					}
 				}
 				log.FailOnError(err, "pool expansion not started")
+				//https://purestorage.atlassian.net/browse/PTX-29004
+				time.Sleep(5 * time.Second)
 			}
 
 			exitPoolMaintenance(poolsToBeResized[0].Uuid)
@@ -2807,7 +2809,9 @@ var _ = Describe("{MulPoolsResize}", Label("p0", "positive", "pool_ops", "PoolEx
 				resizedPoolsMap[poolToBeResized.Uuid] = expectedSize
 				log.InfoD("Current Size of the pool %s is %d", selPool.Uuid, poolToBeResized.TotalSize/units.GiB)
 				err = Inst().V.ExpandPool(selPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
-				dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Pool expansion init successful for %s?", selPool.Uuid))
+				//https://purestorage.atlassian.net/browse/PTX-29004
+				time.Sleep(5 * time.Second)
 			}
 
 			isjournal, err := IsJournalEnabled()
@@ -2901,7 +2905,9 @@ var _ = Describe("{MulPoolsAddDisk}", Label("p0", "positive", "pool_ops", "AddDr
 
 				log.InfoD("Current Size of the pool %s is %d", selPool.Uuid, poolToBeResized.TotalSize/units.GiB)
 				err = Inst().V.ExpandPool(selPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
-				dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Pool expansion init successful for %s?", selPool.Uuid))
+				//https://purestorage.atlassian.net/browse/PTX-29004
+				time.Sleep(5 * time.Second)
 			}
 
 			isjournal, err := IsJournalEnabled()
