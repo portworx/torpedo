@@ -322,22 +322,30 @@ var _ = Describe("{BasicBackupAndRestoreWithParallelBackupSchedule}", Label(Test
 		})
 
 		Step("Create new storage class for restore", func() {
-			log.InfoD("Getting storage class of the destination cluster")
+			log.InfoD("Fetching PVCs from source cluster and preparing corresponding StorageClasses for the destination cluster")
+
+			// Fetch PVCs from the source cluster
 			pvcs, err := core.Instance().GetPersistentVolumeClaims(bkpNamespaces[0], make(map[string]string))
-			log.FailOnError(err, "Getting PVC on source cluster")
+			log.FailOnError(err, "Fetching PVCs from source cluster")
+
+			// Prepare a map to hold old and new StorageClass mappings
+			storageClassMappings := make(map[string]*storagev1.StorageClass)
+
+			// Loop through each PVC to fetch and prepare StorageClass objects
 			for _, singlePvc := range pvcs.Items {
+				// Fetch the StorageClass associated with the PVC
 				storageClass, err := core.Instance().GetStorageClassForPVC(&singlePvc)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting SC %v from PVC in source cluster",
-					storageClass.Name))
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching StorageClass %v from PVC in source cluster", storageClass.Name))
+
+				// Save the old SC name and prepare a new SC name
 				oldScName := storageClass.Name
-				storageClass.Name += fmt.Sprintf("-new-sc-%s", RandomString(4))
-				err = SetDestinationKubeConfig()
-				dash.VerifyFatal(err, nil, "Setting destination kube config")
-				v1obj := metaV1.ObjectMeta{
-					Name: storageClass.Name,
-				}
+				newScName := fmt.Sprintf("%s-new-%s", oldScName, RandomString(4))
+
+				// Prepare a new StorageClass object
 				scObj := &storagev1.StorageClass{
-					ObjectMeta:           v1obj,
+					ObjectMeta: metaV1.ObjectMeta{
+						Name: newScName,
+					},
 					Provisioner:          storageClass.Provisioner,
 					Parameters:           storageClass.Parameters,
 					ReclaimPolicy:        storageClass.ReclaimPolicy,
@@ -345,13 +353,27 @@ var _ = Describe("{BasicBackupAndRestoreWithParallelBackupSchedule}", Label(Test
 					MountOptions:         storageClass.MountOptions,
 					AllowVolumeExpansion: storageClass.AllowVolumeExpansion,
 				}
-				_, err = storage.Instance().CreateStorageClass(scObj)
-				dash.VerifyFatal(err, nil, "Creating sc on dest cluster")
-				storageClassMapping[oldScName] = storageClass.Name
+
+				// Map the old SC name to the new StorageClass object
+				storageClassMappings[oldScName] = scObj
+				storageClassMapping[oldScName] = newScName
 			}
+
+			// Switch to the destination cluster context after preparing all StorageClass objects
+			err = SetDestinationKubeConfig()
+			dash.VerifyFatal(err, nil, "Switching to destination cluster context")
+
+			// Create StorageClasses on the destination cluster
+			for oldScName, scObj := range storageClassMappings {
+				_, err := storage.Instance().CreateStorageClass(scObj)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating StorageClass %s on destination cluster", scObj.Name))
+				log.InfoD("Successfully created StorageClass %s on destination cluster (mapped from %s)", scObj.Name, oldScName)
+			}
+
+			// Restore the source cluster context after processing
 			defer func() {
 				err = SetSourceKubeConfig()
-				dash.VerifyFatal(err, nil, "Setting source kube config")
+				dash.VerifyFatal(err, nil, "Restoring source cluster context")
 			}()
 		})
 
