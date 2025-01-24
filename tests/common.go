@@ -10661,28 +10661,23 @@ type KvdbNode struct {
 // GetAllKvdbNodes returns list of all kvdb nodes present in the cluster
 func GetAllKvdbNodes() ([]KvdbNode, error) {
 	type kvdbNodes []map[string]KvdbNode
-	var randomNode node.Node
+	var readyNode node.Node
 	workerNodes := node.GetStorageNodes()
 	if Inst().V.IsPxLiteCluster() {
 		workerNodes = node.GetStorageDriverNodes()
 	}
-	eligibleNodes := []node.Node{}
-	for _, node := range workerNodes {
-		if Inst().V.IsPxReadyOnNode(node) {
-			eligibleNodes = append(eligibleNodes, node)
-		}
-	}
-	found := false
-	for !found {
-		randomIndex := rand.Intn(len(eligibleNodes))
-		randomNode = workerNodes[randomIndex]
-		log.Infof("Random node to run storage %s", randomNode.Name)
-		status := Inst().V.IsPxReadyOnNode(randomNode)
+	rand.Shuffle(len(workerNodes), func(i, j int) { workerNodes[i], workerNodes[j] = workerNodes[j], workerNodes[i] })
+	for _, workerNode := range workerNodes {
+		log.Infof("GetAllKvdbNodes: checking if node %s is ready", workerNode.Name)
+		status := Inst().V.IsPxReadyOnNode(workerNode)
 		if status {
-			found = true
-		} else {
-			log.Infof("Node %s does not have 'px' running, selecting another...\n", randomNode.Id)
+			readyNode = workerNode
+			break
 		}
+		log.Infof("Node %s (%s) does not have 'px' running, selecting another...\n", workerNode.Name, workerNode.Id)
+	}
+	if readyNode.Name == "" {
+		return nil, errors.New("failed to find a node with 'px' ready")
 	}
 	jsonConvert := func(jsonString string) ([]KvdbNode, error) {
 		var nodes kvdbNodes
@@ -10708,9 +10703,8 @@ func GetAllKvdbNodes() ([]KvdbNode, error) {
 	}
 
 	var allKvdbNodes []KvdbNode
-	// Execute the command and check the alerts of type POOL
 	command := "pxctl service kvdb members list -j"
-	out, err := Inst().N.RunCommand(randomNode, command, node.ConnectionOpts{
+	out, err := Inst().N.RunCommand(readyNode, command, node.ConnectionOpts{
 		Timeout:         2 * time.Minute,
 		TimeBeforeRetry: 10 * time.Second,
 	})
@@ -12405,7 +12399,7 @@ func GenerateS3BucketPolicy(sid string, encryptionPolicy string, bucketName stri
 					"%s":"%s"
 				}
 			}
-		  }	
+		  }
 	   ]
 	}`
 

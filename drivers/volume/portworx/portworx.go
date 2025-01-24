@@ -6408,7 +6408,20 @@ func (d *portworx) GetAlertsUsingResourceTypeByTime(resourceType api.ResourceTyp
 }
 
 func (d *portworx) IsPxReadyOnNode(n node.Node) bool {
-	return d.schedOps.IsPXReadyOnNode(n)
+	if !d.schedOps.IsPXReadyOnNode(n) {
+		log.Warnf("IsPxReadyOnNode: PX pod is not ready on node: %s", n.Name)
+		return false
+	}
+	log.Infof("IsPxReadyOnNode: PX pod is ready on node %s; checking connectivity to node IPs [%v]", n.Name, n.Addresses)
+	for _, addr := range n.Addresses {
+		if err := d.testAndSetEndpointUsingNodeIP(addr); err != nil {
+			log.Warnf("IsPxReadyOnNode: testAndSetEndpoint failed for %v: %v", addr, err)
+			continue
+		}
+		return true
+	}
+	log.Warnf("IsPxReadyOnNode: none of the node IPs are accessible")
+	return false
 }
 
 // EnableSkinnySnap Enables skinnysnap on the cluster
