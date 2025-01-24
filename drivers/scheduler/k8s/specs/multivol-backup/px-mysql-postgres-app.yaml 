@@ -57,4 +57,3 @@ spec:
       - name: postgres-portworx-2
         persistentVolumeClaim:
           claimName: postgres-portworx-pvc-2
-

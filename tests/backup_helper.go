@@ -2353,6 +2353,56 @@ func CreateRestoreWithReplacePolicy(restoreName string, backupName string, names
 	return nil
 }
 
+// CreateRestoreWithReplacePolicy Creates in-place restore
+func CreateRestoreWithReplacePolicyWithoutCheck(restoreName string, backupName string, namespaceMapping map[string]string, clusterName string,
+	orgID string, ctx context1.Context, storageClassMapping map[string]string, replacePolicy ReplacePolicyType) error {
+
+	var bkp *api.BackupObject
+	var bkpUid string
+	backupDriver := Inst().Backup
+	log.Infof("Getting the UID of the backup %s needed to be restored", backupName)
+	bkpEnumerateReq := &api.BackupEnumerateRequest{
+		OrgId: orgID}
+	curBackups, err := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
+	if err != nil {
+		return err
+	}
+	for _, bkp = range curBackups.GetBackups() {
+		if bkp.Name == backupName {
+			bkpUid = bkp.Uid
+			break
+		}
+	}
+	clusterUid, err := Inst().Backup.GetClusterUID(ctx, BackupOrgID, clusterName)
+	if err != nil {
+		return err
+	}
+	createRestoreReq := &api.RestoreCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  restoreName,
+			OrgId: orgID,
+		},
+		Backup:              backupName,
+		Cluster:             clusterName,
+		NamespaceMapping:    namespaceMapping,
+		StorageClassMapping: storageClassMapping,
+		BackupRef: &api.ObjectRef{
+			Name: backupName,
+			Uid:  bkpUid,
+		},
+		ReplacePolicy: api.ReplacePolicy_Type(replacePolicy),
+		ClusterRef: &api.ObjectRef{
+			Name: clusterName,
+			Uid:  clusterUid,
+		},
+	}
+	_, err = backupDriver.CreateRestore(ctx, createRestoreReq)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // CreateRestoreWithReplacePolicyWithValidation Creates in-place restore and waits for it to complete and then validates the restore
 func CreateRestoreWithReplacePolicyWithValidation(restoreName string, backupName string, namespaceMapping map[string]string, clusterName string,
 	orgID string, ctx context1.Context, storageClassMapping map[string]string, replacePolicy ReplacePolicyType, scheduledAppContexts []*scheduler.Context) (err error) {

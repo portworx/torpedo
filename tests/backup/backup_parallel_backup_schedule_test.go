@@ -8,7 +8,7 @@ import (
 	storagev1 "k8s.io/api/storage/v1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"math"
-	"math/rand"
+	"strings"
 	"sync"
 	"time"
 
@@ -22,6 +22,7 @@ import (
 	"github.com/pure-px/torpedo/pkg/log"
 	. "github.com/pure-px/torpedo/tests"
 	"golang.org/x/sync/errgroup"
+	"math/rand"
 )
 
 // This testcase verifies if basic backup and Restore with parallel Backup Schedule
@@ -1299,6 +1300,363 @@ var _ = Describe("{ParallelScheduleWithPartialBackup}", Label(TestCaseLabelsMap[
 		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
 		log.FailOnError(err, "Data validations failed")
 
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
+})
+
+// This testcase verify parallel schedule backup when network latency in induced.
+var _ = Describe("{ValidateParallelScheduleWithNetworkLatency}", Label(TestCaseLabelsMap[ValidateParallelScheduleWithNetworkLatency]...), func() {
+
+	var (
+		scheduledAppContexts    []*scheduler.Context
+		sourceClusterUid        string
+		cloudCredName           string
+		cloudCredUID            string
+		backupLocationUID       string
+		backupLocationName      string
+		backupLocationMap       map[string]string
+		labelSelectors          map[string]string
+		providers               []string
+		firstScheduleBackupName string
+		namespaceMapping        map[string]string
+		schedulePolicyName      string
+		schedulePolicyUID       string
+		schedulePolicyInterval  int64
+		destClusterUid          string
+		scheduleName            string
+		backupNames             []string
+		wg                      sync.WaitGroup
+		namespaces              []string
+		thirdScheduleBackupName string
+		appNodesMap             map[string][]node.Node
+		networkErrorDelay       int
+		restoreNsMapping        map[string]map[string]string
+		controlChannel          chan string
+		errorGroup              *errgroup.Group
+		appScaleFactor          float64
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("ValidateParallelScheduleWithNetworkLatency", "Verify parallel schedule backup success when network latency in induced.", nil, 304647, Ak, Q4FY25)
+
+		backupLocationMap = make(map[string]string)
+		namespaceMapping = make(map[string]string)
+		labelSelectors = make(map[string]string)
+		restoreNsMapping = make(map[string]map[string]string)
+		appNodesMap = make(map[string][]node.Node)
+		providers = GetBackupProviders()
+		schedulePolicyInterval = 15
+		networkErrorDelay = 2000
+		numberOfDeployments := float64(1)
+		appScaleFactor = math.Max(float64(Inst().GlobalScaleFactor), numberOfDeployments)
+		log.InfoD("scheduling applications")
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		Inst().AppList = []string{"mysql-backup-large-data"}
+		for i := 0; i < int(appScaleFactor); i++ {
+			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
+			appContexts := ScheduleApplications(taskName)
+			for _, appCtx := range appContexts {
+				appCtx.ReadinessTimeout = 300 * time.Minute
+				scheduledAppContexts = append(scheduledAppContexts, appCtx)
+				namespaces = append(namespaces, appCtx.ScheduleOptions.Namespace)
+				appNodes, _ := Inst().S.GetNodesForApp(appCtx)
+				appNodesMap[appCtx.ScheduleOptions.Namespace] = appNodes
+			}
+		}
+	})
+
+	It("Verify parallel schedule backup success when network latency in induced", func() {
+		defer func() {
+			log.InfoD("switching to default context")
+			err := SetClusterContext("")
+			log.FailOnError(err, "failed to SetClusterContext to default cluster")
+		}()
+
+		Step("Validating applications", func() {
+			log.InfoD("Validating applications")
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+		})
+
+		Step("Setting cluster-wide average network bandwidth to 450MiB/s", func() {
+			err := ThrottleNetworkSpeed(450)
+			dash.VerifyFatal(err, nil, "Setting cluster-wide average network bandwidth to 450MiB/s")
+
+			err = SetDestinationKubeConfig()
+			log.FailOnError(err, "Switching context to destination cluster failed")
+
+			err = ThrottleNetworkSpeed(450)
+			dash.VerifyFatal(err, nil, "Setting cluster-wide average network bandwidth to 450MiB/s")
+
+			defer func() {
+				err = SetSourceKubeConfig()
+				log.FailOnError(err, "Unable to switch context to source cluster [%s]", SourceClusterName)
+			}()
+		})
+
+		Step("Creating backup location and cloud setting", func() {
+			log.InfoD("Creating backup location and cloud setting")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
+				backupLocationName = fmt.Sprintf("%s-%s-bl-%v", provider, getGlobalBucketName(provider), time.Now().Unix())
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = backupLocationName
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, "Creating backup location")
+			}
+		})
+
+		Step("Create schedule policy", func() {
+			log.InfoD("Creating schedule policy")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			schedulePolicyName = fmt.Sprintf("%s-%v", "periodic-schedule-policy", RandomString(5))
+			schedulePolicyUID = uuid.New()
+			err = CreateBackupScheduleIntervalPolicy(5, schedulePolicyInterval, 5, schedulePolicyName, schedulePolicyUID, BackupOrgID, ctx, false, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule policy %s", schedulePolicyName))
+		})
+
+		Step("Registering cluster for backup", func() {
+			log.InfoD("Registering cluster for backup")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+
+			clusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+
+			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+
+			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
+
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
+		})
+
+		Step("Taking first schedule backup of application from source cluster", func() {
+			log.InfoD("Taking first schedule backup of application from source cluster")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			scheduleName = fmt.Sprintf("%s-%s", "autogenerated-schedule", RandomString(4))
+			log.InfoD("creating schedule backup [%s] in source cluster [%s] (%s), organization [%s], in backup location [%s]", scheduleName, SourceClusterName, sourceClusterUid, BackupOrgID, backupLocationName)
+			resp, err := CreateScheduleBackupWithoutCheck(scheduleName, SourceClusterName, sourceClusterUid, backupLocationName, backupLocationUID, namespaces, labelSelectors, BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, ctx, true)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup for schedule [%s] ", scheduleName))
+			firstScheduleBackupName, err = GetFirstScheduleBackupName(ctx, scheduleName, BackupOrgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of first parallel schedule backup [%s]", firstScheduleBackupName))
+			dash.VerifyFatal(resp.BackupSchedule.ParallelBackup, true, "Verifying if parallelBackup var on Backup Schedule is set to True or not")
+			backupNames = append(backupNames, firstScheduleBackupName)
+			err = ValidateLocalSnapshotCompleted(firstScheduleBackupName, BackupOrgID, 1, ctx)
+			dash.VerifyFatal(err, nil, "Checking if first local Snapshots are created or not")
+		})
+
+		Step("Waiting for second schedule backup of application from source cluster when network delay is injected", func() {
+			log.InfoD("Waiting for second schedule backup of application from source cluster when network delay is injected")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, currentNamespace := range namespaces {
+				log.Infof(fmt.Sprintf("Adding a delay of %dms to the applications nodes", networkErrorDelay))
+				err = Inst().N.InjectNetworkErrorWithRebootFallback(appNodesMap[currentNamespace], "delay", "add", 0, networkErrorDelay)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Adding a delay of %dms to nodes", networkErrorDelay))
+			}
+			err = WaitTillScheduleBackupInDesiredState(scheduleName, BackupOrgID, ctx, 2, api.BackupInfo_StatusInfo_InProgress)
+			dash.VerifyFatal(err, nil, "Checking if second backup in desired state")
+			secondScheduleBackupName, err := GetOrdinalScheduleBackupName(ctx, scheduleName, 2, BackupOrgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of second parallel schedule backup [%s] is been created at schedule policy interval [%v]", secondScheduleBackupName, schedulePolicyInterval))
+			backupNames = append(backupNames, secondScheduleBackupName)
+			err = ValidateLocalSnapshotCompleted(secondScheduleBackupName, BackupOrgID, 1, ctx)
+			dash.VerifyFatal(err, nil, "Checking if second local Snapshots are created or not")
+		})
+
+		Step("waiting for the third schedule backup to complete with success state", func() {
+			log.InfoD("waiting for the third schedule backup to complete with success state")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			err = WaitTillScheduleBackupInDesiredState(scheduleName, BackupOrgID, ctx, 3, api.BackupInfo_StatusInfo_InProgress)
+			dash.VerifyFatal(err, nil, "Checking if third backup in desired state")
+			thirdScheduleBackupName, err = GetOrdinalScheduleBackupName(ctx, scheduleName, 3, BackupOrgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of third parallel schedule backup [%s] is been created at schedule policy interval [%v]", thirdScheduleBackupName, schedulePolicyInterval))
+			backupNames = append(backupNames, thirdScheduleBackupName)
+			err = ValidateLocalSnapshotCompleted(thirdScheduleBackupName, BackupOrgID, 1, ctx)
+			dash.VerifyFatal(err, nil, "Checking if third local Snapshots are created or not")
+			err = SuspendBackupSchedule(scheduleName, schedulePolicyName, BackupOrgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Suspend schedule [%s]", scheduleName))
+			backupNames = append(backupNames, thirdScheduleBackupName)
+		})
+
+		Step("check the backup success state for all schedule backups", func() {
+			log.InfoD("check the backup success state for all schedule backups")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, successBackup := range backupNames {
+				err = BackupSuccessCheckWithValidation(ctx, successBackup, scheduledAppContexts, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*10*time.Minute, 30*time.Second)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Checking backup success for [%s]", successBackup))
+			}
+		})
+
+		Step("Restoring the success backup with replace option", func() {
+			log.InfoD("Restoring the  success  backup with replace option")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			backupName := backupNames[rand.Intn(len(backupNames))]
+			for _, appCtx := range scheduledAppContexts {
+				namespaceMapping[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace
+			}
+			restoreName := fmt.Sprintf("%s-%s-%s", "restore-replace", backupName, RandomString(4))
+			log.InfoD("Restoring from the [%s] backup with namespaceMapping [%v]", restoreName, namespaceMapping)
+			err = CreateRestoreWithReplacePolicyWithoutCheck(restoreName, backupName, namespaceMapping, DestinationClusterName, BackupOrgID, ctx, make(map[string]string), 2)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of restore with success backup with replace option [%s]", restoreName))
+			restoreNsMapping[restoreName] = namespaceMapping
+
+		})
+
+		Step("Restoring the success backups with namespace mapping", func() {
+			log.InfoD("Restoring the success backups with namespace mapping")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			backupName := backupNames[rand.Intn(len(backupNames))]
+			namespaceMapping := make(map[string]string)
+			for _, appCtx := range scheduledAppContexts {
+				namespaceMapping[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + RandomString(4)
+			}
+			restoreName := fmt.Sprintf("%s-%s-%s", "restore", backupName, RandomString(4))
+			log.InfoD("Restoring from the [%s] backup with namespaceMapping [%v]", restoreName, namespaceMapping)
+			_, err = CreateRestoreWithoutCheck(restoreName, backupName, namespaceMapping, DestinationClusterName, destClusterUid, BackupOrgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of restore[%s] with namespace mapping[%s]", restoreName, namespaceMapping))
+			restoreNsMapping[restoreName] = namespaceMapping
+		})
+
+		Step("Validating all restores", func() {
+			log.InfoD("Validating all restores")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			var mutex sync.Mutex
+			errors := make([]string, 0)
+			var wg sync.WaitGroup
+			originalClusterConfigPath := CurrentClusterConfigPath
+			if clusterConfigPath, ok := ClusterConfigPathMap[DestinationClusterName]; !ok {
+				err = fmt.Errorf("switching cluster context: couldn't find clusterConfigPath for cluster [%s]", DestinationClusterName)
+				log.FailOnError(err, "Failed switching cluster context to cluster [%s]", DestinationClusterName)
+			} else {
+				log.InfoD("Switching cluster context to cluster [%s]", DestinationClusterName)
+				err = SetClusterContext(clusterConfigPath)
+				if err != nil {
+					log.FailOnError(err, "Failed switching cluster context to cluster [%s]", DestinationClusterName)
+				}
+			}
+			defer func() {
+				log.InfoD("Switching cluster context back to cluster path [%s]", originalClusterConfigPath)
+				err := SetClusterContext(originalClusterConfigPath)
+				if err != nil {
+					log.FailOnError(err, "Failed switching cluster context back to cluster path [%s]", originalClusterConfigPath)
+				}
+			}()
+			for restoreName, namespaceMapping := range restoreNsMapping {
+				wg.Add(1)
+				go func(restoreName string, namespaceMapping map[string]string) {
+					defer wg.Done()
+					log.InfoD("Validating restore [%s] with namespace mapping [%v]", restoreName, namespaceMapping)
+					expectedRestoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContexts[0], namespaceMapping, make(map[string]string), true)
+					if err != nil {
+						mutex.Lock()
+						errors = append(errors, fmt.Sprintf("Failed while context tranforming of restore [%s]. Error - [%s]", restoreName, err.Error()))
+						mutex.Unlock()
+						return
+					}
+					err = RestoreSuccessCheck(restoreName, BackupOrgID, MaxWaitPeriodForRestoreCompletionInMinute*10*time.Minute, 30*time.Second, ctx)
+					if err != nil {
+						mutex.Lock()
+						errors = append(errors, fmt.Sprintf("Failed while checking restore [%s]. Error - [%s]", restoreName, err.Error()))
+						mutex.Unlock()
+						return
+					}
+					err = ValidateRestore(ctx, restoreName, BackupOrgID, []*scheduler.Context{expectedRestoredAppContext}, make([]string, 0))
+					if err != nil {
+						mutex.Lock()
+						errors = append(errors, fmt.Sprintf("Failed while validating restore [%s]. Error - [%s]", restoreName, err.Error()))
+						mutex.Unlock()
+						return
+					}
+				}(restoreName, namespaceMapping)
+			}
+			wg.Wait()
+			dash.VerifyFatal(len(errors), 0, fmt.Sprintf("Validating restores of individual backups -\n%s", strings.Join(errors, "}\n{")))
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		err = ThrottleNetworkSpeed(0)
+		log.FailOnError(err, "Setting cluster-wide average network bandwidth to default value")
+		for _, currentNamespace := range namespaces {
+			log.Infof(fmt.Sprintf("Removing the delay of %dms to the applications nodes", networkErrorDelay))
+			err = Inst().N.InjectNetworkErrorWithRebootFallback(appNodesMap[currentNamespace], "delay", "del", 0, networkErrorDelay)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Removing the delay of %dms to nodes", networkErrorDelay))
+		}
+		err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx, false)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting schedule [%s]", scheduleName))
+		backupNames, err := GetAllBackupsAdmin()
+		dash.VerifySafely(err, nil, "Fetching all backups")
+		for _, bkp := range backupNames {
+			wg.Add(1)
+			go func(bkp string) {
+				defer wg.Done()
+				backupUID, err := Inst().Backup.GetBackupUID(ctx, bkp, BackupOrgID)
+				_, err = DeleteBackup(bkp, backupUID, BackupOrgID, ctx)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup deletion - %s", bkp))
+				err = DeleteBackupAndWait(bkp, ctx)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup deletion wait- %s", bkp))
+			}(bkp)
+		}
+		wg.Wait()
+
+		log.Info("Destroying scheduled apps on source cluster")
+		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
+
+		log.InfoD("switching to destination context")
+		err = SetDestinationKubeConfig()
+		log.FailOnError(err, "failed to switch to context to destination cluster")
+
+		err = ThrottleNetworkSpeed(0)
+		log.FailOnError(err, "Setting cluster-wide average network bandwidth to default value")
+
+		log.InfoD("Destroying restored apps on destination clusters")
+		restoredAppContexts := make([]*scheduler.Context, 0)
+		for _, namespaceMapping := range restoreNsMapping {
+			restoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContexts[0], namespaceMapping, make(map[string]string), true)
+			if err != nil {
+				log.Errorf("TransformAppContextWithMappings: %v", err)
+				continue
+			}
+			restoredAppContexts = append(restoredAppContexts, restoredAppContext)
+		}
+		DestroyApps(restoredAppContexts, opts)
+		err = SetClusterContext("")
+		log.FailOnError(err, "failed to SetClusterContext to default cluster")
+		log.Info("Deleting restored namespaces")
+		for restoreName, _ := range restoreNsMapping {
+			err = DeleteRestore(restoreName, BackupOrgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore [%s]", restoreName))
+		}
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })

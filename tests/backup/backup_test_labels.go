@@ -190,6 +190,7 @@ const (
 	UpgradePxBackupPostInstallJobCheck                                                 TestCaseName = "UpgradePxBackupPostInstallJobCheck"
 	RestartMultipleComponentsWhenParallelBackupScheduleInProgress                      TestCaseName = "RestartMultipleComponentsWhenParallelBackupScheduleInProgress"
 	ParallelScheduleWithPartialBackup                                                  TestCaseName = "ParallelScheduleWithPartialBackup"
+	ValidateParallelScheduleWithNetworkLatency                                         TestCaseName = "ValidateParallelScheduleWithNetworkLatency"
 )
 
 // Test case labels
@@ -377,6 +378,7 @@ const (
 	UpgradePxBackupPostInstallJobCheckLabel                                                 TestCaseLabel = "UpgradePxBackupPostInstallJobCheck"
 	RestartMultipleComponentsWhenParallelBackupScheduleInProgressLabel                      TestCaseLabel = "RestartMultipleComponentsWhenParallelBackupScheduleInProgress"
 	ParallelScheduleWithPartialBackupLabel                                                  TestCaseLabel = "ParallelScheduleWithPartialBackup"
+	ValidateParallelScheduleWithNetworkLatencyLabel                                         TestCaseLabel = "ValidateParallelScheduleWithNetworkLatency"
 )
 
 // Common Labels
@@ -713,4 +715,5 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	UpgradePxBackupPostInstallJobCheck:                                     {UpgradePxBackupPostInstallJobCheckLabel, FunctionalTest, PxBackupLabel, P1, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
 	RestartMultipleComponentsWhenParallelBackupScheduleInProgress:          {RestartMultipleComponentsWhenParallelBackupScheduleInProgressLabel, SystemTest, PxBackupLabel},
 	ParallelScheduleWithPartialBackup:                                      {ParallelScheduleWithPartialBackupLabel, SystemTest, PxBackupLabel},
+	ValidateParallelScheduleWithNetworkLatency:                             {ValidateParallelScheduleWithNetworkLatencyLabel, SystemTest, PxBackupLabel},
 }
