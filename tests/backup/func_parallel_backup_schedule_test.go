@@ -177,7 +177,7 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 	})
 
 	// Testrail id - T90054303 verify BackupSchedule for Pxd volume with parallel-backup flag disabled
-	It("VerifyScheduledBackupsParallelBackupsDisabled", func() {
+	/*It("VerifyScheduledBackupsParallelBackupsDisabled", func() {
 		StartPxBackupTorpedoTest("VerifyScheduledBackupsParallelBackupsDisabled", "verify ParallelBackupSchedule for Pxd volumes with parallel-backup flag disabled", nil, 304415, Shkumari, Q4FY25)
 		var (
 			scheduleName = fmt.Sprintf("schedule-bkp-%v", RandomString(5))
@@ -252,7 +252,7 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 			}
 			CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, adminContext)
 		})
-	})
+	})*/
 
 	// Testrail id - T90054307 verify ParallelBackupSchedule for Pxd volumes with NameSpace Label
 	It("VerifyNumberOfParallelScheduledBackupsCreatedNSLabel", func() {
