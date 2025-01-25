@@ -1,0 +1,16 @@
+persistentStorage:
+  enabled: true
+  storageClassName: "px-csi-db"
+pxbackup:
+  enabled: true
+images:
+  pullSecrets: []
+  pullPolicy: Always
+  pxBackupImage:
+    registry: pure-artifactory.dev.purestorage.com/px-docker-remote
+    repo: portworx
+    imageName: px-backup-base
+  mongodbImage:
+    registry: pure-artifactory.dev.purestorage.com/px-docker-remote
+    repo: portworx
+    imageName: mongodb

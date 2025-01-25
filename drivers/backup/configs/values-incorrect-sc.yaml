@@ -1,6 +1,6 @@
 persistentStorage:
   enabled: true
-  storageClassName: "px-csi-db"
+  storageClassName: "dummy-sc-for-test"
 pxbackup:
   enabled: true
 images:

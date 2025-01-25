@@ -191,6 +191,9 @@ const (
 	RestartMultipleComponentsWhenParallelBackupScheduleInProgress                      TestCaseName = "RestartMultipleComponentsWhenParallelBackupScheduleInProgress"
 	ParallelScheduleWithPartialBackup                                                  TestCaseName = "ParallelScheduleWithPartialBackup"
 	ValidateParallelScheduleWithNetworkLatency                                         TestCaseName = "ValidateParallelScheduleWithNetworkLatency"
+	InstallPxBackupStorageClassAndImagesCheck                                          TestCaseName = "InstallPxBackupStorageClassAndImagesCheck"
+	InstallPxBackupHelmRollbackCheck                                                   TestCaseName = "InstallPxBackupHelmRollbackCheck"
+	UpgradePxBackupStorageClassAndImagesCheck                                          TestCaseName = "UpgradePxBackupStorageClassAndImagesCheck"
 )
 
 // Test case labels
@@ -379,6 +382,9 @@ const (
 	RestartMultipleComponentsWhenParallelBackupScheduleInProgressLabel                      TestCaseLabel = "RestartMultipleComponentsWhenParallelBackupScheduleInProgress"
 	ParallelScheduleWithPartialBackupLabel                                                  TestCaseLabel = "ParallelScheduleWithPartialBackup"
 	ValidateParallelScheduleWithNetworkLatencyLabel                                         TestCaseLabel = "ValidateParallelScheduleWithNetworkLatency"
+	InstallPxBackupStorageClassAndImagesCheckLabel                                          TestCaseLabel = "InstallPxBackupStorageClassAndImagesCheck"
+	InstallPxBackupHelmRollbackCheckLabel                                                   TestCaseLabel = "InstallPxBackupHelmRollbackCheck"
+	UpgradePxBackupStorageClassAndImagesCheckLabel                                          TestCaseLabel = "UpgradePxBackupStorageClassAndImagesCheck"
 )
 
 // Common Labels
@@ -716,4 +722,7 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	RestartMultipleComponentsWhenParallelBackupScheduleInProgress:          {RestartMultipleComponentsWhenParallelBackupScheduleInProgressLabel, SystemTest, PxBackupLabel},
 	ParallelScheduleWithPartialBackup:                                      {ParallelScheduleWithPartialBackupLabel, SystemTest, PxBackupLabel},
 	ValidateParallelScheduleWithNetworkLatency:                             {ValidateParallelScheduleWithNetworkLatencyLabel, SystemTest, PxBackupLabel},
+	InstallPxBackupStorageClassAndImagesCheck:                              {InstallPxBackupStorageClassAndImagesCheckLabel, FunctionalTest, PxBackupLabel, P0, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
+	InstallPxBackupHelmRollbackCheck:                                       {InstallPxBackupHelmRollbackCheckLabel, FunctionalTest, PxBackupLabel, P0, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
+	UpgradePxBackupStorageClassAndImagesCheck:                              {UpgradePxBackupStorageClassAndImagesCheckLabel, FunctionalTest, PxBackupLabel, P0, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
 }

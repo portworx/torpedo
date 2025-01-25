@@ -13022,12 +13022,12 @@ func InstallPxBackup(version, branch, namespace string, vals map[string]interfac
 	}
 
 	// Skip installation if the release already exists and is deployed
-	exists, err := isReleaseDeployed(cfg, pxCentralReleaseName)
+	exists, err := isReleaseDeployed(cfg, PxCentralReleaseName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check release status: %w", err)
 	}
 	if exists {
-		log.InfoD("Release %s already exists and is deployed. Skipping installation.", pxCentralReleaseName)
+		log.InfoD("Release %s already exists and is deployed. Skipping installation.", PxCentralReleaseName)
 		return nil, nil
 	}
 
@@ -13099,6 +13099,7 @@ func isReleaseDeployed(cfg *action.Configuration, releaseName string) (bool, err
 	list := action.NewList(cfg)
 	list.AllNamespaces = true
 	list.SetStateMask()
+	list.All = true
 
 	releases, err := list.Run()
 	if err != nil {
@@ -13106,7 +13107,7 @@ func isReleaseDeployed(cfg *action.Configuration, releaseName string) (bool, err
 	}
 
 	for _, r := range releases {
-		if r.Name == releaseName && r.Info != nil && r.Info.Status == "deployed" {
+		if r.Name == releaseName && r.Info != nil && (r.Info.Status == "deployed" || r.Info.Status == "failed") {
 			return true, nil
 		}
 	}
@@ -13125,7 +13126,7 @@ func installPxBackupChart(
 	)
 
 	install := action.NewInstall(cfg)
-	install.ReleaseName = pxCentralReleaseName
+	install.ReleaseName = PxCentralReleaseName
 	install.Namespace = namespace
 	install.CreateNamespace = true
 	install.Version = version
@@ -13177,7 +13178,7 @@ func installPxBackupChart(
 // waitForPostInstallHookJob polls until the post-install hook job has succeeded or times out.
 func waitForPostInstallHookJob(namespace string) error {
 	// Retry settings can be adjusted as needed
-	const timeout = 10 * time.Minute
+	const timeout = 20 * time.Minute
 	const interval = 30 * time.Second
 
 	check := func() (interface{}, bool, error) {
@@ -13217,14 +13218,14 @@ func HelmUpgradePxBackup(targetVersion, helmBranchVersion, namespace string, cus
 		return nil, fmt.Errorf("failed to add/update Portworx repository: %w", err)
 	}
 	// Verify installation of the release already exists and is deployed
-	exists, err := isReleaseDeployed(cfg, pxCentralReleaseName)
+	exists, err := isReleaseDeployed(cfg, PxCentralReleaseName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check release status: %w", err)
 	}
 	if exists {
-		log.InfoD("Release %s exists and is deployed in namespace %s. Proceeding with upgrade.", pxCentralReleaseName, namespace)
+		log.InfoD("Release %s exists and is deployed in namespace %s. Proceeding with upgrade.", PxCentralReleaseName, namespace)
 	} else {
-		return nil, fmt.Errorf("release %s does not exist in namespace %s or is not deployed. Cannot upgrade.", pxCentralReleaseName, namespace)
+		return nil, fmt.Errorf("release %s does not exist in namespace %s or is not deployed. Cannot upgrade.", PxCentralReleaseName, namespace)
 	}
 
 	// Upgrade the Helm chart
@@ -13283,7 +13284,7 @@ func UpgradePxBackupChart(cfg *action.Configuration, customValues map[string]int
 	log.Infof("Default Values for helm upgrade: %v", defaultValues)
 
 	// Retrieve user-supplied values from the current release
-	userValues, err := GetHelmReleaseValues(namespace, pxCentralReleaseName, false)
+	userValues, err := GetHelmReleaseValues(namespace, PxCentralReleaseName, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch user-supplied values: %w", err)
 	}
@@ -13314,7 +13315,7 @@ func UpgradePxBackupChart(cfg *action.Configuration, customValues map[string]int
 	upgradeStart := time.Now()
 	log.Infof("Values used for helm upgrade: %v", defaultValues)
 	log.Infof("Chart URL used for helm upgrade: %s", chartURL)
-	rel, err := upgrade.Run(pxCentralReleaseName, chart, defaultValues)
+	rel, err := upgrade.Run(PxCentralReleaseName, chart, defaultValues)
 	if err != nil {
 		return nil, fmt.Errorf("failed to upgrade chart: %w", err)
 	}
@@ -13526,7 +13527,7 @@ func uninstallPxBackupRelease(cfg *action.Configuration) error {
 
 	for _, rel := range releases {
 		// Check if this is the px-backup release and if it’s in a “deployed” state
-		if rel.Name == pxCentralReleaseName &&
+		if rel.Name == PxCentralReleaseName &&
 			rel.Info != nil &&
 			rel.Info.Status.String() == release.StatusDeployed.String() {
 			log.InfoD("Release %s found and is deployed. Uninstalling...", rel.Name)
@@ -13534,7 +13535,7 @@ func uninstallPxBackupRelease(cfg *action.Configuration) error {
 			uninstall.Wait = true
 			uninstall.Timeout = 10 * time.Minute
 
-			resp, err := uninstall.Run(pxCentralReleaseName)
+			resp, err := uninstall.Run(PxCentralReleaseName)
 			if err != nil {
 				return fmt.Errorf("failed to uninstall release: %w", err)
 			}
@@ -13543,7 +13544,7 @@ func uninstallPxBackupRelease(cfg *action.Configuration) error {
 		}
 	}
 
-	log.Infof("Release %s does not exist or is not deployed. Skipping Helm delete.", pxCentralReleaseName)
+	log.Infof("Release %s does not exist or is not deployed. Skipping Helm delete.", PxCentralReleaseName)
 	return nil
 }
 
@@ -13568,6 +13569,32 @@ func deleteIfStalePVCFound() error {
 	}
 
 	log.Infof("No stale PX Backup PVCs found. Nothing to delete.")
+	return nil
+}
+
+// RollbackPxBackup does a helm rollback for px-central release
+func RollbackPxBackup() error {
+	namespace, err := backup.GetPxBackupNamespace()
+	if err != nil {
+		return err
+	}
+	cfg, err := initHelmActionConfig(namespace)
+	if err != nil {
+		return err
+	}
+
+	// Create the rollback action
+	rollback := action.NewRollback(cfg)
+
+	// (Optional) Configure rollback parameters
+	rollback.Version = 1
+	rollback.Timeout = 1 * time.Minute
+
+	// Perform the rollback
+	if err = rollback.Run(PxCentralReleaseName); err != nil {
+		return fmt.Errorf("failed to roll back release '%s': %w", PxCentralReleaseName, err)
+	}
+
 	return nil
 }
 

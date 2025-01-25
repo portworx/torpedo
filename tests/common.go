@@ -314,7 +314,7 @@ const (
 	pxbackupDeploymentNamespace        = "px-backup"
 	pxbackupMongodbDeploymentName      = "pxc-backup-mongodb"
 	pxbackupMongodbDeploymentNamespace = "px-backup"
-	pxCentralReleaseName               = "px-central"
+	PxCentralReleaseName               = "px-central"
 	defaultnamespace                   = "default"
 
 	milestoneFlag               = "testrail-milestone"
