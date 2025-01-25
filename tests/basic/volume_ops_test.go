@@ -2802,7 +2802,9 @@ var _ = Describe("{CSIOnlyTestCloudRestoreAfterBucketDelete}", func() {
 				break
 			}
 			log.Infof("Got Bucket Name [%s]", bucketName)
-			DeleteCloudSnapBucket(bucketName)
+			err = DeleteCloudSnapBucket(bucketName)
+			log.FailOnError(err, fmt.Sprintf("Could not delete bucket with name %s", bucketName))
+
 		})
 
 		stepLog = "Restore cloud-snap"

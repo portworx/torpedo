@@ -13058,17 +13058,27 @@ func GetCloudsnapBucketName(contexts []*scheduler.Context) (string, error) {
 	return bucketName, nil
 }
 
-func DeleteCloudSnapBucket(bucketName string) {
+func DeleteCloudSnapBucket(bucketName string) error {
 	// TODO: Update Aetos with bucket details
 	if bucketName != "" {
 		id, secret, endpoint, s3Region, _, err := getCreateCredParams()
 		if err != nil {
 			log.Errorf("failed to get create cred params, Cause: %v", err)
-			return
+			return err
 		}
 		var sess *session.Session
-		if strings.Contains(endpoint, "minio") {
-
+		if strings.Contains(endpoint, "amazonaws") {
+			sess, err = session.NewSessionWithOptions(session.Options{
+				Config: aws.Config{
+					Region:      aws.String(s3Region),
+					Credentials: credentials.NewStaticCredentials(id, secret, ""),
+				},
+			})
+			if err != nil {
+				log.Errorf("failed to initialize new session using endpoint [%s], Cause: %v", endpoint, err)
+				return err
+			}
+		} else {
 			sess, err = session.NewSessionWithOptions(session.Options{
 				Config: aws.Config{
 					Endpoint:         aws.String(endpoint),
@@ -13079,34 +13089,23 @@ func DeleteCloudSnapBucket(bucketName string) {
 			})
 			if err != nil {
 				log.Errorf("failed to initialize new session using endpoint [%s], Cause: %v", endpoint, err)
-				return
-			}
-		}
-
-		if strings.Contains(endpoint, "amazonaws") {
-			sess, err = session.NewSessionWithOptions(session.Options{
-				Config: aws.Config{
-					Region:      aws.String(s3Region),
-					Credentials: credentials.NewStaticCredentials(id, secret, ""),
-				},
-			})
-			if err != nil {
-				log.Errorf("failed to initialize new session using endpoint [%s], Cause: %v", endpoint, err)
-				return
+				return err
 			}
 		}
 
 		if sess == nil {
 			log.Errorf("failed to initialize new session using endpoint [%s], Cause: %v", endpoint, err)
-			return
+			return err
 		}
 
 		client := s3.New(sess)
 		err = deleteAndValidateBucketDeletion(client, bucketName)
 		if err != nil {
 			log.Errorf("failed to delete bucket [%s] [id: %s, secret: %s, endpoint: %s, region: %s], Cause: %v", bucketName, id, secret, endpoint, s3Region, err)
+			return err
 		}
 	}
+	return nil
 }
 
 func deleteAndValidateBucketDeletion(client *s3.S3, bucketName string) error {
