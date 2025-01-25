@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/Masterminds/semver/v3"
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
@@ -931,6 +932,141 @@ var _ = Describe("{UpgradePxBackupPortInfoCheck}", Label(TestCaseLabelsMap[Upgra
 		})
 	})
 
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(make([]*scheduler.Context, 0))
+		log.Infof("No cleanup required for this testcase")
+	})
+})
+
+// Test case to check if a warning is logged in a config map if the kubernetes version of the
+// cluster is less than the minimum required version during installation
+var _ = Describe("{InstallPxBackupKubernetesVersionCheck}", Label(TestCaseLabelsMap[InstallPxBackupKubernetesVersionCheck]...), func() {
+	var (
+		namespace     string
+		minK8sVersion string
+	)
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("InstallPxBackupKubernetesVersionCheck",
+			"Installing Px Backup and checking if a warning is logged in a config map if the kubernetes version is less than the minimum required version", nil, 304872, SS, Q4FY25)
+		log.InfoD("Uninstalling Px-Backup...")
+		err := UninstallPxBackup()
+		log.FailOnError(err, "Failed to delete px-backup")
+		namespace = "pxb-test"
+		minK8sVersion = "1.30.0"
+	})
+	It("Should check if a warning is logged in a config map if the kubernetes version is less than the minimum required version", func() {
+
+		Step("Install Px-Backup and validate the warning message", func() {
+			log.InfoD("Install Px-Backup and validate the warning message")
+			valuesMap, err := ParseValuesFromFile("values1")
+			log.FailOnError(err, "Failed to parse values file")
+			_, err = InstallPxBackup(LatestPxBackupVersion, DefaultPxBackupHelmBranch, namespace, valuesMap)
+			log.FailOnError(err, "Failed to install px-backup")
+		})
+
+		Step("Check if the Px-Backup report contains the warning message if minimum kubernetes version criteria is not met", func() {
+			log.InfoD("Check if the Px-Backup report contains the warning message if minimum kubernetes version criteria is not met")
+			searchString := "Kubernetes version is less than 1.30.0. Please consider upgrading."
+			configMap, err := core.Instance().GetConfigMap("px-central-report", namespace)
+			log.FailOnError(err, "Failed to get configmap px-central-report")
+			// Check for keys starting with "report" in the ConfigMap data
+			var reportContent string
+			found := false
+			for key, value := range configMap.Data {
+				if strings.HasPrefix(key, "report") {
+					log.InfoD("Found report key: %s", key)
+					reportContent = value
+					found = true
+					break
+				}
+			}
+			// Fail the test if no report key is found
+			dash.VerifyFatal(found, true, "Found the report key in the configmap")
+			// Check if the expected string is present in the report content
+			present := strings.Contains(reportContent, searchString)
+			log.InfoD("Report Content: %s", reportContent)
+			version, err := GetK8SVersion()
+			log.FailOnError(err, "Failed to get k8s version")
+			// Convert version to semver
+			minK8sVersionSemVer := semver.MustParse(minK8sVersion)
+			actualVersionSemVer := semver.MustParse(version)
+			if actualVersionSemVer.LessThan(minK8sVersionSemVer) {
+				dash.VerifyFatal(present, true, "Found the expected string in the report")
+			} else {
+				dash.VerifyFatal(present, false, "Did not find the expected string in the report")
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(make([]*scheduler.Context, 0))
+		log.Infof("No cleanup required for this testcase")
+	})
+})
+
+// Test case to check if a warning is logged in a config map if the kubernetes version of the
+// cluster is less than the minimum required version during upgrade
+var _ = Describe("{UpgradePxBackupKubernetesVersionCheck}", Label(TestCaseLabelsMap[UpgradePxBackupKubernetesVersionCheck]...), func() {
+	var (
+		namespace     string
+		minK8sVersion string
+	)
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("UpgradePxBackupKubernetesVersionCheck",
+			"Upgrading Px Backup and checking if a warning is logged in a config map if the kubernetes version is less than the minimum required version", nil, 304873, SS, Q4FY25)
+		log.InfoD("Uninstalling Px-Backup...")
+		err := UninstallPxBackup()
+		log.FailOnError(err, "Failed to delete px-backup")
+		namespace = "pxb-test"
+		minK8sVersion = "1.30.0"
+		log.InfoD("Installing Px-Backup...")
+		valuesMap, err := ParseValuesFromFile("values1")
+		log.FailOnError(err, "Failed to parse values file")
+		_, err = InstallPxBackup("2.7.0", "master", namespace, valuesMap)
+		log.FailOnError(err, "Failed to install px-backup")
+	})
+	It("Should check if a warning is logged in a config map if the kubernetes version is less than the minimum required version", func() {
+
+		Step("Upgrade Px-Backup and validate the warning message", func() {
+			log.InfoD("Upgrade Px-Backup and validate the warning message")
+			valuesMap, err := ParseValuesFromFile("values1")
+			log.FailOnError(err, "Failed to parse values file")
+			_, err = HelmUpgradePxBackup(LatestPxBackupVersion, DefaultPxBackupHelmBranch, namespace, valuesMap)
+			log.FailOnError(err, "Failed to upgrade px-backup")
+		})
+
+		Step("Check if the Px-Backup report contains the warning message if minimum kubernetes version criteria is not met", func() {
+			log.InfoD("Check if the Px-Backup report contains the warning message if minimum kubernetes version criteria is not met")
+			searchString := "Kubernetes version is less than 1.30.0. Please consider upgrading."
+			configMap, err := core.Instance().GetConfigMap("px-central-report", namespace)
+			log.FailOnError(err, "Failed to get configmap px-central-report")
+			// Check for keys starting with "report" in the ConfigMap data
+			var reportContent string
+			found := false
+			for key, value := range configMap.Data {
+				if strings.HasPrefix(key, "report") {
+					log.InfoD("Found report key: %s", key)
+					reportContent = value
+					found = true
+					break
+				}
+			}
+			// Fail the test if no report key is found
+			dash.VerifyFatal(found, true, "Found the report key in the configmap")
+			// Check if the expected string is present in the report content
+			present := strings.Contains(reportContent, searchString)
+			log.InfoD("Report Content: %s", reportContent)
+			version, err := GetK8SVersion()
+			log.FailOnError(err, "Failed to get k8s version")
+			// Convert version to semver
+			minK8sVersionSemVer := semver.MustParse(minK8sVersion)
+			actualVersionSemVer := semver.MustParse(version)
+			if actualVersionSemVer.LessThan(minK8sVersionSemVer) {
+				dash.VerifyFatal(present, true, "Found the expected string in the report")
+			} else {
+				dash.VerifyFatal(present, false, "Did not find the expected string in the report")
+			}
+		})
+	})
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(make([]*scheduler.Context, 0))
 		log.Infof("No cleanup required for this testcase")

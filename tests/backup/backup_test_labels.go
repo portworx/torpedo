@@ -194,6 +194,8 @@ const (
 	InstallPxBackupStorageClassAndImagesCheck                                          TestCaseName = "InstallPxBackupStorageClassAndImagesCheck"
 	InstallPxBackupHelmRollbackCheck                                                   TestCaseName = "InstallPxBackupHelmRollbackCheck"
 	UpgradePxBackupStorageClassAndImagesCheck                                          TestCaseName = "UpgradePxBackupStorageClassAndImagesCheck"
+	InstallPxBackupKubernetesVersionCheck                                              TestCaseName = "InstallPxBackupKubernetesVersionCheck"
+	UpgradePxBackupKubernetesVersionCheck                                              TestCaseName = "UpgradePxBackupKubernetesVersionCheck"
 )
 
 // Test case labels
@@ -385,6 +387,8 @@ const (
 	InstallPxBackupStorageClassAndImagesCheckLabel                                          TestCaseLabel = "InstallPxBackupStorageClassAndImagesCheck"
 	InstallPxBackupHelmRollbackCheckLabel                                                   TestCaseLabel = "InstallPxBackupHelmRollbackCheck"
 	UpgradePxBackupStorageClassAndImagesCheckLabel                                          TestCaseLabel = "UpgradePxBackupStorageClassAndImagesCheck"
+	InstallPxBackupKubernetesVersionCheckLabel                                              TestCaseLabel = "InstallPxBackupKubernetesVersionCheck"
+	UpgradePxBackupKubernetesVersionCheckLabel                                              TestCaseLabel = "UpgradePxBackupKubernetesVersionCheck"
 )
 
 // Common Labels
@@ -725,4 +729,6 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	InstallPxBackupStorageClassAndImagesCheck:                              {InstallPxBackupStorageClassAndImagesCheckLabel, FunctionalTest, PxBackupLabel, P0, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
 	InstallPxBackupHelmRollbackCheck:                                       {InstallPxBackupHelmRollbackCheckLabel, FunctionalTest, PxBackupLabel, P0, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
 	UpgradePxBackupStorageClassAndImagesCheck:                              {UpgradePxBackupStorageClassAndImagesCheckLabel, FunctionalTest, PxBackupLabel, P0, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
+	InstallPxBackupKubernetesVersionCheck:                                  {InstallPxBackupKubernetesVersionCheckLabel, FunctionalTest, PxBackupLabel, P2, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
+	UpgradePxBackupKubernetesVersionCheck:                                  {UpgradePxBackupKubernetesVersionCheckLabel, FunctionalTest, PxBackupLabel, P2, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
 }

@@ -13108,6 +13108,7 @@ func isReleaseDeployed(cfg *action.Configuration, releaseName string) (bool, err
 
 	for _, r := range releases {
 		if r.Name == releaseName && r.Info != nil && (r.Info.Status == "deployed" || r.Info.Status == "failed") {
+			log.Infof("Release %s found and is deployed in namespace %s", releaseName, r.Namespace)
 			return true, nil
 		}
 	}
@@ -13530,7 +13531,7 @@ func uninstallPxBackupRelease(cfg *action.Configuration) error {
 		if rel.Name == PxCentralReleaseName &&
 			rel.Info != nil &&
 			rel.Info.Status.String() == release.StatusDeployed.String() {
-			log.InfoD("Release %s found and is deployed. Uninstalling...", rel.Name)
+			log.InfoD("Release %s found and is deployed in namespace %s. Uninstalling...", rel.Name, rel.Namespace)
 			uninstall := action.NewUninstall(cfg)
 			uninstall.Wait = true
 			uninstall.Timeout = 10 * time.Minute
@@ -14319,4 +14320,25 @@ func ValidateLocalSnapshotCompletedForSuccessfulVolumes(backupName string, orgID
 		}
 	}
 	return nil
+}
+
+// IsPxBackupRunning checks if px-backup is installed and healthy in the cluster
+func IsPxBackupRunning() (bool, error) {
+	// Check for px-backup namespace, if not present return false
+	pxBackupNamespace, err := backup.GetPxBackupNamespace()
+	if err != nil {
+		// Check if error string contains "can't find PxBackup service"
+		if strings.Contains(err.Error(), "can't find PxBackup service") {
+			return false, nil
+		}
+		return false, err
+	}
+	log.Infof("px-backup namespace [%s] found", pxBackupNamespace)
+	// Check px-backup version
+	pxBackupVersion, err := GetPxBackupVersionString()
+	if err != nil {
+		return false, nil
+	}
+	log.Infof("px-backup version [%s] found", pxBackupVersion)
+	return true, nil
 }

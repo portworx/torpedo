@@ -374,10 +374,13 @@ var _ = AfterSuite(func() {
 	defer EndTorpedoTest()
 
 	cleanup := TriggerCleanup()
-	ctx, err := backup.GetAdminCtxFromSecret()
-	log.FailOnError(err, "Fetching px-central-admin ctx")
 	log.InfoD(fmt.Sprintf("Cleanup state is set to %t", cleanup))
-	if cleanup {
+	running, err := IsPxBackupRunning()
+	log.FailOnError(err, "Failed to check if px-backup is running")
+	log.Infof("Is Px-Backup running? %t", running)
+	if cleanup && running {
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
 
 		//Cleanup policy
 		s3EncryptionPolicy := os.Getenv("S3_ENCRYPTION_POLICY")
