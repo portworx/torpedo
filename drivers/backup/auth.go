@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/pure-px/sched-ops/k8s/batch"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -236,6 +237,24 @@ func getKeycloakEndPoint(admin bool) (string, error) {
 
 }
 
+var PxBackupPreSetupJobs = []string{
+	"pre-upgrade-check",
+	"pre-install-check",
+	"preflight-check",
+}
+
+var PxBackupPVCs = []string{
+	"theme-pxcentral",
+	"pvc-quick-maintenance-repo",
+	"pvc-full-maintenance-repo",
+	"pvc-nfs",
+	"pre-upgrade-data-pvc",
+	"alertmanager-px-backup-alertmanager-db-alertmanager-px-backup-alertmanager",
+	"prometheus-px-backup-dashboard-prometheus-db-prometheus-px-backup-dashboard-prometheus",
+	"pxc-mongodb-data-pxc-backup-mongodb",
+	"pxcentral-keycloak-data",
+}
+
 // GetPxBackupNamespace returns namespace of px-backup deployment.
 func GetPxBackupNamespace() (string, error) {
 	allServices, err := k8sCore.ListServices("", metav1.ListOptions{})
@@ -246,6 +265,27 @@ func GetPxBackupNamespace() (string, error) {
 		if svc.Name == pxbServiceName {
 			return svc.Namespace, nil
 		}
+	}
+	allJobs, err := batch.Instance().ListAllJobs("", metav1.ListOptions{})
+	for _, job := range PxBackupPreSetupJobs {
+		for _, j := range allJobs.Items {
+			if j.Name == job {
+				return j.Namespace, nil
+			}
+		}
+	}
+	pvcs, err := core.Instance().GetPersistentVolumeClaims("", nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to list PVCs in the cluster: %v", err)
+	}
+
+	for _, pvc := range pvcs.Items {
+		for _, p := range PxBackupPVCs {
+			if pvc.Name == p {
+				return pvc.Namespace, nil
+			}
+		}
+
 	}
 	return "", fmt.Errorf("can't find PxBackup service [%s] from list of services", pxbServiceName)
 }

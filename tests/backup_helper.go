@@ -13477,13 +13477,15 @@ func convertValue(v interface{}) interface{} {
 func UninstallPxBackup() error {
 	// 1. Early check to see if we can find a valid PX Backup namespace
 	namespace, err := backup.GetPxBackupNamespace()
+	log.Infof("Px-Backup namespace - %s", namespace)
 	if err != nil {
-		// If the error says "can't find PxBackup service", skip Helm actions
+		// If the error says "can't find PxBackup namespace", skip Helm actions
 		if strings.Contains(err.Error(), "can't find PxBackup service") {
-			log.Infof("PX Backup service not found. Checking for any stale PX Backup-related PVCs...")
-			return deleteIfStalePVCFound()
+			log.Infof("Px Backup namespace not found.")
+			return nil
+		} else {
+			return err
 		}
-		return err
 	}
 
 	// 2. Initialize Helm configuration
@@ -13492,26 +13494,33 @@ func UninstallPxBackup() error {
 		return err
 	}
 
-	// 3. Add/Update Helm repos
-	settings := cli.New()
-	if err := addAndUpdateRepo(settings); err != nil {
-		return fmt.Errorf("failed to add/update repo: %w", err)
+	releaseDeployed, err := isReleaseDeployed(cfg, PxCentralReleaseName)
+	if err != nil {
+		return fmt.Errorf("failed to check release status: %w", err)
 	}
 
-	// Terminating the backup deletion monitoring go routine because px-backup will be unreachable
-	// This is being done because the backup enumerate call is taking a long time to timeout when the backup server is unreachable
-	if IsBackupDeleteCheckAlive {
-		DeleteDoneChannel <- struct{}{}
-	}
+	if releaseDeployed {
+		// 3. Add/Update Helm repos
+		settings := cli.New()
+		if err := addAndUpdateRepo(settings); err != nil {
+			return fmt.Errorf("failed to add/update repo: %w", err)
+		}
 
-	// 4. Uninstall px-backup release if it is deployed
-	if err := uninstallPxBackupRelease(cfg); err != nil {
-		return err
-	}
+		// Terminating the backup deletion monitoring go routine because px-backup will be unreachable
+		// This is being done because the backup enumerate call is taking a long time to timeout when the backup server is unreachable
+		if IsBackupDeleteCheckAlive {
+			DeleteDoneChannel <- struct{}{}
+		}
 
-	// 5. Delete the PX Backup namespace
-	if err := DeleteAppNamespace(namespace); err != nil {
-		return fmt.Errorf("failed to delete namespace %s: %v", namespace, err)
+		// 4. Uninstall px-backup release if it is deployed
+		if err := uninstallPxBackupRelease(cfg); err != nil {
+			return err
+		}
+
+		// 5. Delete the PX Backup namespace
+		if err := DeleteAppNamespace(namespace); err != nil {
+			return fmt.Errorf("failed to delete namespace %s: %v", namespace, err)
+		}
 	}
 	return nil
 }
@@ -13561,9 +13570,9 @@ func deleteIfStalePVCFound() error {
 	for _, pvc := range pvcs.Items {
 		for _, p := range PxBackupPVCs {
 			if pvc.Name == p {
-				log.Infof("Found stale PVC %s in namespace %s, deleting namespace...", pvc.Name, pvc.Namespace)
-				if err := DeleteAppNamespace(pvc.Namespace); err != nil {
-					return fmt.Errorf("failed to delete namespace %s: %v", pvc.Namespace, err)
+				log.Infof("Found stale PVC %s in namespace %s, deleting PVC...", pvc.Name, pvc.Namespace)
+				if err = k8sCore.DeletePersistentVolumeClaim(pvc.Name, pvc.Namespace); err != nil {
+					return fmt.Errorf("failed to delete pvc %s in namespace %s: %v", pvc.Name, pvc.Namespace, err)
 				}
 				return nil
 			}
@@ -14432,24 +14441,23 @@ func ValidateNonJobPodsReady(namespace string) error {
 
 // WaitForPodsReady waits for all pods in the namespace to be in ready state
 func WaitForPodsReady(namespace string, timeout time.Duration, retryInterval time.Duration) error {
-    log.Infof("Waiting for all pods in namespace %s to be in ready state", namespace)
+	log.Infof("Waiting for all pods in namespace %s to be in ready state", namespace)
 
-    waitForPodsReady := func() (interface{}, bool, error) {
-        err := ValidateNonJobPodsReady(namespace)
-        if err != nil {
-            log.Infof("Pods are not in ready state, waiting for them to become ready")
-            return nil, false, nil // Retry as pods are still not ready
-        }
-        log.Infof("All pods are in ready state as expected")
-        return nil, true, nil // Pods are ready, exit the wait loop
-    }
+	waitForPodsReady := func() (interface{}, bool, error) {
+		err := ValidateNonJobPodsReady(namespace)
+		if err != nil {
+			log.Infof("Pods are not in ready state, waiting for them to become ready")
+			return nil, false, nil // Retry as pods are still not ready
+		}
+		log.Infof("All pods are in ready state as expected")
+		return nil, true, nil // Pods are ready, exit the wait loop
+	}
 
-    // Use retry with timeout
-    _, err := task.DoRetryWithTimeout(waitForPodsReady, timeout, retryInterval)
-    if err != nil {
-        log.FailOnError(err, "Timeout occurred while waiting for pods to become ready")
-        return fmt.Errorf("pods did not transition to ready state within %v", timeout)
-    }
-    return nil
+	// Use retry with timeout
+	_, err := task.DoRetryWithTimeout(waitForPodsReady, timeout, retryInterval)
+	if err != nil {
+		log.FailOnError(err, "Timeout occurred while waiting for pods to become ready")
+		return fmt.Errorf("pods did not transition to ready state within %v", timeout)
+	}
+	return nil
 }
-

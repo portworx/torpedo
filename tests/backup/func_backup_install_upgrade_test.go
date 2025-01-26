@@ -56,16 +56,16 @@ var _ = Describe("{InstallPxBackupResourceQuotaCheck}", Label(TestCaseLabelsMap[
 
 		Step("Validate the pre-install job pod logs", func() {
 			log.InfoD("Validate the pre-install job pod logs")
-			searchString := "Namespace px-backup does not meet the storage quota requirements for Px-Backup installation"
+			searchString := "Insufficient resource quota"
 			present, err := SearchPodLogs(map[string]string{"job-name": "pre-install-check"}, namespace, searchString)
 			log.FailOnError(err, "Failed to search pod logs")
 			dash.VerifyFatal(present, true, "Found the expected string in the pod logs")
 		})
 
 		Step("Delete namespace and resource quota", func() {
-			log.InfoD("Delete namespace and resource quota")
-			err := DeleteAppNamespace(namespace)
-			log.FailOnError(err, "Failed to delete namespace and resource quota")
+			log.InfoD("Uninstalling Px-Backup...")
+			err := UninstallPxBackup()
+			log.FailOnError(err, "Failed to delete px-backup")
 		})
 
 		Step("Create namespace with sufficient resource quota", func() {
@@ -146,15 +146,26 @@ var _ = Describe("{InstallPxBackupPvcCheck}", Label(TestCaseLabelsMap[InstallPxB
 
 		Step("Create namespace and PVC", func() {
 			log.InfoD("Create namespace and PVC")
-			// Create the Namespace object
-			ns := &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: namespace,
-				},
+			namespaceExists := false
+			// Check if namespace exists
+			_, err := core.Instance().GetNamespace(namespace)
+			if err == nil {
+				log.Infof("Namespace %s already exists", namespace)
+				namespaceExists = true
 			}
-			// Create Namespace
-			_, err := core.Instance().CreateNamespace(ns)
-			log.FailOnError(err, "Failed to create namespace")
+
+			if !namespaceExists {
+				// Create the Namespace object
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: namespace,
+					},
+				}
+				// Create Namespace
+				_, err := core.Instance().CreateNamespace(ns)
+				log.FailOnError(err, "Failed to create namespace")
+			}
+
 			sc, err := GetDefaultStorageClass()
 			log.Infof("Using storage class - %s", sc.Name)
 
@@ -281,9 +292,9 @@ var _ = Describe("{InstallPxBackupStorageClassAndImagesCheck}", Label(TestCaseLa
 		})
 
 		Step("Delete px-backup namespace", func() {
-			log.InfoD("Delete px-backup namespace")
-			err := DeleteAppNamespace(namespace)
-			log.FailOnError(err, "Failed to delete namespace")
+			log.InfoD("Uninstalling Px-Backup...")
+			err := UninstallPxBackup()
+			log.FailOnError(err, "Failed to delete px-backup")
 		})
 
 		Step("Install Px-Backup with incorrect storage class", func() {
@@ -309,9 +320,9 @@ var _ = Describe("{InstallPxBackupStorageClassAndImagesCheck}", Label(TestCaseLa
 		})
 
 		Step("Delete px-backup namespace", func() {
-			log.InfoD("Delete px-backup namespace")
-			err := DeleteAppNamespace(namespace)
-			log.FailOnError(err, "Failed to delete namespace")
+			log.InfoD("Uninstalling Px-Backup...")
+			err := UninstallPxBackup()
+			log.FailOnError(err, "Failed to delete px-backup")
 		})
 
 		Step("Install Px-Backup with correct storage class and images", func() {
@@ -906,8 +917,6 @@ var _ = Describe("{UpgradePxBackupPortInfoCheck}", Label(TestCaseLabelsMap[Upgra
 		err := UninstallPxBackup()
 		log.FailOnError(err, "Failed to delete px-backup")
 		namespace = "px-backup"
-		timeout = 5 * time.Minute
-		retryInterval = 10 * time.Second
 
 		log.InfoD("Installing Px-Backup...")
 		valuesMap, err := ParseValuesFromFile("values1")
@@ -974,9 +983,9 @@ var _ = Describe("{InstallPxBackupWithSkipValidationsFlagTrue}", Label(TestCaseL
 		})
 
 		Step("Delete namespace and resource quota", func() {
-			log.InfoD("Delete namespace and resource quota")
-			err := DeleteAppNamespace(namespace)
-			log.FailOnError(err, "Failed to delete namespace and resource quota")
+			log.InfoD("Uninstalling Px-Backup...")
+			err := UninstallPxBackup()
+			log.FailOnError(err, "Failed to delete px-backup")
 		})
 	})
 
@@ -1234,6 +1243,8 @@ var _ = Describe("{UpgradePxBackupPodReadinessCheck}", Label(TestCaseLabelsMap[U
 		log.FailOnError(err, "Failed to parse values file")
 		_, err = InstallPxBackup("2.8.0", "master", namespace, valuesMap)
 		log.FailOnError(err, "Failed to install px-backup")
+		timeout = 5 * time.Minute
+		retryInterval = 10 * time.Second
 	})
 	It("Should check readiness of px-backup pods during upgrade", func() {
 

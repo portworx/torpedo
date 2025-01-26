@@ -16687,9 +16687,24 @@ func ValidateLocalSnapshotCompleted(backupName string, orgID string, localSnapsh
 // CreateNamespaceAndResourceQuota creates a namespace and a resource quota that limits
 // storage requests for persistent volume claims (PVCs).
 func CreateNamespaceAndResourceQuota(namespace string, storageLimit string) error {
+	namespaceExists := false
+	// Check if namespace exists
+	ns, err := k8sCore.GetNamespace(namespace)
+	if err == nil {
+		log.Infof("Namespace %s already exists", namespace)
+		namespaceExists = true
+	}
+
+	if namespaceExists {
+		// Delete the existing namespace
+		err = DeleteAppNamespace(namespace)
+		if err != nil {
+			return err
+		}
+	}
 
 	// Create the Namespace object
-	ns := &corev1.Namespace{
+	ns = &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: namespace,
 		},
@@ -16755,7 +16770,6 @@ func SearchPodLogs(podLabelSelector map[string]string, namespace, searchString s
 
 	return false, nil
 }
-
 
 // GetDefaultStorageClass attempts to find the default StorageClass. If no default is found,
 // it returns the first StorageClass from the list. If none exist, it returns an error.
