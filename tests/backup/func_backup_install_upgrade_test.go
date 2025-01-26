@@ -11,6 +11,7 @@ import (
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/pure-px/sched-ops/k8s/apps"
 	"github.com/pure-px/torpedo/drivers/backup"
 	"github.com/pure-px/torpedo/drivers/scheduler"
 	"github.com/pure-px/torpedo/pkg/log"
@@ -905,6 +906,8 @@ var _ = Describe("{UpgradePxBackupPortInfoCheck}", Label(TestCaseLabelsMap[Upgra
 		err := UninstallPxBackup()
 		log.FailOnError(err, "Failed to delete px-backup")
 		namespace = "px-backup"
+		timeout = 5 * time.Minute
+		retryInterval = 10 * time.Second
 
 		log.InfoD("Installing Px-Backup...")
 		valuesMap, err := ParseValuesFromFile("values1")
@@ -1204,6 +1207,94 @@ var _ = Describe("{InstallPxBackupInNamespaceOtherThanPxBackup}", Label(TestCase
 			log.FailOnError(err, "Failed to install px-backup")
 		})
 	})
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(make([]*scheduler.Context, 0))
+		log.Infof("No cleanup required for this testcase")
+	})
+})
+
+// Test case to check readiness of px-backup pods during upgrade
+var _ = Describe("{UpgradePxBackupPodReadinessCheck}", Label(TestCaseLabelsMap[UpgradePxBackupPodReadinessCheck]...), func() {
+	var (
+		namespace     string
+		validImage    string
+		timeout       time.Duration
+		retryInterval time.Duration
+	)
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("UpgradePxBackupPodReadinessCheck", "Upgrading Px Backup and checking if all non-job pods are in Running state", nil, 304872, SS, Q4FY25)
+
+		log.InfoD("Uninstalling Px-Backup...")
+		err := UninstallPxBackup()
+		log.FailOnError(err, "Failed to delete px-backup")
+		namespace = "px-backup"
+
+		log.InfoD("Installing Px-Backup...")
+		valuesMap, err := ParseValuesFromFile("values1")
+		log.FailOnError(err, "Failed to parse values file")
+		_, err = InstallPxBackup("2.8.0", "master", namespace, valuesMap)
+		log.FailOnError(err, "Failed to install px-backup")
+	})
+	It("Should check readiness of px-backup pods during upgrade", func() {
+
+		Step("Update pods to not be ready", func() {
+			log.InfoD("Update pods to not be ready")
+			statefulSetToBeUpdated := "pxcentral-keycloak"
+			sts, err := apps.Instance().GetStatefulSet(statefulSetToBeUpdated, namespace)
+			log.FailOnError(err, "Failed to get statefulset")
+			validImage = sts.Spec.Template.Spec.Containers[0].Image
+			wrongImage := "wrong-image"
+			sts.Spec.Template.Spec.Containers[0].Image = wrongImage
+			_, err = apps.Instance().UpdateStatefulSet(sts)
+			time.Sleep(1 * time.Minute)
+			log.FailOnError(err, "Failed to update statefulset")
+
+			// Wait for pods to be in not ready state
+			err = WaitForPodsNotReady(namespace, timeout, retryInterval)
+			if err != nil {
+				log.FailOnError(err, "Failed to wait for pods to be in not ready state")
+			}
+		})
+
+		Step("Upgrade Px-Backup and validate the readiness of pods", func() {
+			log.InfoD("Upgrade Px-Backup")
+			valuesMap, err := ParseValuesFromFile("values1")
+			log.FailOnError(err, "Failed to parse values file")
+			_, err = HelmUpgradePxBackup(LatestPxBackupVersion, DefaultPxBackupHelmBranch, namespace, valuesMap)
+			if err != nil {
+				log.InfoD("Upgrade Px-Backup error - %s", err.Error())
+				dash.VerifyFatal(strings.Contains(err.Error(), "px-backup chart upgrade failed"), true, "Failed to upgrade px-backup")
+			} else {
+				log.FailOnError(fmt.Errorf("upgrade was successful when it should not have been"),
+					"Upgrade was successful when it should not have been")
+			}
+		})
+
+		Step("Update the statefulset to the valid image", func() {
+			log.InfoD("Update the statefulset to the valid image")
+			sts, err := apps.Instance().GetStatefulSet("pxcentral-keycloak", namespace)
+			log.FailOnError(err, "Failed to get statefulset")
+			sts.Spec.Template.Spec.Containers[0].Image = validImage
+			_, err = apps.Instance().UpdateStatefulSet(sts)
+			log.FailOnError(err, "Failed to update statefulset")
+			time.Sleep(1 * time.Minute)
+
+			// Checking if all non-job pods are healthy before upgrade
+			err = WaitForPodsReady(namespace, timeout, retryInterval)
+			if err != nil {
+				log.FailOnError(err, "All non-job pods are not healthy before upgrade")
+			}
+		})
+
+		Step("Upgrade Px-Backup", func() {
+			log.InfoD("Upgrade Px-Backup")
+			valuesMap, err := ParseValuesFromFile("values1")
+			log.FailOnError(err, "Failed to parse values file")
+			_, err = HelmUpgradePxBackup(LatestPxBackupVersion, DefaultPxBackupHelmBranch, namespace, valuesMap)
+			log.FailOnError(err, "Failed to upgrade px-backup")
+		})
+	})
+
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(make([]*scheduler.Context, 0))
 		log.Infof("No cleanup required for this testcase")

@@ -14343,3 +14343,113 @@ func IsPxBackupRunning() (bool, error) {
 	log.Infof("px-backup version [%s] found", pxBackupVersion)
 	return true, nil
 }
+
+// Wait for pods to be in not ready state
+func WaitForPodsNotReady(namespace string, timeout time.Duration, retryInterval time.Duration) error {
+	log.Infof("Waiting for all pods in namespace %s to be in not ready state", namespace)
+
+	waitForPodsNotReady := func() (interface{}, bool, error) {
+		err := ValidateNonJobPodsReady(namespace)
+		if err == nil {
+			log.Infof("All pods are in ready state, waiting for them to become not ready")
+			return nil, false, nil // Retry as pods are still ready
+		}
+		log.Infof("All pods are not in ready state as expected")
+		return nil, true, nil // Pods are not ready, exit the wait loop
+	}
+
+	// Use retry with timeout
+	_, err := task.DoRetryWithTimeout(waitForPodsNotReady, timeout, retryInterval)
+	if err != nil {
+		log.FailOnError(err, "Timeout occurred while waiting for pods to become not ready")
+		return fmt.Errorf("pods did not transition to not ready state within %v", timeout)
+	}
+	return nil
+}
+
+// ValidateNonJobPodsReady validates that all non-job pods in the namespace are in Running state and fully Ready.
+func ValidateNonJobPodsReady(namespace string) error {
+	log.Infof("Validating that all non-job pods in namespace %s are Running and Ready", namespace)
+
+	// Retrieve all pods in the namespace
+	pods, err := core.Instance().GetPods(namespace, nil)
+	if err != nil {
+		return fmt.Errorf("failed to list pods in namespace %s: %v", namespace, err)
+	}
+
+	for _, pod := range pods.Items {
+		// Skip job pods by checking the pod's owner reference
+		isJobPod := false
+		for _, owner := range pod.OwnerReferences {
+			if owner.Kind == "Job" {
+				isJobPod = true
+				break
+			}
+		}
+		if isJobPod {
+			log.Infof("Skipping job pod: %s", pod.Name)
+			continue
+		}
+
+		// Check if the pod is in the Running state
+		if pod.Status.Phase != corev1.PodRunning {
+			log.Errorf("Pod %s is not in Running state: current phase is %s", pod.Name, pod.Status.Phase)
+			return fmt.Errorf("pod %s is not in Running state: current phase is %s", pod.Name, pod.Status.Phase)
+		}
+
+		// Validate readiness condition
+		isReady := false
+		for _, condition := range pod.Status.Conditions {
+			if condition.Type == corev1.PodReady && condition.Status == corev1.ConditionTrue {
+				isReady = true
+				break
+			}
+		}
+		if !isReady {
+			log.Errorf("Pod %s is in Running state but not fully ready", pod.Name)
+			return fmt.Errorf("pod %s is in Running state but not fully ready", pod.Name)
+		}
+
+		// Validate containers' readiness (n/n)
+		readyCount := 0
+		for _, containerStatus := range pod.Status.ContainerStatuses {
+			if containerStatus.Ready {
+				readyCount++
+			}
+		}
+		totalContainers := len(pod.Status.ContainerStatuses)
+		if readyCount != totalContainers {
+			log.Errorf("Pod %s is not fully ready: %d/%d containers are ready", pod.Name, readyCount, totalContainers)
+			return fmt.Errorf("pod %s is not fully ready: %d/%d containers are ready", pod.Name, readyCount, totalContainers)
+		}
+
+		log.Infof("Pod %s is Running and fully Ready (%d/%d containers are ready)", pod.Name, readyCount, totalContainers)
+	}
+
+	log.Infof("All non-job pods in namespace %s are Running and fully Ready", namespace)
+	return nil
+}
+
+// WaitForPodsReady waits for all pods in the namespace to be in ready state
+func WaitForPodsReady(namespace string, timeout time.Duration, retryInterval time.Duration) error {
+    log.Infof("Waiting for all pods in namespace %s to be in ready state", namespace)
+
+    waitForPodsReady := func() (interface{}, bool, error) {
+        err := ValidateNonJobPodsReady(namespace)
+        if err != nil {
+            log.Infof("Pods are not in ready state, waiting for them to become ready")
+            return nil, false, nil // Retry as pods are still not ready
+        }
+        log.Infof("All pods are in ready state as expected")
+        return nil, true, nil // Pods are ready, exit the wait loop
+    }
+
+    // Use retry with timeout
+    _, err := task.DoRetryWithTimeout(waitForPodsReady, timeout, retryInterval)
+    if err != nil {
+        log.FailOnError(err, "Timeout occurred while waiting for pods to become ready")
+        return fmt.Errorf("pods did not transition to ready state within %v", timeout)
+    }
+    return nil
+}
+
