@@ -1071,10 +1071,13 @@ var _ = Describe("{UpgradePxBackupWithSkipValidationsFlagTrue}", Label(TestCaseL
 			valuesMap, err := ParseValuesFromFile("values1")
 			log.FailOnError(err, "Failed to parse configuration file skipValidations")
 			_, err = HelmUpgradePxBackup(LatestPxBackupVersion, DefaultPxBackupHelmBranch, namespace, valuesMap)
-			dash.VerifySafely(strings.Contains(err.Error(), "px-backup chart upgrade failed: failed to upgrade chart: pre-upgrade hooks failed"), true, "there needs to error saying upgrade has failed")
-			//dash.VerifySafely(err, "px-backup chart upgrade failed: failed to upgrade chart: pre-upgrade hooks failed: job failed: BackoffLimitExceeded", "there needs to error saying upgrade has failed")
-			//log.FailOnError(err, "Failed to upgrade px-backup")
-			//"Err: px-backup chart upgrade failed: failed to upgrade chart: pre-upgrade hooks failed: job failed: BackoffLimitExceeded"
+			if err != nil {
+				log.InfoD("Upgrade Px-Backup error - %s", err.Error())
+				dash.VerifySafely(strings.Contains(err.Error(), "px-backup chart upgrade failed: failed to upgrade chart: pre-upgrade hooks failed"), true, "there needs to error saying upgrade has failed")
+			} else {
+				log.FailOnError(fmt.Errorf("upgrade was successful when it should not have been"),
+					"Upgrade was successful when it should not have been")
+			}
 		})
 
 		Step("Retrieve values.yaml from helm release and make sure skipValidations flag was set to false", func() {
@@ -1122,7 +1125,13 @@ var _ = Describe("{UpgradePxBackupWithSkipValidationsFlagTrue}", Label(TestCaseL
 			valuesMap, err := ParseValuesFromFile("skipValidationsTrue")
 			log.FailOnError(err, "Failed to parse configuration file skipValidations")
 			_, err = HelmUpgradePxBackup(LatestPxBackupVersion, DefaultPxBackupHelmBranch, namespace, valuesMap)
-			dash.VerifySafely(strings.Contains(err.Error(), "px-backup chart upgrade failed: failed to upgrade chart: pre-upgrade hooks failed"), true, "there needs to error saying upgrade has failed")
+			if err != nil {
+				log.InfoD("Upgrade Px-Backup error - %s", err.Error())
+				dash.VerifySafely(strings.Contains(err.Error(), "px-backup chart upgrade failed: failed to upgrade chart: pre-upgrade hooks failed"), true, "there needs to error saying upgrade has failed")
+			} else {
+				log.FailOnError(fmt.Errorf("upgrade was successful when it should not have been"),
+					"Upgrade was successful when it should not have been")
+			}
 		})
 
 		Step("Retrieve values.yaml from helm release and make sure skipValidations flag was set to true", func() {
@@ -1191,7 +1200,13 @@ var _ = Describe("{UpgradePxBackupWhenInstallVersionIsInValid}", Label(TestCaseL
 			valuesMap, err := ParseValuesFromFile("values1")
 			log.FailOnError(err, "Failed to parse configuration file values1")
 			_, err = HelmUpgradePxBackup(LatestPxBackupVersion, DefaultPxBackupHelmBranch, namespace, valuesMap)
-			dash.VerifySafely(strings.Contains(err.Error(), "px-backup chart upgrade failed: failed to upgrade chart: pre-upgrade hooks failed"), true, "there needs to error saying upgrade has failed")
+			if err != nil {
+				log.InfoD("Upgrade Px-Backup error - %s", err.Error())
+				dash.VerifySafely(strings.Contains(err.Error(), "px-backup chart upgrade failed: failed to upgrade chart: pre-upgrade hooks failed"), true, "there needs to error saying upgrade has failed")
+			} else {
+				log.FailOnError(fmt.Errorf("upgrade was successful when it should not have been"),
+					"Upgrade was successful when it should not have been")
+			}
 		})
 	})
 	JustAfterEach(func() {
@@ -1323,7 +1338,7 @@ var _ = Describe("{InstallPxBackupKubernetesVersionCheck}", Label(TestCaseLabels
 	)
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("InstallPxBackupKubernetesVersionCheck",
-			"Installing Px Backup and checking if a warning is logged in a config map if the kubernetes version is less than the minimum required version", nil, 304872, SS, Q4FY25)
+			"Installing Px Backup and checking if a warning is logged in a config map if the kubernetes version is less than the minimum required version", nil, 304864, SS, Q4FY25)
 		log.InfoD("Uninstalling Px-Backup...")
 		err := UninstallPxBackup()
 		log.FailOnError(err, "Failed to delete px-backup")
@@ -1388,7 +1403,7 @@ var _ = Describe("{UpgradePxBackupKubernetesVersionCheck}", Label(TestCaseLabels
 	)
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("UpgradePxBackupKubernetesVersionCheck",
-			"Upgrading Px Backup and checking if a warning is logged in a config map if the kubernetes version is less than the minimum required version", nil, 304873, SS, Q4FY25)
+			"Upgrading Px Backup and checking if a warning is logged in a config map if the kubernetes version is less than the minimum required version", nil, 304866, SS, Q4FY25)
 		log.InfoD("Uninstalling Px-Backup...")
 		err := UninstallPxBackup()
 		log.FailOnError(err, "Failed to delete px-backup")
