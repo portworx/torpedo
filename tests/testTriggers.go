@@ -738,6 +738,9 @@ const (
 
 	// Bring down the node with max storage drives associated with it, verify the drives and pools on the new node.
 	RebootNodeWithMaxPools = "rebootNodeWithMaxPools"
+
+	// AsyncDR node restart on source runs Async DR migration between two clusters with px restart
+	AsyncDRNodeRestartSource = "asyncdrnoderestartsource"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -15465,4 +15468,165 @@ func TriggerRebootNodesWithMaxPools(contexts *[]*scheduler.Context, recordChan *
 			updateMetrics(*event)
 		})
 	})
+}
+
+// TriggerAsyncDRNodeRestartSource triggers Async DR with node restart on source
+func TriggerAsyncDRNodeRestartSource(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(AsyncDRNodeRestartSource)
+	defer ginkgo.GinkgoRecover()
+	log.Infof("Async DR Node restart on source trigger triggered at: %v", time.Now())
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: AsyncDRNodeRestartSource,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	chaosLevel := ChaosMap[AsyncDRNodeRestartSource]
+	var (
+		migrationNamespaces   []string
+		migNamespaces         string
+		kubeConfigPathSrc     string
+		schedulePolicy        *storkapi.SchedulePolicy
+		schedulePolicyName    = "async-policy"
+		migrationInterval     = 5
+		clusterPairName       string
+		migrationSchedName    string
+		defaultBackupLocation = "s3"
+		defaultNs             = "kube-system"
+		defaultSecret         = "s3secret"
+		makeSuspend           = true
+	)
+
+	stepLog := fmt.Sprintf("Deploy applications for migration, with frequency: %v", chaosLevel)
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+		err := asyncdr.WriteKubeconfigToFiles()
+		if err != nil {
+			log.Errorf("Failed to write kubeconfig: %v", err)
+			UpdateOutcome(event, err)
+			return
+		}
+
+		err = SetSourceKubeConfig()
+		if err != nil {
+			log.Errorf("Failed to Set source kubeconfig: %v", err)
+			UpdateOutcome(event, err)
+			return
+		}
+
+		stepLog = "Scheduling application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range *contexts {
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, "")
+				migrationNamespaces = append(migrationNamespaces, namespace)
+			}
+			ValidateApplications(*contexts)
+			kubeConfigPathSrc, err = GetCustomClusterConfigPath(asyncdr.FirstCluster)
+			if err != nil {
+				UpdateOutcome(event, err)
+				return
+			}
+			migNamespaces = strings.Join(migrationNamespaces, ",")
+			log.Infof("Migration Namespaces: %v", migrationNamespaces)
+		})
+
+		stepLog = "Creating schedule policy for migration"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			schedulePolicy, err = asyncdr.CreateSchedulePolicy(schedulePolicyName, migrationInterval)
+			if err != nil {
+				log.Errorf("failed to create schedule policy: %v", err)
+				UpdateOutcome(event, err)
+				return
+			}
+			log.InfoD("Schedule policy [%v] created and validated successfuly on namespace [%v]", schedulePolicyName, defaultNs)
+		})
+
+		stepLog = "Creating cluster pair for migration schedule"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			clusterPairName = asyncdr.DefaultClusterPairName + strconv.Itoa(int(time.Now().Unix()))
+			err = ScheduleBidirectionalClusterPair(clusterPairName, defaultNs, "", storkapi.BackupLocationType(defaultBackupLocation), defaultSecret, "async-dr", asyncdr.FirstCluster, asyncdr.SecondCluster, nil)
+			if err != nil {
+				log.Errorf("failed to create clusterpair: %v", err)
+				UpdateOutcome(event, err)
+				return
+			}
+			log.InfoD("Clusterpair [%v] created and validated successfuly on namespace [%v]", clusterPairName, defaultNs)
+		})
+	})
+
+	extraArgs := map[string]string{
+		"namespaces":           migNamespaces,
+		"kubeconfig":           kubeConfigPathSrc,
+		"schedule-policy-name": schedulePolicy.Name,
+	}
+
+	stepLog = "Restart node on the source cluster and validate migration"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+
+		migrationSchedName = migrationKey + strconv.Itoa(int(time.Now().Unix()))
+		allMigrations, err := CreateAndValidateMigrationSched(migrationSchedName, clusterPairName, defaultNs, extraArgs)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("failed to create migration schedule %v. Error: [%v]", migrationSchedName, err))
+			return
+		}
+
+		nodesToRestart := node.GetStorageNodes()
+		nodeIndex := rand.Intn(len(nodesToRestart))
+		log.Infof("Restarting node: %v", nodesToRestart[nodeIndex].Name)
+		err = Inst().N.RebootNodeAndWait(nodesToRestart[nodeIndex])
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("failed to reboot node  %v. Error: [%v]", nodesToRestart[nodeIndex].Name, err))
+			return
+		}
+		err = Inst().V.WaitDriverUpOnNode(nodesToRestart[nodeIndex], 15*time.Minute)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("failed to wait for px up on node  %v. Error: [%v]", nodesToRestart[nodeIndex].Name, err))
+			return
+		}
+
+		for _, mig := range allMigrations {
+			err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
+			if err != nil {
+				UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
+				return
+			}
+			dashStats := stats.GetStorkMigrationStats(mig)
+			updateLongevityStats(AsyncDRNodeRestartSource, stats.AsyncDREventName, dashStats)
+		}
+	})
+
+	stepLog = "Suspend all Migration Schedules"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		migSchedule, err := storkops.Instance().GetMigrationSchedule(migrationSchedName, defaultNs)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("couldn't suspend migration %v due to error %v", migSchedule.Name, err))
+		}
+		migSchedule.Spec.Suspend = &makeSuspend
+		_, err = storkops.Instance().UpdateMigrationSchedule(migSchedule)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("couldn't suspend migration %v due to error %v", migSchedule.Name, err))
+		} else {
+			log.InfoD("migrationSchedule %v, suspended successfully", migSchedule.Name)
+		}
+	})
+	updateMetrics(*event)
 }

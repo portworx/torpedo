@@ -404,6 +404,7 @@ func populateTriggerFuncs() {
 		PowerOffNBy2PlusOneNodes:          TriggerPowerOffNBy2PlusOneNodes,
 		AddHotPlugDiskToVMAndLiveMigrate:  TriggerAddHotPlugDiskToVMAndLiveMigrate,
 		RebootNodeWithMaxPools:            TriggerRebootNodesWithMaxPools,
+		AsyncDRNodeRestartSource:          TriggerAsyncDRNodeRestartSource,
 	}
 
 	//Creating a distinct trigger to make sure email triggers at regular intervals
@@ -939,6 +940,7 @@ func populateIntervals() {
 	triggerInterval[PowerOffNBy2PlusOneNodes] = make(map[int]time.Duration)
 	triggerInterval[AddHotPlugDiskToVMAndLiveMigrate] = make(map[int]time.Duration)
 	triggerInterval[RebootNodeWithMaxPools] = make(map[int]time.Duration)
+	triggerInterval[AsyncDRNodeRestartSource] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -2225,6 +2227,17 @@ func populateIntervals() {
 	triggerInterval[RebootNodeWithMaxPools][2] = 24 * baseInterval
 	triggerInterval[RebootNodeWithMaxPools][1] = 27 * baseInterval
 
+	triggerInterval[AsyncDRNodeRestartSource][10] = 1 * baseInterval
+	triggerInterval[AsyncDRNodeRestartSource][9] = 3 * baseInterval
+	triggerInterval[AsyncDRNodeRestartSource][8] = 6 * baseInterval
+	triggerInterval[AsyncDRNodeRestartSource][7] = 9 * baseInterval
+	triggerInterval[AsyncDRNodeRestartSource][6] = 12 * baseInterval
+	triggerInterval[AsyncDRNodeRestartSource][5] = 15 * baseInterval
+	triggerInterval[AsyncDRNodeRestartSource][4] = 18 * baseInterval
+	triggerInterval[AsyncDRNodeRestartSource][3] = 21 * baseInterval
+	triggerInterval[AsyncDRNodeRestartSource][2] = 24 * baseInterval
+	triggerInterval[AsyncDRNodeRestartSource][1] = 27 * baseInterval
+
 	// Chaos Level of 0 means disable test trigger
 	triggerInterval[DeployApps][0] = 0
 	triggerInterval[RebootNode][0] = 0
@@ -2337,6 +2350,7 @@ func populateIntervals() {
 	triggerInterval[PowerOffNBy2PlusOneNodes][0] = 0
 	triggerInterval[AddHotPlugDiskToVMAndLiveMigrate][0] = 0
 	triggerInterval[RebootNodeWithMaxPools][0] = 0
+	triggerInterval[AsyncDRNodeRestartSource][0] = 0
 
 }
 

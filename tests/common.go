@@ -138,6 +138,7 @@ import (
 	"github.com/pure-px/torpedo/pkg/pureutils"
 	"github.com/pure-px/torpedo/pkg/s3utils"
 	"github.com/pure-px/torpedo/pkg/stats"
+	"github.com/pure-px/torpedo/pkg/storkctlcli"
 	torpedotask "github.com/pure-px/torpedo/pkg/task"
 	"github.com/pure-px/torpedo/pkg/testrailuttils"
 	"github.com/pure-px/torpedo/pkg/units"
@@ -16794,4 +16795,35 @@ func GetDefaultStorageClass() (*storageapi.StorageClass, error) {
 		return nil, fmt.Errorf("no storage classes found")
 	}
 	return &allScList.Items[0], err
+}
+
+func CreateAndValidateMigrationSched(migSchedName, cpName, migNs string, extraArgs map[string]string) ([]*storkapi.Migration, error) {
+	var migrationData *storkapi.Migration
+	var migrations []*storkv1.Migration
+	err := storkctlcli.ScheduleStorkctlMigrationSched(migSchedName, cpName, migNs, extraArgs)
+	if err != nil {
+		log.Errorf("Error creating migrationschedule: %v", err)
+		return nil, err
+	}
+	time.Sleep(time.Second * 30)
+	migSchedule, err := storkops.Instance().GetMigrationSchedule(migSchedName, migNs)
+	if err != nil {
+		log.Errorf("failed to get migrationschedule: %v err: %v", migSchedName, err)
+		return nil, err
+	}
+	migrationsStatus := migSchedule.Status.Items["Interval"]
+	for _, mig := range migrationsStatus {
+		migrationData, err = storkops.Instance().GetMigration(mig.Name, migNs)
+		if err != nil {
+			log.Errorf("failed to get migration for migrationschedule %v, err: %v", migSchedName, err)
+			return nil, err
+		}
+		err = asyncdr.WaitForMigration([]*storkapi.Migration{migrationData})
+		if err != nil {
+			log.Errorf("Migration failed with error: %v", err)
+			return nil, err
+		}
+		migrations = append(migrations, migrationData)
+	}
+	return migrations, nil
 }
