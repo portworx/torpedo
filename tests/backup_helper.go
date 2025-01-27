@@ -6340,6 +6340,86 @@ func IsMongoDBReady() error {
 	return nil
 }
 
+// IsMongoDBFullyReady validates if the MongoDB all pods in the Px-Backup namespace are healthy enough for Px-Backup to upgrade
+func IsMongoDBFullyReady() error {
+	log.Infof("Verify that at all MongoDB pods are in the Ready state")
+	errorString := "mongodb pods are not ready yet"
+	pxbNamespace, err := backup.GetPxBackupNamespace()
+	if err != nil {
+		return err
+	}
+
+	mongoDBPodStatus := func() (interface{}, bool, error) {
+		statefulSet, err := apps.Instance().GetStatefulSet(MongodbStatefulset, pxbNamespace)
+		if err != nil {
+			return "", true, err
+		}
+
+		if statefulSet.Status.ReadyReplicas < 3 {
+			return "", true, fmt.Errorf("%s. expected ready pods = 3, actual ready pods = %d",
+				errorString, statefulSet.Status.ReadyReplicas)
+		}
+		return "", false, nil
+	}
+
+	_, err = DoRetryWithTimeoutWithGinkgoRecover(mongoDBPodStatus, 10*time.Minute, 30*time.Second)
+	if err != nil {
+		return err
+	}
+
+	log.Infof("MongoDB pods are in Ready state")
+	return nil
+}
+
+// deleteUnreadyMongoPVCsAndPods deletes the unready MongoDB PVCs and Pods in the Px-Backup namespace
+func deleteUnreadyMongoPVCsAndPods() error {
+	pxbNamespace, err := backup.GetPxBackupNamespace()
+	// 1. Get all pods in the namespace
+	pods, err := core.Instance().GetPods(pxbNamespace, nil)
+	if err != nil {
+		return fmt.Errorf("failed to list pods in namespace %s: %w", pxbNamespace, err)
+	}
+
+	for _, pod := range pods.Items {
+		// 2. Check if this Pod is part of the "pxc-backup-mongodb" StatefulSet
+		if strings.HasPrefix(pod.Name, pxbackupMongodbPodPrefix) {
+			// 3. Check if Pod is unready (0/1, or any container not ready)
+			if !isPodReady(&pod) {
+				log.Warnf("Deleting unready MongoDB Pod %s and its associated PVC", pod.Name)
+
+				// 4. Derive the PVC name from the Pod name
+				// For example, podName=pxc-backup-mongodb-0 => pvcName=pxc-mongodb-data-pxc-backup-mongodb-0
+				suffix := strings.TrimPrefix(pod.Name, pxbackupMongodbPodPrefix)
+				pvcName := pxbackupMongodbPvcPrefix + suffix
+
+				// 5a. Delete the PVC
+				if err := core.Instance().DeletePersistentVolumeClaim(pvcName, pxbNamespace); err != nil {
+					return fmt.Errorf("failed to delete PVC %s for unready pod %s: %w", pvcName, pod.Name, err)
+				}
+
+				// 5b. Delete the Pod
+				if err := core.Instance().DeletePod(pod.Name, pxbNamespace, false); err != nil {
+					return fmt.Errorf("failed to delete unready pod %s: %w", pod.Name, err)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// isPodReady returns true if all containers in the Pod are ready.
+func isPodReady(pod *corev1.Pod) bool {
+	if pod.Status.Phase != corev1.PodRunning {
+		return false
+	}
+	for _, cs := range pod.Status.ContainerStatuses {
+		if !cs.Ready {
+			return false
+		}
+	}
+	return true
+}
+
 // DeleteAppNamespace deletes the given namespace and wait for termination
 func DeleteAppNamespace(namespace string) error {
 	var ns *corev1.Namespace
@@ -13228,6 +13308,22 @@ func HelmUpgradePxBackup(targetVersion, helmBranchVersion, namespace string, cus
 		log.InfoD("Release %s exists and is deployed in namespace %s. Proceeding with upgrade.", PxCentralReleaseName, namespace)
 	} else {
 		return nil, fmt.Errorf("release %s does not exist in namespace %s or is not deployed. Cannot upgrade.", PxCentralReleaseName, namespace)
+	}
+
+	// Check if all mongo pods are ready
+	// If not, mitigate by deleting PVC and Pod
+	err = IsMongoDBFullyReady()
+	if err != nil {
+		if strings.Contains(err.Error(), "mongodb pods are not ready yet") {
+			err = deleteUnreadyMongoPVCsAndPods()
+			if err != nil {
+				return nil, err
+			}
+			err = IsMongoDBFullyReady()
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	// Upgrade the Helm chart

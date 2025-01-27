@@ -901,7 +901,9 @@ var _ = Describe("{InstallPxBackupHelmRollbackCheck}", Label(TestCaseLabelsMap[I
 	})
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(make([]*scheduler.Context, 0))
-		log.Infof("No cleanup required for this testcase")
+		// Delete the secret named sh.helm.release.v1.px-central.v2 in the namespace
+		err := Inst().S.DeleteSecret(namespace, "sh.helm.release.v1.px-central.v2")
+		log.FailOnError(err, "Failed to delete secret sh.helm.release.v1.px-central.v2")
 	})
 })
 

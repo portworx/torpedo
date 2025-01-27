@@ -313,6 +313,8 @@ const (
 	pxbackupDeploymentName             = "px-backup"
 	pxbackupDeploymentNamespace        = "px-backup"
 	pxbackupMongodbDeploymentName      = "pxc-backup-mongodb"
+	pxbackupMongodbPodPrefix           = "pxc-backup-mongodb-"
+	pxbackupMongodbPvcPrefix           = "pxc-mongodb-data-pxc-backup-mongodb-"
 	pxbackupMongodbDeploymentNamespace = "px-backup"
 	PxCentralReleaseName               = "px-central"
 	defaultnamespace                   = "default"
