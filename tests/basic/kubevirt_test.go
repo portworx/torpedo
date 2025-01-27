@@ -7274,11 +7274,13 @@ var _ = Describe("{AddAndRemoveNewHotPlugDiskToKubevirtVM}", Label("p0", "positi
 var _ = Describe("{FillPoolOnSourceAndTargetNodeAndLiveMigrateVM}", Label("p1", "positive", "kubevirt", "pool_ops", "staging"), func() {
 	/*
 	   Step 1: Create a repl=2 Kubevirt VM
-	   Step 2: Identify Node 1 hosting the VM and Node 2 serving as targets for the VM
-	   Step 3: Identify the pool size on Node 1, fill the pool to 80% of the least pool size of a node. This also fills replica Node.
-	   Step 4: Live migrate the VM out of this node 1
-	   Step 5: Validate usual things like uptime, fio etc.
+	   Step 2: Get the pool size with the least remaining space to fill up 80% size of the pool.
+	   Step 3: Identify Node 1 hosting the VM and Node 2 serving as targets for the VM
+	   Step 4: Identify the pool size on Node 1, fill the pool with size calculated ins Step 2. This also fills replica Node.
+	   Step 5: Live migrate the VM out of this node 1.
+	   Step 6: Validate usual things like uptime, fio etc.
 	   JIRA ID: https://purestorage.atlassian.net/browse/HAZEL-1685 and https://purestorage.atlassian.net/browse/HAZEL-1686
+	   Enhancement JIRA ID: https://purestorage.atlassian.net/browse/HAZEL-1849
 	*/
 	var (
 		app, volType        string
@@ -7292,6 +7294,7 @@ var _ = Describe("{FillPoolOnSourceAndTargetNodeAndLiveMigrateVM}", Label("p1", 
 		wg                  sync.WaitGroup
 		vm                  kubevirtv1.VirtualMachine
 		usedNodePoolSizeMap map[string]uint64
+		poolSizeToFill      uint64
 	)
 
 	JustBeforeEach(func() {
@@ -7311,19 +7314,41 @@ var _ = Describe("{FillPoolOnSourceAndTargetNodeAndLiveMigrateVM}", Label("p1", 
 		defer ListEvents(pxNs)
 
 		nodes := node.GetStorageDriverNodes()
-		// Get a random storage node and get all the pools since the pools sizes are uniform across the nodes
-		pools := nodes[0].GetPools()
-		// Get the least size pool in the node
-		leastSizePool := pools[0].GetTotalSize()
-		for _, pool := range pools {
-			if pool.GetTotalSize() < leastSizePool {
-				leastSizePool = pool.GetTotalSize()
+
+		// initial setting of pool size to calculate the remaining size to fill 80% of pools. Pools configuration is uniform across the nodes.
+		randomNodePools := nodes[0].GetPools()
+		maxSizePoolSize := randomNodePools[0].GetTotalSize() / units.GiB
+		for _, pool := range randomNodePools {
+			totalSize := pool.GetTotalSize() / units.GiB
+			if totalSize > maxSizePoolSize {
+				maxSizePoolSize = totalSize
 			}
 		}
-		leastSizePool = leastSizePool / units.GiB
-		log.Infof("Least size pool is of size: %vGi", leastSizePool)
-		// app has 2 disks hence divide by 2 and fill 80%
-		updateSize := 0.8 * float64(leastSizePool/2)
+
+		log.Infof("Getting the pool size with least remaining space to fill up 80%% size of the pool.")
+		poolSizeToFill = maxSizePoolSize
+		for _, node := range nodes {
+			poolStatus, err := Inst().V.GetNodePoolsStatus(node)
+			log.FailOnError(err, "Failed to get pool status for source node [%s]", vmNodeName)
+			for poolUUID, _ := range poolStatus {
+				pool, err := GetStoragePoolByUUID(poolUUID)
+				log.FailOnError(err, "Failed to get pool by UUID [%s]", poolUUID)
+				usedPoolSize := pool.Used / units.GiB
+				totalPoolSize := pool.TotalSize / units.GiB
+
+				log.Infof("Pool [%s] used size is [%d]Gi and total size is [%d]Gi", pool.Uuid, usedPoolSize, totalPoolSize)
+				// Calculate how much size is needed to fill 80% of the pool
+				remainingSize := 0.8*float64(totalPoolSize) - float64(usedPoolSize)
+				if uint64(remainingSize) < poolSizeToFill {
+					poolSizeToFill = uint64(remainingSize)
+					log.Infof("Pool size to fill is [%d]Gi of Pool [%s]", poolSizeToFill, pool.Uuid)
+				}
+			}
+		}
+		log.Infof("Pool size of VM to fill is [%d]Gi", poolSizeToFill)
+
+		// assign the volume size to each pvc (2 pvcs in the app)
+		updateSize := poolSizeToFill / 2
 		log.Infof("Update size of pool is %vGi", updateSize)
 
 		appList := Inst().AppList
@@ -7335,7 +7360,7 @@ var _ = Describe("{FillPoolOnSourceAndTargetNodeAndLiveMigrateVM}", Label("p1", 
 
 		// assign the volume size to each pvc
 		Inst().CustomAppConfig[app] = scheduler.AppConfig{
-			VolumeSize: fmt.Sprintf("%vGi", updateSize),
+			VolumeSize: fmt.Sprintf("%vGi", int64(updateSize)),
 		}
 		err = Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
 		log.FailOnError(err, "Failed to rescan specs from %s for storage provider %s with VolumeSize %v", Inst().SpecDir, Inst().V.String(), updateSize)
