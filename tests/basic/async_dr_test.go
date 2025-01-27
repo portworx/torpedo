@@ -2151,7 +2151,6 @@ var _ = Describe("{RestartPXAndDeleteStorkLeaderDuringAsyncMigration}", Label("s
 			WriteKubeconfigToFiles()
 			kubeConfigWritten = true
 		}
-		wantAllAfterSuiteActions = false
 	})
 
 	JustBeforeEach(func() {
@@ -3797,3 +3796,167 @@ func BlockIPTabelOnNode(n *node.Node, block bool) error {
 
 	return nil
 }
+
+var _ = Describe("{AppBackupRestoreWithMultipleVolumes}", Label("staging", "p1", "positive", "CustomerIssue"), func() {
+
+	/*
+		https://purestorage.atlassian.net/browse/HAZEL-157
+		1. Create 360 volumes
+		2. Create application backup
+		3. Create volumes using pxctl command while backup is in progress
+		4. Restore application backup
+	*/
+
+	var (
+		restoreJobName      = "storkrestore-" + time.Now().Format("15h03m05s")
+		s3SecretName        = "s3secret"
+		backupLocationName  = "storkbackuplocation-" + time.Now().Format("15h03m05s")
+		backupName          = "storkbackup-" + time.Now().Format("15h03m05s")
+		taskNamePrefix      = "appbkp"
+		defaultNs           = "kube-system"
+		backupTimeout       = 30 * time.Minute
+		contexts            []*scheduler.Context
+		backupNamespaces    []string
+		targetVolumeCount          = 50
+		volumesCreatedCount        = 0
+		pxctlVolumeCount           = 5
+		volumeSize          uint64 = 4
+		haLevel             int64  = 1
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("AppBackupRestoreWithMultipleVolumes", "Validating backup and restore for multiple volumes", nil, 0)
+	})
+
+	itLog := "App backup and restore for multiple volumes and create volume using pxctl command while backup is in progress"
+	It(itLog, func() {
+		log.InfoD(itLog)
+
+		cleanup := func() {
+			log.Infof("Perform cleanup task")
+			if len(contexts) > 0 {
+				for _, ctx := range contexts {
+					ctx.SkipVolumeValidation = true
+					TearDownContext(ctx, map[string]bool{
+						SkipClusterScopedObjects:                    true,
+						scheduler.OptionsWaitForResourceLeakCleanup: true,
+						scheduler.OptionsWaitForDestroy:             true,
+					})
+				}
+			}
+			log.Infof("Remove volumes")
+			volList, err := Inst().V.ListAllVolumes()
+			log.FailOnError(err, "Failed to get volume list")
+			if len(volList) > 0 {
+				for _, volName := range volList {
+					_ = Inst().V.DeleteVolume(volName)
+				}
+			}
+		}
+		defer cleanup()
+
+		appIndex := 0
+		for volumesCreatedCount < targetVolumeCount {
+
+			var appContexts []*scheduler.Context
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				taskName := fmt.Sprintf("%s-%d-%d", taskNamePrefix, appIndex, i)
+				log.Infof("Task name %s\n", taskName)
+				appContexts = append(appContexts, ScheduleApplications(taskName)...)
+				for _, curCtx := range appContexts {
+					backupNamespaces = append(backupNamespaces, curCtx.App.NameSpace)
+				}
+				contexts = append(contexts, appContexts...)
+			}
+
+			volumesCreatedCount = 0
+			for _, ctx := range contexts {
+				appVols, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, fmt.Sprintf("error getting volumes for the app [%s]", ctx.App.Key))
+				volumesCreatedCount += len(appVols)
+			}
+
+			log.Infof("Current volume count: %d (Target: %d)", volumesCreatedCount, targetVolumeCount)
+			appIndex++
+		}
+		log.Infof("Total number of volumes created for backup and restore is: [%v]", volumesCreatedCount)
+
+		Step("Create App Backup", func() {
+			log.Infof("Contexts is: %v", contexts)
+			log.Infof("Created namespaces are: %v", backupNamespaces)
+			backupLocation, err := applicationbackup.CreateBackupLocation(backupLocationName, defaultNs, s3SecretName)
+			log.FailOnError(err, "Failed to create backup location")
+			appBackup, bkp_create_err := applicationbackup.CreateApplicationBackupKs(backupName, defaultNs, backupLocation, backupNamespaces)
+			log.FailOnError(bkp_create_err, "Failed to create backup")
+			log.Infof("Backup is %v", appBackup)
+
+			stepLog := "Create volumes while backup is in progress"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				selectedNode := node.GetStorageNodes()[0]
+				err = applicationbackup.ValidateAppBackupIsInProgress(backupName, defaultNs, backupTimeout)
+				log.FailOnError(err, "Backup is not in progress")
+				appBackup, err := storkops.Instance().GetApplicationBackup(backupName, defaultNs)
+				log.FailOnError(err, "Failed to get backup")
+				log.InfoD("Application backup status is %v", appBackup.Status.Status)
+
+				for i := 0; i < pxctlVolumeCount; i++ {
+					volName := fmt.Sprintf("backup-vols-%d", i)
+					err := Inst().V.CreateVolumeUsingPxctlCmd(selectedNode, volName, volumeSize, haLevel)
+					log.FailOnError(err, "Failed to create volume %v", volName)
+				}
+				log.InfoD("Created %v volumes while backup is in progress", pxctlVolumeCount)
+			})
+
+			bkp_comp_err := applicationbackup.WaitForAppBackupCompletion(backupName, defaultNs, backupTimeout)
+			log.FailOnError(bkp_comp_err, "Backup completion failed")
+			log.InfoD("backup successful, backup name - %v, backup location - %v", backupName, backupLocationName)
+		})
+
+		Step("Perform Restore to new Ns", func() {
+			namespaceMapping := make(map[string]string)
+			for i, ns := range backupNamespaces {
+				uniqueRestoreNs := fmt.Sprintf("restr%d-%s", i, ns)
+				namespaceMapping[ns] = uniqueRestoreNs
+				nsSpec := &v1.Namespace{
+					ObjectMeta: meta_v1.ObjectMeta{
+						Name: uniqueRestoreNs,
+					},
+				}
+				_, err = core.Instance().CreateNamespace(nsSpec)
+				log.FailOnError(err, "Failed to create namespace for restore: "+uniqueRestoreNs)
+			}
+			bl, err := storkops.Instance().GetBackupLocation(backupLocationName, defaultNs)
+			log.FailOnError(err, "Failed to get backup location")
+			log.Infof("BackupLocation is %v", bl)
+			ab, err := storkops.Instance().GetApplicationBackup(backupName, defaultNs)
+			log.FailOnError(err, "Failed to get backup location")
+			appRestore, restore_err := applicationbackup.CreateApplicationRestore(restoreJobName, defaultNs, bl, ab.Name, namespaceMapping)
+			log.FailOnError(restore_err, "Failed to create restore")
+			log.Infof("Restore is %v", appRestore)
+			restr_comp_err := applicationbackup.WaitForAppRestoreCompletion(restoreJobName, defaultNs, backupTimeout)
+			log.FailOnError(restr_comp_err, "Restore completion failed")
+			log.InfoD("restore successful, restore name - %v", restoreJobName)
+			for i, ns := range backupNamespaces {
+				mapping := map[string]string{ns: namespaceMapping[ns]}
+				restoredContext, err := CloneAppContextAndTransformWithMappings(contexts[i], mapping, nil, true)
+				log.FailOnError(err, "Failed to get mapped context for namespace: "+ns)
+				waitForPodsToBeRunning(restoredContext, false)
+				contexts = append(contexts, restoredContext)
+			}
+		})
+
+		Step("Destroy apps", func() {
+			log.InfoD("Destroy apps")
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})

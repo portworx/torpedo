@@ -200,3 +200,19 @@ func WaitForAppRestoreToStart(name, namespace string, timeout time.Duration) err
 	_, err := task.DoRetryWithTimeout(getAppRestore, timeout, applicationRestoreScheduleRetryInterval)
 	return err
 }
+
+func ValidateAppBackupIsInProgress(name, namespace string, timeout time.Duration) error {
+	getAppBackup := func() (interface{}, bool, error) {
+		appBackup, err := storkops.Instance().GetApplicationBackup(name, namespace)
+		if err != nil {
+			return "", false, err
+		}
+
+		if appBackup.Status.Status != storkv1.ApplicationBackupStatusInProgress {
+			return "", true, fmt.Errorf("app backups %s in %s not complete yet.Retrying", name, namespace)
+		}
+		return "", false, nil
+	}
+	_, err := task.DoRetryWithTimeout(getAppBackup, timeout, applicationBackupScheduleRetryInterval)
+	return err
+}
