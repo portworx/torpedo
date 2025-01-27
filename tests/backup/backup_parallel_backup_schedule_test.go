@@ -1060,6 +1060,22 @@ var _ = Describe("{ParallelScheduleWithPartialBackup}", Label(TestCaseLabelsMap[
 			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
+		Step("Setting cluster-wide average network bandwidth to 90MiB/s", func() {
+			err := ThrottleNetworkSpeed(90)
+			dash.VerifyFatal(err, nil, "Setting cluster-wide average network bandwidth to 90MiB/s")
+
+			err = SetDestinationKubeConfig()
+			log.FailOnError(err, "Switching context to destination cluster failed")
+
+			err = ThrottleNetworkSpeed(90)
+			dash.VerifyFatal(err, nil, "Setting cluster-wide average network bandwidth to 90MiB/s")
+
+			defer func() {
+				err = SetSourceKubeConfig()
+				log.FailOnError(err, "Unable to switch context to source cluster [%s]", SourceClusterName)
+			}()
+		})
+
 		Step("Creating backup location and cloud setting", func() {
 			log.InfoD("Creating backup location and cloud setting")
 			ctx, err := backup.GetAdminCtxFromSecret()
@@ -1321,7 +1337,18 @@ var _ = Describe("{ParallelScheduleWithPartialBackup}", Label(TestCaseLabelsMap[
 		log.Info("Destroying scheduled apps on source cluster")
 		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
 		log.FailOnError(err, "Data validations failed")
+		err = ThrottleNetworkSpeed(0)
+		log.FailOnError(err, "Setting cluster-wide average network bandwidth to default value")
 
+		log.InfoD("switching to destination context")
+		err = SetDestinationKubeConfig()
+		log.FailOnError(err, "failed to switch to context to destination cluster")
+
+		err = ThrottleNetworkSpeed(0)
+		log.FailOnError(err, "Setting cluster-wide average network bandwidth to default value")
+
+		err = SetClusterContext("")
+		log.FailOnError(err, "failed to SetClusterContext to default cluster")
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
@@ -1404,15 +1431,15 @@ var _ = Describe("{ValidateParallelScheduleWithNetworkLatency}", Label(TestCaseL
 			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
-		Step("Setting cluster-wide average network bandwidth to 450MiB/s", func() {
-			err := ThrottleNetworkSpeed(450)
-			dash.VerifyFatal(err, nil, "Setting cluster-wide average network bandwidth to 450MiB/s")
+		Step("Setting cluster-wide average network bandwidth to 300MiB/s", func() {
+			err := ThrottleNetworkSpeed(300)
+			dash.VerifyFatal(err, nil, "Setting cluster-wide average network bandwidth to 300MiB/s")
 
 			err = SetDestinationKubeConfig()
 			log.FailOnError(err, "Switching context to destination cluster failed")
 
-			err = ThrottleNetworkSpeed(450)
-			dash.VerifyFatal(err, nil, "Setting cluster-wide average network bandwidth to 450MiB/s")
+			err = ThrottleNetworkSpeed(300)
+			dash.VerifyFatal(err, nil, "Setting cluster-wide average network bandwidth to 300MiB/s")
 
 			defer func() {
 				err = SetSourceKubeConfig()
