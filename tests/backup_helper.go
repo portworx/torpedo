@@ -115,6 +115,7 @@ const (
 	Nvettaiyan     TestcaseAuthor = "nvettaiyan-px"
 	SS             TestcaseAuthor = "ss-px"
 	Kgarg          TestcaseAuthor = "kgarg-px"
+	Avasanthareddy TestcaseAuthor = "avasanthareddy-px"
 )
 
 // TestcaseQuarter List
@@ -150,7 +151,7 @@ const (
 	MaxBackupsToBeCreated                     = "MAX_BACKUPS"
 	VolCountForParallelDelete                 = "TOTAL_VOLUME_COUNT"
 	MaxWaitPeriodForBackupCompletionInMinutes = 40
-	MaxWaitPeriodForRestoreCompletionInMinute = 40
+	MaxWaitPeriodForRestoreCompletionInMinute = 180
 	MaxWaitPeriodForBackupJobCancellation     = 20
 	MaxWaitPeriodForRestoreJobCancellation    = 20
 	RestoreJobCancellationRetryTime           = 30
@@ -14383,6 +14384,7 @@ func WaitTillScheduleBackupInDesiredState(backupScheduleName string, orgId strin
 
 // GetSnapshotCount Gets the current expected snapshot count by traversing over all the previous ordinal backup
 func GetSnapshotCount(backupScheduleName string, orgId string, ctx context1.Context, ordinalCount int) (int, error) {
+
 	backupDriver := Inst().Backup
 	snapshotCount := 0
 	for i := ordinalCount; i > 0; i-- {
@@ -14563,4 +14565,18 @@ func WaitForPodsReady(namespace string, timeout time.Duration, retryInterval tim
 		return fmt.Errorf("pods did not transition to ready state within %v", timeout)
 	}
 	return nil
+}
+
+// WaitForBackupCount ensures the expected backup is created in the schedule before waiting for state transitions
+func WaitForBackupCount(scheduleName string, expectedCount int, orgID string, ctx context1.Context, timeout time.Duration) (interface{}, error) {
+	return task.DoRetryWithTimeout(func() (interface{}, bool, error) {
+		scheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
+		if err != nil {
+			return nil, true, err
+		}
+		if len(scheduleBackupNames) < expectedCount {
+			return nil, true, fmt.Errorf("schedule backups for %s are less than expected: %d < %d", scheduleName, len(scheduleBackupNames), expectedCount)
+		}
+		return nil, false, nil
+	}, timeout, 30*time.Second)
 }

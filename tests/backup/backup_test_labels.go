@@ -200,6 +200,7 @@ const (
 	UpgradePxBackupStorageClassAndImagesCheck                                          TestCaseName = "UpgradePxBackupStorageClassAndImagesCheck"
 	InstallPxBackupKubernetesVersionCheck                                              TestCaseName = "InstallPxBackupKubernetesVersionCheck"
 	UpgradePxBackupKubernetesVersionCheck                                              TestCaseName = "UpgradePxBackupKubernetesVersionCheck"
+	BackupAndRestoreWithParallelBackupScheduleAndLargeVol                              TestCaseName = "BackupAndRestoreWithParallelBackupScheduleAndLargeVo"
 )
 
 // Test case labels
@@ -395,6 +396,7 @@ const (
 	UpgradePxBackupStorageClassAndImagesCheckLabel                                          TestCaseLabel = "UpgradePxBackupStorageClassAndImagesCheck"
 	InstallPxBackupKubernetesVersionCheckLabel                                              TestCaseLabel = "InstallPxBackupKubernetesVersionCheck"
 	UpgradePxBackupKubernetesVersionCheckLabel                                              TestCaseLabel = "UpgradePxBackupKubernetesVersionCheck"
+	BackupAndRestoreWithParallelBackupScheduleAndLargeVolLabel                              TestCaseLabel = "BackupAndRestoreWithParallelBackupScheduleAndLargeVol"
 )
 
 // Common Labels
@@ -739,4 +741,5 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	UpgradePxBackupStorageClassAndImagesCheck:                              {UpgradePxBackupStorageClassAndImagesCheckLabel, FunctionalTest, PxBackupLabel, P0, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
 	InstallPxBackupKubernetesVersionCheck:                                  {InstallPxBackupKubernetesVersionCheckLabel, FunctionalTest, PxBackupLabel, P2, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
 	UpgradePxBackupKubernetesVersionCheck:                                  {UpgradePxBackupKubernetesVersionCheckLabel, FunctionalTest, PxBackupLabel, P2, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
+	BackupAndRestoreWithParallelBackupScheduleAndLargeVol:                  {BackupAndRestoreWithParallelBackupScheduleAndLargeVolLabel, SystemTest, PxBackupLabel},
 }
