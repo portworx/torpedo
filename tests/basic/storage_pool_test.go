@@ -5392,9 +5392,17 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 		log.InfoD(stepLog)
 
 		contexts = make([]*scheduler.Context, 0)
+		done := make(chan bool)
+		errorChan := make(chan error)
+		defer func() {
+			done <- true
+			close(done)
+			close(errorChan)
+			log.Infof("Closed both the channels")
+		}()
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("snapcreateresizepool-%d", i))...)
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("volresyncresizepool-%d", i))...)
 		}
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
@@ -5450,6 +5458,15 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 
 			log.InfoD("setting replication on the volumes")
 			setRepl := func(vol *volume.Volume) error {
+				var (
+					maxReplicaFactor int64
+					nodesToBeUpdated []string
+					poolsToBeUpdated []string
+				)
+				maxReplicaFactor = 3
+				poolsToBeUpdated = nil
+				nodesToBeUpdated = nil
+
 				log.InfoD("setting replication factor of the volume [%v] with ID [%v]", vol.Name, vol.ID)
 				currRepFactor, err := Inst().V.GetReplicationFactor(vol)
 				log.FailOnError(err, "Failed to get replication factor on the volume")
@@ -5457,22 +5474,26 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 				opts := volume.Options{
 					ValidateReplicationUpdateTimeout: replicationUpdateTimeout,
 				}
+
 				if currRepFactor == 3 {
+					//check if volume is in the pool
+					poolIds, err := GetPoolIDsFromVolName(vol.Name)
+					log.FailOnError(err, "Failed to get pool IDs from volume name")
+					for _, poolId := range poolIds {
+						if poolId == rebootPoolID {
+							poolsToBeUpdated = append(poolsToBeUpdated, rebootPoolID)
+						}
+					}
 					newRepl := currRepFactor - 1
-					err = Inst().V.SetReplicationFactor(vol, newRepl, nil, nil, true, opts)
+					err = Inst().V.SetReplicationFactor(vol, newRepl, nodesToBeUpdated, poolsToBeUpdated, true, opts)
 					if err != nil {
 						return err
 					}
 				}
 				// Change Replica sets of each volumes created to 3
-				var (
-					maxReplicaFactor int64
-					nodesToBeUpdated []string
-					poolsToBeUpdated []string
-				)
-				maxReplicaFactor = 3
-				nodesToBeUpdated = nil
-				poolsToBeUpdated = nil
+				if len(poolsToBeUpdated) == 0 {
+					poolsToBeUpdated = append(poolsToBeUpdated, rebootPoolID)
+				}
 				err = Inst().V.SetReplicationFactor(vol, maxReplicaFactor,
 					nodesToBeUpdated, poolsToBeUpdated, true, opts)
 				if err != nil {
@@ -5484,7 +5505,11 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 
 			// Set replicaiton on all volumes in parallel so that multiple volumes will be in resync
 			var wg sync.WaitGroup
-			var m sync.Mutex
+			var m, poolExpandLock sync.Mutex
+
+			// This function checks for pool's status if it is offline it does the needfull to get it online
+			go poolStatusChecker(&done, &errorChan, *restartDriver, rebootPoolID, expectedSize, isjournal, &poolExpandLock)
+
 			error_array := []error{}
 			for _, eachVol := range Volumes {
 				log.InfoD("Set replication on the volume [%v]", eachVol.ID)
@@ -5499,20 +5524,24 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 					}
 				}(eachVol)
 			}
-			wg.Wait()
-			dash.VerifyFatal(len(error_array) == 0, true, fmt.Sprintf("errored while setting replication on volumes [%v]", error_array))
 
-			log.InfoD("Waiting till Volume is In Resync Mode ")
+			log.InfoD("Waiting till Volume is In Resync Mode")
 			if WaitTillVolumeInResync(randomVolIDs) == false {
 				log.InfoD("Failed to get Volume in Resync state [%s]", randomVolIDs)
 			}
 
 			log.InfoD("Current Size of the pool %s is %d", rebootPoolID, poolToBeResized.TotalSize/units.GiB)
-			err = Inst().V.ExpandPool(rebootPoolID, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize, true)
+			poolExpandLock.Lock()
+			err = Inst().V.ExpandPool(rebootPoolID, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 			resizeErr := waitForPoolToBeResized(expectedSize, rebootPoolID, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool [%s] on node [%s] expansion using auto", rebootPoolID, restartDriver.Name))
+			poolExpandLock.Unlock()
+			wg.Wait()
+
+			dash.VerifyFatal(len(error_array) == 0, true, fmt.Sprintf("errored while setting replication on volumes [%v]", error_array))
+			dash.VerifyFatal(len(errorChan) == 0, true, fmt.Sprintf("errored while expanding pool in poolstatuschecker[%v]", <-errorChan))
 		}
 	})
 
@@ -5521,6 +5550,43 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
+
+// poolStatusChecker checks for pool status on selectedNode and when the pool goes offline it will expand the pool with ID poolID with the given type of expand and to expected size
+func poolStatusChecker(done *chan bool, errorChan *chan error, selectedNode node.Node, PoolID string, expectedSize uint64, isjournal bool, poolExpandLock *sync.Mutex) {
+	defer GinkgoRecover()
+	for {
+		select {
+		case <-*done:
+			log.Infof("exited Pool status checker: %v", *done)
+			return
+		default:
+			poolsStatus, err := Inst().V.GetNodePoolsStatus(selectedNode)
+			if err != nil {
+				*errorChan <- err
+			} else {
+				if poolsStatus != nil {
+					for _, v := range poolsStatus {
+						log.Infof("monitoring pool: %v, status: %v", PoolID, v)
+						if poolExpandLock.TryLock() {
+							if v == "Offline" {
+								log.InfoD("Pool status checker has triggered pool expand because pool became %v", v)
+								err := Inst().V.ExpandPool(PoolID, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
+								*errorChan <- err
+								resizeErr := waitForPoolToBeResized(expectedSize, PoolID, isjournal)
+								*errorChan <- resizeErr
+								poolExpandLock.Unlock()
+							} else {
+								log.Infof("pool %v is already expanding ", poolIDToResize)
+							}
+						}
+					}
+				}
+			}
+		}
+		log.Infof("poolstatuschecker Sleeping for 20 seconds")
+		time.Sleep(20 * time.Second)
+	}
+}
 
 var _ = Describe("{PoolIncreaseSize20TB}", func() {
 	/*
