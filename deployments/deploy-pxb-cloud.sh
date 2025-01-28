@@ -724,6 +724,10 @@ spec:
       value: "${IMAGE_PULL_SECRET}"
     - name: VOLUME_COUNT_FOR_PARALLEL_DELETE
       value: "${VOLUME_COUNT_FOR_PARALLEL_DELETE}"
+    - name: DOCKER_USERNAME
+      value: "${DOCKER_USERNAME}"
+    - name: DOCKER_PASSWORD
+      value: "${DOCKER_PASSWORD}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account

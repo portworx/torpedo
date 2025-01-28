@@ -247,6 +247,7 @@ const (
 	RESOURCEGROUP                         = "apps"
 	RESOURCEKIND                          = "Deployment"
 	RESOURCEVERSION                       = "v1"
+	DocRegistrySecret                     = "docregistry-secret"
 )
 
 var (
@@ -13098,8 +13099,92 @@ func GetAllCustomRoles() ([]string, error) {
 	return roles, nil
 }
 
+func CreateDocRegistrySecret(namespace string) error {
+
+	// Check if secret exists
+	secret, err := k8sCore.GetSecret("px-backup-secret", namespace)
+	if err != nil {
+		log.Infof("Secret does not exist. Creating...")
+		// Create the Docker config JSON string
+		// Read username and password from environment variables
+		username := os.Getenv("DOCKER_USERNAME")
+		password := os.Getenv("DOCKER_PASSWORD")
+
+		if username == "" || password == "" {
+			return fmt.Errorf("DOCKER_USERNAME or DOCKER_PASSWORD environment variable is not set")
+		}
+
+		// Create the Docker config JSON string
+		dockerConfigJson := fmt.Sprintf(`{
+			"auths": {
+				"docker.io": {
+					"username": "%s",
+					"password": "%s",
+					"auth": ""
+				}
+			}
+		}`, username, password)
+
+		// Create the secret object
+		docRegistrySecret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      DocRegistrySecret,
+				Namespace: namespace,
+			},
+			Type: corev1.SecretTypeDockerConfigJson,
+			Data: map[string][]byte{
+				corev1.DockerConfigJsonKey: []byte(dockerConfigJson),
+			},
+		}
+
+		_, err = k8sCore.CreateSecret(docRegistrySecret)
+		if err != nil {
+			log.Errorf("Failed to create secret: %v", err)
+			return err
+		}
+		log.Infof("Secret created successfully")
+	} else {
+		log.Infof("Secret %s already exists", secret.Name)
+	}
+	return nil
+}
+
 // InstallPxBackup installs Px-Backup through helm and waits for all the pods to be ready
 func InstallPxBackup(version, branch, namespace string, vals map[string]interface{}) (*release.Release, error) {
+
+	cluster_provider := os.Getenv("CLUSTER_PROVIDER")
+	if cluster_provider == "" {
+		return nil, fmt.Errorf("CLUSTER_PROVIDER environment variable is not set")
+	}
+	if !(cluster_provider == "vanilla" ||
+		cluster_provider == "openshift" ||
+		cluster_provider == "rke") {
+		log.Infof("Cluster provider is not on-prem.")
+
+		// Check if namespace exists
+		_, err := k8sCore.GetNamespace(namespace)
+		if err != nil {
+			// Namespace doesn't exist, create it
+			log.Infof("Namespace %s does not exist. Creating...", namespace)
+			ns := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: namespace,
+				},
+			}
+			if _, err = k8sCore.CreateNamespace(ns); err != nil {
+				log.Errorf("Failed to create namespace %s: %v", namespace, err)
+				return nil, err
+			}
+			log.Infof("Namespace %s created successfully", namespace)
+		}
+
+		// Create Docker registry secret
+		err = CreateDocRegistrySecret(namespace)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	cfg, err := initHelmActionConfig(namespace)
 	if err != nil {
 		return nil, err
@@ -13233,24 +13318,31 @@ func installPxBackupChart(
 		return nil, fmt.Errorf("failed to load chart: %w", err)
 	}
 
+	// Start with the default values of the new chart
+	defaultValues := chart.Values
+	log.Infof("Default Values for helm upgrade: %v", defaultValues)
+
+	// Merge user-supplied values into the new chart's defaults
+	mergeCustomOverrides(defaultValues, vals)
+
 	// Update custom repo and registry
 	customRepo := os.Getenv("CUSTOM_REPO")
 	customRegistry := os.Getenv("CUSTOM_REGISTRY")
 
 	if customRepo != "" && customRegistry != "" {
 		imageNames := []string{}
-		for key := range vals["images"].(map[string]interface{}) {
+		for key := range defaultValues["images"].(map[string]interface{}) {
 			imageNames = append(imageNames, key)
 		}
-		updateCustomRepoAndRegistry(vals, imageNames, customRepo, customRegistry)
+		updateCustomRepoAndRegistry(defaultValues, imageNames, customRepo, customRegistry, DocRegistrySecret)
 		log.Infof("Applied custom registry and repo: registry=%s, repo=%s", customRegistry, customRepo)
 	}
 
 	installStart := time.Now()
-	log.Infof("Values used for helm install:\n%v", vals)
+	log.Infof("Values used for helm install:\n%v", defaultValues)
 	log.Infof("Chart URL used for helm install - %s", chartURL)
 
-	rel, err := install.Run(chart, vals)
+	rel, err := install.Run(chart, defaultValues)
 	if err != nil {
 		return nil, fmt.Errorf("failed to install chart: %w", err)
 	}
@@ -13389,21 +13481,8 @@ func UpgradePxBackupChart(cfg *action.Configuration, customValues map[string]int
 	defaultValues := chart.Values
 	log.Infof("Default Values for helm upgrade: %v", defaultValues)
 
-	// Retrieve user-supplied values from the current release
-	userValues, err := GetHelmReleaseValues(namespace, PxCentralReleaseName, false)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch user-supplied values: %w", err)
-	}
-	log.Infof("Fetched values previously set by user for helm upgrade: %v", userValues)
-
 	// Merge user-supplied values into the new chart's defaults
-	mergeCustomOverrides(defaultValues, userValues)
-
-	// Merge custom values if provided
-	if customValues != nil {
-		mergeCustomOverrides(defaultValues, customValues)
-		log.Infof(("Updated custom values for helm upgrade: %v"), customValues)
-	}
+	mergeCustomOverrides(defaultValues, customValues)
 
 	// Update repo and registry for cloud environments after merging custom and default values
 	customRepo := os.Getenv("CUSTOM_REPO")
@@ -13414,7 +13493,7 @@ func UpgradePxBackupChart(cfg *action.Configuration, customValues map[string]int
 		for key := range defaultValues["images"].(map[string]interface{}) {
 			imageNames = append(imageNames, key)
 		}
-		updateCustomRepoAndRegistry(defaultValues, imageNames, customRepo, customRegistry)
+		updateCustomRepoAndRegistry(defaultValues, imageNames, customRepo, customRegistry, DocRegistrySecret)
 		log.Infof("Applied custom registry and repo: registry=%s, repo=%s", customRegistry, customRepo)
 	}
 
@@ -13435,19 +13514,55 @@ func UpgradePxBackupChart(cfg *action.Configuration, customValues map[string]int
 }
 
 // updateCustomRepoAndRegistry updates the custom repo and registry for the given image names
-func updateCustomRepoAndRegistry(customValues map[string]interface{}, imageNames []string, customRepo, customRegistry string) {
+func updateCustomRepoAndRegistry(
+	customValues map[string]interface{},
+	imageNames []string,
+	customRepo,
+	customRegistry,
+	imagePullSecret string,
+) {
+	// Safely get the "images" key as a map[string]interface{}
+	imagesMap, ok := customValues["images"].(map[string]interface{})
+	if !ok || imagesMap == nil {
+		log.Warnf("No 'images' map found in customValues; cannot update registry or pull secrets.")
+		return
+	}
 
-	images := customValues["images"].(map[string]interface{})
-
+	// 1. Update repo and registry fields for the specified images
 	for _, imageName := range imageNames {
-		// Check if the image entry already exists in the map
-		if image, exists := images[imageName]; exists {
-			// If the entry exists, cast it to a map and update repo and registry
-			if imageMap, isMap := image.(map[string]interface{}); isMap {
-				imageMap["repo"] = customRepo
-				imageMap["registry"] = customRegistry
-				log.Infof("Updated repo and registry for existing image: %s", imageName)
+		if imgEntry, exists := imagesMap[imageName]; exists {
+			if imgMap, isMap := imgEntry.(map[string]interface{}); isMap {
+				imgMap["repo"] = customRepo
+				imgMap["registry"] = customRegistry
+				log.Infof("Updated repo/registry for existing image: %s", imageName)
 			}
+		}
+	}
+
+	// 2. Optionally add the pull secret to images.pullSecrets
+	//    if `imagePullSecret` is non-empty
+	if imagePullSecret != "" {
+		// Get pullSecrets as a []interface{} (the typical structure of YAML lists)
+		pullSecrets, found := imagesMap["pullSecrets"].([]interface{})
+		if !found || pullSecrets == nil {
+			pullSecrets = []interface{}{}
+		}
+
+		// Check if the secret is already present
+		alreadyExists := false
+		for _, s := range pullSecrets {
+			if s == imagePullSecret {
+				alreadyExists = true
+				break
+			}
+		}
+
+		if !alreadyExists {
+			pullSecrets = append(pullSecrets, imagePullSecret)
+			imagesMap["pullSecrets"] = pullSecrets
+			log.Infof("Added imagePullSecret: %s", imagePullSecret)
+		} else {
+			log.Infof("imagePullSecret: %s already present; skipping", imagePullSecret)
 		}
 	}
 }
