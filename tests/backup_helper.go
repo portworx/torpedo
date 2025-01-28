@@ -14551,11 +14551,10 @@ func WaitForPodsReady(namespace string, timeout time.Duration, retryInterval tim
 	waitForPodsReady := func() (interface{}, bool, error) {
 		err := ValidateNonJobPodsReady(namespace)
 		if err != nil {
-			log.Infof("Pods are not in ready state, waiting for them to become ready")
-			return nil, false, nil // Retry as pods are still not ready
+			return nil, true, fmt.Errorf("pods are not in ready state, waiting for them to become ready - %s", err.Error())
 		}
 		log.Infof("All pods are in ready state as expected")
-		return nil, true, nil // Pods are ready, exit the wait loop
+		return nil, false, nil
 	}
 
 	// Use retry with timeout
