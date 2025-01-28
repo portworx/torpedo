@@ -11530,3 +11530,221 @@ var _ = Describe("{ValidateNewCloudDriveNotCreated}", Label("p1", "negative", "p
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{ValidatePVCNotBoundAndAppNotRunningDueToTopologyMismatch}", Label("p1", "negative", "topology", "pvc", "px_vol_ops"), func() {
+	/*
+		https://purestorage.atlassian.net/browse/PTX-27787
+		1. Create a SC with topology
+		2. Create a PVC with the SC
+		3. Deploy an application with the PVC
+		4. Verify the PVC is not bound
+		5. Verify the application is not running
+		6. Delete the PVC, SC and the application
+	*/
+
+	const (
+		fsEndpoint    = "xfs"
+		pureFAPodName = "automation"
+		scType        = "pure_block"
+	)
+
+	var (
+		scName  = "sc-topology-mismatch-" + time.Now().Format("01-02-15h04m05s")
+		ns      = "ns-topology-mismatch-" + time.Now().Format("01-02-15h04m05s")
+		pvcName = "pvc-topology-mismatch-" + time.Now().Format("01-02-15h04m05s")
+		pvc     *v1.PersistentVolumeClaim
+		pod     *v1.Pod
+	)
+
+	JustBeforeEach(func() {
+
+		StartTorpedoTest("ValidatePVCNotBoundAndAppNotRunningDueToTopologyMismatch",
+			"Validate PVC is not bound and application is not running due to topology mismatch", nil, 0)
+
+		stc, err := Inst().V.GetDriver()
+		log.FailOnError(err, "Failed to get driver")
+		log.InfoD("Check if the topology is enabled in the stc")
+		if stc.Spec.CSI.Topology.Enabled == false {
+			Skip("Topology is Disabled so skipping the test")
+		}
+
+		driverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+
+		pxPureSecret, err := pureutils.GetPXPureSecret(driverNamespace)
+		log.FailOnError(err, "Failed to get px pure secret")
+
+		endpointToZoneMap := pxPureSecret.GetArrayToZoneMap()
+		if len(endpointToZoneMap) < 2 {
+			Skip("Need atleast 2 different zones to run this test")
+		}
+	})
+
+	itLog := "ValidatePVCNotBoundAndAppNotRunningDueToTopologyMismatch"
+	It(itLog, func() {
+		log.InfoD(itLog)
+
+		stepLog := "Create a SC with topology"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			params := map[string]string{
+				"backend":                   scType,
+				"csi.storage.k8s.io/fstype": fsEndpoint,
+				"pure_fa_pod_name":          pureFAPodName,
+			}
+			allowVolExpansion := true
+			bindMode := storageApi.VolumeBindingWaitForFirstConsumer
+			allowedTopologies := map[string][]string{
+				k8s.TopologyZoneK8sNodeLabel: {"zone-1"},
+			}
+			mountOptions := []string{"nosuid"}
+
+			// Delete the storage class if it already exists
+			storage.Instance().DeleteStorageClass(scName)
+			time.Sleep(1 * time.Second)
+
+			// Create the storage class
+			err := CreateFlashStorageClass(scName, scType,
+				v1.PersistentVolumeReclaimDelete,
+				params, mountOptions,
+				&allowVolExpansion, bindMode, allowedTopologies)
+			dash.VerifyFatal(err, nil, "Verify SC is created successfully")
+		})
+
+		stepLog = "Create a PVC with the SC"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			nsName := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: ns,
+				},
+			}
+			_, err := core.Instance().CreateNamespace(nsName)
+			log.FailOnError(err, fmt.Sprintf("error creating namespace [%s] failed [%v]", ns, err))
+
+			err = CreateFlashPVCOnCluster(pvcName, scName, ns, "5Gi")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verify PVC [%s] is created successfully", pvcName))
+
+			time.Sleep(10 * time.Second)
+
+			pvc, err = core.Instance().GetPersistentVolumeClaim(pvcName, ns)
+			log.FailOnError(err, "Failed to create PVC [%v]. Error : [%v]", pvcName, err)
+		})
+
+		stepLog = "Deploy an application with the PVC"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			podSpec := &corev1.Pod{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Pod",
+					APIVersion: "v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "pod-" + pvc.Name,
+					Namespace: pvc.Namespace,
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "nginx-container",
+							Image: "nginx:latest",
+							Ports: []corev1.ContainerPort{
+								{
+									ContainerPort: 80,
+								},
+							},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									MountPath: "/usr/share/nginx/html",
+									Name:      "nginx-volume",
+								},
+							},
+						},
+					},
+					Volumes: []corev1.Volume{
+						{
+							Name: "nginx-volume",
+							VolumeSource: corev1.VolumeSource{
+								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+									ClaimName: pvc.Name,
+								},
+							},
+						},
+					},
+					Affinity: &corev1.Affinity{
+						NodeAffinity: &corev1.NodeAffinity{
+							RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+								NodeSelectorTerms: []corev1.NodeSelectorTerm{
+									{
+										MatchExpressions: []corev1.NodeSelectorRequirement{
+											{
+												Key:      "topology.portworx.io/zone",
+												Operator: corev1.NodeSelectorOpIn,
+												Values:   []string{"zone-2"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			log.Infof("Creating nginx pod from pvc")
+			pod, err = k8sCore.CreatePod(podSpec)
+			log.FailOnError(err, "Failed to create pod")
+		})
+
+		stepLog = "Verify the PVC is not bound"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			var errorMessage string
+			containsPodNotFoundError := false
+			err := Inst().S.WaitForSinglePVCToBound(pvcName, ns, 5)
+			if pvc.Status.Phase == "Pending" {
+				for _, event := range Inst().S.GetEvents()["PersistentVolumeClaim"] {
+					if strings.Contains(event.Message, fmt.Sprintf("waiting for pod %s to be scheduled", pod.Name)) {
+						errorMessage = event.Message
+						containsPodNotFoundError = true
+						break
+					}
+				}
+			}
+			dash.VerifyFatal(err != nil, true, fmt.Sprintf("Verify PVC [%s] fails to get bound in namespace [%s].", pvcName, ns))
+			dash.VerifyFatal(containsPodNotFoundError, true, fmt.Sprintf("Verify PVC fails to get bound as expected with error [%s].", errorMessage))
+		})
+
+		stepLog = "Verify the application is not running"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			time.Sleep(2 * time.Minute)
+			t := func() (interface{}, bool, error) {
+				pod, err := k8sCore.GetPodByName(pod.Name, pod.Namespace)
+				if err != nil {
+					return nil, true, err
+				}
+				if k8sCore.IsPodReady(*pod) {
+					return nil, false, fmt.Errorf("pod %s is in running state, which is not expected", pod.Name)
+				}
+				return nil, true, nil
+			}
+			_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
+			log.FailOnError(err, "Test failed because the pod transitioned to a running state")
+		})
+
+		stepLog = "Delete the PVC, SC and the application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			err = core.Instance().DeleteNamespace(ns)
+			log.FailOnError(err, "Failed to delete namespace [%v]. Error : [%v]", ns, err)
+
+			err = storage.Instance().DeleteStorageClass(scName)
+			log.FailOnError(err, "Failed to delete SC [%v]. Error : [%v]", scName, err)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
