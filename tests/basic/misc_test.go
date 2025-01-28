@@ -3990,6 +3990,203 @@ var _ = Describe("{ContinuousPXRestartAndAppValidation}", Label("p0", "negative"
 	})
 })
 
+
+// Keep killing the node which is becoming new etcd node.
+var _ = Describe("{ValidateKillingNewNodeAfterKVDBFailOver}", Label("p1", "kvdb_ops", "negative", "staging"), func() {
+	/*
+		JiraID : https://purestorage.atlassian.net/browse/HAZEL-1006
+		Create few (10) initial apps
+		Trigger KVDB Failover by stopping px on kvdb node
+		Once failover is done and new node becomes kvdb member, kill this new node as well
+		Create one app & delete any one initial app
+		Repeat steps 2 to 4 atleast 10 times
+		After Step 5, all initial apps should be deleted and 10 new apps from step 4 should be running
+		Validate apps
+	*/
+
+	var (
+		testrailID            = 36147344
+		runID                 int
+		preContexts           = make([]*scheduler.Context, 0)
+		postContexts          = make([]*scheduler.Context, 0)
+		initialAppCount       = 10
+		selectedNodeForPxStop KvdbNode
+		previousKVDBNodesMap  = make(map[string]bool)
+	)
+	JustBeforeEach(func() {
+		StartTorpedoTest("ValidateKillingNewNodeAfterKVDBFailOver", "Keep killing the node which is becoming new etcd node", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	stepLog := "Restart all the px nodes after killing leader node of etcd in etcd cluster"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+
+		storageNodes := node.GetStorageNodes()
+		log.Infof("Storage node in the cluster: [%v]", storageNodes)
+		if len(storageNodes) < 7 {
+			Skip("At least 7 nodes are required to run the tests")
+		}
+
+		for i := 0; i < initialAppCount; i++ {
+			preContexts = append(preContexts, ScheduleApplications(fmt.Sprintf("kvdb-%d", i))...)
+		}
+
+		ValidateApplications(preContexts)
+		cleanup := func() {
+			log.Info("Executing cleanup tasks")
+
+			if selectedNodeForPxStop.ID != "" {
+				node, err := node.GetNodeDetailsByNodeID(selectedNodeForPxStop.ID)
+				log.FailOnError(err, "Unable to get the node details for the node  [%v]", node)
+				err = Inst().V.StartDriver(node)
+				log.FailOnError(err, "error starting driver on node %s", node.Name)
+				err = Inst().V.WaitDriverUpOnNode(node, 10*time.Minute)
+				log.FailOnError(err, "error while waiting for driver up on node %s", node.Name)
+				log.Infof("Successfully start the portworx :[%v]", selectedNodeForPxStop)
+			}
+			DestroyApps(preContexts, nil)
+			DestroyApps(postContexts, nil)
+		}
+		defer cleanup()
+
+		stopPXOnKVDBNode := func(nodeDetails node.Node) {
+			StopVolDriverAndWait([]node.Node{nodeDetails})
+			log.InfoD("PX service successfully stopped on node: %v", selectedNodeForPxStop)
+			time.Sleep(20 * time.Second)
+			healthyCount := 0
+			checkKVDBQuorum := func() (interface{}, bool, error) {
+				healthyCount = 0
+				getKVDBNodes, err := GetAllKvdbNodes()
+				if err != nil {
+					return nil, true, fmt.Errorf("unable to get KVDB nodes: %w", err)
+				}
+				log.Infof("KVDB node details: %v", getKVDBNodes)
+				for _, each := range getKVDBNodes {
+					if each.IsHealthy == true {
+						healthyCount++
+					}
+				}
+				if healthyCount == 2 {
+					log.Infof("KVDB quorum intact. Healthy count: %d, Expected: 2", healthyCount)
+					return nil, false, nil
+				}
+				log.Errorf("KVDB quorum lost. Healthy count: %d, Expected: 2. Retrying...", healthyCount)
+				return nil, true, fmt.Errorf("quorum lost. Healthy count: %d, Expected: 2", healthyCount)
+			}
+			_, err = task.DoRetryWithTimeout(checkKVDBQuorum, 5*time.Minute, 30*time.Second)
+			log.FailOnError(err, "Error occurred while checking KVDB quorum")
+			dash.VerifyFatal(healthyCount == 2, true, fmt.Sprintf("verify kvdb quorum is not lost.Healthy count: %d, Expected: 2", healthyCount))
+		}
+
+		// Repeat steps 2 to 4 atleast 10 times
+		for i := 0; i < initialAppCount; i++ {
+			stepLog = "Initiating KVDB failover by stopping PX on one of the KVDB member nodes"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				getKVDBNodes, err := GetAllKvdbNodes()
+				log.FailOnError(err, "Unable to get KVDB nodes")
+				previousKVDBNodesMap = make(map[string]bool)
+				for _, kvdbNode := range getKVDBNodes {
+					previousKVDBNodesMap[kvdbNode.ID] = true
+				}
+				log.Infof("Previous KVDB node details: %v", getKVDBNodes)
+				selectedNodeForPxStop = getKVDBNodes[0]
+				log.Infof("Selected node for PX stop: %v", selectedNodeForPxStop)
+				nodeDetails, err := node.GetNodeDetailsByNodeID(selectedNodeForPxStop.ID)
+				log.FailOnError(err, "Unable to retrieve node details for NodeID [%v]", selectedNodeForPxStop.ID)
+				stopPXOnKVDBNode(nodeDetails)
+			})
+
+			stepLog = "Deleting the new kvdb member node"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				newKVDBNode := node.Node{}
+				t := func() (interface{}, bool, error) {
+					getKVDBNodes, err := GetAllKvdbNodes()
+					if err != nil {
+						return nil, true, fmt.Errorf("failed to get KVDB nodes")
+					}
+					healthyCount := 0
+					for _, each := range getKVDBNodes {
+						if each.IsHealthy == true {
+							healthyCount++
+						}
+					}
+					if healthyCount == 3 {
+						log.Infof("KVDB quorum intact. Healthy count: %d, Expected: 3", healthyCount)
+						log.Infof("Number of KVDB nodes: %v", len(getKVDBNodes))
+						return getKVDBNodes, false, nil
+					}
+					return nil, true, fmt.Errorf("KVDB quorum not intact. Healthy count: %d, Expected: 3", healthyCount)
+				}
+				getKVDBNodes, err := task.DoRetryWithTimeout(t, 10*time.Minute, 30*time.Second)
+				log.FailOnError(err, "Unable to get KVDB nodes")
+				log.Infof("KVDB node details: %v", getKVDBNodes)
+				for _, kvdbNode := range getKVDBNodes.([]KvdbNode) {
+					log.Infof("New KVDB node details: %v", kvdbNode.ID)
+					if _, ok := previousKVDBNodesMap[kvdbNode.ID]; !ok {
+						log.InfoD("The New KVDB Node to be killed %v", kvdbNode)
+						newKVDBNode, err = node.GetNodeDetailsByNodeID(kvdbNode.ID)
+						log.FailOnError(err, "Unable to get node details with ID [%v]", kvdbNode.ID)
+						break
+					}
+				}
+				log.Infof("Stop volume driver [%s] on nodes: [%v]", Inst().V.String(), newKVDBNode)
+				StopVolDriverAndWait([]node.Node{newKVDBNode})
+				log.Infof("Stopped volume driver [%s] on nodes [%v]", Inst().V.String(), newKVDBNode)
+				log.Infof("Starting volume driver [%s] on nodes [%v]", Inst().V.String(), newKVDBNode)
+				StartVolDriverAndWait([]node.Node{newKVDBNode})
+				log.Infof("Started volume driver [%s] on nodes [%v]", Inst().V.String(), newKVDBNode)
+			})
+
+			stepLog = "Create one app & deleting one initial app"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+
+				// deleting an app and namespace from the  preContexts
+				ns := preContexts[i].App.NameSpace
+				TearDownContext(preContexts[i], nil)
+				err = k8sCore.DeleteNamespace(ns)
+				log.FailOnError(err, "Unable to delete namespace [%v]", ns)
+				// schedule a new app in postContexts
+				postContexts = append(postContexts, ScheduleApplications(fmt.Sprintf("kvdb-new-%d", i))...)
+			})
+			stepLog = "Starting the PX driver on the initially stopped Node"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				log.Infof("Selected node for PX start: %v", selectedNodeForPxStop)
+				nodeDetails, err := node.GetNodeDetailsByNodeID(selectedNodeForPxStop.ID)
+				log.FailOnError(err, "Unable to retrieve node details for NodeID [%v]", selectedNodeForPxStop.ID)
+				StartVolDriverAndWait([]node.Node{nodeDetails})
+				log.Infof("Started volume driver [%s] on nodes [%v]", Inst().V.String(), nodeDetails)
+				selectedNodeForPxStop = KvdbNode{}
+			})
+		}
+
+		stepLog = "Verify all initial apps are deleted"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range preContexts {
+				log.Infof("Length of precontexts is %v, ctx value: %v", len(preContexts), ctx.UID)
+				err := Inst().S.SelectiveWaitForTermination(ctx, Inst().DestroyAppTimeout, []node.Node{})
+				dash.VerifyFatal(err == nil, true, fmt.Sprintf("Initially created app [%v] is not deleted!!", len(preContexts)))
+			}
+		})
+
+		stepLog = "validate applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			ValidateApplications(postContexts)
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(postContexts, testrailID, runID)
+  })
+})
+
 // keep restarting etcd node till 3 mins.
 var _ = Describe("{RestartKVDBNodeUntilTimeout}", Label("p1", "kvdb_ops", "positive", "node_reboot", "staging"), func() {
 	/*
