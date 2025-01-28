@@ -3989,3 +3989,133 @@ var _ = Describe("{ContinuousPXRestartAndAppValidation}", Label("p0", "negative"
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
+
+// keep restarting etcd node till 3 mins.
+var _ = Describe("{RestartKVDBNodeUntilTimeout}", Label("p1", "kvdb_ops", "positive", "node_reboot", "staging"), func() {
+	/*
+		JiraID : https://purestorage.atlassian.net/browse/HAZEL-1004
+		1. Pick any kvdb node
+		2. Restart the node
+		3. Repeat above 2 steps atleast 10 times
+		4. Validate apps
+	*/
+
+	var (
+		testrailID    = 36147339
+		runID         int
+		contexts      = make([]*scheduler.Context, 0)
+		loopCount     = 10
+		nodeToRestart = node.Node{}
+	)
+	JustBeforeEach(func() {
+		StartTorpedoTest("RestartKVDBNodeUntilTimeout", "keep restarting etcd node till 3 mins", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	stepLog := "Restarting Random KVDB nodes in a loop(10 times)"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+
+		stepLog = "Checking the Storage node in the cluster"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			storageNodes := node.GetStorageNodes()
+			log.Infof("Storage node in the cluster: [%v]", storageNodes)
+			if len(storageNodes) < 7 {
+				Skip("At least 7 nodes are required to run the tests")
+			}
+		})
+
+		stepLog = "Scheduling Applications and validating"
+		Step(stepLog, func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("kvdb-%d", i))...)
+			}
+			ValidateApplications(contexts)
+		})
+
+		cleanup := func() {
+			log.Info("Executing cleanup tasks")
+			DestroyApps(contexts, nil)
+		}
+		defer cleanup()
+
+		checkKVDBQuorum := func() (interface{}, bool, error) {
+			healthyCount := 0
+			getKVDBNodes, err := GetAllKvdbNodes()
+			if err != nil {
+				return nil, true, fmt.Errorf("unable to get KVDB nodes: %w", err)
+			}
+			log.Infof("KVDB node details: %v", getKVDBNodes)
+			for _, each := range getKVDBNodes {
+				if each.IsHealthy == true {
+					healthyCount++
+				}
+			}
+			if healthyCount == 3 {
+				log.Infof("KVDB quorum intact. Healthy count: %d, Expected: 3", healthyCount)
+				return getKVDBNodes, false, nil
+			}
+			log.Errorf("KVDB quorum lost. Healthy count: %d, Expected: 3. Retrying...", healthyCount)
+			return nil, true, fmt.Errorf("quorum lost. Healthy count: %d, Expected: 3", healthyCount)
+		}
+
+		// Repeat steps 1 & 2 atleast 10 times
+		for i := 0; i < loopCount; i++ {
+			log.InfoD("Iteration : <<%d>> Restarting KVDB Node", i)
+
+			stepLog = "Picking a KVDB node for restart"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+
+				getKVDBNodes, err := task.DoRetryWithTimeout(checkKVDBQuorum, 5*time.Minute, 20*time.Second)
+				log.FailOnError(err, "Unable to get KVDB nodes")
+				selectedKVDBNode := getKVDBNodes.([]KvdbNode)[rand.Intn(len(getKVDBNodes.([]KvdbNode)))]
+				nodeToRestart, err = node.GetNodeDetailsByNodeID(selectedKVDBNode.ID)
+				log.FailOnError(err, "Unable to retrieve node details for NodeID [%v]", selectedKVDBNode.ID)
+				log.Infof("KVDB node to Restart : %v", nodeToRestart)
+			})
+
+			stepLog = "keep restarting etcd node till 3 mins"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+
+				log.InfoD("Rebooting Node [%v]", nodeToRestart.Name)
+				err = Inst().N.RebootNode(nodeToRestart, node.RebootNodeOpts{
+					Force: true,
+					ConnectionOpts: node.ConnectionOpts{
+						Timeout:         1 * time.Minute,
+						TimeBeforeRetry: 5 * time.Second,
+					},
+				})
+				log.FailOnError(err, "failed to reboot Node [%v]", nodeToRestart.Name)
+				log.InfoD("Restarted the KVDB Node [%v]", nodeToRestart.Name)
+			})
+
+			stepLog = "Wait for connection to come back online after reboot"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				err = Inst().N.TestConnection(nodeToRestart, node.ConnectionOpts{
+					Timeout:         15 * time.Minute,
+					TimeBeforeRetry: 10 * time.Second,
+				})
+
+				err = Inst().S.IsNodeReady(nodeToRestart)
+				log.FailOnError(err, "Node [%v] is not in ready state", nodeToRestart.Name)
+
+				err = Inst().V.WaitDriverUpOnNode(nodeToRestart, Inst().DriverStartTimeout)
+				log.FailOnError(err, "failed waiting for driver up on Node[%v]", nodeToRestart.Name)
+			})
+		}
+
+		stepLog = "validate applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			ValidateApplications(contexts)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
