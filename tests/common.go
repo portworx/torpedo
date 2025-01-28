@@ -9857,6 +9857,7 @@ func GetPoolsDetailsOnNode(n *node.Node) ([]*opsapi.StoragePool, error) {
 		return nil, err
 	}
 	// updating the node info after refresh
+	log.Infof("updating node: %s/%s", n.Name, n.VolDriverNodeID)
 	stDriverNodes := node.GetStorageDriverNodes()
 	for _, stDriverNode := range stDriverNodes {
 		if stDriverNode.VolDriverNodeID == n.VolDriverNodeID {
@@ -16799,6 +16800,7 @@ func GetDefaultStorageClass() (*storageapi.StorageClass, error) {
 		return nil, fmt.Errorf("no storage classes found")
 	}
 	return &allScList.Items[0], err
+
 }
 
 func CreateAndValidateMigrationSched(migSchedName, cpName, migNs string, extraArgs map[string]string) ([]*storkapi.Migration, error) {

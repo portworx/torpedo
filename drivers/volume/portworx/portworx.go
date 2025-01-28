@@ -793,6 +793,7 @@ func (d *portworx) updateNode(n *node.Node, pxNodes []*api.StorageNode) error {
 						log.Infof("Updating node [%s] as storage node", n.Name)
 						n.StoragePools = nil
 						for _, pxNodePool := range pxNode.Pools {
+							log.Infof("Adding storage pool [%s] with size [%d] to node [%s]", pxNodePool.Uuid, pxNodePool.TotalSize/units.GiB, n.Name)
 							storagePool := node.StoragePool{
 								StoragePool:       pxNodePool,
 								StoragePoolAtInit: pxNodePool,
