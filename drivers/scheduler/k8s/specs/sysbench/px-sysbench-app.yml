@@ -36,13 +36,13 @@ spec:
               command: ["sh", "-c", "mysqladmin -u root -p$MYSQL_ROOT_PASSWORD ping"]
             initialDelaySeconds: 120
             periodSeconds: 10
-            timeoutSeconds: 5
+            timeoutSeconds: 30
           readinessProbe:
             exec:
               command: ["sh", "-c", "mysql -u root -p$MYSQL_ROOT_PASSWORD -e \"select 1\""]
-            initialDelaySeconds: 60
+            initialDelaySeconds: 180
             periodSeconds: 10
-            timeoutSeconds: 5
+            timeoutSeconds: 30
           volumeMounts:
             - name: mysql-persistent-storage
               mountPath: /var/lib/mysql
