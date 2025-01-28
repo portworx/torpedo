@@ -5025,12 +5025,18 @@ func PxBackupUpgrade(versionToUpgrade string) error {
 	log.Infof("Upgrading Px-Backup version from %s to %s", currentBackupVersionString, versionToUpgrade)
 	customRegistry := os.Getenv("CUSTOM_REGISTRY")
 	customRepo := os.Getenv("CUSTOM_REPO")
+	imagePullSecret := os.Getenv("IMAGE_PULL_SECRET")
 	if customRegistry == "" || customRepo == "" {
 		cmd = fmt.Sprintf("helm upgrade px-central px-central-%s.tgz --namespace %s --version %s --timeout=15m --set persistentStorage.enabled=true,persistentStorage.storageClassName=\"%s\",pxbackup.enabled=true",
 			versionToUpgrade, pxBackupNamespace, versionToUpgrade, *storageClassName)
 	} else {
-		cmd = fmt.Sprintf("helm upgrade px-central px-central-%s.tgz --namespace %s --version %s --timeout=15m --set persistentStorage.enabled=true,persistentStorage.storageClassName=\"%s\",pxbackup.enabled=true",
-			versionToUpgrade, pxBackupNamespace, versionToUpgrade, *storageClassName)
+		if imagePullSecret != "" {
+			cmd = fmt.Sprintf("helm upgrade px-central px-central-%s.tgz --namespace %s --version %s --timeout=15m --set persistentStorage.enabled=true,persistentStorage.storageClassName=\"%s\",pxbackup.enabled=true,images.pullSecrets[0]=\"%s\"",
+				versionToUpgrade, pxBackupNamespace, versionToUpgrade, *storageClassName, imagePullSecret)
+		} else {
+			cmd = fmt.Sprintf("helm upgrade px-central px-central-%s.tgz --namespace %s --version %s --timeout=15m --set persistentStorage.enabled=true,persistentStorage.storageClassName=\"%s\",pxbackup.enabled=true,images.pullSecrets[0]=docregistry-secret",
+				versionToUpgrade, pxBackupNamespace, versionToUpgrade, *storageClassName)
+		}
 
 		// Additional settings to be appended using template
 		tmpl := `,{{range .Images}}images.{{.Name}}.repo="{{$.CustomRepo}}",images.{{.Name}}.registry="{{$.CustomRegistry}}",{{end}}`
@@ -5080,6 +5086,7 @@ func PxBackupUpgrade(versionToUpgrade string) error {
 				{Name: "pxBackupPrometheusOperatorImage"},
 				{Name: "pxBackupPrometheusConfigReloaderImage"},
 				{Name: "preUpgradeHookImage"},
+				{Name: "preSetupHookImage"},
 				{Name: "mongodbImageMap"},
 				{Name: "mysqlInitImage"},
 			},

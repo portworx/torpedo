@@ -720,6 +720,8 @@ spec:
       value: "${CUSTOM_REGISTRY}"
     - name: CUSTOM_REPO
       value: "${CUSTOM_REPO}"
+    - name: IMAGE_PULL_SECRET
+      value: "${IMAGE_PULL_SECRET}"
     - name: VOLUME_COUNT_FOR_PARALLEL_DELETE
       value: "${VOLUME_COUNT_FOR_PARALLEL_DELETE}"
   volumes: [${VOLUMES}]
