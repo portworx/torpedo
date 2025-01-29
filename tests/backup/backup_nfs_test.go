@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/pure-px/stork/pkg/k8sutils"
 	"time"
 
 	"strings"
@@ -21,43 +22,48 @@ import (
 // DeleteNfsExecutorPodWhileBackupAndRestoreInProgress deletes the nfs executor pod while backup and restore are in progress and validates their status
 var _ = Describe("{DeleteNfsExecutorPodWhileBackupAndRestoreInProgress}", Label(TestCaseLabelsMap[DeleteNfsExecutorPodWhileBackupAndRestoreInProgress]...), func() {
 	var (
-		bkpLocationName          string
-		backupLocationUID        string
-		schedulePolicyName       string
-		schedulePolicyUID        string
-		scheduleName             string
-		firstSchBackupName       string
-		customResourceBackupName string
-		clusterUid               string
-		singleNamespaceBackup    string
-		multiNamespaceRestore    string
-		singleNamespaceRestore   string
-		currentBackupName        string
-		scheduleBackup           string
-		customResourceBackup     string
-		singleNamespaceBkp       string
-		appNamespaces            []string
-		restoreNames             []string
-		schedulePolicyInterval   = int64(15)
-		currentContext           []*scheduler.Context
-		contexts                 []*scheduler.Context
-		appContexts              []*scheduler.Context
-		scheduledAppContexts     []*scheduler.Context
-		appContextsToBackup      []*scheduler.Context
-		schedulePolicyInfo       *api.SchedulePolicyInfo
-		controlChannel           chan string
-		errorGroup               *errgroup.Group
-		destClusterUid           string
+		bkpLocationName                   string
+		backupLocationUID                 string
+		schedulePolicyName                string
+		schedulePolicyUID                 string
+		scheduleName                      string
+		firstSchBackupName                string
+		customResourceBackupName          string
+		clusterUid                        string
+		singleNamespaceBackup             string
+		multiNamespaceRestore             string
+		singleNamespaceRestore            string
+		currentBackupName                 string
+		scheduleBackup                    string
+		customResourceBackup              string
+		singleNamespaceBkp                string
+		appNamespaces                     []string
+		restoreNames                      []string
+		schedulePolicyInterval            = int64(15)
+		currentContext                    []*scheduler.Context
+		contexts                          []*scheduler.Context
+		appContexts                       []*scheduler.Context
+		scheduledAppContexts              []*scheduler.Context
+		appContextsToBackup               []*scheduler.Context
+		schedulePolicyInfo                *api.SchedulePolicyInfo
+		controlChannel                    chan string
+		errorGroup                        *errgroup.Group
+		destClusterUid                    string
+		backupLocationMap                 map[string]string
+		MultiAppNfsPodDeploymentNamespace string
 	)
-	backupLocationMap := make(map[string]string)
-	scheduleBackup = "scheduleBackup"
-	customResourceBackup = "customResourceBackup"
-	singleNamespaceBkp = "singleNamespaceBkp"
 
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("DeleteNfsExecutorPodWhileBackupAndRestoreInProgress", "Delete nfs executor pod while backup and restore are in progress and validate the status", nil, 86105, Sagrawal, Q3FY24)
 		log.InfoD("Scheduling Applications")
+		var err error
+		backupLocationMap = make(map[string]string)
+		scheduleBackup = "scheduleBackup"
+		customResourceBackup = "customResourceBackup"
+		singleNamespaceBkp = "singleNamespaceBkp"
 		scheduledAppContexts = make([]*scheduler.Context, 0)
+		MultiAppNfsPodDeploymentNamespace, err = k8sutils.GetStorkPodNamespace()
+		log.FailOnError(err, "Fetching stork pod namespace")
 		for i := 0; i < 5; i++ {
 			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
 			appContexts = ScheduleApplications(taskName)

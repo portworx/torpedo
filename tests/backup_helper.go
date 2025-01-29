@@ -201,7 +201,6 @@ const (
 	volumeSnapshotClassEnv                = "VOLUME_SNAPSHOT_CLASS"
 	RancherActiveCluster                  = "local"
 	RancherProjectDescription             = "new project"
-	MultiAppNfsPodDeploymentNamespace     = "kube-system"
 	backupScheduleDeleteTimeout           = 60 * time.Minute
 	backupScheduleDeleteRetryTime         = 30 * time.Second
 	sshPodName                            = "ssh-pod"
