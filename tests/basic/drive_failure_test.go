@@ -8,8 +8,16 @@ import (
 	"time"
 
 	"github.com/libopenstorage/openstorage/api"
+	"github.com/portworx/sched-ops/k8s/talisman"
+	"github.com/pure-px/sched-ops/k8s/core"
+	"github.com/pure-px/sched-ops/k8s/storage"
 	"github.com/pure-px/torpedo/pkg/log"
 	"github.com/pure-px/torpedo/pkg/units"
+	"github.com/pure-px/torpedo/pkg/vpsutil"
+	corev1 "k8s.io/api/core/v1"
+	storageApi "k8s.io/api/storage/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/pure-px/torpedo/pkg/testrailuttils"
 
@@ -17,6 +25,7 @@ import (
 
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/drivers/scheduler/k8s"
 	. "github.com/pure-px/torpedo/tests"
 )
 
@@ -1357,25 +1366,108 @@ func PoolResize(testName, description string) {
 	})
 
 	It(testName, func() {
-		stepLog := "Schedule Apps"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			log.Info("schedule app succeed")
-			contexts = scheduleApps()
-			time.Sleep(5 * time.Minute)
-		})
-
+		poolDeleteMap := getDeletablePoolMap()
 		stepLog = "Select a pool to resize"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			poolUUIDSelected = pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, 100)
-			dash.VerifyFatal(len(poolUUIDSelected) > 0, true, fmt.Sprintf("Expected poolIDToResize to not be empty, pool id to resize %s", poolIDToResize))
-			poolToResize = getStoragePool(poolUUIDSelected)
-			nodeSelected, err = GetNodeWithGivenPoolID(poolUUIDSelected)
-			log.FailOnError(err, "Failed to get node from pool id [%v]", poolUUIDSelected)
-
+			for poolID, _ := range poolDeleteMap {
+				n, err := GetNodeWithGivenPoolID(poolID)
+				failOnError(err, "failed to get node details from PoolUUID [%v]", poolID)
+				eligibilityMap, err := GetPoolExpansionEligibility(n, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, 100)
+				if err != nil {
+					log.Warnf("Error identifying pool expansion eligibility, Error: %v", err)
+					continue
+				}
+				if eligibilityMap[n.Id] && eligibilityMap[poolID] {
+					nodeSelected = n
+					poolUUIDSelected = poolID
+					break
+				} else {
+					log.Infof("Excluding pool [%s] from resize as it is on node [%s] as it is not eligible for expansion", poolID, n.Id)
+				}
+			}
 			log.Info(fmt.Sprintf("Pool going to resize is UUID: %s", poolUUIDSelected))
 		})
+
+		dash.VerifyFatal(poolUUIDSelected != "", true, "no pool is found which is eligible for expansion and deletion")
+
+		stepLog = "Get node details by pool uuid and add pool label"
+		poolLabelToUpdate := make(map[string]string)
+		labels := []string{"SSD"}
+		Step(stepLog, func() {
+			log.Infof(stepLog)
+			poolLabelToUpdate["mediatype"] = labels[0]
+			err = Inst().V.UpdatePoolLabels(*nodeSelected, poolUUIDSelected, poolLabelToUpdate)
+			dash.VerifyFatal(err, nil, "Check if able to update the label on the pool")
+
+		})
+
+		stepLog = "Apply volume placement strategy"
+		vpsName := fmt.Sprintf("mongo-vps-%v", time.Now().Unix())
+		Step(stepLog, func() {
+			log.Infof(stepLog)
+			vpsSpec := vpsutil.ReplicaAffinityPool(vpsName)
+			_, err = talisman.Instance().CreateVolumePlacementStrategy(&vpsSpec)
+			dash.VerifyFatal(err, nil, "Check if able to apply volume placement strategy")
+		})
+
+		scName := fmt.Sprintf("mongo-sc-%v", time.Now().Unix())
+		params := make(map[string]string)
+		stepLog = "Apply storage class"
+		k8sStorage := storage.Instance()
+		Step(stepLog, func() {
+			log.Infof(stepLog)
+			params["repl"] = "1"
+			params["placement_strategy"] = vpsName
+			v1obj := metav1.ObjectMeta{
+				Name: scName,
+			}
+			bindMode := storageApi.VolumeBindingImmediate
+			scObj := storageApi.StorageClass{
+				ObjectMeta:        v1obj,
+				Provisioner:       k8s.CsiProvisioner,
+				Parameters:        params,
+				VolumeBindingMode: &bindMode,
+			}
+			_, err := k8sStorage.CreateStorageClass(&scObj)
+			dash.VerifyFatal(err, nil, "Verifying creation of new storage class")
+		})
+
+		stepLog = "Apply persistent volume claim"
+		pvcName := fmt.Sprintf("mongo-pvc-%v", time.Now().Unix())
+
+		Step(stepLog, func() {
+			log.Infof(stepLog)
+			_, err := core.Instance().CreatePersistentVolumeClaim(&corev1.PersistentVolumeClaim{
+				TypeMeta: metav1.TypeMeta{
+					Kind: "PersistentVolumeClaim",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: pvcName,
+				},
+				Spec: corev1.PersistentVolumeClaimSpec{
+					AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteMany},
+					StorageClassName: &scName,
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							corev1.ResourceStorage: resource.MustParse("10Gi"),
+						},
+					},
+				},
+			})
+			dash.VerifyFatal(err, nil, "Verifying creation of new storage class")
+		})
+		poolToResize = getStoragePool(poolUUIDSelected)
+		originalSize := poolToResize.TotalSize
+
+		stepLog := "Schedule Apps"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			contexts = scheduleApps()
+			log.Info("schedule app succeed")
+			time.Sleep(5 * time.Minute)
+		})
+
 		if testName == "ExpandPoolResizeDriveAfterYankingDrive" {
 			stepLog = "Select pool drive"
 			Step(stepLog, func() {
@@ -1557,10 +1649,92 @@ func PoolResize(testName, description string) {
 			ValidateApplications(contexts)
 			log.Info("validate application succeed")
 		})
+
+		stepLog = fmt.Sprintf("Delete pool %s", poolToResize.Uuid)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = DeletePoolAndValidate(*nodeSelected, strconv.Itoa(int(poolToResize.GetID())))
+			log.FailOnError(err, fmt.Sprintf("Error occured while Validating the deleted pool %s in the node %s", poolToResize.Uuid, nodeSelected.Name))
+			log.InfoD("pool [%d] delete succed", poolToResize.GetID())
+		})
+
+		stepLog = "Add new pools with original size"
+		Step(stepLog, func() {
+			log.Info(stepLog)
+			driveSpecs, err := GetCloudDriveDeviceSpecs()
+			log.FailOnError(err, "Error getting cloud drive specs")
+			deviceSpec := driveSpecs[0]
+			deviceSpecParams := strings.Split(deviceSpec, ",")
+
+			paramsArr := make([]string, 0)
+			for _, param := range deviceSpecParams {
+				if strings.Contains(param, "size") {
+					paramsArr = append(paramsArr, fmt.Sprintf("size=%d,", originalSize/units.GiB))
+				} else {
+					paramsArr = append(paramsArr, param)
+				}
+				//drive spec generated from actual cloudrive spec
+
+			}
+			newSpec := strings.Join(paramsArr, ",")
+
+			err = Inst().V.AddCloudDrive(nodeSelected, newSpec, -1)
+			log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", nodeSelected.Name))
+			log.InfoD("adding new pool was successful")
+		})
+
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		appsValidateAndDestroy(contexts)
 		AfterEachTest(contexts)
 	})
+}
+
+func getDeletablePoolMap() map[string]struct{} {
+	var jrnlPartPoolID string
+	deletablePoolMap := map[string]struct{}{}
+
+	poolDeletableNodes := selectPoolDeletableNodes()
+	for _, node := range poolDeletableNodes {
+		nodePools := node.StoragePools
+		log.Infof("selected node [%s]", node.Name)
+		stepLog = "Selecting pool to delete"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			isjournal, err := IsJournalEnabled()
+			log.FailOnError(err, "Failed to check if Journal enabled")
+
+			if isjournal && len(nodePools) > 1 {
+				jDev, err := Inst().V.GetJournalDevicePath(&node)
+				log.FailOnError(err, fmt.Sprintf("error getting journal device path from node %s", node.Name))
+				log.Infof("JournalDev: %s", jDev)
+				if jDev == "" {
+					log.FailOnError(fmt.Errorf("no journal device path found"), "error getting journal device path from storage spec")
+				}
+				drivesMap, err := Inst().V.GetPoolDrives(&node)
+				jPath := jDev[:len(jDev)-1]
+			outer:
+				for k, v := range drivesMap {
+					for _, dv := range v {
+						if strings.Contains(dv.Device, jPath) {
+							jrnlPartPoolID = k
+							break outer
+						}
+					}
+				}
+				for _, nodePool := range nodePools {
+					if strconv.Itoa(int(nodePool.ID)) != jrnlPartPoolID {
+						deletablePoolMap[nodePool.Uuid] = struct{}{}
+					}
+				}
+			} else {
+				for _, nodePool := range nodePools {
+					deletablePoolMap[nodePool.Uuid] = struct{}{}
+				}
+			}
+		})
+	}
+
+	return deletablePoolMap
 }
