@@ -1270,6 +1270,11 @@ var _ = Describe("{StorageFullPoolExpansion}", Label("p0", "positive", "pool_ops
 var _ = Describe("{PoolExpandTestLimits}", Label("p1", "positive", "pool_ops", "PoolExpand"), func() {
 	var poolSizeInGiB uint64
 	BeforeEach(func() {
+		isDMthin, err := IsDMthin()
+		dash.VerifyFatal(err, nil, "error verifying if set up is DMTHIN enabled")
+		if !isDMthin {
+			Skip("DMThin/PX-Storev2 is not enabled on underlaying PX cluster. Skipping `PoolExpandTestBeyond15TiBLimit` test.")
+		}
 		contexts = scheduleApps()
 	})
 
@@ -1314,9 +1319,6 @@ var _ = Describe("{PoolExpandTestLimits}", Label("p1", "positive", "pool_ops", "
 
 		StartTorpedoTest("DMThinPoolExpandBeyond15TiBLimit",
 			"Initiate pool expansion using resize-disk to 20 TiB target size", nil, testrailID)
-		isDMthin, err := IsDMthin()
-		dash.VerifyFatal(err, nil, "error verifying if set up is DMTHIN enabled")
-		dash.VerifyFatal(isDMthin, true, "DMThin/PX-Storev2 is not enabled on underlaying PX cluster. Skipping `PoolExpandTestBeyond15TiBLimit` test.")
 
 		targetSizeTiB := uint64(20)
 		targetSizeInBytes = targetSizeTiB * units.TiB
