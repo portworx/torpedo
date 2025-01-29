@@ -7336,3 +7336,121 @@ var _ = Describe("{CreateCloudSnapAndDeleteKvdbLeaderNode}", Label("p0", "negati
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{CloudsnapVerification}", Label("staging", "p0", "positive", "px_ops"), func() {
+	/*
+	   ticket id: https://purestorage.atlassian.net/browse/HAZEL-1055
+	   Step1: Create a cloudsnap
+	   Step2: Delete app entirely
+	   Step3: Validate cloudsnap didnt get deleted
+	*/
+	var testrailID = 0
+	JustBeforeEach(func() {
+		StartTorpedoTest("CloudsnapVerification", "Create a CloudSnap, delete the app entirely, and verify the CloudSnap remains intact.", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var (
+		volumeNames []string
+		appVolumes  []*volume.Volume
+	)
+
+	stepLog := "Create a CloudSnap, delete the app entirely, and verify the CloudSnap remains intact."
+	It(stepLog, func() {
+		policyName := "intervalpolicy"
+		stepLog = "Create cloud credentails"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := CreatePXCloudCredential()
+			log.FailOnError(err, "failed to create cloud credential")
+		})
+		cleanup := func() {
+			if len(volumeNames) > 0 {
+				for _, vol := range volumeNames {
+					csBksps, _ := Inst().V.GetCloudsnaps(vol, nil)
+					for _, bk := range csBksps {
+						log.Infof("Deleting : %s having status : %v, Source volume: %s", bk.Id, bk.Status, bk.SrcVolumeName)
+						err = Inst().V.DeleteAllCloudsnaps(vol, bk.SrcVolumeId, nil)
+						if err != nil && strings.Contains(err.Error(), "Key already exists") {
+							continue
+						}
+					}
+				}
+			}
+			DeletePXCloudCredential()
+			err = storkops.Instance().DeleteSchedulePolicy(policyName)
+		}
+		defer cleanup()
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			retain := 8
+			interval := 5
+			schedPolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
+			if err != nil {
+				log.InfoD("Creating a interval schedule policy %v with interval %v minutes", policyName, interval)
+				schedPolicy = &storkv1.SchedulePolicy{
+					ObjectMeta: meta_v1.ObjectMeta{
+						Name: policyName,
+					},
+					Policy: storkv1.SchedulePolicyItem{
+						Interval: &storkv1.IntervalPolicy{
+							Retain:          storkv1.Retain(retain),
+							IntervalMinutes: interval,
+						},
+					}}
+
+				_, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
+				log.FailOnError(err, fmt.Sprintf("error creating a SchedulePolicy [%s]", policyName))
+			}
+
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("cloudsnapverify%d", i))...)
+			}
+
+			ValidateApplications(contexts)
+
+		})
+		for _, ctx := range contexts {
+			stepLog = fmt.Sprintf("Getting app volumes for volume %s", ctx.App.Key)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				appVolumes, err = Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "error getting volumes for [%s]", ctx.App.Key)
+				dash.VerifyFatal(len(appVolumes) >= 1, true, "There should be atleast one volume to proceed with taking snapshot")
+				for _, vol := range appVolumes {
+					volumeNames = append(volumeNames, vol.ID)
+				}
+				log.Infof("VolumeIds for cloud snapshot %v", volumeNames)
+
+			})
+		}
+
+		stepLog = "Verify that cloud snap status"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := ValidateSnapshot(contexts)
+			log.FailOnError(err, "Error during snapshot validation")
+			log.InfoD("Snapshot validation completed successfully")
+		})
+		DestroyApps(contexts, nil)
+		stepLog = "Validate that Cloud Snapshot remains intact"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			cssnaps, err := Inst().V.GetCloudsnaps(volumeNames[0], nil)
+			dash.VerifyFatal(err == nil, true, "Cloudsnap should be available")
+			log.Infof("cloudsnapshot details :[%v]", cssnaps)
+			for _, cssnap := range cssnaps {
+				isVolumeinCssnap := false
+				cssnapsrcvol := cssnap.SrcVolumeName
+				log.Infof("Cloudsnap source vol [%d]:", cssnapsrcvol)
+				if slices.Contains(volumeNames, cssnapsrcvol) {
+					isVolumeinCssnap = true
+				}
+				dash.VerifyFatal(isVolumeinCssnap, true, "Is cloudsnap available?")
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
