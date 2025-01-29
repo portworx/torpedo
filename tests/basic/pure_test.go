@@ -11748,3 +11748,149 @@ var _ = Describe("{ValidatePVCNotBoundAndAppNotRunningDueToTopologyMismatch}", L
 		defer EndTorpedoTest()
 	})
 })
+
+var _ = Describe("{ValidateStoragelessNodeClaimDrive}", Label("p1", "negative", "node_ops", "px_vol_ops", "error_injection"), func() {
+	/*
+	   https://purestorage.atlassian.net/browse/PTX-27936
+	   1. Select random storage node.
+	   2. Power Off the selected storage node.
+	   3. Validate only one of the storageless node restarts among storageless nodes present in selected zone.
+	   4. Validate that drive that was attached earlier to selected storage node got claimed by storage less node that got restarted.
+	   5. Power On the selected storage node and validate it is converted to storage less node.
+	*/
+
+	var (
+		storageNodes            []node.Node
+		storageLessNodes        []node.Node
+		selectedStorageNode     node.Node
+		selectedStorageNodeZone string
+		startTime               time.Time
+		endTime                 time.Time
+		firstDownNode           string
+		newStorageNodes         []node.Node
+		newStorageLessNodes     []node.Node
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("ValidateStoragelessNodeClaimDrive",
+			"Validate single storageless node should restart to claim drive after shutdown of storage node within same zone", nil, 0)
+	})
+
+	itLog := "ValidateStoragelessNodeClaimDrive"
+	It(itLog, func() {
+		log.InfoD(itLog)
+
+		stepLog := "Select random storage node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			storageNodes = node.GetStorageNodes()
+			storageLessNodes = node.GetStorageLessNodes()
+			selectedStorageNode = GetRandomNode(storageNodes)
+			selectedStorageNodeZone = selectedStorageNode.SchedulerTopology.Labels["topology.portworx.io/zone"]
+			log.Infof("Selected storage node %s in zone %s", selectedStorageNode.Name, selectedStorageNode.SchedulerTopology.Labels["topology.portworx.io/zone"])
+		})
+
+		stepLog = fmt.Sprintf("Power Off the selected storage node %s", selectedStorageNode.Name)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			startTime = time.Now()
+			err = Inst().N.PowerOffVM(selectedStorageNode)
+			log.FailOnError(err, "failed to shutdown the node %s", selectedStorageNode.Name)
+			log.InfoD("Waiting for 15 minutes for a storage-less node to complete its restart")
+			time.Sleep(15 * time.Minute)
+			endTime = time.Now()
+		})
+
+		stepLog = "Validate only one of the storageless node restarts among storageless nodes present in selected zone"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			alertsResponse, err := Inst().V.GetAlertsUsingResourceTypeByTime(api.ResourceType_RESOURCE_TYPE_NODE,
+				startTime, endTime)
+			log.FailOnError(err, "Failed to fetch alerts between startTime [%v] and endTime [%v]",
+				startTime, endTime)
+			log.Infof("Lists of alerts generated [%v]", alertsResponse.Alerts)
+
+			for _, alert := range alertsResponse.Alerts {
+				if strings.Contains(alert.Message, "has an Operational Status: Down") {
+					for _, pxNode := range storageLessNodes {
+						if alert.Message == fmt.Sprintf("Node %s has an Operational Status: Down", pxNode.Addresses[0]) {
+							if pxNode.SchedulerTopology.Labels["topology.portworx.io/zone"] == selectedStorageNodeZone {
+								if firstDownNode == "" {
+									log.Infof("first node to go down in zone %s is %s", selectedStorageNodeZone, pxNode.Name)
+									firstDownNode = pxNode.Name
+								} else if firstDownNode == pxNode.Name {
+									continue
+								} else {
+									log.FailOnError(fmt.Errorf("More than one storageless node restarted in the zone %s", selectedStorageNodeZone), "More than one storageless node restarted in the zone %s", selectedStorageNodeZone)
+								}
+							} else {
+								log.FailOnError(fmt.Errorf("Storage less node from different zone restarted"), "Storage less node from different zone restarted")
+							}
+						}
+					}
+				}
+			}
+
+			if firstDownNode == "" {
+				log.FailOnError(fmt.Errorf("failed to wait for storage less node to restart"), "failed to wait for storage less node to restart")
+			}
+		})
+
+		stepLog = "Validate that drive that was attached earlier to selected storage node got claimed by storage less node that got restarted"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			waitForStorageLessNodeToClaimDrive := func() (interface{}, bool, error) {
+				err := Inst().V.RefreshDriverEndpoints()
+				log.FailOnError(err, "Failed to refresh node drivers")
+				newStorageNodes = node.GetStorageNodes()
+				for _, n := range newStorageNodes {
+					if n.Name == firstDownNode && n.Id == selectedStorageNode.Id {
+						return true, false, nil
+					}
+				}
+				return false, true, fmt.Errorf("No storageless node claimed the drive")
+			}
+
+			isDriveClaimedByStorageLessNode, err := task.DoRetryWithTimeout(waitForStorageLessNodeToClaimDrive, 15*time.Minute, 0*time.Second)
+			log.FailOnError(err, "Failed to wait for storage less node to claim the drive")
+			dash.VerifyFatal(isDriveClaimedByStorageLessNode.(bool), true, fmt.Sprintf("Verify storageless node %s claimed the drive after shutdown of storage node", firstDownNode))
+		})
+
+		stepLog = fmt.Sprintf("Power On the selected storage node %s and validate it is converted to storage less node", selectedStorageNode.Name)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			powerOnVM := func() (interface{}, bool, error) {
+				err = Inst().N.PowerOnVM(selectedStorageNode)
+				if err != nil {
+					return nil, false, err
+				}
+				return nil, true, err
+			}
+
+			_, err = task.DoRetryWithTimeout(powerOnVM, 5*time.Minute, 10*time.Second)
+			log.FailOnError(err, "Failed to powered on the vm on Node %s", selectedStorageNode.Name)
+			err = Inst().V.WaitDriverUpOnNode(selectedStorageNode, addDriveUpTimeOut)
+			log.FailOnError(err, "timedout when waiting for node %s to be up", selectedStorageNode.Name)
+			err = Inst().V.RefreshDriverEndpoints()
+			log.FailOnError(err, "Failed to refresh node drivers")
+
+			newStorageLessNodes = node.GetStorageLessNodes()
+			isStorageLess := false
+			for _, n := range newStorageLessNodes {
+				if n.Name == selectedStorageNode.Name {
+					isStorageLess = true
+					break
+				}
+			}
+
+			dash.VerifyFatal(isStorageLess, true, fmt.Sprintf("Verify node %s is converted to storageless node", selectedStorageNode.Name))
+		})
+	})
+
+	JustAfterEach(func() {
+		EndTorpedoTest()
+	})
+})
