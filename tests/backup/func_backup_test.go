@@ -1970,3 +1970,45 @@ var _ = Describe("{TestBackupResilienceToKeycloakScale}", Label(TestCaseLabelsMa
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
+
+// Verify deletion of default roles assigned to the the user
+var _ = Describe("{TestDeleteDefaultRolesForUser}", Label(TestCaseLabelsMap[PxBackupLabel]...), func() {
+
+	var (
+		adminCtx             context.Context
+		users                []string
+		err                  error
+		scheduledAppContexts []*scheduler.Context
+		role                 = backup.DefaultRoles
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("VerifyTestDeleteDefaultRolesForUser", "Verify deletion of default roles assigned to the the user", nil, 300688, Pingle, Q3FY25)
+		adminCtx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		users = make([]string, 0)
+	})
+
+	//Verify deletion of default roles assigned to the the user
+	It("Verify deletion of default roles assigned to the the user.", func() {
+
+		// 1. delete the default role assigned to user
+		Step("delete the default role assigned to user", func() {
+			users = CreateUsers(1)
+			log.Infof("create user %v", users)
+			defaultRole, err := backup.GetRolesForUser(users[0])
+			dash.VerifyFatal(err, nil, "Fetching default role of user")
+			err = backup.DeleteRoleFromUser(users[0], backup.PxBackupRole(defaultRole[0].Name), "default role add")
+			log.Info("Error is:", err)
+			dash.VerifyNotNilFatal(err, fmt.Sprintf("Verifying deletion of role [%s] created by user  %s", defaultRole[0].Name, adminCtx))
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		err = backup.AddRoleToUser(users[0], role, "default role add")
+		dash.VerifySafely(err, nil, "add role to user")
+	})
+
+})
