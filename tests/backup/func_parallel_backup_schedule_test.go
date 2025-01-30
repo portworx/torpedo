@@ -147,6 +147,16 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 			// Suspend the backup schedule so that no new backup is created while we are deleting the schedule
 			err = SuspendBackupSchedule(scheduleName, schedulePolicyName, BackupOrgID, adminContext)
 			log.FailOnError(err, "failed to suspend backup schedule")
+			// Validate that the next backup is completed
+			err = Inst().Backup.BackupScheduleWaitForNBackupsCompletion(
+				adminContext,
+				scheduleName,
+				BackupOrgID,
+				2,
+				BackupCompletionWaitTime,
+				defaultWaitInterval,
+			)
+			log.FailOnError(err, "failed to wait for next backup completion")
 			backupScheduleUID, err := GetScheduleUID(scheduleName, BackupOrgID, adminContext)
 			log.FailOnError(err, "failed to get schedule uid")
 			err = DeleteScheduleWithUIDAndWait(scheduleName, backupScheduleUID, SourceClusterName, sourceClusterUID, BackupOrgID, adminContext)
@@ -177,7 +187,7 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 	})
 
 	// Testrail id - T90054303 verify BackupSchedule for Pxd volume with parallel-backup flag disabled
-	/*It("VerifyScheduledBackupsParallelBackupsDisabled", func() {
+	It("VerifyScheduledBackupsParallelBackupsDisabled", func() {
 		StartPxBackupTorpedoTest("VerifyScheduledBackupsParallelBackupsDisabled", "verify ParallelBackupSchedule for Pxd volumes with parallel-backup flag disabled", nil, 304415, Shkumari, Q4FY25)
 		var (
 			scheduleName = fmt.Sprintf("schedule-bkp-%v", RandomString(5))
@@ -252,7 +262,7 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 			}
 			CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, adminContext)
 		})
-	})*/
+	})
 
 	// Testrail id - T90054307 verify ParallelBackupSchedule for Pxd volumes with NameSpace Label
 	It("VerifyNumberOfParallelScheduledBackupsCreatedNSLabel", func() {
@@ -292,6 +302,18 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 			// Suspend the backup schedule so that no new backup is created while we are deleting the schedule
 			err = SuspendBackupSchedule(scheduleName, schedulePolicyName, BackupOrgID, adminContext)
 			log.FailOnError(err, "failed to suspend backup schedule")
+
+			// Validate that the next backup is completed
+			err = Inst().Backup.BackupScheduleWaitForNBackupsCompletion(
+				adminContext,
+				scheduleName,
+				BackupOrgID,
+				2,
+				BackupCompletionWaitTime,
+				defaultWaitInterval,
+			)
+			log.FailOnError(err, "failed to wait for next backup completion")
+
 			// Delete the backup schedules
 			scheduleEnumerateRequest := &api.BackupScheduleEnumerateRequest{
 				OrgId: BackupOrgID,
@@ -369,6 +391,18 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 			// Suspend the backup schedule so that no new backup is created while we are deleting the schedule
 			err = SuspendBackupSchedule(scheduleName, schedulePolicyName, BackupOrgID, adminContext)
 			log.FailOnError(err, "failed to suspend backup schedule")
+
+			// Validate that the next backup is completed
+			err = Inst().Backup.BackupScheduleWaitForNBackupsCompletion(
+				adminContext,
+				scheduleName,
+				BackupOrgID,
+				2,
+				BackupCompletionWaitTime,
+				defaultWaitInterval,
+			)
+			log.FailOnError(err, "failed to wait for next backup completion")
+
 			backupScheduleUID, err := GetScheduleUID(scheduleName, BackupOrgID, adminContext)
 			log.FailOnError(err, "failed to get schedule uid")
 			err = DeleteScheduleWithUIDAndWait(scheduleName, backupScheduleUID, SourceClusterName, sourceClusterUID, BackupOrgID, adminContext)
@@ -427,6 +461,11 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 			// Add Same Labels to another namespace
 			err = AddLabelsToMultipleNamespaces(nsLabelsMap, []string{bkpNamespaces[1]})
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels [%v] to namespaces [%v]", nsLabelsMap, []string{bkpNamespaces[1]}))
+
+			// Validate that the first backup is completed
+			err = Inst().Backup.WaitForBackupCompletion(adminContext, schedulebackup1name, BackupOrgID, 2*BackupCompletionWaitTime, defaultWaitInterval)
+			log.FailOnError(err, "failed to wait for backup completion")
+			log.InfoD("Backup [%v] completed", schedulebackup1name)
 
 			schedulebackup2name, err := GetNextScheduleBackupName(scheduleName, 15, adminContext)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Get second schedule backup name of backup schedule[%s]", scheduleName))
@@ -850,6 +889,7 @@ var _ = Describe("{ParallelBackupScheduleNonPxdTestSuite}", Ordered, Label(TestC
 				defaultWaitInterval,
 			)
 			log.FailOnError(err, "failed to wait for next backup completion")
+
 			err = DeleteScheduleWithUIDAndWait(scheduleName, backupScheduleUID, SourceClusterName, sourceClusterUID, BackupOrgID, adminContext)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of backup schedule [%s]", scheduleName))
 
@@ -946,6 +986,7 @@ var _ = Describe("{ParallelBackupScheduleNonPxdTestSuite}", Ordered, Label(TestC
 				defaultWaitInterval,
 			)
 			log.FailOnError(err, "failed to wait for next backup completion")
+
 			err = DeleteScheduleWithUIDAndWait(scheduleName, backupScheduleUID, SourceClusterName, sourceClusterUID, BackupOrgID, adminContext)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of backup schedule [%s]", scheduleName))
 
