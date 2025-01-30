@@ -892,7 +892,7 @@ func PrintCommandOutput(cmnd string, pxNode node.Node) {
 }
 
 func PrintSvPoolStatus(node node.Node) {
-	output, err := runCmdGetOutput("pxctl sv pool show", node)
+	output, err := RunCmdGetOutput("pxctl sv pool show", node)
 	if err != nil {
 		log.Warnf("error getting pool data on node [%s], cause: %v", node.Name, err)
 		return
@@ -3372,7 +3372,7 @@ func runCmdOnce(cmd string, n node.Node) (string, error) {
 
 }
 
-func runCmdGetOutput(cmd string, n node.Node) (string, error) {
+func RunCmdGetOutput(cmd string, n node.Node) (string, error) {
 	output, err := Inst().N.RunCommand(n, cmd, node.ConnectionOpts{
 		Timeout:         defaultCmdTimeout,
 		TimeBeforeRetry: defaultCmdRetryInterval,
@@ -6853,7 +6853,7 @@ func DeleteAzureBucket(bucketName string) {
 func ThrottleNetworkSpeed(speed int) error {
 	workerNode := node.GetWorkerNodes()[0]
 	cmd := fmt.Sprintf("%v=%d", networkBandwidthUpdateCmd, speed)
-	output, err := runCmdGetOutput(cmd, workerNode)
+	output, err := RunCmdGetOutput(cmd, workerNode)
 	if err != nil {
 		log.Infof("Running command [%v] failed on node [%v]", cmd, workerNode)
 		return err
@@ -7450,7 +7450,7 @@ func IsNFSSubPathEmpty(subPath string) (bool, error) {
 		fmt.Sprintf("find %s/%s -type f", mountDir, subPath),
 	}
 	for _, cmd := range mountCmds {
-		output, err := runCmdGetOutput(cmd, masterNode)
+		output, err := RunCmdGetOutput(cmd, masterNode)
 		log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", cmd, masterNode, err))
 		log.Infof("Output from command [%s] -\n%s", cmd, output)
 	}
@@ -7471,7 +7471,7 @@ func IsNFSSubPathEmpty(subPath string) (bool, error) {
 	log.Infof("Checking the contents in NFS share subpath: [%s] from path: [%s] on server: [%s]", subPath, creds.NfsPath, creds.NfsServerAddress)
 	fileCountCmd := fmt.Sprintf("find %s/%s -type f | wc -l", mountDir, subPath)
 	log.Infof("Running command - %s", fileCountCmd)
-	output, err := runCmdGetOutput(fileCountCmd, masterNode)
+	output, err := RunCmdGetOutput(fileCountCmd, masterNode)
 	log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", fileCountCmd, masterNode, err))
 	log.Infof("Output of command [%s] - \n%s", fileCountCmd, output)
 	result, err := strconv.Atoi(strings.TrimSpace(output))
@@ -11929,7 +11929,7 @@ func ListVolumeNamesUsingPxctl(n *node.Node) ([]VolMap, error) {
 	var vols VolMap
 
 	cmd := "pxctl volume list -j | jq "
-	output, err := runCmdGetOutput(cmd, *n)
+	output, err := RunCmdGetOutput(cmd, *n)
 	if err != nil {
 		return nil, err
 	}
@@ -12090,7 +12090,7 @@ func convertToGiB(size string) float64 {
 func GetClusterProvisionStatusOnSpecificNode(n node.Node) ([]ProvisionStatus, error) {
 	clusterProvision := []ProvisionStatus{}
 	cmd := "pxctl cluster provision-status list"
-	output, err := runCmdGetOutput(cmd, n)
+	output, err := RunCmdGetOutput(cmd, n)
 	if err != nil {
 		log.Infof("running command [%v] failed on Node [%v]", cmd, n.Name)
 		return nil, err
@@ -13746,7 +13746,7 @@ func SplitStorageDriverUpgradeURL(upgradeURL string) (string, string, error) {
 // GetIQNOfNode returns the IQN of the given node in a FA setup
 func GetIQNOfNode(n node.Node) (string, error) {
 	cmd := "cat /etc/iscsi/initiatorname.iscsi"
-	output, err := runCmdGetOutput(cmd, n)
+	output, err := RunCmdGetOutput(cmd, n)
 	if err != nil {
 		return "", err
 	}
@@ -13769,7 +13769,7 @@ func GetIQNOfFA(n node.Node, FAclient flasharray.Client) (string, error) {
 		ip := networkInterface.Address
 		log.InfoD("IP address of the iscsi service: %v", ip)
 		cmd := fmt.Sprintf("iscsiadm -m discovery -t st -p %s", ip)
-		output, err := runCmdGetOutput(cmd, n)
+		output, err := RunCmdGetOutput(cmd, n)
 		if err != nil {
 			return "", err
 		}
@@ -13793,7 +13793,7 @@ func GetIQNOfFA(n node.Node, FAclient flasharray.Client) (string, error) {
 
 func RefreshIscsiSession(n node.Node) error {
 	cmd := "iscsiadm -m session --rescan"
-	_, err := runCmdGetOutput(cmd, n)
+	_, err := RunCmdGetOutput(cmd, n)
 	if err != nil {
 		return err
 	}
@@ -16592,7 +16592,7 @@ func GetVolumeIDForGivenPVC(pvcName string) (string, error) {
 	cmd := "pxctl v l -j"
 
 	// Run the command on the worker node
-	output, err := runCmdGetOutput(cmd, workerNode)
+	output, err := RunCmdGetOutput(cmd, workerNode)
 	if err != nil {
 		return "", fmt.Errorf("failed to run command %s on %s: %s", cmd, workerNode.Name, err.Error())
 	}
@@ -16630,7 +16630,7 @@ func GetAllLocalSnapshotStatus(pvcName string) ([]PXSnapshotStatus, error) {
 	cmd := fmt.Sprintf("pxctl v l -s -j -p %s", volumeID)
 
 	// Run the command on the worker node
-	output, err := runCmdGetOutput(cmd, workerNode)
+	output, err := RunCmdGetOutput(cmd, workerNode)
 	if err != nil {
 		return nil, fmt.Errorf("failed to run command %s on %s: %s", cmd, workerNode.Name, err.Error())
 	}

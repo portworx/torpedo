@@ -9099,7 +9099,7 @@ func RunCmdInVM(vm kubevirtv1.VirtualMachine, cmd string, ctx context1.Context) 
 	} else {
 		workerNode := node.GetWorkerNodes()[0]
 		t := func() (interface{}, bool, error) {
-			output, err := runCmdGetOutput(sshCmd, workerNode)
+			output, err := RunCmdGetOutput(sshCmd, workerNode)
 			if err != nil {
 				log.Infof("Error encountered")
 				if isConnectionError(err.Error()) {
@@ -10868,7 +10868,7 @@ func StopCloudsnapBackup(pvcName, namespace string) error {
 					}
 					cmd := fmt.Sprintf("pxctl cs stop -n %s", key)
 					workerNode := node.GetStorageNodes()[0]
-					output, err := runCmdGetOutput(cmd, workerNode)
+					output, err := RunCmdGetOutput(cmd, workerNode)
 					log.Infof("Output of the command [%s]: \n%s", cmd, output)
 					if err != nil {
 						if strings.Contains(err.Error(), "CloudsnapStop: Failed to change state: No active backup/restore for the volume") && value.Status != "Stopped" {
@@ -10922,7 +10922,7 @@ func GetCloudsnapStatus() (map[string]CloudsnapStatus, error) {
 	// Get a worker node
 	workerNode := node.GetStorageNodes()[0]
 	cmd := "pxctl cs status -j"
-	output, err := runCmdGetOutput(cmd, workerNode)
+	output, err := RunCmdGetOutput(cmd, workerNode)
 	if err != nil {
 		return nil, fmt.Errorf("failed to run command %s on %s: %s", cmd, workerNode.Name, err.Error())
 	}
@@ -10943,7 +10943,7 @@ func WatchAndStopCloudsnapBackup(pvcName, namespace string, timeoutDuration time
 	getCloudsnapStatus := func() (map[string]CloudsnapStatus, error) {
 		statusMap := make(map[string]CloudsnapStatus)
 		cmd := "pxctl cs status -j"
-		output, err := runCmdGetOutput(cmd, workerNode)
+		output, err := RunCmdGetOutput(cmd, workerNode)
 		if err != nil {
 			return nil, fmt.Errorf("failed to run command %s on %s: %s", cmd, workerNode.Name, err.Error())
 		}
@@ -10980,7 +10980,7 @@ func WatchAndStopCloudsnapBackup(pvcName, namespace string, timeoutDuration time
 					case "", "Active":
 						// Stop the cloudsnap
 						cmd := fmt.Sprintf("pxctl cs stop -n %s", key)
-						_, err := runCmdGetOutput(cmd, workerNode)
+						_, err := RunCmdGetOutput(cmd, workerNode)
 						if err != nil {
 							log.Infof("failed to run command %s on %s: %w", cmd, workerNode.Name, err)
 						}
