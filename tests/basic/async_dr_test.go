@@ -3968,3 +3968,251 @@ var _ = Describe("{AppBackupRestoreWithMultipleVolumes}", Label("staging", "p1",
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{MetroDRFailoverFailbackWithNetworkDelay}", Label("staging", "p1", "negative", "MetroDR"), func() {
+	/*
+		https://purestorage.atlassian.net/browse/HAZEL-1792
+		1. Use “tc” to induce network delay on the source side (entire cluster - all nodes) ~ keep it of the order of 30ms & keep this configurable
+		2. Trigger Sync DR
+		3. Remove all delays
+		4. Validate Sync DR
+	*/
+	var (
+		testrailID          = 0
+		runID               int
+		contexts            []*scheduler.Context
+		taskNamePrefix      = "syncdr-networkdelay"
+		defaultNs           = "kube-system"
+		migrationNamespaces []string
+		migNamespaces       string
+		kubeConfigPathSrc   string
+		kubeConfigPathDest  string
+		isCloud             bool
+		cloudName           string
+		migrationSchedName  string
+		cpName              string
+		extraArgsCp         = map[string]string{}
+		storageNodes        []node.Node
+		networkDelay        = 30
+	)
+	BeforeEach(func() {
+		if !kubeConfigWritten {
+			WriteKubeconfigToFiles()
+			kubeConfigWritten = true
+		}
+	})
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("MetroDRFailoverFailbackWithNetworkDelay", "perform strokctl metroDR failover and failback with network delay for 30ms", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	stepLog := "perform strokctl metroDR failover and failback with network delay for 30ms"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+
+		cleanup := func() {
+			log.Infof("Perform cleanup task")
+			if len(contexts) > 0 {
+				for _, ctx := range contexts {
+					ctx.SkipVolumeValidation = true
+					TearDownContext(ctx, map[string]bool{
+						SkipClusterScopedObjects:                    true,
+						scheduler.OptionsWaitForResourceLeakCleanup: true,
+						scheduler.OptionsWaitForDestroy:             true,
+					})
+				}
+			}
+			log.Infof("Remove migrations from namespace [%v]", defaultNs)
+			migrationSchedules, err := storkops.Instance().ListMigrationSchedules(defaultNs)
+			log.FailOnError(err, "Failed to get migration schedule list from the namespace %v", defaultNs)
+			for _, migrSched := range migrationSchedules.Items {
+				err := asyncdr.DeleteAndWaitForMigrationSchedDeletion(migrSched.Name, defaultNs)
+				log.FailOnError(err, "Failed to deleting migration schedule on destination cluster")
+			}
+		}
+		defer cleanup()
+
+		stepLog = "Schedule application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			migrationNamespaces, contexts = initialSetupApps(taskNamePrefix, false, false)
+			migNamespaces = strings.Join(migrationNamespaces, ",")
+
+			kubeConfigPathSrc, err = GetCustomClusterConfigPath(asyncdr.FirstCluster)
+			log.FailOnError(err, "Failed to get source configPath: %v", err)
+			kubeConfigPathDest, err = GetCustomClusterConfigPath(asyncdr.SecondCluster)
+			log.FailOnError(err, "Failed to get destination configPath: %v", err)
+			log.InfoD("Application schedule success. Migration namespaces [%v]", migNamespaces)
+		})
+
+		extraArgs := map[string]string{
+			"namespaces":   migNamespaces,
+			"kubeconfig":   kubeConfigPathSrc,
+			"include-jobs": "",
+		}
+		stepLog := "Set up sync DR migration with cloud configurations"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			stc, err := Inst().V.GetDriver()
+			log.FailOnError(err, "Failed to get driver")
+
+			isCloud, cloudName = asyncdr.IsCloud(stc)
+			var srcEp, destEp string
+			const defaultPort = "9001"
+
+			if isCloud {
+				storageDriverName := Inst().V.String()
+				if err = asyncdr.ChangePxServiceToLoadBalancer(false, storageDriverName, stc); err != nil {
+					log.FailOnError(err, "failed to change PX service to LoadBalancer on source cluster")
+				}
+				if cloudName == "eks" {
+					pxService, err := core.Instance().GetService("portworx-service", "kube-system")
+					log.FailOnError(err, "failed to get px service")
+					srcEp = pxService.Status.LoadBalancer.Ingress[0].Hostname
+				}
+				err = SetDestinationKubeConfig()
+				log.FailOnError(err, "Failed to set destination kubeconfig")
+				if err = asyncdr.ChangePxServiceToLoadBalancer(false, storageDriverName, stc); err != nil {
+					log.FailOnError(err, "failed to change PX service to LoadBalancer on destination cluster")
+				}
+				if cloudName == "eks" {
+					pxService, err := core.Instance().GetService("portworx-service", "kube-system")
+					log.FailOnError(err, "failed to get px service")
+					destEp = pxService.Status.LoadBalancer.Ingress[0].Hostname
+				}
+				err = SetSourceKubeConfig()
+				log.FailOnError(err, "Failed to set source kubeconfig")
+			}
+
+			if cloudName == "aks" {
+				defaultSecret = azureSecret
+				defaultBackupLocation = azureBackupLocation
+			} else if cloudName == "gke" {
+				defaultSecret = googleSecret
+				defaultBackupLocation = googleBackupLocation
+			} else if cloudName == "eks" {
+				extraArgsCp["src-ep"] = srcEp + ":" + defaultPort
+				extraArgsCp["dest-ep"] = destEp + ":" + defaultPort
+			}
+		})
+
+		stepLog = "Creating clusterpair between first and second cluster"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			storageNodes = node.GetStorageNodes()
+			cpName = defaultClusterPairName + strconv.Itoa(int(time.Now().Unix()))
+
+			err = ScheduleBidirectionalClusterPair(cpName, defaultNs, "", storkapi.BackupLocationType(defaultBackupLocation), defaultSecret, "sync-dr", asyncdr.FirstCluster, asyncdr.SecondCluster, extraArgsCp)
+			log.FailOnError(err, "Failed creating bidirectional cluster pair")
+			log.InfoD("Clusterpair [%v] created and validated successfuly on namespace [%v]", cpName, defaultNs)
+		})
+
+		defer func() {
+			err = SetCustomKubeConfig(asyncdr.FirstCluster)
+			log.FailOnError(err, "Failed to switch destination to source cluster")
+			storageNodes = node.GetStorageNodes()
+			for _, nodeDetail := range storageNodes {
+				log.Infof("Deleting the delay of %dms from the node: %v", networkDelay, nodeDetail.Name)
+				err := Inst().N.InjectNetworkErrorWithRebootFallback([]node.Node{nodeDetail}, "delay", "del", 0, networkDelay)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Removing delay of %dms from nodes", networkDelay))
+			}
+			log.InfoD("Successfully removed network delay for all nodes")
+		}()
+
+		stepLog = "Induce network delay for 30ms on source cluster and create and validate migration"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			for _, nodeDetail := range storageNodes {
+				log.Infof("Adding a delay of %dms to a node: %v ", networkDelay, nodeDetail.Name)
+				err := Inst().N.InjectNetworkErrorWithRebootFallback([]node.Node{nodeDetail}, "delay", "add", 0, networkDelay)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Adding a delay of %dms to nodes", networkDelay))
+			}
+
+			log.Infof("Start migration schedule")
+			migrationSchedName = migrationSchedKey + strconv.Itoa(int(time.Now().Unix()))
+			err = storkctlcli.ScheduleStorkctlMigrationSched(migrationSchedName, cpName, defaultNs, extraArgs)
+			log.FailOnError(err, "Error creating migrationschedule: [%v] on source cluster", migrationSchedName)
+		})
+
+		log.Infof("Validating migration schedule [%v] in the namespace [%v]", migrationSchedName, defaultNs)
+		_, err = storkops.Instance().ValidateMigrationSchedule(migrationSchedName, defaultNs, migrationRetryTimeout, migrationRetryInterval)
+		log.FailOnError(err, "Failed to validate migration schedule [%v] in the namespace [%v] on the source cluster", migrationSchedName, defaultNs)
+
+		extraArgsFailoverFailback := map[string]string{
+			"kubeconfig": kubeConfigPathDest,
+		}
+
+		stepLog = "Perform failover"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = SetCustomKubeConfig(asyncdr.SecondCluster)
+			log.FailOnError(err, "Switching context to second cluster failed")
+
+			failoverParam := failoverFailbackParam{
+				action:                    "failover",
+				failoverOrFailbackNs:      defaultNs,
+				migrationSchedName:        migrationSchedName,
+				configPath:                kubeConfigPathDest,
+				single:                    false,
+				skipSourceOp:              false,
+				includeNs:                 false,
+				excludeNs:                 false,
+				extraArgsFailoverFailback: extraArgsFailoverFailback,
+				contexts:                  contexts,
+			}
+			performFailoverFailback(failoverParam)
+			time.Sleep(1 * time.Minute)
+			log.InfoD("Successfully performed failover")
+		})
+
+		stepLog = "Create reverse migration and Perform failback"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = hardSetConfig(kubeConfigPathDest)
+			log.FailOnError(err, "Error setting destination config: %v", err)
+			extraArgs["kubeconfig"] = kubeConfigPathDest
+
+			newMigSched := migrationSchedName + "-rev"
+			createMigSchdAndValidateMigration(newMigSched, cpName, defaultNs, kubeConfigPathDest, extraArgs)
+			log.InfoD("Migration schedule [%v] created and validated successfuly on namespace [%v]", newMigSched, defaultNs)
+
+			failoverback := failoverFailbackParam{
+				action:                    "failback",
+				failoverOrFailbackNs:      defaultNs,
+				migrationSchedName:        newMigSched,
+				configPath:                kubeConfigPathDest,
+				single:                    false,
+				skipSourceOp:              false,
+				includeNs:                 false,
+				excludeNs:                 false,
+				extraArgsFailoverFailback: extraArgsFailoverFailback,
+				contexts:                  contexts,
+			}
+			performFailoverFailback(failoverback)
+			log.InfoD("Successfully performed failback")
+		})
+
+		stepLog = "Destroy applications on the destination cluster"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			cleanup()
+		})
+
+		stepLog = "Destroy applications on the source cluster"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = SetCustomKubeConfig(asyncdr.FirstCluster)
+			log.FailOnError(err, "Failed to switch destination to source cluster")
+			cleanup()
+		})
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
