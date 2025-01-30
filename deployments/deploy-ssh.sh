@@ -880,6 +880,10 @@ spec:
       value: "${VOLUME_COUNT_FOR_PARALLEL_DELETE}"
     - name: SIMULATE_FB_FQDN
       value: "${SIMULATE_FB_FQDN}"
+    - name: NON_DEFAULT_ADMIN_USERNAME
+      value: "${NON_DEFAULT_ADMIN_USERNAME}"
+    - name: NON_DEFAULT_ADMIN_PASSWORD
+      value: "${NON_DEFAULT_ADMIN_PASSWORD}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account

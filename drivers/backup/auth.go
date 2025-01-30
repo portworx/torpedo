@@ -818,6 +818,15 @@ func GetPxCentralAdminToken() (string, error) {
 	return token, nil
 }
 
+// GetPxNonDefaultAdminToken gets token for "px-central-admin"
+func GetPxNonDefaultAdminToken(nonDefaultAdminUsername string, nonDefaultAdminPassword string) (string, error) {
+	token, err := GetToken(nonDefaultAdminUsername, nonDefaultAdminPassword)
+	if err != nil {
+		return "", err
+	}
+	return token, nil
+}
+
 // GetCtxWithToken gets ctx with passed token
 func GetCtxWithToken(token string) context.Context {
 	ctx := context.Background()
@@ -867,11 +876,49 @@ func UpdatePxBackupAdminSecret() error {
 	return nil
 }
 
+// UpdatePxBackupWithNonDefaultAdminSecret updating "px-backup-admin-secret" token with
+// "non default admin" token
+func UpdatePxBackupWithNonDefaultAdminSecret(nonDefaultAdminUsername string, nonDefaultAdminPassword string) error {
+	nonDefaultAdminToken, err := GetPxNonDefaultAdminToken(nonDefaultAdminUsername, nonDefaultAdminPassword)
+	if err != nil {
+		return err
+	}
+
+	pxbNamespace, err := GetPxBackupNamespace()
+	if err != nil {
+		return err
+	}
+	secret, err := k8s.Instance().GetSecret(AdminTokenSecretName, pxbNamespace)
+	if err != nil {
+		return err
+	}
+	// Now update the token into "AdminTokenSecretName"
+	secret.Data[OrgToken] = ([]byte(nonDefaultAdminToken))
+	_, err = k8s.Instance().UpdateSecret(secret)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // GetAdminCtxFromSecret with provided name and namespace
 func GetAdminCtxFromSecret() (context.Context, error) {
-	err := UpdatePxBackupAdminSecret()
-	if err != nil {
-		return nil, err
+
+	nonDefaultAdminUsername := os.Getenv("NON_DEFAULT_ADMIN_USERNAME")
+	nonDefaultAdminPassword := os.Getenv("NON_DEFAULT_ADMIN_PASSWORD")
+
+	// If non-default admin is provided update with non-default admin secret
+	if nonDefaultAdminUsername != "" {
+		log.Infof("Using non default admin %v as super admin", nonDefaultAdminUsername)
+		if err := UpdatePxBackupWithNonDefaultAdminSecret(nonDefaultAdminUsername, nonDefaultAdminPassword); err != nil {
+			return nil, fmt.Errorf("failed to update backup with non-default admin secret: %w", err)
+		}
+	} else {
+		// If non-default credentials are not provided, update with default admin secret
+		if err := UpdatePxBackupAdminSecret(); err != nil {
+			return nil, fmt.Errorf("failed to update backup admin secret: %w", err)
+		}
 	}
 
 	pxbNamespace, err := GetPxBackupNamespace()
