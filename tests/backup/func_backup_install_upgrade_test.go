@@ -12,6 +12,7 @@ import (
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/pure-px/sched-ops/k8s/apps"
+	"github.com/pure-px/sched-ops/k8s/batch"
 	"github.com/pure-px/torpedo/drivers/backup"
 	"github.com/pure-px/torpedo/drivers/scheduler"
 	"github.com/pure-px/torpedo/pkg/log"
@@ -1455,6 +1456,112 @@ var _ = Describe("{UpgradePxBackupKubernetesVersionCheck}", Label(TestCaseLabels
 			}
 		})
 	})
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(make([]*scheduler.Context, 0))
+		log.Infof("No cleanup required for this testcase")
+	})
+})
+
+// Test case to check if post-install job is handled during upgrade
+var _ = Describe("{UpgradePxBackupPostInstallJobCheck}", Label(TestCaseLabelsMap[UpgradePxBackupPostInstallJobCheck]...), func() {
+	var (
+		namespace string
+		jobStatus string
+	)
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("UpgradePxBackupPostInstallJobCheck", "Upgrading Px Backup and handling the post-install job if it is present in the namespace", nil, 304873, SS, Q4FY25)
+		log.InfoD("Uninstalling Px-Backup...")
+		err := UninstallPxBackup()
+		log.FailOnError(err, "Failed to delete px-backup")
+		namespace = "px-backup"
+	})
+	It("Should check if post-install job is present during upgrade", func() {
+
+		pxCentralPostInstallHookJobName := "pxcentral-post-install-hook"
+
+		Step("Install Px-Backup and validate successful installation", func() {
+			log.InfoD("Installing Px-Backup...")
+			valuesMap, err := ParseValuesFromFile("values1")
+			log.FailOnError(err, "Failed to parse values file")
+			log.InfoD("Attempting to fail the post-install job")
+			_, err = InstallPxBackup("2.8.0", "master", namespace, valuesMap)
+			log.FailOnError(err, "Failed to install px-backup")
+		})
+
+		Step("Upgrade and fail the post-install job", func() {
+			log.InfoD("Upgrade and fail the post-install job")
+			valuesMap, err := ParseValuesFromFile("FailPostInstallJob")
+			log.FailOnError(err, "Failed to parse values file")
+			_, err = HelmUpgradePxBackup(LatestPxBackupVersion, DefaultPxBackupHelmBranch, namespace, valuesMap)
+			errStr := fmt.Sprintf("job %s not yet in desired state.", pxCentralPostInstallHookJobName)
+			if err != nil {
+				log.InfoD("Upgrade failed when it should not have - %s", err.Error())
+				dash.VerifyFatal(strings.Contains(err.Error(), errStr), true,
+					"Upgrade failed when it should not have")
+			}
+		})
+
+		Step("Check if post-install job is present", func() {
+			log.InfoD("Check if post-install job is present")
+			job, err := batch.Instance().GetJob(pxCentralPostInstallHookJobName, namespace)
+			log.FailOnError(err, "Failed to get job")
+			present := job != nil
+			dash.VerifyFatal(present, true, "Found the post-install job in the namespace")
+		})
+
+		Step("Fetch status of post-install job", func() {
+
+			log.InfoD("Wait for post-install job to fail")
+			err := WaitForJobToFail(pxCentralPostInstallHookJobName, namespace, time.Minute*30, time.Second*30)
+			log.FailOnError(err, "Failed to wait for job to fail")
+
+			log.InfoD("Fetch status of post-install job")
+			job, err := batch.Instance().GetJob(pxCentralPostInstallHookJobName, namespace)
+			if err != nil {
+				log.FailOnError(err, "Failed to fetch job")
+			}
+			if job == nil {
+				log.FailOnError(fmt.Errorf("job %s not found in namespace %s", pxCentralPostInstallHookJobName, namespace),
+					"Failed to get job")
+			}
+
+			if job.Status.Succeeded > 0 {
+				jobStatus = "Succeeded" // Job has completed successfully
+			} else if job.Status.Active > 0 {
+				jobStatus = "Active" // Job is still running
+			} else if job.Status.Failed > 0 {
+				jobStatus = "Failed" // Job has failed with no active pods
+			} else {
+				jobStatus = "Unknown" // Job status is unknown
+			}
+			expectedStatus := "Failed"
+			dash.VerifyFatal(jobStatus, expectedStatus, "Post-install job status is as expected")
+		})
+
+		Step("Upgrade Px-Backup and validate successful upgrade", func() {
+			log.InfoD("Upgrade Px-Backup")
+			valuesMap, err := ParseValuesFromFile("PassPostInstallJob")
+			log.FailOnError(err, "Failed to parse values file")
+			_, err = HelmUpgradePxBackup(LatestPxBackupVersion, DefaultPxBackupHelmBranch, namespace, valuesMap)
+			if err != nil {
+				log.Errorf("Upgrade failed when it should not have - %s", err.Error())
+				log.FailOnError(fmt.Errorf("upgrade failed when it should not have"),
+					"Upgrade failed when it should not have")
+			} else {
+				log.InfoD("Upgrade successful")
+			}
+		})
+
+		Step("Check if post-install job pod logs are dumped during the upgrade", func() {
+			log.InfoD("Check if post-install job pod logs are dumped during the upgrade")
+			// Access the logs of the post-install job from the PVC
+			filePath := "/mnt/data/logs/"
+			err := MountPVCAndCheckLogs("pre-upgrade-data-pvc", namespace, filePath, pxCentralPostInstallHookJobName, "HELM DEPLOYMENT TYPE")
+			log.FailOnError(err, "Failed to mount PVC and check logs")
+			log.InfoD("Successfully mounted PVC and found logs for failed post-install job")
+		})
+	})
+
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(make([]*scheduler.Context, 0))
 		log.Infof("No cleanup required for this testcase")

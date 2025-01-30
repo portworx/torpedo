@@ -1,0 +1,8 @@
+persistentStorage:
+  enabled: true
+  storageClassName: "px-csi-db"
+pxbackup:
+  enabled: true
+oidc:
+  centralOIDC:
+    defaultUsername: "admin"

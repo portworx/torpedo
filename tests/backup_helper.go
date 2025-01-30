@@ -13151,13 +13151,12 @@ func CreateDocRegistrySecret(namespace string) error {
 // InstallPxBackup installs Px-Backup through helm and waits for all the pods to be ready
 func InstallPxBackup(version, branch, namespace string, vals map[string]interface{}) (*release.Release, error) {
 
-	cluster_provider := os.Getenv("CLUSTER_PROVIDER")
-	if cluster_provider == "" {
-		return nil, fmt.Errorf("CLUSTER_PROVIDER environment variable is not set")
-	}
-	if !(cluster_provider == "vanilla" ||
-		cluster_provider == "openshift" ||
-		cluster_provider == "rke") {
+	clusterProvider := os.Getenv("CLUSTER_PROVIDER")
+	
+	if !(clusterProvider == "vanilla" ||
+		clusterProvider == "openshift" ||
+		clusterProvider == "rke" ||
+		clusterProvider == "") {
 		log.Infof("Cluster provider is not on-prem.")
 
 		// Check if namespace exists
@@ -14693,3 +14692,131 @@ func WaitForBackupCount(scheduleName string, expectedCount int, orgID string, ct
 		return nil, false, nil
 	}, timeout, 30*time.Second)
 }
+
+// Mount PVC to a pod and check if the file exists
+func MountPVCAndCheckLogs(pvcName, namespace, filePath, fileName, checkString string) error {
+
+	// Define the debug pod
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "debug-pod",
+			Namespace: namespace,
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:    "debug-container",
+					Image:   "busybox",
+					Command: []string{"sh", "-c", "sleep infinity"},
+					VolumeMounts: []corev1.VolumeMount{
+						{
+							Name:      "data-volume",
+							MountPath: "/mnt/data",
+						},
+					},
+				},
+			},
+			Volumes: []corev1.Volume{
+				{
+					Name: "data-volume",
+					VolumeSource: corev1.VolumeSource{
+						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+							ClaimName: pvcName,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Create the pod
+	_, err := k8sCore.CreatePod(pod)
+	if err != nil {
+		return fmt.Errorf("failed to create debug pod: %v", err)
+	}
+	log.Infof("Created debug pod with PVC %s in namespace %s", pvcName, namespace)
+
+	defer func() {
+		// Clean up the pod
+		err := k8sCore.DeletePod(pod.Name, namespace, true)
+		if err != nil {
+			log.Errorf("failed to delete debug pod: %v", err)
+		}
+		log.Infof("Deleted debug pod with PVC %s in namespace %s", pvcName, namespace)
+	}()
+
+	// Wait for the pod to be ready
+	debugPod, err := k8sCore.GetPodByName(pod.Name, namespace)
+	log.InfoD("Waiting for pod %s to be ready...", debugPod.Name)
+	err = core.Instance().ValidatePod(debugPod, podReadyTimeout, podReadyRetryTime)
+	if err != nil {
+		return fmt.Errorf("failed to wait for pod to be ready: %v", err)
+	}
+
+	// Check if the file exists
+	cmd := []string{"sh", "-c", fmt.Sprintf("ls %s | grep %s", filePath, fileName)}
+	stdout, err := k8sCore.RunCommandInPod(cmd, pod.Name, "debug-container", namespace)
+	if err != nil {
+		return fmt.Errorf("failed to list log files for job %s: %s", fileName, err)
+	}
+	log.InfoD(("File search result: %s"), stdout)
+
+	// Check if the log file contains the expected string
+	files := strings.Split(stdout, "\n")
+	for _, file := range files {
+		if strings.TrimSpace(file) == "" {
+			continue
+		}
+
+		logFilePath := fmt.Sprintf("%s/%s", filePath, strings.TrimSpace(file))
+
+		// Validate the contents of the log file
+		cmd = []string{"sh", "-c", fmt.Sprintf("grep -q %s %s", checkString, logFilePath)}
+		_, err := k8sCore.RunCommandInPod(cmd, pod.Name, "debug-container", namespace)
+		if err == nil {
+			fmt.Printf("Validation successful for file: %s", file)
+			return nil
+		}
+		log.InfoD("Validation failed for file %s in path %s", file, logFilePath)
+	}
+	return fmt.Errorf("no matching log file containing %s", checkString)
+}
+
+func WaitForJobToFail(jobName, namespace string, timeout time.Duration, retryInterval time.Duration) error {
+    log.Infof("Waiting for job %s in namespace %s to reach failed state", jobName, namespace)
+
+	waitForJobToFail := func() (interface{}, bool, error) {
+		
+		// Fetch the job object
+        job, err := batch.Instance().GetJob(jobName, namespace)
+        if err != nil {
+            log.Errorf("Failed to fetch job %s: %v", jobName, err)
+            return nil, true, err
+        }
+
+        // Log job status
+        log.Infof("Job status: Succeeded=%d, Active=%d, Failed=%d", job.Status.Succeeded, job.Status.Active, job.Status.Failed)
+
+		// Check job states
+		if job.Status.Failed > 0 {
+			log.Infof("Job %s has failed as expected", jobName)
+			return nil, false, nil // Job has failed, exit successfully
+		} else if job.Status.Succeeded > 0 {
+			log.Errorf("Job %s succeeded unexpectedly", jobName)
+			return nil, false, nil // Job has succeeded, exit with error message
+		} else {
+			// Job is still active, wait before retrying
+			log.Infof("Job %s is still active, waiting for %v before next check...", jobName, retryInterval)
+			return nil, true, fmt.Errorf("job %s is still active", jobName)
+		}
+	}
+
+	_, err := task.DoRetryWithTimeout(waitForJobToFail, timeout, retryInterval)
+	if err != nil {
+		log.Errorf("Timeout occurred after %v while waiting for job to fail", timeout)
+		return fmt.Errorf("job %s did not transition to failed state within %v", jobName, timeout)
+	}
+
+	return nil
+}
+
