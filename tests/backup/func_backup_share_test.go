@@ -3968,3 +3968,81 @@ var _ = Describe("{RestoringFromBothBackupAndAnotherSharedBackupWithSameName}", 
 
 	})
 })
+
+// This test case ensures that the error message for unauthorized operations includes the user's details and role when access is denied.
+var _ = Describe("{VerifyAccessDeniedErrorMessagesforUnAuthorizedOperations}", Label(TestCaseLabelsMap[ValidateUserAccessLevel]...), func() {
+	var (
+		customUserCtx  context.Context
+		providers      []string
+		cloudCredName  string
+		cloudCredUID   string
+		customUser     string
+		firstName      string
+		lastName       string
+		email          string
+		userID         string
+		customRoleName backup.PxBackupRole = backup.ApplicationUser
+		err            error
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("VerifyAccessDeniedErrorMessagesforUnAuthorizedOperations",
+			"Validate Error Messages for Unauthorized User Actions", nil, 300687, Nvettaiyan, Q1FY25)
+		providers = GetBackupProviders()
+	})
+
+	It("Ensure Proper Error Messages For Unauthorized Action Attempts", func() {
+		Step("Create a new user", func() {
+			log.InfoD("Create a new user")
+			customUser = fmt.Sprintf("testuser-%s", RandomString(5))
+			firstName = fmt.Sprintf("FirstName-%s", customUser)
+			lastName = fmt.Sprintf("LastName-%s", customUser)
+			email = fmt.Sprintf("%v@cnbu.com", customUser)
+			err = backup.AddUser(customUser, firstName, lastName, email, CommonPassword)
+			log.FailOnError(err, "Failed to create user - %s", customUser)
+			userID, err = backup.FetchIDOfUser(customUser)
+			log.FailOnError(err, "Failed to fetch user id - %s", userID)
+			log.InfoD("User Information - [User: %s] Name: %s %s Email: %s", customUser, firstName, lastName, email)
+		})
+
+		Step("Add custom role to the user", func() {
+			log.InfoD(fmt.Sprintf("Add role to the user [%s]", customRoleName))
+			err = backup.AddRoleToUser(customUser, customRoleName, fmt.Sprintf("Adding %v role to %s", customRoleName, customUser))
+			log.FailOnError(err, "failed to add role %s to the user %s", customRoleName, customUser)
+			log.Infof("username %s common password %s", customUser, CommonPassword)
+		})
+
+		Step("Creating backup location and cloud setting", func() {
+			log.InfoD("Creating backup location and cloud setting")
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, RandomString(10))
+				cloudCredUID = uuid.New()
+				customUserCtx, err = backup.GetNonAdminCtx(customUser, CommonPassword)
+				log.FailOnError(err, "Fetching non admin ctx")
+				err = CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, customUserCtx)
+				if err != nil {
+					firstName = strings.TrimSpace(firstName)
+					lastName = strings.TrimSpace(lastName)
+					dash.VerifyFatal(
+						strings.Contains(err.Error(), firstName) && strings.Contains(err.Error(), lastName) && strings.Contains(err.Error(), string(customRoleName)),
+						true,
+						fmt.Sprintf("Verifying if the error message contains user's first name [%s], last name [%s], and role [%s]. Actual error: %s", firstName, lastName, customRoleName, err.Error()),
+					)
+				} else {
+					log.FailOnError(err, fmt.Sprintf("Unexpected success when creating cloud credential %s — Access denied or missing", cloudCredName))
+				}
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		customUserCtx, err = backup.GetNonAdminCtx(customUser, CommonPassword)
+		log.FailOnError(err, "Fetching non admin ctx")
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		log.Infof("Cleaning up users")
+		err := CleanupAllUserAndGroups()
+		dash.VerifySafely(err, nil, "Verifying cleanup all user and groups")
+		CleanupCloudSettingsAndClusters(nil, cloudCredName, cloudCredUID, customUserCtx)
+	})
+})
