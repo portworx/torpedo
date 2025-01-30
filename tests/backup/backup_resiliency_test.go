@@ -3035,8 +3035,10 @@ var _ = Describe("{AutopilotEnabledBackupRestore}", Label(TestCaseLabelsMap[Auto
 			for _, pod := range pods.Items {
 				for _, v := range pod.Spec.Volumes {
 					if v.PersistentVolumeClaim != nil {
-						volId, err := GetVolumeIDForGivenPVC(v.PersistentVolumeClaim.ClaimName)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("get volume id for pvc %s", v.PersistentVolumeClaim.ClaimName))
+						pv, er := core.Instance().GetPersistentVolumeClaim(v.PersistentVolumeClaim.ClaimName, namespace)
+						dash.VerifyFatal(er, nil, fmt.Sprintf("getting pvc %s in namespace %s", v.PersistentVolumeClaim.ClaimName, namespace))
+						volId, err := GetVolumeIDForGivenPVC(pv.Spec.VolumeName)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("get volume id for pvc %s", pv.Spec.VolumeName))
 						appVol, err := Inst().V.InspectVolume(volId)
 						dash.VerifyFatal(err, nil, fmt.Sprintf("inspect volume %s", v.Name))
 						pvcCapacity := appVol.Spec.Size / units.GiB
@@ -3116,8 +3118,10 @@ var _ = Describe("{AutopilotEnabledBackupRestore}", Label(TestCaseLabelsMap[Auto
 			for _, pod := range pods.Items {
 				for _, v := range pod.Spec.Volumes {
 					if v.PersistentVolumeClaim != nil {
-						volId, err := GetVolumeIDForGivenPVC(v.PersistentVolumeClaim.ClaimName)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("get volume id for pvc %s", v.PersistentVolumeClaim.ClaimName))
+						pv, er := core.Instance().GetPersistentVolumeClaim(v.PersistentVolumeClaim.ClaimName, namespace)
+						dash.VerifyFatal(er, nil, fmt.Sprintf("getting pvc %s in namespace %s", v.PersistentVolumeClaim.ClaimName, namespace))
+						volId, err := GetVolumeIDForGivenPVC(pv.Spec.VolumeName)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("get volume id for pvc %s", pv.Spec.VolumeName))
 						appVol, err := Inst().V.InspectVolume(volId)
 						dash.VerifyFatal(err, nil, fmt.Sprintf("inspect volume %s", v.Name))
 						pvcCapacity := appVol.Spec.Size / units.GiB
@@ -3143,8 +3147,10 @@ var _ = Describe("{AutopilotEnabledBackupRestore}", Label(TestCaseLabelsMap[Auto
 			for _, pod := range pods.Items {
 				for _, v := range pod.Spec.Volumes {
 					if v.PersistentVolumeClaim != nil {
-						volId, err := GetVolumeIDForGivenPVC(v.PersistentVolumeClaim.ClaimName)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("get volume id for pvc %s", v.PersistentVolumeClaim.ClaimName))
+						pv, er := core.Instance().GetPersistentVolumeClaim(v.PersistentVolumeClaim.ClaimName, namespace)
+						dash.VerifyFatal(er, nil, fmt.Sprintf("getting pvc %s in namespace %s", v.PersistentVolumeClaim.ClaimName, namespace))
+						volId, err := GetVolumeIDForGivenPVC(pv.Spec.VolumeName)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("get volume id for pvc %s", pv.Spec.VolumeName))
 						appVol, err := Inst().V.InspectVolume(volId)
 						dash.VerifyFatal(err, nil, fmt.Sprintf("inspect volume %s", v.Name))
 						pvcCapacity := appVol.Spec.Size / units.GiB
@@ -3210,8 +3216,10 @@ var _ = Describe("{AutopilotEnabledBackupRestore}", Label(TestCaseLabelsMap[Auto
 			for _, pod := range pods.Items {
 				for _, v := range pod.Spec.Volumes {
 					if v.PersistentVolumeClaim != nil {
-						volId, err := GetVolumeIDForGivenPVC(v.PersistentVolumeClaim.ClaimName)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("get volume id for pvc %s", v.PersistentVolumeClaim.ClaimName))
+						pv, er := core.Instance().GetPersistentVolumeClaim(v.PersistentVolumeClaim.ClaimName, namespace)
+						dash.VerifyFatal(er, nil, fmt.Sprintf("getting pvc %s in namespace %s", v.PersistentVolumeClaim.ClaimName, namespace))
+						volId, err := GetVolumeIDForGivenPVC(pv.Spec.VolumeName)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("get volume id for pvc %s", pv.Spec.VolumeName))
 						appVol, err := Inst().V.InspectVolume(volId)
 						dash.VerifyFatal(err, nil, fmt.Sprintf("inspect volume %s", v.Name))
 						pvcCapacity := appVol.Spec.Size / units.GiB
