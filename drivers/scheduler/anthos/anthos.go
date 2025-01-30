@@ -136,6 +136,7 @@ const (
 	storagePDBMinAvailable       = "portworx.io/storage-pdb-min-available"
 	clusterNameSpace             = "default"
 	skipFlagCheckVersion         = "1.29.0"
+	upgradeStepChangedVersion    = "1.31.0"
 	versionsKey                  = "versions"
 	versionKey                   = "version"
 )
@@ -191,16 +192,17 @@ type AnthosInstance struct {
 type anthos struct {
 	version string
 	kube.K8s
-	adminWsSSHInstance  *ssh.SSH
-	instances           []AnthosInstance
-	adminWsNode         *node.Node
-	adminWsKeyPath      string
-	instPath            string
-	confPath            string
-	adminClusterUpgrade bool
-	skipPDBFlag         bool
-	clusterName         string
-	Ops                 anthosops.Ops
+	adminWsSSHInstance       *ssh.SSH
+	instances                []AnthosInstance
+	adminWsNode              *node.Node
+	adminWsKeyPath           string
+	instPath                 string
+	confPath                 string
+	adminClusterUpgrade      bool
+	skipPDBFlag              bool
+	upgradeAdminClusterFirst bool
+	clusterName              string
+	Ops                      anthosops.Ops
 }
 
 // Init Initialize the driver
@@ -289,6 +291,8 @@ func (anth *anthos) getVersion() error {
 func (anth *anthos) UpgradeScheduler(version string) error {
 	log.Info("Upgrading Anthos user cluster")
 	upgradeVersion := version
+	var startTime time.Time
+	var timeTaken time.Duration
 	if !versionReg.MatchString(version) {
 		if !partialVersion.MatchString(version) {
 			return fmt.Errorf("incorrect upgrade version: [%s] is provided", version)
@@ -312,23 +316,45 @@ func (anth *anthos) UpgradeScheduler(version string) error {
 	if err := anth.upgradeAdminWorkstation(upgradeVersion); err != nil {
 		return err
 	}
-	startTime := time.Now()
-	if err := anth.upgradeUserCluster(upgradeVersion); err != nil {
+	if err := anth.prepareUpgrade(upgradeVersion); err != nil {
 		return err
 	}
-	timeTaken := time.Since(startTime)
-	log.Infof("Anthos user cluster took: %v time to complete the upgrade", timeTaken)
-	if err := anth.RefreshNodeRegistry(); err != nil {
-		return err
-	}
-	if err := anth.checkUserClusterNodesUpgradeTime(); err != nil {
-		return err
-	}
-	if anth.adminClusterUpgrade {
+	// If upgrade cluster version is greater than or equal to 1.31 then upgrade admin cluster first
+	if anth.upgradeAdminClusterFirst {
+		anth.adminClusterUpgrade = true
 		if err := anth.invokeUpgradeAdminCluster(version); err != nil {
 			return err
 		}
+		startTime = time.Now()
+		if err := anth.upgradeUserCluster(upgradeVersion); err != nil {
+			return err
+		}
+		timeTaken = time.Since(startTime)
+		if err := anth.RefreshNodeRegistry(); err != nil {
+			return err
+		}
+		if err := anth.checkUserClusterNodesUpgradeTime(); err != nil {
+			return err
+		}
+	} else {
+		startTime = time.Now()
+		if err := anth.upgradeUserCluster(upgradeVersion); err != nil {
+			return err
+		}
+		if err := anth.RefreshNodeRegistry(); err != nil {
+			return err
+		}
+		timeTaken = time.Since(startTime)
+		if err := anth.checkUserClusterNodesUpgradeTime(); err != nil {
+			return err
+		}
+		if anth.adminClusterUpgrade {
+			if err := anth.invokeUpgradeAdminCluster(version); err != nil {
+				return err
+			}
+		}
 	}
+	log.Infof("Anthos user cluster took: %v time to complete the upgrade", timeTaken)
 	return nil
 }
 
@@ -354,8 +380,6 @@ func (anth *anthos) invokeUpgradeAdminCluster(version string) error {
 // updateNodeInstance will update the host info after upgrade
 func (anth *anthos) updateNodeInstance() error {
 	log.Info("Updating node Instance")
-	var startAdminNodeIndex int = 2
-	var lastAdminNodeIndex int = 4
 	k8sOps, err := k8s.NewInstanceFromConfigFile(path.Join(anth.confPath, kubeConfig))
 	if err != nil {
 		return err
@@ -364,15 +388,15 @@ func (anth *anthos) updateNodeInstance() error {
 	if err != nil {
 		return err
 	}
-	adminIndex := startAdminNodeIndex
 	for _, adminNode := range adminNodeList.Items {
-		if adminIndex > lastAdminNodeIndex {
-			break
+		for idx, instance := range anth.instances {
+			if instance.PublicIpAddress == adminNode.Status.Addresses[0].Address {
+				anth.instances[idx].Name = adminNode.Name
+				anth.instances[idx].HostName = adminNode.Name
+				anth.instances[idx].PublicIpAddress = adminNode.Status.Addresses[0].Address
+				anth.instances[idx].PrivateIpAddress = adminNode.Status.Addresses[0].Address
+			}
 		}
-		anth.instances[adminIndex].HostName = adminNode.Name
-		anth.instances[adminIndex].PublicIpAddress = adminNode.Status.Addresses[0].Address
-		anth.instances[adminIndex].PrivateIpAddress = adminNode.Status.Addresses[0].Address
-		adminIndex += 1
 	}
 	return nil
 }
@@ -418,6 +442,15 @@ func (anth *anthos) VerifyUpgradeVersion(upgradeVersion string) error {
 	if version1.GreaterThanOrEqual(skipFlagVersion) {
 		log.Infof("Setting skip PDB flag to true for next anthos version [%s] upgrade", anth.version)
 		anth.skipPDBFlag = true
+	}
+	// This step to identify if admin cluster to be upgraded first
+	upgradeAdminClusterFirstVersion, err := version.NewVersion(upgradeStepChangedVersion)
+	if err != nil {
+		return fmt.Errorf("failed to parse upgrade admin cluster first check version: %s. Err: %v", upgradeAdminClusterFirstVersion, err)
+	}
+	if version2.GreaterThanOrEqual(upgradeAdminClusterFirstVersion) {
+		log.Infof("Upgrading admin cluster first for next anthos version [%s] upgrade", anth.version)
+		anth.upgradeAdminClusterFirst = true
 	}
 	toVersion := vReg.FindAllStringSubmatch(v1, -1)
 	fromVersion := vReg.FindAllStringSubmatch(v2, -1)
@@ -529,11 +562,6 @@ func (anth *anthos) upgradeUserCluster(version string) error {
 	}
 
 	upgradeLogger := anth.startLogCollector(logChan, anth.clusterName, enableControlplaneV2)
-	cmd = fmt.Sprintf("%s%s.tgz  --kubeconfig %s", upgradePrepareCmd, version, adminKubeconfPath)
-	if out, err := anth.execOnAdminWSNode(cmd); err != nil {
-		return fmt.Errorf("preparing user cluster for upgrade is failing: [%s]. Err: (%v)", out, err)
-	}
-
 	disableIPv6Ticker := anth.startDisablingIPv6(ipv6Chan)
 
 	// skipPDBUpgradePreflightFlag is needed to skip PDB check
@@ -1249,6 +1277,15 @@ func (anth *anthos) getLatestVersion(partialVersion string) (string, error) {
 		}
 	}
 	return latestVersion, nil
+}
+
+// prepareUpgrade prepares cluster for upgrade
+func (anth *anthos) prepareUpgrade(version string) error {
+	cmd := fmt.Sprintf("%s%s.tgz  --kubeconfig %s", upgradePrepareCmd, version, adminKubeconfPath)
+	if out, err := anth.execOnAdminWSNode(cmd); err != nil {
+		return fmt.Errorf("preparing user cluster for upgrade is failing: [%s]. Err: (%v)", out, err)
+	}
+	return nil
 }
 
 // init registering anthos sheduler
