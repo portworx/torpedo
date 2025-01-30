@@ -1027,7 +1027,11 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 		var timeout time.Duration
 		log.InfoD(fmt.Sprintf("Validating %s app", ctx.App.Key))
 		appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
-		if Inst().ScaleAppTimeout != time.Duration(0) {
+		// app "kubevirt-windows-mssql" takes longer time to start running, hence the timeout is increased
+		if ctx.App.Key == "kubevirt-windows-mssql" {
+			log.Infof("app [%s] is takes longer time to start running, hence the timeout is increased", ctx.App.Key)
+			timeout = appScaleFactor * 20 * time.Minute
+		} else if Inst().ScaleAppTimeout != time.Duration(0) {
 			timeout = Inst().ScaleAppTimeout
 		} else if ctx.ReadinessTimeout == time.Duration(0) {
 			timeout = appScaleFactor * defaultTimeout
@@ -16826,4 +16830,29 @@ func CreateAndValidateMigrationSched(migSchedName, cpName, migNs string, extraAr
 		migrations = append(migrations, migrationData)
 	}
 	return migrations, nil
+}
+
+// ToggleIscsiPorts toggles the iscsi ports on FA
+func ToggleIscsiPorts(PureFaClientVif *newflasharray.Client, faMgmtIP string, enabled bool) ([]string, error) {
+	var LastDisabledInterface []string
+	networkInterfaces, err := pureutils.ListAllInterfaces(PureFaClientVif)
+	log.Infof("NetworkInterfaces: [%v]", networkInterfaces)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list network interfaces on FA with IP [%s]: %v", faMgmtIP, err)
+	}
+	for _, nw := range networkInterfaces {
+		log.Infof("NetworkInterfaces items: [%+v]", nw.Items)
+		for _, networkInterface := range nw.Items {
+			for _, service := range networkInterface.Services {
+				if strings.Contains(service, "iscsi") {
+					_, err := pureutils.SetInterfaceEnabled(PureFaClientVif, networkInterface.Name, enabled)
+					if err != nil {
+						return nil, fmt.Errorf("failed to toggle network interfaces on FA with IP [%s]: %v to [%s]", faMgmtIP, err, enabled)
+					}
+					LastDisabledInterface = append(LastDisabledInterface, networkInterface.Name)
+				}
+			}
+		}
+	}
+	return LastDisabledInterface, nil
 }

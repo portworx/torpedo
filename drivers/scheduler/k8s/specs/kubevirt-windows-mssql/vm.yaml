@@ -1,0 +1,131 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: vgm-win2k22-mssql-1
+spec:
+  dataVolumeTemplates:
+    - metadata:
+        name: win-boot-template
+        annotations:
+          cdi.kubevirt.io/storage.usePopulator: "false"
+      spec:
+        source:
+          pvc:
+            name: win-boot-template
+            namespace: openshift-virtualization-os-images
+        pvc:
+          accessModes:
+            - ReadWriteMany
+          resources:
+            requests:
+              storage: 100Gi
+          storageClassName: px-rwx
+          volumeMode: Filesystem
+    - metadata:
+        name: win-data-vol-tempate-1
+        annotations:
+          cdi.kubevirt.io/storage.usePopulator: "false"
+      spec:
+        source:
+          pvc:
+            name: win-data-vol-tempate-1
+            namespace: openshift-virtualization-os-images
+        pvc:
+          accessModes:
+            - ReadWriteMany
+          resources:
+            requests:
+              storage: 100Gi
+          storageClassName: px-rwx
+          volumeMode: Filesystem
+    - metadata:
+        name: win-data-vol-tempate-2
+        annotations:
+          cdi.kubevirt.io/storage.usePopulator: "false"
+      spec:
+        source:
+          pvc:
+            name: win-data-vol-tempate-2
+            namespace: openshift-virtualization-os-images
+        pvc:
+          accessModes:
+            - ReadWriteMany
+          resources:
+            requests:
+              storage: 100Gi
+          storageClassName: px-rwx
+          volumeMode: Filesystem
+  running: true
+  template:
+    metadata:
+      labels:
+        kubevirt.io/domain: win2k22-template
+        kubevirt.io/size: medium
+    spec:
+      domain:
+        clock:
+          timer:
+            hpet:
+              present: false
+            hyperv: {}
+            pit:
+              tickPolicy: delay
+            rtc:
+              tickPolicy: catchup
+          utc: {}
+        cpu:
+          cores: 4
+          sockets: 1
+          threads: 1
+        devices:
+          disks:
+            - name: win-boot-disk
+              bootOrder: 1
+              disk:
+                bus: virtio
+            - name: win-dv-data-disk-1
+              disk:
+                bus: virtio
+            - name: win-dv-data-disk-2
+              disk:
+                bus: virtio
+            - name: cloud-initdisk
+              disk:
+                bus: virtio
+          inputs:
+            - bus: usb
+              name: tablet
+              type: tablet
+          interfaces:
+            - masquerade: {}
+              name: default
+        firmware:
+          bootloader:
+            bios: {}
+        machine:
+          type: q35
+        resources:
+          requests:
+            memory: 8Gi
+      evictionStrategy: LiveMigrate
+      networks:
+        - name: default
+          pod: {}
+      terminationGracePeriodSeconds: 3600
+      volumes:
+        - name: win-boot-disk
+          dataVolume:
+            name: win-boot-template
+        - name: win-dv-data-disk-1
+          dataVolume:
+            name: win-data-vol-tempate-1
+        - name: win-dv-data-disk-2
+          dataVolume:
+            name: win-data-vol-tempate-2
+        - name: cloud-initdisk
+          cloudInitNoCloud:
+            userData: |
+                #cloud-config
+                runcmd:
+                  - powershell.exe -Command |
+                      Start-Job -FilePath C:\Users\Administrator\Desktop\mysql_data.ps1

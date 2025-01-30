@@ -1,0 +1,65 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: win-dv-sc-immediate
+parameters:
+  repl: "3"
+  sharedv4: "true"
+  sharedv4_mount_options: vers=3.0,nolock
+provisioner: pxd.portworx.com
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: win-boot-template
+  namespace: openshift-virtualization-os-images
+  labels:
+    app: containerized-data-importer
+  annotations:
+    cdi.kubevirt.io/storage.import.endpoint: http://kubevirt-disk-registry.pwx.dev.purestorage.com/more_images/win-mssql-boot-vol.qcow2
+    pvc.source: "cloned"
+spec:
+  storageClassName: win-dv-sc-immediate
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 100Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: win-data-vol-tempate-1
+  namespace: openshift-virtualization-os-images
+  labels:
+    app: containerized-data-importer
+  annotations:
+    cdi.kubevirt.io/storage.import.endpoint: http://kubevirt-disk-registry.pwx.dev.purestorage.com/more_images/win-mssql-data-vol-1.qcow2
+    pvc.source: "cloned"
+spec:
+  storageClassName: win-dv-sc-immediate
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 100Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: win-data-vol-tempate-2
+  namespace: openshift-virtualization-os-images
+  labels:
+    app: containerized-data-importer
+  annotations:
+    cdi.kubevirt.io/storage.import.endpoint: http://kubevirt-disk-registry.pwx.dev.purestorage.com/more_images/win-mssql-data-vol-2.qcow2
+    pvc.source: "cloned"
+spec:
+  storageClassName: win-dv-sc-immediate
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 100Gi

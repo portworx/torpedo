@@ -28,11 +28,13 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/pure-px/torpedo/drivers/node"
+	newflasharray "github.com/pure-px/torpedo/drivers/pure/flasharray"
 	"github.com/pure-px/torpedo/drivers/scheduler"
 	"github.com/pure-px/torpedo/drivers/volume"
 	"github.com/pure-px/torpedo/pkg/asyncdr"
 	"github.com/pure-px/torpedo/pkg/aututils"
 	"github.com/pure-px/torpedo/pkg/log"
+	"github.com/pure-px/torpedo/pkg/pureutils"
 	"github.com/pure-px/torpedo/pkg/units"
 	. "github.com/pure-px/torpedo/tests"
 )
@@ -7965,6 +7967,7 @@ var _ = Describe("{SingleVMLiveMigrationPostCopy}", Label("p1", "positive", "kub
 		AfterEachTest(appCtxs)
 	})
 })
+
 var _ = Describe("{LMAfterAddingHotAndColdDiskToKubevirtVMMultipleTimes}", Label("p0", "positive", "kubevirt"), func() {
 	/*
 		JIRA ID : https://purestorage.atlassian.net/browse/HAZEL-1784
@@ -8076,7 +8079,7 @@ var _ = Describe("{LMAfterAddingHotAndColdDiskToKubevirtVMMultipleTimes}", Label
 			log.Infof("Running the iteration [%d]", i)
 
 			numberOfVolumes = 1
-			stepLog = "Hot-plug one  disk (DataVolume) to the running KubeVirt VM"
+			stepLog = "Hot-plug one disk (DataVolume) to the running KubeVirt VM"
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
 				isHotPluggable, err := HotPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "50Gi", volumeMode, true)
@@ -8120,6 +8123,497 @@ var _ = Describe("{LMAfterAddingHotAndColdDiskToKubevirtVMMultipleTimes}", Label
 	})
 
 	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
+	})
+})
+
+var _ = Describe("{FAFailoverWithLiveMigrationOfKubevirtVM}", Label("p1", "negative", "pure_ops", "network_failure"), func() {
+	/*
+		Step 1 : Schedule a kubevirt VM
+		Step 2 : Bring down icsci ports
+		Step 3 : Live migrate the kubevirt VM
+		Step 4 : Bring up icsci ports
+		Jira ID: https://purestorage.atlassian.net/browse/HAZEL-1858
+	*/
+	var (
+		app             string
+		volType         string
+		present         bool
+		appCtxs         []*scheduler.Context
+		namespace       string
+		canSsh          bool
+		initialUptime   map[string]time.Duration
+		vmNodeName      string
+		PureFaClientVif *newflasharray.Client
+		MgmtEndPoint    string
+	)
+	JustBeforeEach(func() {
+		log.Infof("Starting Torpedo tests ")
+		StartTorpedoTest("FAFailoverWithLiveMigrationOfKubevirtVM", "Live migration of kubevirt VM when all iscsi ports are down in FA", nil, 0)
+		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
+		if !present {
+			app = "kubevirt-debian-fio-minimal"
+		}
+		if volType == "pxe-raw" {
+			app = "kubevirt-raw-vol"
+		} else if volType == "fada-raw" {
+			app = "kubevirt-fada-raw-fio"
+		} else {
+			app = "kubevirt-debian-fio-minimal"
+		}
+		log.InfoD("Setting app for this test to be : %s", app)
+	})
+
+	itLog := "Live migration of kubevirt VM when all iscsi ports are down in FA"
+	It(itLog, func() {
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+		canSsh = false
+		stepLog := "Schedule a KubeVirt VM"
+		log.InfoD(stepLog)
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		Inst().AppList = []string{app}
+		Inst().CsiAppList = []string{app}
+
+		stepLog = "Schedule a kubevirt VM"
+		Step(stepLog, func() {
+			namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
+			appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
+		})
+		ValidateApplications(appCtxs)
+
+		if !present {
+			for _, appCtx := range appCtxs {
+				bindMount, err := IsVMBindMounted(appCtx, false)
+				log.FailOnError(err, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+			}
+		}
+
+		log.Infof("Hard Sleep for 2 minutes to let VMs come up")
+		time.Sleep(2 * time.Minute)
+
+		canSsh = CreateSSHPodAndSetCanSsh()
+		ValidateFioInVMs(appCtxs, canSsh)
+
+		initialUptime = make(map[string]time.Duration)
+
+		stepLog = "Get initial uptime of VMs and current node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			var wg sync.WaitGroup
+			for _, appCtx := range appCtxs {
+				wg.Add(1)
+				go func(appCtx *scheduler.Context) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+					log.FailOnError(err, "Failed to get VMs from appCtx")
+					for _, vm := range vms {
+						uptime, err := GetVMUptime(vm)
+						log.FailOnError(err, "Failed to get uptime from VM %s", vm.Name)
+						vmKey := fmt.Sprintf("%s/%s", vm.Namespace, vm.Name)
+						initialUptime[vmKey] = uptime
+						log.Infof("Initial uptime for VM %s is %v", vmKey, uptime)
+
+						vmNodeName, err = GetNodeOfVM(vm)
+						log.FailOnError(err, "Failed to get node of VM %v", vm.Name)
+						log.Infof("VM %s is currently running on node %s", vm.Name, vmNodeName)
+					}
+				}(appCtx)
+			}
+			wg.Wait()
+		})
+
+		// Get Details of iscsi ports present in the cluster
+		flashArrays, err := FlashArrayGetIscsiPorts()
+		log.Infof("flashArray iscsi ports: [%v]", flashArrays)
+		log.FailOnError(err, "Failed to Get Details on Flasharray iscsi ports that are in Use ")
+
+		defer enableInterfaces(flashArrays)
+
+		repeat := 5
+		for i := 0; i < repeat; i++ {
+			log.Infof("Starting iteration [%d]", i)
+			stepLog = "Live migrate VMs while icsci ports are down"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				vms, err := GetAllVMsFromScheduledContexts(appCtxs)
+				log.FailOnError(err, "Failed to get VMs from context")
+
+				if len(vms) == 0 {
+					log.FailOnError(fmt.Errorf("No VMs found"), "No VMs found in context")
+				}
+				log.Infof("Number of VMs : [%v]", len(vms))
+				allFAs, err := GetFADetailsUsed()
+				log.Infof("All flasharrays : [%v]", allFAs)
+				rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+				flashArrayIndex := rng.Intn(len(allFAs))
+				MgmtEndPoint = allFAs[flashArrayIndex].MgmtEndPoint
+				log.Infof("Management EndPoint : [%v]", MgmtEndPoint)
+				volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+				log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
+				secret, err := pureutils.GetPXPureSecret(volDriverNamespace)
+				log.FailOnError(err, "failed to get secret [%s/%s]", PureSecretName, volDriverNamespace)
+				apiToken, err := pureutils.GetApiTokenForFAMgmtEndpoint(secret, MgmtEndPoint)
+				log.Infof("apiToken : [%v]", apiToken)
+				faClient, err := pureutils.PureCreateClientAndConnectRest2_x(MgmtEndPoint, apiToken)
+				log.FailOnError(err, "failed to get API token for FA with IP [%s]", MgmtEndPoint)
+				PureFaClientVif, err = GetVifInterface(faClient, MgmtEndPoint, apiToken)
+				log.FailOnError(err, "failed to get vif interface for FA with IP [%s]", MgmtEndPoint)
+				LastDisabledInterface, err := ToggleIscsiPorts(PureFaClientVif, MgmtEndPoint, false)
+				log.Infof("Last Disabled Interface : [%v]", LastDisabledInterface)
+				log.FailOnError(err, "failed to toggle iscsi ports for FA with IP [%s]", MgmtEndPoint)
+
+				log.Infof("Hard Sleep for 1 minutes after bringing down iscsi ports")
+				time.Sleep(1 * time.Minute)
+
+				log.Infof("Starting VM live migration")
+				for _, appCtx := range appCtxs {
+					err := StartAndWaitForVMIMigration(appCtx, context1.TODO())
+					log.FailOnError(err, "Failed to live migrate kubevirt VM")
+				}
+			})
+
+			stepLog = "Enable the iscsi ports"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				enableInterfaces(flashArrays)
+			})
+
+			ValidateVMUptime(appCtxs, canSsh, initialUptime)
+			ValidateFioInVMs(appCtxs, canSsh)
+		}
+
+	})
+	JustAfterEach(func() {
+		log.Infof("In Teardown")
+		DestroyApps(appCtxs, nil)
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
+	})
+})
+
+var _ = Describe("{FAFailoverWithHotPlugDiskToKubevirtVM}", Label("p1", "negative", "pure_ops", "network_failure"), func() {
+	/*
+		Step 1 : Schedule a kubevirt VM
+		Step 2 : Bring down icsci ports
+		Step 3 : Hot plug disk to kubevirt VM
+		Step 4 : Bring up icsci ports
+		Jira ID: https://purestorage.atlassian.net/browse/HAZEL-1867
+	*/
+	var (
+		app             string
+		volType         string
+		present         bool
+		appCtxs         []*scheduler.Context
+		namespace       string
+		canSsh          bool
+		initialUptime   map[string]time.Duration
+		vmNodeName      string
+		PureFaClientVif *newflasharray.Client
+		MgmtEndPoint    string
+	)
+	JustBeforeEach(func() {
+		log.Infof("Starting Torpedo tests ")
+		StartTorpedoTest("FAFailoverWithHotPlugDiskToKubevirtVM", "Hot plug disk to kubevirt VM when all iscsi ports are down in FA", nil, 0)
+		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
+		if !present {
+			app = "kubevirt-debian-fio-minimal"
+		}
+		if volType == "pxe-raw" {
+			app = "kubevirt-raw-vol"
+		} else if volType == "fada-raw" {
+			app = "kubevirt-fada-raw-fio"
+		} else {
+			app = "kubevirt-debian-fio-minimal"
+		}
+		log.InfoD("Setting app for this test to be : %s", app)
+	})
+
+	itLog := "Hot plug disk to kubevirt VM when all iscsi ports are down in FA"
+	It(itLog, func() {
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+		canSsh = false
+		stepLog := "Schedule a KubeVirt VM"
+		log.InfoD(stepLog)
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		Inst().AppList = []string{app}
+		Inst().CsiAppList = []string{app}
+
+		stepLog = "Schedule a kubevirt VM"
+		Step(stepLog, func() {
+			namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
+			appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
+		})
+		ValidateApplications(appCtxs)
+
+		if !present {
+			for _, appCtx := range appCtxs {
+				bindMount, err := IsVMBindMounted(appCtx, false)
+				log.FailOnError(err, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+			}
+		}
+
+		log.Infof("Hard Sleep for 2 minutes to let VMs come up")
+		time.Sleep(2 * time.Minute)
+
+		canSsh = CreateSSHPodAndSetCanSsh()
+		ValidateFioInVMs(appCtxs, canSsh)
+
+		initialUptime = make(map[string]time.Duration)
+
+		stepLog = "Get initial uptime of VMs and current node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			var wg sync.WaitGroup
+			for _, appCtx := range appCtxs {
+				wg.Add(1)
+				go func(appCtx *scheduler.Context) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+					log.FailOnError(err, "Failed to get VMs from appCtx")
+					for _, vm := range vms {
+						uptime, err := GetVMUptime(vm)
+						log.FailOnError(err, "Failed to get uptime from VM %s", vm.Name)
+						vmKey := fmt.Sprintf("%s/%s", vm.Namespace, vm.Name)
+						initialUptime[vmKey] = uptime
+						log.Infof("Initial uptime for VM %s is %v", vmKey, uptime)
+
+						vmNodeName, err = GetNodeOfVM(vm)
+						log.FailOnError(err, "Failed to get node of VM %v", vm.Name)
+						log.Infof("VM %s is currently running on node %s", vm.Name, vmNodeName)
+					}
+				}(appCtx)
+			}
+			wg.Wait()
+		})
+
+		// Get Details of iscsi ports present in the cluster
+		flashArrays, err := FlashArrayGetIscsiPorts()
+		log.Infof("flashArray iscsi ports: [%v]", flashArrays)
+		log.FailOnError(err, "Failed to Get Details on Flasharray iscsi ports that are in Use ")
+
+		defer enableInterfaces(flashArrays)
+
+		repeat := 2
+		for i := 0; i < repeat; i++ {
+			log.Infof("Starting iteration [%d]", i)
+			stepLog = "Hot plug disk to VM when icsci ports are down"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				vms, err := GetAllVMsFromScheduledContexts(appCtxs)
+				log.FailOnError(err, "Failed to get VMs from context")
+
+				if len(vms) == 0 {
+					log.FailOnError(fmt.Errorf("No VMs found"), "No VMs found in context")
+				}
+				log.Infof("Number of VMs : [%v]", len(vms))
+				allFAs, err := GetFADetailsUsed()
+				log.Infof("All flasharrays : [%v]", allFAs)
+				rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+				flashArrayIndex := rng.Intn(len(allFAs))
+				MgmtEndPoint = allFAs[flashArrayIndex].MgmtEndPoint
+				log.Infof("Management EndPoint : [%v]", MgmtEndPoint)
+				volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+				log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
+				secret, err := pureutils.GetPXPureSecret(volDriverNamespace)
+				log.FailOnError(err, "failed to get secret [%s/%s]", PureSecretName, volDriverNamespace)
+				apiToken, err := pureutils.GetApiTokenForFAMgmtEndpoint(secret, MgmtEndPoint)
+				log.Infof("apiToken : [%v]", apiToken)
+				faClient, err := pureutils.PureCreateClientAndConnectRest2_x(MgmtEndPoint, apiToken)
+				log.FailOnError(err, "failed to get API token for FA with IP [%s]", MgmtEndPoint)
+				PureFaClientVif, err = GetVifInterface(faClient, MgmtEndPoint, apiToken)
+				log.FailOnError(err, "failed to get vif interface for FA with IP [%s]", MgmtEndPoint)
+				LastDisabledInterface, err := ToggleIscsiPorts(PureFaClientVif, MgmtEndPoint, false)
+				log.Infof("Last Disabled Interface : [%v]", LastDisabledInterface)
+				log.FailOnError(err, "failed to toggle iscsi ports for FA with IP [%s]", MgmtEndPoint)
+
+				log.Infof("Hard Sleep for 1 minutes after bringing down iscsi ports")
+				time.Sleep(1 * time.Minute)
+
+				log.Infof("Starting hot-plug disk to VM")
+				for _, appCtx := range appCtxs {
+					numberOfVolumes := 1
+					isHotPlugged, err := HotPlugDataVolumesToKubevirtVM([]*scheduler.Context{appCtx}, numberOfVolumes, "50Gi", "", false)
+					log.FailOnError(err, "Failed to hot-plug DataVolume to KubeVirt VM")
+					dash.VerifyFatal(isHotPlugged, true, "Successfully hot-plugged disk to KubeVirt VM ?")
+				}
+			})
+
+			stepLog = "Enable the iscsi ports"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				enableInterfaces(flashArrays)
+			})
+
+			ValidateVMUptime(appCtxs, canSsh, initialUptime)
+			ValidateFioInVMs(appCtxs, canSsh)
+		}
+
+	})
+	JustAfterEach(func() {
+		log.Infof("In Teardown")
+		DestroyApps(appCtxs, nil)
+		defer EndTorpedoTest()
+		AfterEachTest(appCtxs)
+	})
+})
+
+var _ = Describe("{FAFailoverWithColdAddDiskToKubevirtVM}", Label("p1", "negative", "pure_ops", "network_failure"), func() {
+	/*
+		Step 1 : Schedule a kubevirt VM
+		Step 2 : Bring down icsci ports
+		Step 3 : Cold add disk to kubevirt VM
+		Step 4 : Bring up icsci ports
+		Jira ID: https://purestorage.atlassian.net/browse/HAZEL-1859
+	*/
+	var (
+		app             string
+		volType         string
+		present         bool
+		appCtxs         []*scheduler.Context
+		namespace       string
+		canSsh          bool
+		PureFaClientVif *newflasharray.Client
+		MgmtEndPoint    string
+	)
+	JustBeforeEach(func() {
+		log.Infof("Starting Torpedo tests ")
+		StartTorpedoTest("FAFailoverWithColdAddDiskToKubevirtVM", "Cold add disk to kubevirt VM when all iscsi ports are down in FA", nil, 0)
+		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
+		if !present {
+			app = "kubevirt-debian-fio-minimal"
+		}
+		if volType == "pxe-raw" {
+			app = "kubevirt-raw-vol"
+		} else if volType == "fada-raw" {
+			app = "kubevirt-fada-raw-fio"
+		} else {
+			app = "kubevirt-debian-fio-minimal"
+		}
+		log.InfoD("Setting app for this test to be : %s", app)
+	})
+
+	itLog := "Cold add disk to kubevirt VM when all iscsi ports are down in FA"
+	It(itLog, func() {
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		log.FailOnError(err, "Failed to get volume driver namespace")
+		defer ListEvents(pxNs)
+		canSsh = false
+		stepLog := "Schedule a KubeVirt VM"
+		log.InfoD(stepLog)
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		Inst().AppList = []string{app}
+		Inst().CsiAppList = []string{app}
+
+		stepLog = "Schedule a kubevirt VM"
+		Step(stepLog, func() {
+			namespace = fmt.Sprintf("kubevirt-%v", time.Now().Unix())
+			appCtxs = append(appCtxs, ScheduleApplicationsOnNamespace(namespace, "test")...)
+		})
+		ValidateApplications(appCtxs)
+
+		if !present {
+			for _, appCtx := range appCtxs {
+				bindMount, err := IsVMBindMounted(appCtx, false)
+				log.FailOnError(err, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+			}
+		}
+
+		log.Infof("Hard Sleep for 2 minutes to let VMs come up")
+		time.Sleep(2 * time.Minute)
+
+		canSsh = CreateSSHPodAndSetCanSsh()
+		ValidateFioInVMs(appCtxs, canSsh)
+
+		// Get Details of iscsi ports present in the cluster
+		flashArrays, err := FlashArrayGetIscsiPorts()
+		log.Infof("flashArray iscsi ports: [%v]", flashArrays)
+		log.FailOnError(err, "Failed to Get Details on Flasharray iscsi ports that are in Use ")
+
+		defer enableInterfaces(flashArrays)
+
+		repeat := 5
+		for i := 0; i < repeat; i++ {
+			log.Infof("Starting iteration [%d]", i)
+			stepLog = "Cold add disk to VM when icsci ports are down"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				vms, err := GetAllVMsFromScheduledContexts(appCtxs)
+				log.FailOnError(err, "Failed to get VMs from context")
+
+				if len(vms) == 0 {
+					log.FailOnError(fmt.Errorf("No VMs found"), "No VMs found in context")
+				}
+				log.Infof("Number of VMs : [%v]", len(vms))
+				allFAs, err := GetFADetailsUsed()
+				log.Infof("All flasharrays : [%v]", allFAs)
+				rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+				flashArrayIndex := rng.Intn(len(allFAs))
+				MgmtEndPoint = allFAs[flashArrayIndex].MgmtEndPoint
+				log.Infof("Management EndPoint : [%v]", MgmtEndPoint)
+				volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+				log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
+				secret, err := pureutils.GetPXPureSecret(volDriverNamespace)
+				log.FailOnError(err, "failed to get secret [%s/%s]", PureSecretName, volDriverNamespace)
+				apiToken, err := pureutils.GetApiTokenForFAMgmtEndpoint(secret, MgmtEndPoint)
+				log.Infof("apiToken : [%v]", apiToken)
+				faClient, err := pureutils.PureCreateClientAndConnectRest2_x(MgmtEndPoint, apiToken)
+				log.FailOnError(err, "failed to get API token for FA with IP [%s]", MgmtEndPoint)
+				PureFaClientVif, err = GetVifInterface(faClient, MgmtEndPoint, apiToken)
+				log.FailOnError(err, "failed to get vif interface for FA with IP [%s]", MgmtEndPoint)
+				LastDisabledInterface, err := ToggleIscsiPorts(PureFaClientVif, MgmtEndPoint, false)
+				log.Infof("Last Disabled Interface : [%v]", LastDisabledInterface)
+				log.FailOnError(err, "failed to toggle iscsi ports for FA with IP [%s]", MgmtEndPoint)
+
+				log.Infof("Hard Sleep for 1 minutes after bringing down iscsi ports")
+				time.Sleep(1 * time.Minute)
+
+				log.Infof("Starting cold add disk to VM")
+				numberOfVolumes := 1
+				for _, appCtx := range appCtxs {
+					if volType == "pxe-raw" || volType == "fada-raw" {
+						isRawColdAddDisk, err := AddRawBlockDriveToKubevirtVM([]*scheduler.Context{appCtx}, numberOfVolumes, "10Gi")
+						log.FailOnError(err, "Failed to add raw cold disk to KubeVirt VM")
+						dash.VerifyFatal(isRawColdAddDisk, true, "Successfully added raw cold disk to KubeVirt VM ?")
+					} else {
+						isColdAddDisk, err := AddDisksToKubevirtVM([]*scheduler.Context{appCtx}, numberOfVolumes, "10Gi")
+						log.FailOnError(err, "Failed to add cold disk to KubeVirt VM")
+						dash.VerifyFatal(isColdAddDisk, true, "Successfully added cold disk to KubeVirt VM ?")
+					}
+				}
+			})
+
+			stepLog = "Enable the iscsi ports"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				enableInterfaces(flashArrays)
+			})
+
+			ValidateFioInVMs(appCtxs, canSsh)
+		}
+
+	})
+	JustAfterEach(func() {
+		log.Infof("In Teardown")
+		DestroyApps(appCtxs, nil)
 		defer EndTorpedoTest()
 		AfterEachTest(appCtxs)
 	})
