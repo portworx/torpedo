@@ -2387,6 +2387,7 @@ var _ = Describe("{SingleVMLiveMigrationStorkUpgrade}", Label("p0", "positive", 
 					} else {
 						log.Infof("VM successfully migrated from node %s to node %s", vmNodeName, newNodeName)
 					}
+					vmNodeName = newNodeName
 				})
 			}
 		})

@@ -1462,6 +1462,14 @@ func validateFailoverFailback(clusterType, taskNamePrefix string, single, skipSo
 	stc, err := Inst().V.GetDriver()
 	log.FailOnError(err, "Failed to get driver")
 
+	pxNamespace, err := Inst().V.GetVolumeDriverNamespace()
+	log.FailOnError(err, "Failed to get volume driver namespace")
+
+	if stc.Spec.Security != nil && stc.Spec.Security.Enabled {
+		log.InfoD("Security is enabled, modifying migrationschedule")
+		extraArgs["annotations"] = fmt.Sprintf("openstorage.io/auth-secret-namespace=%v,openstorage.io/auth-secret-name=%v", pxNamespace, "px-admin-token")
+	}
+
 	isCloud, cloudName := asyncdr.IsCloud(stc)
 	var srcEp, destEp string
 	extraArgsCp := map[string]string{}
