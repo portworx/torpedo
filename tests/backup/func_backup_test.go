@@ -15,6 +15,7 @@ import (
 	"github.com/pure-px/stork/pkg/k8sutils"
 	"github.com/pure-px/torpedo/drivers"
 	"github.com/pure-px/torpedo/drivers/backup"
+	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/scheduler"
 	"github.com/pure-px/torpedo/drivers/volume/portworx/schedops"
 	"github.com/pure-px/torpedo/pkg/log"
@@ -2125,4 +2126,177 @@ var _ = Describe("{UpdateClusterObjectDuringBackupDeletion}", Label(TestCaseLabe
 		DestroyApps(scheduledAppContexts, opts)
 		CleanupCloudSettingsAndClusters(nil, cloudCredName, cloudCredUID, ctx)
 	})
+})
+
+// Verify the error when objectstore endpoint is not reachable while backup is in progress
+var _ = Describe("{TestBackupFailureWhenMinioEndpointUnreachable}", Label(TestCaseLabelsMap[PxBackupLabel]...), func() {
+
+	var (
+		ctx                  context.Context
+		backupNames          []string
+		bkpLocationName      string
+		backupLocationUID    string
+		cloudCredName        string
+		cloudCredUID         string
+		clusterUid           string
+		backupLocationMap    map[string]string
+		clusterStatus        api.ClusterInfo_StatusInfo_Status
+		err                  error
+		scheduledAppContexts []*scheduler.Context
+		bkpNamespaces        []string
+		providers            []string
+		numOfBackup          int
+		testDir              string
+		storkRunningNode     node.Node
+		minioEndpoint        string
+		present              bool
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("VerifyBackupFailureWhenMinioEndpointUnreachable", "Verify the error when objectstore endpoint is not reachable while backup is in progress", nil, 300496, Pingle, Q3FY25)
+		ctx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		backupLocationMap = make(map[string]string)
+
+		bkpNamespaces = make([]string, 0)
+		providers = make([]string, 0)
+		backupNames = make([]string, 0)
+		numOfBackup = 1
+		providers = GetBackupProviders()
+		testDir = "testdata"
+		// Schedule an Application
+		appContexts := ScheduleApplications(TaskNamePrefix)
+		for _, ctx := range appContexts {
+			ctx.ReadinessTimeout = AppReadinessTimeout
+			namespace := GetAppNamespace(ctx, TaskNamePrefix)
+			bkpNamespaces = append(bkpNamespaces, namespace)
+			scheduledAppContexts = append(scheduledAppContexts, ctx)
+		}
+	})
+
+	//Verify the error when objectstore endpoint is not reachable while backup is in progress
+	It("Verify the error when objectstore endpoint is not reachable while backup is in progress.", func() {
+		// 1. Validate applications
+		Step("Validate applications", func() {
+			log.InfoD("Validating applications")
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		// 2. Filling data into the pod
+		Step("Filling data into the pod", func() {
+			log.InfoD("Filling data into the pod")
+
+			pods, err := core.Instance().GetPods(bkpNamespaces[0], nil)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("getting pods from namespace [%s] ", bkpNamespaces[0]))
+			for _, pod := range pods.Items {
+				containerPaths := schedops.GetContainerPVCMountMap(pod)
+				for containerName, mountPaths := range containerPaths {
+					for _, mountPath := range mountPaths {
+						dir := fmt.Sprintf("%s/%s", mountPath, testDir)
+						cmd := fmt.Sprintf("mkdir %s; dd if=/dev/urandom of=%s/data bs=1M count=1500", dir, dir)
+						cmdArgs := []string{"/bin/sh", "-c", cmd}
+						_, err := core.Instance().RunCommandInPod(cmdArgs, pod.Name, containerName, pod.Namespace)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Writing data to the pod %s on path %s", pod.Name, dir))
+					}
+				}
+			}
+		})
+
+		// 3. Create cloud credentials and backup location
+		Step("Creating cloud credentials and backup location", func() {
+			log.InfoD("Creating cloud credentials and backup location")
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, time.Now().Unix())
+				bkpLocationName = fmt.Sprintf("%s-%s-%v-bl", provider, getGlobalBucketName(provider), time.Now().Unix())
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = bkpLocationName
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				err = CreateBackupLocation(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", bkpLocationName))
+			}
+		})
+
+		// 4. Create application cluster for backup
+		Step("Register cluster for backup", func() {
+			err := CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			clusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			log.InfoD("Uid of [%s] cluster is %s", SourceClusterName, clusterUid)
+		})
+
+		// 5. Take backup of app
+		Step("Taking backup of applications", func() {
+			for i := 0; i < numOfBackup; i++ {
+				backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, RandomString(6))
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+				_, err = CreateBackupWithoutCheck(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, nil, BackupOrgID, clusterUid, "", "", "", "")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
+				backupNames = append(backupNames, backupName)
+			}
+		})
+
+		// 6. Disconnect the minio connection from node
+		Step("Disconnect the minio connection from node", func() {
+			storkNamespace, err := k8sutils.GetStorkPodNamespace()
+			dash.VerifyFatal(err, nil, "Fetching stork pods namespace")
+			storkPods, err := core.Instance().GetPods(storkNamespace, StorkLabel)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching stork pods in namespace [%s]", storkNamespace))
+
+			nodeName, err := GetNodeNameFromPod(storkPods.Items[0], storkNamespace)
+			dash.VerifyFatal(err, nil, "Fetch node from stork pod running")
+			log.Infof("get node name cmd: %s", string(nodeName))
+
+			storkRunningNode, err = node.GetNodeByName(string(nodeName))
+			dash.VerifyFatal(err, nil, "Get node details")
+			minioEndpoint, present = os.LookupEnv("S3_ENDPOINT")
+			if present {
+				log.InfoD("Picking the s3 location endpoint [%s] from env variable", minioEndpoint)
+			} else {
+				log.InfoD("Env variable %s not set hence returning empty", minioEndpoint)
+			}
+
+			log.Infof("minio endpoint is:%s", minioEndpoint)
+			err = DisconnectNetworkOnNode(storkRunningNode, minioEndpoint)
+			dash.VerifyFatal(err, nil, "Disconnect minio endpoint from node")
+			time.Sleep(WaitTimeForNodeConnection)
+		})
+
+		Step("connect node again endpoint", func() {
+			err = ConnectNetworkOnNode(storkRunningNode, minioEndpoint)
+			dash.VerifyFatal(err, nil, "connect minio endpoint from node")
+		})
+
+		// 7. Check success status of backup
+		Step("Checking success of backup", func() {
+			backupName := backupNames[0]
+			log.Infof("Checking success state for the backup %s", backupName)
+			err = BackupSuccessCheck(backupName, BackupOrgID, 40*time.Minute, 30*time.Second, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the backup [%s] in success state", backupName))
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		log.InfoD("Deleting deployed applications")
+		DestroyApps(scheduledAppContexts, opts)
+
+		err = DeleteAllBackups(ctx, BackupOrgID)
+		dash.VerifySafely(err, nil, "Verifying backup deletion")
+
+		err = DeleteNamespaces(bkpNamespaces)
+		dash.VerifySafely(err, nil, "Deleting app namespace")
+
+		// Clean up the cluster
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
+
 })

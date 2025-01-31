@@ -289,6 +289,7 @@ var (
 	PrivilegedPSALabel           = map[string]string{"pod-security.kubernetes.io/enforce": "privileged"}
 	PSAAppMap                    = map[string]string{"postgres-backup": "postgres-restricted", "mysql-backup": "mysql-restricted"}
 	CurrentPxBackupVersion       string
+	WaitTimeForNodeConnection    = 10 * time.Minute
 )
 
 type UserRoleAccess struct {
@@ -14818,4 +14819,27 @@ func WaitForJobToFail(jobName, namespace string, timeout time.Duration, retryInt
 	}
 
 	return nil
+}
+func GetNodeNameFromPod(pod corev1.Pod, namespace string) (string, error) {
+	cmd := "kubectl"
+	args := []string{"get", "pod", pod.Name, "-n", namespace, "-o", "jsonpath={.spec.nodeName}"}
+	output, err := exec.Command(cmd, args...).CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("failed to get node name for pod [%s] in namespace [%s]: %v", pod.Name, namespace, err)
+	}
+	return string(output), nil
+}
+
+func DisconnectNetworkOnNode(node node.Node, url string) error {
+	cmd := fmt.Sprintf("iptables -A OUTPUT -d %s -j DROP", url)
+	_, err := RunCmdGetOutput(cmd, node)
+	return err
+
+}
+
+func ConnectNetworkOnNode(node node.Node, url string) error {
+	cmd := fmt.Sprintf("iptables -D OUTPUT -d %s -j DROP", url)
+	_, err := RunCmdGetOutput(cmd, node)
+	return err
+
 }
