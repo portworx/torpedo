@@ -160,6 +160,7 @@ const (
 	DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel                            TestCaseName = "DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel"
 	ValidateMetrics                                                                    TestCaseName = "ValidateMetrics"
 	KDMPBackup                                                                         TestCaseName = "ValidateGenericBackupDeletionWithMissingS3Bucket"
+	UpdateClusterObjectDuringBackupDeletion                                            TestCaseName = "UpdateClusterObjectDuringBackupDeletion"
 	StorkControllerConfigCM                                                            TestCaseName = "StorkControllerConfigCM"
 	BackupDeletionWithDynamicPVCGeneration                                             TestCaseName = "BackupDeletionWithDynamicPVCGeneration"
 	BackupScheduleEnumerate                                                            TestCaseName = "BackupScheduleEnumerate"

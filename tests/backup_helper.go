@@ -13152,7 +13152,7 @@ func CreateDocRegistrySecret(namespace string) error {
 func InstallPxBackup(version, branch, namespace string, vals map[string]interface{}) (*release.Release, error) {
 
 	clusterProvider := os.Getenv("CLUSTER_PROVIDER")
-	
+
 	if !(clusterProvider == "vanilla" ||
 		clusterProvider == "openshift" ||
 		clusterProvider == "rke" ||
@@ -14783,19 +14783,19 @@ func MountPVCAndCheckLogs(pvcName, namespace, filePath, fileName, checkString st
 }
 
 func WaitForJobToFail(jobName, namespace string, timeout time.Duration, retryInterval time.Duration) error {
-    log.Infof("Waiting for job %s in namespace %s to reach failed state", jobName, namespace)
+	log.Infof("Waiting for job %s in namespace %s to reach failed state", jobName, namespace)
 
 	waitForJobToFail := func() (interface{}, bool, error) {
-		
-		// Fetch the job object
-        job, err := batch.Instance().GetJob(jobName, namespace)
-        if err != nil {
-            log.Errorf("Failed to fetch job %s: %v", jobName, err)
-            return nil, true, err
-        }
 
-        // Log job status
-        log.Infof("Job status: Succeeded=%d, Active=%d, Failed=%d", job.Status.Succeeded, job.Status.Active, job.Status.Failed)
+		// Fetch the job object
+		job, err := batch.Instance().GetJob(jobName, namespace)
+		if err != nil {
+			log.Errorf("Failed to fetch job %s: %v", jobName, err)
+			return nil, true, err
+		}
+
+		// Log job status
+		log.Infof("Job status: Succeeded=%d, Active=%d, Failed=%d", job.Status.Succeeded, job.Status.Active, job.Status.Failed)
 
 		// Check job states
 		if job.Status.Failed > 0 {
@@ -14819,4 +14819,3 @@ func WaitForJobToFail(jobName, namespace string, timeout time.Duration, retryInt
 
 	return nil
 }
-
