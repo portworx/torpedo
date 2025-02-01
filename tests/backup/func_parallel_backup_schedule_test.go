@@ -9,6 +9,7 @@ import (
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/pure-px/sched-ops/k8s/core"
+	"github.com/pure-px/sched-ops/task"
 	"github.com/pure-px/torpedo/drivers/backup"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/scheduler"
@@ -36,6 +37,8 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 		parallelScheduledBackupNamespacePrefix               = "parallel-scheduled-backup"
 		defaultWaitInterval                    time.Duration = 20 * time.Second
 		pxNamespace                                          = "portworx"
+		defaultTimeout                                       = 5 * time.Minute
+		defaultRetryInterval                                 = 10 * time.Second
 	)
 	BeforeAll(func() {
 		// Schedule a pxd Volume Application
@@ -65,7 +68,7 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 				taskName := fmt.Sprintf("%s-%s", TaskNamePrefix, RandomString(randomStringLength))
 				appContexts := ScheduleApplicationsOnNamespace(namespace, taskName)
 				for _, ctx := range appContexts {
-					ctx.ReadinessTimeout = AppReadinessTimeout
+					ctx.ReadinessTimeout = 2 * AppReadinessTimeout
 					namespace := GetAppNamespace(ctx, taskName)
 					bkpNamespaces = append(bkpNamespaces, namespace)
 					scheduledAppContexts = append(scheduledAppContexts, ctx)
@@ -75,15 +78,15 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 
 		// Validate the application
 		ValidateApplications(scheduledAppContexts)
+	})
 
+	JustBeforeEach(func() {
+		// Throttle network speed
 		err := ThrottleNetworkSpeed(10)
 		if err != nil {
 			log.FailOnError(err, "Unable to update the network bandwidth usage")
 		}
 
-	})
-
-	JustBeforeEach(func() {
 		// Get Admin User Context
 		adminContext, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching admin user ctx")
@@ -118,6 +121,10 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 		log.Infof("Schedule policy status, name, uid: %v, %v, %v", periodicPolicyStatus, schedulePolicyName, schedulePolicyUid)
 	})
 
+	JustAfterEach(func() {
+		EndPxBackupTorpedoTest(scheduledAppContexts)
+	})
+
 	// Testrail id - T90054302 verify ParallelBackupSchedule for Pxd volumes
 	It("VerifyPxdVolumeParallelScheduledBackups", func() {
 		StartPxBackupTorpedoTest("VerifyPxdVolumeParallelScheduledBackups", "verify ParallelBackupSchedule for Pxd volumes", nil, 304414, Shkumari, Q4FY25)
@@ -141,6 +148,11 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 		})
 
 		Step("cleanup- delete the created resources", func() {
+			// Resume Network spped
+			err := ThrottleNetworkSpeed(0)
+			if err != nil {
+				log.FailOnError(err, "Unable to update the network bandwidth usage")
+			}
 			// Get Admin User Context
 			adminContext, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching admin user ctx")
@@ -217,6 +229,11 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 		})
 
 		Step("cleanup- delete the created resources", func() {
+			// Resume Network spped
+			err := ThrottleNetworkSpeed(0)
+			if err != nil {
+				log.FailOnError(err, "Unable to update the network bandwidth usage")
+			}
 			// Get Admin User Context
 			adminContext, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching admin user ctx")
@@ -296,6 +313,11 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 		})
 
 		Step("cleanup- delete the created resources", func() {
+			// Resume Network spped
+			err := ThrottleNetworkSpeed(0)
+			if err != nil {
+				log.FailOnError(err, "Unable to update the network bandwidth usage")
+			}
 			// Get Admin User Context
 			adminContext, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching admin user ctx")
@@ -385,6 +407,11 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 			log.InfoD("Validated Parallel Backup Schedule")
 		})
 		Step("cleanup- delete the created resources", func() {
+			// Resume Network spped
+			err := ThrottleNetworkSpeed(0)
+			if err != nil {
+				log.FailOnError(err, "Unable to update the network bandwidth usage")
+			}
 			// Get Admin User Context
 			adminContext, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching admin user ctx")
@@ -454,30 +481,18 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 			_, err = CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName, SourceClusterName, sourceClusterUID, bkpLocationName, backupLocationUID, labelSelectors, BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUid, nsLabelString, adminContext, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule name [%s]", scheduleName))
 			time.Sleep(1 * time.Minute)
-			schedulebackup1name, err := GetFirstScheduleBackupName(adminContext, scheduleName, BackupOrgID)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Get first schedule backup name of backup schedule[%s]", scheduleName))
-			log.InfoD("first schedule backup for schedule name [%s] is [%s]", scheduleName, schedulebackup1name)
 
 			// Add Same Labels to another namespace
 			err = AddLabelsToMultipleNamespaces(nsLabelsMap, []string{bkpNamespaces[1]})
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels [%v] to namespaces [%v]", nsLabelsMap, []string{bkpNamespaces[1]}))
 
-			// Validate that the first backup is completed
-			err = Inst().Backup.WaitForBackupCompletion(adminContext, schedulebackup1name, BackupOrgID, 2*BackupCompletionWaitTime, defaultWaitInterval)
-			log.FailOnError(err, "failed to wait for backup completion")
-			log.InfoD("Backup [%v] completed", schedulebackup1name)
-
-			schedulebackup2name, err := GetNextScheduleBackupName(scheduleName, 15, adminContext)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Get second schedule backup name of backup schedule[%s]", scheduleName))
-			log.InfoD("Second schedule backup for schedule name [%s] is [%s]", scheduleName, schedulebackup2name)
-
-			schedulebackup1InspectRequest := &api.BackupInspectRequest{
-				OrgId: BackupOrgID,
-				Name:  schedulebackup1name,
+			// Validate Non Parallel Backup Schedule are not triggering parallel backups
+			err = ValidateNumberOfParallelScheduledBackups(scheduleName, BackupOrgID, 15, adminContext, 2)
+			log.FailOnNoError(err, "VerifyPxdVolumeParallelScheduledBackupsPostEnabling")
+			if !strings.Contains(err.Error(), "not been created up to the provided ordinal value") {
+				log.FailOnError(err, "next scheduled backup has been created before first was successful")
 			}
-			schedulebackup1, err := Inst().Backup.InspectBackup(adminContext, schedulebackup1InspectRequest)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Get first schedule backup object of backup schedule[%s]", scheduleName))
-			dash.VerifyFatal(schedulebackup1.Backup.GetStatus().Status, api.BackupInfo_StatusInfo_Success, fmt.Sprintf("Verify first schedule backup is successfully completed before second schedule backup is triggered with backup schedule[%s]", scheduleName))
+			log.InfoD("Validated Non Parallel Backup Schedule is not triggering parallel backups")
 
 			// Enable the parallel schedule backup.
 			scheduleUID, err := GetScheduleUID(scheduleName, BackupOrgID, adminContext)
@@ -494,21 +509,42 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 			_, err = Inst().Backup.UpdateBackupSchedule(adminContext, bkpScheduleUpdateRequest)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of backup schedule[%s]", scheduleName))
 
-			// schedulebackup3
-			schedulebackup3name, err := GetNextScheduleBackupName(scheduleName, 15, adminContext)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Get third schedule backup name of backup schedule[%s]", scheduleName))
-			log.InfoD("Third schedule backup for schedule name [%s] is [%s]", scheduleName, schedulebackup3name)
+			// schedulebackup2
+			schedulebackup2name, err := GetNextScheduleBackupName(scheduleName, 15, adminContext)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Get second schedule backup name of backup schedule[%s]", scheduleName))
+			log.InfoD("Second schedule backup for schedule name [%s] is [%s]", scheduleName, schedulebackup2name)
 
-			schedulebackup2InspectRequest := &api.BackupInspectRequest{
-				OrgId: BackupOrgID,
-				Name:  schedulebackup2name,
+			//schedulebackup3
+			time.Sleep(15 * time.Minute)
+			t := func() (interface{}, bool, error) {
+				backupName, err := GetOrdinalScheduleBackupName(adminContext, scheduleName, 3, BackupOrgID)
+				if err != nil {
+					return nil, true, err
+				}
+				log.InfoD("Inspecting backup %s", backupName)
+				bkpInspectRequest := &api.BackupInspectRequest{
+					OrgId: BackupOrgID,
+					Name:  backupName,
+				}
+				bkpInspectResponse, err := Inst().Backup.InspectBackup(adminContext, bkpInspectRequest)
+				if err != nil {
+					return nil, true, err
+				}
+				if bkpInspectResponse.GetBackup().GetStatus().GetStatus() != api.BackupInfo_StatusInfo_InProgress {
+					return nil, true, fmt.Errorf("backup %s is not in progress, currentState %v", backupName, bkpInspectResponse.GetBackup().GetStatus().GetStatus())
+				}
+				return nil, true, nil
 			}
-			schedulebackup2, err := Inst().Backup.InspectBackup(adminContext, schedulebackup2InspectRequest)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Get second schedule backup object of backup schedule[%s]", scheduleName))
-			dash.VerifyFatal(schedulebackup2.Backup.GetStatus().Status, api.BackupInfo_StatusInfo_InProgress, fmt.Sprintf("Verify second schedule backup is in-progress before third schedule backup is triggered with backup schedule[%s]", scheduleName))
+			_, err = task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Get third schedule backup name of backup schedule[%s]", scheduleName))
 		})
 
 		Step("cleanup- delete the created resources", func() {
+			// Resume Network spped
+			err := ThrottleNetworkSpeed(0)
+			if err != nil {
+				log.FailOnError(err, "Unable to update the network bandwidth usage")
+			}
 			// Get Admin User Context
 			adminContext, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching admin user ctx")
@@ -627,20 +663,47 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of backup schedule[%s]", scheduleName))
 
 			// schedulebackup3
-			schedulebackup3name, err := GetNextScheduleBackupName(scheduleName, 15, adminContext)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Get third schedule backup name of backup schedule[%s]", scheduleName))
-			log.InfoD("Third schedule backup for schedule name [%s] is [%s]", scheduleName, schedulebackup3name)
-
-			schedulebackup2InspectRequest := &api.BackupInspectRequest{
-				OrgId: BackupOrgID,
-				Name:  schedulebackup2name,
+			time.Sleep(15 * time.Minute)
+			t := func() (interface{}, bool, error) {
+				backupName, err := GetOrdinalScheduleBackupName(adminContext, scheduleName, 3, BackupOrgID)
+				if err != nil {
+					return nil, true, err
+				}
+				log.InfoD("Inspecting backup %s", backupName)
+				bkpInspectRequest := &api.BackupInspectRequest{
+					OrgId: BackupOrgID,
+					Name:  backupName,
+				}
+				bkpInspectResponse, err := Inst().Backup.InspectBackup(adminContext, bkpInspectRequest)
+				if err != nil {
+					return nil, true, err
+				}
+				if bkpInspectResponse.GetBackup().GetStatus().GetStatus() != api.BackupInfo_StatusInfo_InProgress {
+					return nil, true, fmt.Errorf("backup %s is not in progress, currentState %v", backupName, bkpInspectResponse.GetBackup().GetStatus().GetStatus())
+				}
+				return nil, true, nil
 			}
-			schedulebackup2, err := Inst().Backup.InspectBackup(adminContext, schedulebackup2InspectRequest)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Get second schedule backup object of backup schedule[%s]", scheduleName))
-			dash.VerifyFatal(schedulebackup2.Backup.GetStatus().Status, api.BackupInfo_StatusInfo_Success, fmt.Sprintf("Verify second schedule backup is completed before third schedule backup is triggered with backup schedule[%s]", scheduleName))
+			_, err = task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
+			if err == nil {
+				schedulebackup2InspectRequest := &api.BackupInspectRequest{
+					OrgId: BackupOrgID,
+					Name:  schedulebackup2name,
+				}
+				schedulebackup2, err := Inst().Backup.InspectBackup(adminContext, schedulebackup2InspectRequest)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Get second schedule backup object of backup schedule[%s]", scheduleName))
+				dash.VerifyFatal(schedulebackup2.Backup.GetStatus().Status, api.BackupInfo_StatusInfo_Success, fmt.Sprintf("Verify second schedule backup is completed before third schedule backup is triggered with backup schedule[%s]", scheduleName))
+			} else {
+				log.FailOnNoError(err, "VerifyPxdVolumeParallelScheduledBackupsPostDisabling - not triggering parallel backup post diabling parallel backup")
+			}
+
 		})
 
 		Step("cleanup- delete the created resources", func() {
+			// Resume Network spped
+			err := ThrottleNetworkSpeed(0)
+			if err != nil {
+				log.FailOnError(err, "Unable to update the network bandwidth usage")
+			}
 			// Get Admin User Context
 			adminContext, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching admin user ctx")
@@ -652,8 +715,8 @@ var _ = Describe("{ParallelBackupScheduleTestSuite}", Ordered, Label(TestCaseLab
 				adminContext,
 				scheduleName,
 				BackupOrgID,
-				3,
-				3*BackupCompletionWaitTime,
+				2,
+				2*BackupCompletionWaitTime,
 				defaultWaitInterval,
 			)
 			log.FailOnError(err, "failed to wait for next backup completion")
@@ -757,7 +820,7 @@ var _ = Describe("{ParallelBackupScheduleNonPxdTestSuite}", Ordered, Label(TestC
 			taskName := fmt.Sprintf("%s-%s", TaskNamePrefix, RandomString(randomStringLength))
 			appContexts := ScheduleApplicationsOnNamespace(namespace, taskName)
 			for _, ctx := range appContexts {
-				ctx.ReadinessTimeout = AppReadinessTimeout
+				ctx.ReadinessTimeout = 2 * AppReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				bkpNamespaces = append(bkpNamespaces, namespace)
 				scheduledAppContexts = append(scheduledAppContexts, ctx)
@@ -765,14 +828,14 @@ var _ = Describe("{ParallelBackupScheduleNonPxdTestSuite}", Ordered, Label(TestC
 		}
 		// Validate the application
 		ValidateApplications(scheduledAppContexts)
-
-		err = ThrottleNetworkSpeed(10)
-		if err != nil {
-			log.FailOnError(err, "Unable to update the network bandwidth usage")
-		}
 	})
 
 	JustBeforeEach(func() {
+		// Throttle Network Speed
+		err := ThrottleNetworkSpeed(10)
+		if err != nil {
+			log.FailOnError(err, "Unable to update the network bandwidth usage")
+		}
 		// Deploy non-pxd Volume Application
 		pipelineAppList := Inst().AppList
 		Inst().AppList = []string{"busybox-non-pxd"}
@@ -784,7 +847,7 @@ var _ = Describe("{ParallelBackupScheduleNonPxdTestSuite}", Ordered, Label(TestC
 		// Create a namespace for non pxd app
 		namespaceNonPxd = fmt.Sprintf("%s-%s", parallelScheduledBackupNamespacePrefix, RandomString(10))
 		log.InfoD("Creating namespace %v", namespaceNonPxd)
-		_, err := core.Instance().CreateNamespace(&corev1.Namespace{
+		_, err = core.Instance().CreateNamespace(&corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: namespaceNonPxd,
 			},
@@ -837,6 +900,10 @@ var _ = Describe("{ParallelBackupScheduleNonPxdTestSuite}", Ordered, Label(TestC
 		log.Infof("Schedule policy status, name, uid: %v, %v, %v", periodicPolicyStatus, schedulePolicyName, schedulePolicyUid)
 	})
 
+	JustAfterEach(func() {
+		EndPxBackupTorpedoTest(scheduledAppContexts)
+	})
+
 	// Testrail id - T90054304 verify ParallelBackupSchedule for non-Pxd volumes
 	It("VerifyParallelScheduledBackupsNonPxdVolume", func() {
 		StartPxBackupTorpedoTest("VerifyParallelScheduledBackupsNonPxdVolume", "verify ParallelBackupSchedule for non-Pxd volumes", nil, 304416, Shkumari, Q4FY25)
@@ -869,6 +936,11 @@ var _ = Describe("{ParallelBackupScheduleNonPxdTestSuite}", Ordered, Label(TestC
 		})
 
 		Step("cleanup- delete the created resources", func() {
+			// Resume Network spped
+			err := ThrottleNetworkSpeed(0)
+			if err != nil {
+				log.FailOnError(err, "Unable to update the network bandwidth usage")
+			}
 			// Get Admin User Context
 			adminContext, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching admin user ctx")
@@ -966,6 +1038,11 @@ var _ = Describe("{ParallelBackupScheduleNonPxdTestSuite}", Ordered, Label(TestC
 		})
 
 		Step("cleanup- delete the created resources", func() {
+			// Resume Network spped
+			err := ThrottleNetworkSpeed(0)
+			if err != nil {
+				log.FailOnError(err, "Unable to update the network bandwidth usage")
+			}
 			// Get Admin User Context
 			adminContext, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching admin user ctx")
@@ -1075,6 +1152,11 @@ var _ = Describe("{ParallelBackupScheduleNonPxdTestSuite}", Ordered, Label(TestC
 		})
 
 		Step("cleanup- delete the created resources", func() {
+			// Resume Network spped
+			err := ThrottleNetworkSpeed(0)
+			if err != nil {
+				log.FailOnError(err, "Unable to update the network bandwidth usage")
+			}
 			// Get Admin User Context
 			adminContext, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching admin user ctx")

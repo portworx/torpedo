@@ -16216,13 +16216,12 @@ func ValidateNumberOfParallelScheduledBackups(backupScheduleName string, orgId s
 			time.Sleep(interval * time.Minute)
 		}
 		backupDriver := Inst().Backup
-		var backupName string
 		t := func() (interface{}, bool, error) {
 			backupName, err := GetOrdinalScheduleBackupName(ctx, backupScheduleName, i, orgId)
 			if err != nil {
 				return nil, true, err
 			}
-			log.InfoD("Inspecting backup")
+			log.InfoD("Inspecting backup %s", backupName)
 			bkpInspectRequest := &api.BackupInspectRequest{
 				OrgId: orgId,
 				Name:  backupName,
@@ -16240,7 +16239,7 @@ func ValidateNumberOfParallelScheduledBackups(backupScheduleName string, orgId s
 		if err != nil {
 			return err
 		}
-		log.InfoD("Validated scheduled backup %s is in progress", backupName)
+		log.Info("Validated next scheduled backup is in progress")
 	}
 	return nil
 }
