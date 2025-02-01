@@ -2077,3 +2077,99 @@ func GetUptimeForAllVMs(appCtxs []*scheduler.Context) (map[string]time.Duration,
 		return vmUptimes, nil
 	}
 }
+
+// ColdPlugDataVolumesToKubevirtVM cold plugs the data volumes to the VM
+func ColdPlugDataVolumesToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisks int, size string) (bool, error) {
+	var pvcs []*corev1.PersistentVolumeClaim
+	var rawDisk bool
+
+	for _, appCtx := range virtualMachines {
+		vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+		if err != nil {
+			return false, fmt.Errorf("failed to get VMs from scheduled contexts: %v", err)
+		}
+
+		// The app must contain "raw" in its name if the app is not sharedv4 type
+		log.Infof("App to cold add disk is [%s]", appCtx.App.Key)
+		if strings.Contains(appCtx.App.Key, "raw") {
+			rawDisk = true
+		} else {
+			rawDisk = false
+		}
+
+		for _, v := range vms {
+			// Get the initial number of disks
+			initialDiskCount, err := GetNumberOfDrivesInVM(v)
+			if err != nil {
+				return false, fmt.Errorf("failed to get initial number of disks in VM [%s]: %v", v.Name, err)
+			}
+			log.Infof("Initial number of disks in VM [%s]: %d", v.Name, initialDiskCount)
+
+			// Get the storage class of the existing VM PVC
+			storageClass, err := GetStorageClassOfVmPVC(appCtx)
+			if err != nil {
+				return false, fmt.Errorf("failed to get storage class of VM PVC: %v", err)
+			}
+			log.Infof("Storage class of PVC attached to VM [%s]: %s", v.Name, storageClass)
+			if rawDisk {
+				log.Infof("Creating block mode PVCs for VM [%s]", v.Name)
+				pvcs, err = CreateBlockModePVCsForVM(v, numberOfDisks, storageClass, size, corev1.PersistentVolumeBlock)
+				if err != nil {
+					return false, fmt.Errorf("failed to create block mode PVCs for VM [%s]: %v", v.Name, err)
+				}
+			} else {
+				log.Infof("Creating PVCs for VM [%s]", v.Name)
+				pvcs, err = CreatePVCsForVM(v, numberOfDisks, storageClass, size)
+				if err != nil {
+					return false, fmt.Errorf("failed to create PVCs for VM [%s]: %v", v.Name, err)
+				}
+			}
+
+			// Add the new PVCs to the app context's spec list
+			for _, pvc := range pvcs {
+				appCtx.App.SpecList = append(appCtx.App.SpecList, pvc)
+			}
+
+			// Add the PVCs to the VM
+			err = AddPVCsToVirtualMachine(v, pvcs)
+			if err != nil {
+				return false, fmt.Errorf("failed to add PVCs to VM [%s]: %v", v.Name, err)
+			}
+
+			// Restart the VM
+			err = RestartKubevirtVM(v.Name, v.Namespace, true)
+			if err != nil {
+				return false, fmt.Errorf("failed to restart VM [%s]: %v", v.Name, err)
+			}
+
+			// Wait for VM to be ready
+			err = WaitForVMToBeReady(v.Name, v.Namespace)
+			if err != nil {
+				return false, fmt.Errorf("VM [%s] did not become ready: %v", v.Name, err)
+			}
+
+			// Verify the new number of disks
+			expectedDiskCount := initialDiskCount + numberOfDisks
+			t := func() (interface{}, bool, error) {
+				newDiskCount, err := GetNumberOfDrivesInVM(v)
+				if err != nil {
+					log.Warnf("Failed to get number of disks in VM [%s]: %v", v.Name, err)
+					return nil, true, err
+				}
+				if newDiskCount != expectedDiskCount {
+					err := fmt.Errorf("number of disks in VM [%s] is %d; expected %d", v.Name, newDiskCount, expectedDiskCount)
+					log.Warnf(err.Error())
+					return nil, true, err
+				}
+				return newDiskCount, false, nil
+			}
+			_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
+			if err != nil {
+				return false, fmt.Errorf("failed to verify number of disks in VM [%s]: %v", v.Name, err)
+			}
+			log.Infof("Successfully verified number of disks in VM [%s]", v.Name)
+
+		}
+	}
+	return true, nil
+}

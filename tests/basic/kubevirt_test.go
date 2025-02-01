@@ -80,7 +80,7 @@ var _ = Describe("{AddNewDiskToKubevirtVM}", Label("p0", "positive", "kubevirt")
 		stepLog = "Add one disk to the kubevirt VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			_, err := AddDisksToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
+			_, err := ColdPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
 			log.FailOnError(err, "Failed to add disks to kubevirt VM")
 			dash.VerifyFatal(true, true, "Failed to add disks to kubevirt VM?")
 		})
@@ -237,7 +237,7 @@ var _ = Describe("{PxKillBeforeAddDiskToVM}", Label("p1", "negative", "kubevirt"
 		stepLog = "Add one disk to the kubevirt VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			_, err := AddDisksToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
+			_, err := ColdPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
 			log.FailOnError(err, "Failed to add disks to kubevirt VM")
 			dash.VerifyFatal(true, true, "Failed to add disks to kubevirt VM?")
 		})
@@ -301,7 +301,7 @@ var _ = Describe("{PxKillAfterAddDiskToVM}", Label("p1", "negative", "kubevirt",
 		stepLog = "Add one disk to the kubevirt VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			success, err := AddDisksToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
+			success, err := ColdPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
 			log.FailOnError(err, "Failed to add disks to kubevirt VM")
 			dash.VerifyFatal(success, true, "Failed to add disks to kubevirt VM?")
 		})
@@ -577,7 +577,7 @@ var _ = Describe("{LiveMigrationBeforeAddDisk}", Label("p0", "positive", "kubevi
 		stepLog = "Add one disk to the kubevirt VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			success, err := AddDisksToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
+			success, err := ColdPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
 			log.FailOnError(err, "Failed to add disks to kubevirt VM")
 			dash.VerifyFatal(success, true, "Failed to add disks to kubevirt VM?")
 		})
@@ -638,7 +638,7 @@ var _ = Describe("{AddDiskAndLiveMigrate}", Label("p0", "positive", "kubevirt", 
 		stepLog = "Add one disk to the kubevirt VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			success, err := AddDisksToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
+			success, err := ColdPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
 			log.FailOnError(err, "Failed to add disks to kubevirt VM")
 			dash.VerifyFatal(success, true, "Failed to add disks to kubevirt VM?")
 		})
@@ -1115,7 +1115,7 @@ var _ = Describe("{ParallelAddDiskToVM}", Label("p1", "postive", "kubevirt", "sh
 				go func(appCtx *scheduler.Context) {
 					defer GinkgoRecover()
 					defer wg.Done()
-					_, err := AddDisksToKubevirtVM([]*scheduler.Context{appCtx}, numberOfVolumes, "10Gi")
+					_, err := ColdPlugDataVolumesToKubevirtVM([]*scheduler.Context{appCtx}, numberOfVolumes, "10Gi")
 					log.FailOnError(err, "Failed to add disks to kubevirt VM")
 					dash.VerifyFatal(true, true, "Failed to add disks to kubevirt VM?")
 				}(appCtx)
@@ -1304,7 +1304,7 @@ var _ = Describe("{AddDiskAndLiveMigrateMultipleVm}", Label("p1", "postive", "ku
 					defer GinkgoRecover()
 					defer wg.Done()
 
-					success, err := AddDisksToKubevirtVM([]*scheduler.Context{appCtx}, numberOfVolumes, "10Gi")
+					success, err := ColdPlugDataVolumesToKubevirtVM([]*scheduler.Context{appCtx}, numberOfVolumes, "10Gi")
 					log.FailOnError(err, "Failed to add disks to kubevirt VM")
 					dash.VerifyFatal(success, true, "Failed to add disks to kubevirt VM?")
 
@@ -1377,7 +1377,7 @@ var _ = Describe("{LiveMigrationBeforeAddDiskMultipleVm}", Label("p1", "postive"
 					err := StartAndWaitForVMIMigration(appCtx, context1.TODO())
 					log.FailOnError(err, "Failed to live migrate kubevirt VM")
 
-					success, err := AddDisksToKubevirtVM([]*scheduler.Context{appCtx}, numberOfVolumes, "10Gi")
+					success, err := ColdPlugDataVolumesToKubevirtVM([]*scheduler.Context{appCtx}, numberOfVolumes, "10Gi")
 					log.FailOnError(err, "Failed to add disks to kubevirt VM")
 					dash.VerifyFatal(success, true, "Failed to add disks to kubevirt VM?")
 
@@ -2728,11 +2728,11 @@ var _ = Describe("{LiveMigrationsOfVMsInALoop}", Label("p0", "positive", "kubevi
 	})
 })
 
-var _ = Describe("{AddNewRawDiskToKubevirtVM}", Label("p0", "positive", "kubevirt"), func() {
+var _ = Describe("{ColdAddNewDiskToKubevirtVM}", Label("p0", "positive", "kubevirt"), func() {
 	var app, volType string
 	var present bool
 	JustBeforeEach(func() {
-		StartTorpedoTest("AddNewRawDiskToKubevirtVM", "Add a new raw disk to a kubevirtVM", nil, 0)
+		StartTorpedoTest("ColdAddNewDiskToKubevirtVM", "Cold add a new disk to a kubevirtVM", nil, 0)
 		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
 		if !present {
 			app = "kubevirt-debian-fio-minimal"
@@ -2741,6 +2741,8 @@ var _ = Describe("{AddNewRawDiskToKubevirtVM}", Label("p0", "positive", "kubevir
 			app = "kubevirt-raw-vol"
 		} else if volType == "fada-raw" {
 			app = "kubevirt-fada-raw-fio"
+		} else {
+			app = "kubevirt-debian-fio-minimal"
 		}
 		log.InfoD("Setting app for this test to be : %s", app)
 	})
@@ -2748,7 +2750,7 @@ var _ = Describe("{AddNewRawDiskToKubevirtVM}", Label("p0", "positive", "kubevir
 	var namespace string
 	var canSsh bool
 
-	itLog := "Add a new raw disk to a kubevirtVM"
+	itLog := "Cold add a new disk to a kubevirtVM"
 	It(itLog, func() {
 		pxNs, err := Inst().V.GetVolumeDriverNamespace()
 		log.FailOnError(err, "Failed to get volume driver namespace")
@@ -2784,10 +2786,10 @@ var _ = Describe("{AddNewRawDiskToKubevirtVM}", Label("p0", "positive", "kubevir
 		canSsh = CreateSSHPodAndSetCanSsh()
 		ValidateFioInVMs(appCtxs, canSsh)
 
-		stepLog = "Add one raw disk to the kubevirt VM"
+		stepLog = "Cold add one disk to the kubevirt VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			_, err := AddRawBlockDriveToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
+			_, err := ColdPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
 			log.FailOnError(err, "Failed to add disks to kubevirt VM")
 			dash.VerifyFatal(true, true, "Disk added to kubevirt VM")
 		})
@@ -2804,11 +2806,11 @@ var _ = Describe("{AddNewRawDiskToKubevirtVM}", Label("p0", "positive", "kubevir
 	})
 })
 
-var _ = Describe("{LMAfterRawDiskAddToVM}", Label("p0", "positive", "kubevirt", "LiveMigration"), func() {
+var _ = Describe("{LMAfterColdAddDiskToVM}", Label("p0", "positive", "kubevirt", "LiveMigration"), func() {
 	var app, volType string
 	var present bool
 	JustBeforeEach(func() {
-		StartTorpedoTest("LMAfterRawDiskAddToVM", "Add a raw disk to KubeVirt VM and then live migrate it", nil, 0)
+		StartTorpedoTest("LMAfterColdAddDiskToVM", "Cold add a disk to KubeVirt VM and then live migrate it", nil, 0)
 		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
 		if !present {
 			app = "kubevirt-debian-fio-minimal"
@@ -2817,6 +2819,8 @@ var _ = Describe("{LMAfterRawDiskAddToVM}", Label("p0", "positive", "kubevirt", 
 			app = "kubevirt-raw-vol"
 		} else if volType == "fada-raw" {
 			app = "kubevirt-fada-raw-fio"
+		} else {
+			app = "kubevirt-debian-fio-minimal"
 		}
 		log.InfoD("Setting app for this test to be : %s", app)
 	})
@@ -2827,7 +2831,7 @@ var _ = Describe("{LMAfterRawDiskAddToVM}", Label("p0", "positive", "kubevirt", 
 	var initialUptime map[string]time.Duration
 	var initialNodeName map[string]string
 
-	itLog := "Add a disk to KubeVirt VM and then live migrate it"
+	itLog := "Cold add a disk to KubeVirt VM and then live migrate it"
 	It(itLog, func() {
 		pxNs, err := Inst().V.GetVolumeDriverNamespace()
 		log.FailOnError(err, "Failed to get volume driver namespace")
@@ -2866,7 +2870,8 @@ var _ = Describe("{LMAfterRawDiskAddToVM}", Label("p0", "positive", "kubevirt", 
 		stepLog = "Add one disk to the KubeVirt VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			_, err := AddRawBlockDriveToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
+			_, err := ColdPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
+
 			log.FailOnError(err, "Failed to add disks to KubeVirt VM")
 			dash.VerifyFatal(true, true, "Disk added to KubeVirt VM")
 		})
@@ -2970,11 +2975,11 @@ var _ = Describe("{LMAfterRawDiskAddToVM}", Label("p0", "positive", "kubevirt", 
 	})
 })
 
-var _ = Describe("{LMBeforeRawDiskAddToVM}", Label("p0", "positive", "kubevirt", "LiveMigration"), func() {
+var _ = Describe("{LMBeforeColdAddDiskToVM}", Label("p0", "positive", "kubevirt", "LiveMigration"), func() {
 	var app, volType string
 	var present bool
 	JustBeforeEach(func() {
-		StartTorpedoTest("LMBeforeRawDiskAddToVM", "Live migrate KubeVirt VM and then add a disk", nil, 0)
+		StartTorpedoTest("LMBeforeColdAddDiskToVM", "Live migrate KubeVirt VM and then cold add a disk", nil, 0)
 		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
 		if !present {
 			app = "kubevirt-debian-fio-minimal"
@@ -2983,6 +2988,8 @@ var _ = Describe("{LMBeforeRawDiskAddToVM}", Label("p0", "positive", "kubevirt",
 			app = "kubevirt-raw-vol"
 		} else if volType == "fada-raw" {
 			app = "kubevirt-fada-raw-fio"
+		} else {
+			app = "kubevirt-debian-fio-minimal"
 		}
 		log.InfoD("Setting app for this test to be : %s", app)
 	})
@@ -2993,7 +3000,7 @@ var _ = Describe("{LMBeforeRawDiskAddToVM}", Label("p0", "positive", "kubevirt",
 	var initialNodeName map[string]string
 	var mu sync.Mutex
 
-	itLog := "Live migrate KubeVirt VM and then add a disk"
+	itLog := "Live migrate KubeVirt VM and then cold add a disk"
 	It(itLog, func() {
 		pxNs, err := Inst().V.GetVolumeDriverNamespace()
 		log.FailOnError(err, "Failed to get volume driver namespace")
@@ -3117,7 +3124,7 @@ var _ = Describe("{LMBeforeRawDiskAddToVM}", Label("p0", "positive", "kubevirt",
 		stepLog = "Add one disk to the KubeVirt VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			_, err := AddRawBlockDriveToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
+			_, err := ColdPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
 			log.FailOnError(err, "Failed to add disks to KubeVirt VM")
 			dash.VerifyFatal(true, true, "Disk added to KubeVirt VM")
 		})
@@ -3136,11 +3143,11 @@ var _ = Describe("{LMBeforeRawDiskAddToVM}", Label("p0", "positive", "kubevirt",
 	})
 })
 
-var _ = Describe("{LMAndAddRawDiskToVMInALoop}", Label("p0", "positive", "kubevirt", "LiveMigration"), func() {
+var _ = Describe("{LMAndColdAddDiskToVMInALoop}", Label("p0", "positive", "kubevirt", "LiveMigration"), func() {
 	var app, volType string
 	var present bool
 	JustBeforeEach(func() {
-		StartTorpedoTest("LMAndAddRawDiskToVMInALoop", "Live migrate and add raw disk to KubeVirt VM multiple times", nil, 0)
+		StartTorpedoTest("LMAndColdAddDiskToVMInALoop", "Live migrate and cold add disk to KubeVirt VM multiple times", nil, 0)
 		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
 		if !present {
 			app = "kubevirt-debian-fio-minimal"
@@ -3149,6 +3156,8 @@ var _ = Describe("{LMAndAddRawDiskToVMInALoop}", Label("p0", "positive", "kubevi
 			app = "kubevirt-raw-vol"
 		} else if volType == "fada-raw" {
 			app = "kubevirt-fada-raw-fio"
+		} else {
+			app = "kubevirt-debian-fio-minimal"
 		}
 		log.InfoD("Setting app for this test to be : %s", app)
 	})
@@ -3162,7 +3171,7 @@ var _ = Describe("{LMAndAddRawDiskToVMInALoop}", Label("p0", "positive", "kubevi
 	var mu sync.Mutex
 	var failure bool = false
 
-	itLog := "Live migrate and add disk to KubeVirt VM multiple times"
+	itLog := "Live migrate and cold add disk to KubeVirt VM multiple times"
 	It(itLog, func() {
 		pxNs, err := Inst().V.GetVolumeDriverNamespace()
 		log.FailOnError(err, "Failed to get volume driver namespace")
@@ -3287,7 +3296,7 @@ var _ = Describe("{LMAndAddRawDiskToVMInALoop}", Label("p0", "positive", "kubevi
 			stepLog = fmt.Sprintf("Iteration %d: Add a disk to the KubeVirt VM", i)
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
-				_, err := AddRawBlockDriveToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
+				_, err := ColdPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
 				log.FailOnError(err, "Failed to add disks to KubeVirt VM")
 				dash.VerifyFatal(true, true, "Disk added to KubeVirt VM")
 			})
@@ -3309,11 +3318,11 @@ var _ = Describe("{LMAndAddRawDiskToVMInALoop}", Label("p0", "positive", "kubevi
 	})
 })
 
-var _ = Describe("{PxKillAfterAddRawDiskToVM}", Label("p1", "negative", "kubevirt", "error_injection", "px_crash"), func() {
+var _ = Describe("{PxKillAfterColdAddDiskToVM}", Label("p1", "negative", "kubevirt", "error_injection", "px_crash"), func() {
 	var app, volType string
 	var present bool
 	JustBeforeEach(func() {
-		StartTorpedoTest("PxKillAfterAddRawDiskToVM", "Add a disk to KubeVirt VM, kill Px, add another disk and validate the VM", nil, 0)
+		StartTorpedoTest("PxKillAfterColdAddDiskToVM", "Add a disk to KubeVirt VM, kill Px, add another disk and validate the VM", nil, 0)
 		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
 		if !present {
 			app = "kubevirt-debian-fio-minimal"
@@ -3322,6 +3331,8 @@ var _ = Describe("{PxKillAfterAddRawDiskToVM}", Label("p1", "negative", "kubevir
 			app = "kubevirt-raw-vol"
 		} else if volType == "fada-raw" {
 			app = "kubevirt-fada-raw-fio"
+		} else {
+			app = "kubevirt-debian-fio-minimal"
 		}
 		log.InfoD("Setting app for this test to be : %s", app)
 	})
@@ -3370,7 +3381,7 @@ var _ = Describe("{PxKillAfterAddRawDiskToVM}", Label("p1", "negative", "kubevir
 		stepLog = "Add one disk to the KubeVirt VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			_, err := AddRawBlockDriveToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
+			_, err := ColdPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
 			log.FailOnError(err, "Failed to add disks to KubeVirt VM")
 			dash.VerifyFatal(true, true, "Disk added to KubeVirt VM")
 		})
@@ -3449,7 +3460,7 @@ var _ = Describe("{PxKillAfterAddRawDiskToVM}", Label("p1", "negative", "kubevir
 		stepLog = "Add another disk to the KubeVirt VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			_, err := AddRawBlockDriveToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
+			_, err := ColdPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
 			log.FailOnError(err, "Failed to add disks to KubeVirt VM")
 			dash.VerifyFatal(true, true, "Disk added to KubeVirt VM")
 		})
@@ -3481,6 +3492,8 @@ var _ = Describe("{AddDiskKillPxLMAgainAddDisk}", Label("p1", "negative", "kubev
 			app = "kubevirt-raw-vol"
 		} else if volType == "fada-raw" {
 			app = "kubevirt-fada-raw-fio"
+		} else {
+			app = "kubevirt-debian-fio-minimal"
 		}
 		log.InfoD("Setting app for this test to be : %s", app)
 	})
@@ -3528,7 +3541,7 @@ var _ = Describe("{AddDiskKillPxLMAgainAddDisk}", Label("p1", "negative", "kubev
 		stepLog = "Add one disk to the KubeVirt VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			_, err := AddRawBlockDriveToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
+			_, err := ColdPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
 			log.FailOnError(err, "Failed to add disks to KubeVirt VM")
 			dash.VerifyFatal(true, true, "Disk added to KubeVirt VM")
 		})
@@ -3661,7 +3674,7 @@ var _ = Describe("{AddDiskKillPxLMAgainAddDisk}", Label("p1", "negative", "kubev
 		stepLog = "Add another disk to the KubeVirt VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			_, err := AddRawBlockDriveToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
+			_, err := ColdPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
 			log.FailOnError(err, "Failed to add disks to KubeVirt VM")
 			dash.VerifyFatal(true, true, "Disk added to KubeVirt VM")
 		})
@@ -3693,6 +3706,8 @@ var _ = Describe("{KillPxOnSourceNodeDuringMigration}", Label("p1", "negative", 
 			app = "kubevirt-raw-vol"
 		} else if volType == "fada-raw" {
 			app = "kubevirt-fada-raw-fio"
+		} else {
+			app = "kubevirt-debian-fio-minimal"
 		}
 		log.InfoD("Setting app for this test to be : %s", app)
 	})
@@ -3834,12 +3849,10 @@ var _ = Describe("{KillPxOnSourceNodeDuringMigration}", Label("p1", "negative", 
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
 				numberOfVolumes := 1
-				_, err := AddRawBlockDriveToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
+				_, err := ColdPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
 				log.FailOnError(err, "Failed to add disks to KubeVirt VM")
 				dash.VerifyFatal(true, true, "Disk added to KubeVirt VM")
 			})
-
-			ValidateVMUptime([]*scheduler.Context{appCtxs[0]}, canSsh, initialUptime)
 
 			ValidateFioInVMs(appCtxs, canSsh)
 		}()
@@ -3922,6 +3935,8 @@ var _ = Describe("{KillPxOnDestNodeDuringMigration}", Label("p1", "negative", "k
 			app = "kubevirt-raw-vol"
 		} else if volType == "fada-raw" {
 			app = "kubevirt-fada-raw-fio"
+		} else {
+			app = "kubevirt-debian-fio-minimal"
 		}
 		log.InfoD("Setting app for this test to be : %s", app)
 	})
@@ -4051,7 +4066,7 @@ var _ = Describe("{KillPxOnDestNodeDuringMigration}", Label("p1", "negative", "k
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
 				numberOfVolumes := 1
-				_, err := AddRawBlockDriveToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
+				_, err := ColdPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
 				log.FailOnError(err, "Failed to add disks to KubeVirt VM")
 				dash.VerifyFatal(true, true, "Disk added to KubeVirt VM")
 			})
@@ -5003,6 +5018,8 @@ var _ = Describe("{AddNewMixedDiskToKubevirtVMAndLM}", Label("p0", "positive", "
 			app = "kubevirt-raw-vol"
 		} else if volType == "fada-raw" {
 			app = "kubevirt-fada-raw-fio"
+		} else {
+			app = "kubevirt-debian-fio-minimal"
 		}
 		log.InfoD("Setting app for this test to be : %s", app)
 	})
@@ -5054,7 +5071,7 @@ var _ = Describe("{AddNewMixedDiskToKubevirtVMAndLM}", Label("p0", "positive", "
 			stepLog = "Add one raw block disk to the kubevirt VM"
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
-				_, err := AddRawBlockDriveToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
+				_, err := ColdPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
 				log.FailOnError(err, "Failed to add disks to kubevirt VM")
 				dash.VerifyFatal(true, true, "Disk added to kubevirt VM")
 			})
@@ -5213,6 +5230,8 @@ var _ = Describe("{ResizePvcAndLiveMigrateVMs}", Label("p0", "positive", "kubevi
 			app = "kubevirt-raw-vol"
 		} else if volType == "fada-raw" {
 			app = "kubevirt-fada-raw-fio"
+		} else {
+			app = "kubevirt-debian-fio-minimal"
 		}
 		log.InfoD("Setting app for this test to be : %s", app)
 	})
@@ -5306,7 +5325,7 @@ var _ = Describe("{ResizePvcAndLiveMigrateVMs}", Label("p0", "positive", "kubevi
 						for _, vm := range vms {
 							pvcNames := GetPVCsAttachedToVM(vm)
 							for _, pvcName := range pvcNames {
-								pvc, err := k8sCore.GetPersistentVolumeClaim(vm.Namespace, pvcName)
+								pvc, err := k8sCore.GetPersistentVolumeClaim(pvcName, vm.Namespace)
 								log.FailOnError(err, "Failed to get PVC %s", pvcName)
 								mu.Lock()
 								pvcDetailsList = append(pvcDetailsList, &PVCDetails{
@@ -5424,7 +5443,7 @@ var _ = Describe("{ResizePvcAndLiveMigrateVMs}", Label("p0", "positive", "kubevi
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
 				numberOfVolumes := 1
-				_, err := AddRawBlockDriveToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
+				_, err := ColdPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
 				log.FailOnError(err, "Failed to add disks to KubeVirt VMs")
 				dash.VerifyFatal(true, true, "Disk added to KubeVirt VMs")
 			})
@@ -7814,15 +7833,9 @@ func coldAddDisk(appCtxs []*scheduler.Context, volType string) {
 	var isColdAddDisk bool
 	numberOfVolumes := 1
 	for _, appCtx := range appCtxs {
-		if volType == "pxe-raw" || volType == "fada-raw" {
-			isRawColdAddDisk, err := AddRawBlockDriveToKubevirtVM([]*scheduler.Context{appCtx}, numberOfVolumes, "10Gi")
-			log.FailOnError(err, "Failed to add raw cold disk to KubeVirt VM")
-			dash.VerifyFatal(isRawColdAddDisk, true, "Successfully added raw cold disk to KubeVirt VM ?")
-		} else {
-			isColdAddDisk, err = AddDisksToKubevirtVM([]*scheduler.Context{appCtx}, numberOfVolumes, "10Gi")
-			log.FailOnError(err, "Failed to add cold disk to KubeVirt VM")
-			dash.VerifyFatal(isColdAddDisk, true, "Successfully added cold disk to KubeVirt VM ?")
-		}
+		isColdAddDisk, err = ColdPlugDataVolumesToKubevirtVM([]*scheduler.Context{appCtx}, numberOfVolumes, "10Gi")
+		log.FailOnError(err, "Failed to add cold disk to KubeVirt VM")
+		dash.VerifyFatal(isColdAddDisk, true, "Successfully added cold disk to KubeVirt VM ?")
 	}
 }
 
@@ -8096,7 +8109,8 @@ var _ = Describe("{LMAfterAddingHotAndColdDiskToKubevirtVMMultipleTimes}", Label
 
 			stepLog = "Cold add disk to kubevirt VM"
 			Step(stepLog, func() {
-				isColdAddDisk, err := AddDisksToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
+				// isColdAddDisk, err := AddDisksToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
+				isColdAddDisk, err := ColdPlugDataVolumesToKubevirtVM(appCtxs, numberOfVolumes, "10Gi")
 				log.FailOnError(err, "Failed to add cold disk to KubeVirt VM")
 				dash.VerifyFatal(isColdAddDisk, true, "Successfully added cold disk KubeVirt VM ?")
 
@@ -8112,15 +8126,15 @@ var _ = Describe("{LMAfterAddingHotAndColdDiskToKubevirtVMMultipleTimes}", Label
 					log.FailOnError(err, "Failed to live migrate kubevirt VM")
 				}
 			})
-
-			stepLog = "Destroy Applications"
-			Step(stepLog, func() {
-				log.InfoD(stepLog)
-				DestroyApps(appCtxs, nil)
-				err = DeleteNamespaces([]string{namespace})
-				log.FailOnError(err, "failed to delete namespaces")
-			})
 		}
+
+		stepLog = "Destroy Applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(appCtxs, nil)
+			err = DeleteNamespaces([]string{namespace})
+			log.FailOnError(err, "failed to delete namespaces")
+		})
 	})
 
 	JustAfterEach(func() {
