@@ -2,6 +2,8 @@ package tests
 
 import (
 	"fmt"
+	"github.com/pure-px/sched-ops/task"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -673,6 +675,181 @@ var _ = Describe("{HAUpdateWhenReplPoolIsDown}", Label("p1", "negative", "px_vol
 			})
 			ValidateApplications(contexts)
 		}
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+// Verify HA increase fails on the node where the storage pool is offline
+var _ = Describe("{HAIncreaseWhenReplPoolIsDown}", Label("p1", "negative", "px_vol_ops", "HA_Increase_Decrease", "staging"), func() {
+
+	/*
+		Jira ID: https://purestorage.atlassian.net/browse/HAZEL-1003
+		1) Schedule Applications
+		2) Identify one node acting as a target node
+		3) Put pool on this node in maintenance mode
+		4) Trigger HA Increase on the node where pool is offline
+		5) validate HA increases for 3 mins
+		6) Exit maintenance mode
+		7) Validate HA increase happens after exiting maintenance mode
+		8) Validate app
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("HAIncreaseWhenReplPoolIsDown", "Verify HA increase fails on the node where the storage pool is offline", nil, 0)
+	})
+	var (
+		contexts     []*scheduler.Context
+		nodeSelected node.Node
+		initialRepl  int
+		expectedRepl int
+	)
+
+	itLog := "Verify HA increase fails on the node where the storage pool is offline"
+	It(itLog, func() {
+		isPoolAddDiskSupported := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			Skip("Add disk operation is not supported for DMThin Setup")
+		}
+		stepLog := "schedule Application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ { // using elasticsearch app with repl = 3 in appList
+				for _, app := range Inst().AppList {
+					contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%s", app, "ha-increase"))...)
+				}
+			}
+		})
+		ValidateApplications(contexts)
+
+		exitPoolMaintenanceMode := func(nodeSelected node.Node) {
+			err = ExitPoolMaintenance(nodeSelected)
+			log.FailOnError(err, "Failed to exit maintenance mode")
+		}
+
+		cleanUp := func() {
+			log.InfoD("Executing cleanUp task!!")
+			exitPoolMaintenanceMode(nodeSelected)
+			DestroyApps(contexts, nil)
+		}
+		defer cleanUp()
+
+		for _, ctx := range contexts {
+			volumes, err := Inst().S.GetVolumes(ctx)
+			log.FailOnError(err, "Failed while listing the volume with error")
+			log.InfoD("Vol details %v", volumes)
+
+			if len(volumes) == 0 {
+				msg := fmt.Sprintf("There are no volumes associated with the app %v", ctx.App.Key)
+				log.InfoD(msg)
+				Skip(msg)
+			}
+			volumeSelected := volumes[0]
+
+			stepLog = "Identify one node acting as a target node"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				log.InfoD("Select the volume replica node")
+				rsDetails, err := Inst().V.GetReplicaSets(volumeSelected)
+				log.FailOnError(err, fmt.Sprintf("error getting replica sets for vol %s", volumeSelected.Name))
+				log.InfoD("Volume Replica info %v", rsDetails)
+				replicaNodeIDs := rsDetails[0].GetNodes()
+
+				storageNode := node.GetStorageNodes()
+				for _, node := range storageNode {
+					log.InfoD("Check if the storage node is not in the replicaNodes")
+					if !slices.Contains(replicaNodeIDs, node.Id) {
+						log.InfoD("The Selected node : %v is not in the replicaNodes", node.Id)
+						nodeSelected = node
+					}
+				}
+			})
+
+			stepLog = "Put pool on this node in maintenance mode"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				err = EnterPoolMaintenance(nodeSelected)
+				log.FailOnError(err, "Failed to enter maintenance mode")
+				log.Info("enter pool maintenance mode succeed")
+			})
+
+			stepLog = "Increase HA of all PVCs in this app to (current repl + 1)"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				// Check if volumes are Pure FA/FB DA volumes
+				log.InfoD("Check if volumes are Pure FA/FB DA volumes")
+				isPureVol, err := Inst().V.IsPureVolume(volumeSelected)
+				log.FailOnError(err, "Failed to check is PURE volume")
+				dash.VerifyFatal(isPureVol, false, fmt.Sprintf("Repl increase on Pure DA Volume [%s] not supported.Skiping this operation", volumeSelected.Name))
+
+				currRepl, err := Inst().V.GetReplicationFactor(volumeSelected)
+				log.FailOnError(err, "Failed to get Repl factor for vol %s", volumeSelected.Name)
+
+				initialRepl = int(currRepl)
+				expectedRepl = initialRepl
+				if currRepl == 3 {
+					log.InfoD("The current repl factor is 3, Decrease HA of all PVCs in this app to (current repl - 1) Before HA Increase!")
+					stepLog = "Decrease HA of all PVCs in this app to (current repl - 1)"
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
+						opts := volume.Options{
+							ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
+						}
+						err = Inst().V.SetReplicationFactor(volumeSelected, currRepl-1, nil, nil, true, opts)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Validate set repl factor to %d", currRepl-1))
+						expectedRepl = int(currRepl) - 1
+					})
+				}
+
+				log.InfoD("Increase HA of all PVCs in this app to (current repl + 1)")
+				currRepl, err = Inst().V.GetReplicationFactor(volumeSelected)
+				log.FailOnError(err, "Failed to get Repl factor for vol %s", volumeSelected.Name)
+				opts := volume.Options{
+					ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
+				}
+				err = Inst().V.SetReplicationFactor(volumeSelected, currRepl+1, nil, nil, false, opts)
+				log.Infof("Error while HA Increase in Maintenance mode, err : %v", err)
+				log.FailOnError(err, "Failed to HA Increase in Maintenance mode")
+				log.InfoD("Waiting for 5 mins to check HA Increase in Maintenance mode")
+				time.Sleep(5 * time.Minute)
+				currRepl, err = Inst().V.GetReplicationFactor(volumeSelected)
+				log.FailOnError(err, "Failed to Inspect volume %s", volumeSelected.ID)
+				if int(currRepl) > expectedRepl {
+					log.FailOnError(fmt.Errorf("HA Increased in Maintenance mode"), "Failed due to HA Increased in Maintenance mode!!")
+				}
+				log.InfoD("HA Increase Failed in Maintenance mode, verifying after Maintenance Exit")
+			})
+
+			stepLog = "Exit pool maintenance mode"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				exitPoolMaintenanceMode(nodeSelected)
+				log.Info("exit pool maintenance mode succeed")
+			})
+
+			stepLog = "Validate HA increase after exiting pool maintenance mode"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				t := func() (interface{}, bool, error) {
+					currRepl, err := Inst().V.GetReplicationFactor(volumeSelected)
+					if err != nil {
+						return nil, true, err
+					}
+					if int(currRepl) > expectedRepl {
+						return nil, false, nil
+					}
+					return nil, true, fmt.Errorf("current repl %v and Initial repl %v both are same after HA Increase", currRepl, initialRepl)
+				}
+				_, err = task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
+				log.FailOnError(err, fmt.Sprintf("Failed to HA Increase after exiting Maintenance mode"))
+				log.InfoD("HA Increase succeed after exiting pool maintenance mode!!")
+			})
+			ctx.SkipVolumeValidation = true
+		}
+
+		ValidateApplications(contexts)
 	})
 
 	JustAfterEach(func() {
