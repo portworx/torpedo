@@ -203,6 +203,7 @@ const (
 	UpgradePxBackupKubernetesVersionCheck                                              TestCaseName = "UpgradePxBackupKubernetesVersionCheck"
 	BackupAndRestoreWithParallelBackupScheduleAndLargeVol                              TestCaseName = "BackupAndRestoreWithParallelBackupScheduleAndLargeVo"
 	StorkInstallClusterStatusCheck                                                     TestCaseName = "StorkInstallClusterStatusCheck"
+	RestoreFromBackupsTakenByStork                                                     TestCaseName = "RestoreFromBackupsTakenByStork"
 )
 
 // Test case labels
@@ -400,6 +401,7 @@ const (
 	UpgradePxBackupKubernetesVersionCheckLabel                                              TestCaseLabel = "UpgradePxBackupKubernetesVersionCheck"
 	BackupAndRestoreWithParallelBackupScheduleAndLargeVolLabel                              TestCaseLabel = "BackupAndRestoreWithParallelBackupScheduleAndLargeVol"
 	StorkInstallClusterStatusCheckLabel                                                     TestCaseLabel = "StorkInstallClusterStatusCheck"
+	RestoreFromBackupsTakenByStorkLabel                                                     TestCaseLabel = "RestoreFromBackupsTakenByStork"
 )
 
 // Common Labels

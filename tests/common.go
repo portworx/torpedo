@@ -16857,3 +16857,45 @@ func ToggleIscsiPorts(PureFaClientVif *newflasharray.Client, faMgmtIP string, en
 	}
 	return LastDisabledInterface, nil
 }
+
+// CreateNFSBackupLocationCustomAddress creates backup location for nfs with custom path and address
+func CreateNFSBackupLocationCustomAddress(name string, uid string, orgID string, encryptionKey string, subPath string, validate bool) error {
+	serverAddr := os.Getenv("NFS_SERVER_ADDR")
+	mountOption := os.Getenv("NFS_MOUNT_OPTION")
+	path := os.Getenv("NFS_PATH")
+	backupDriver := Inst().Backup
+	bLocationCreateReq := &api.BackupLocationCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  name,
+			OrgId: orgID,
+			Uid:   uid,
+		},
+		BackupLocation: &api.BackupLocationInfo{
+			Config: &api.BackupLocationInfo_NfsConfig{
+				NfsConfig: &api.NFSConfig{
+					ServerAddr:  serverAddr,
+					SubPath:     subPath,
+					MountOption: mountOption,
+				},
+			},
+			Path:          path,
+			Type:          api.BackupLocationInfo_NFS,
+			EncryptionKey: encryptionKey,
+		},
+	}
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return err
+	}
+	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	if err != nil {
+		return fmt.Errorf("failed to create backup location Error: %v", err)
+	}
+	if validate {
+		err = WaitForBackupLocationAddition(ctx, name, uid, orgID, defaultTimeout, defaultRetryInterval)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}

@@ -2,6 +2,7 @@ package applicationbackup
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/pure-px/sched-ops/k8s/core"
@@ -215,4 +216,87 @@ func ValidateAppBackupIsInProgress(name, namespace string, timeout time.Duration
 	}
 	_, err := task.DoRetryWithTimeout(getAppBackup, timeout, applicationBackupScheduleRetryInterval)
 	return err
+}
+
+func DeleteBackupLocationAndSecret(
+	name string,
+	namespace string,
+	secretName string,
+) error {
+	log.Infof("Deleting backup location %v in namespace %v", name, namespace)
+
+	// Step : Delete the backup location
+	err := storkops.Instance().DeleteBackupLocation(name, namespace)
+	if err != nil {
+		return fmt.Errorf("failed to delete backup location %v in namespace %v: %v", name, namespace, err)
+	}
+	log.Infof("Backup location %v deleted successfully", name)
+
+	// Secret exists, so delete it
+	err = core.Instance().DeleteSecret(secretName, namespace)
+	if err != nil {
+		return fmt.Errorf("failed to delete secret %v in namespace %v: %v", secretName, namespace, err)
+	}
+	log.Infof("Secret %v deleted successfully in namespace %v", secretName, namespace)
+
+	return nil
+}
+
+func DeleteApplicationBackup(
+	name string,
+	namespace string,
+) error {
+	log.Infof("Deleting application backup %v in namespace %v", name, namespace)
+
+	// Step : Delete the application backup
+	err := storkops.Instance().DeleteApplicationBackup(name, namespace)
+	if err != nil {
+		return fmt.Errorf("failed to delete application backup %v in namespace %v: %v", name, namespace, err)
+	}
+	log.Infof("Application backup %v deleted successfully", name)
+
+	return nil
+}
+
+func CreateCustomBackupLocation(
+	name string,
+	namespace string,
+	secretName string,
+) (*storkv1.BackupLocation, error) {
+	var custombackupLocationType storkv1.BackupLocationType
+	var custombackupLocationPath string
+	if secretName == "nfssecret" {
+		custombackupLocationType = storkv1.BackupLocationNFS
+		custombackupLocationPath = os.Getenv("NFS_PATH")
+	} else if secretName == "s3secret" {
+		custombackupLocationType = storkv1.BackupLocationS3
+		custombackupLocationPath = "testpath"
+	}
+
+	log.Infof("Using backup location type as %v", custombackupLocationType)
+	backupLocation := &storkv1.BackupLocation{
+		ObjectMeta: meta.ObjectMeta{
+			Name:        name,
+			Namespace:   namespace,
+			Annotations: map[string]string{"stork.libopenstorage.ord/skipresource": "true"},
+		},
+		Location: storkv1.BackupLocationItem{
+			Type:         custombackupLocationType,
+			Path:         custombackupLocationPath,
+			SecretConfig: secretName,
+		},
+	}
+
+	backupLocation, err := storkops.Instance().CreateBackupLocation(backupLocation)
+	if err != nil {
+		return nil, err
+	}
+
+	// Doing a "Get" on the backuplocation created to add any missing info from the secrets,
+	// that might be required to later get buckets from the cloud objectstore
+	backupLocation, err = storkops.Instance().GetBackupLocation(backupLocation.Name, backupLocation.Namespace)
+	if err != nil {
+		return nil, err
+	}
+	return backupLocation, nil
 }
