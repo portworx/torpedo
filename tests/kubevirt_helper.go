@@ -1724,51 +1724,105 @@ func WaitForHotplugVolumeDetached(namespace, vmName, dvName string, timeout, ret
 }
 
 func CheckIsDiskSizeFullInVM(vm kubevirtv1.VirtualMachine) (bool, error) {
-	ipAddress, err := GetVMIPAddress(vm)
-	if err != nil {
-		return false, fmt.Errorf("failed to get IP address: %w", err)
-	}
-	targetMounts := []string{"/mnt/disks/vdb", "/mnt/disks/vdc"}
+    ipAddress, err := GetVMIPAddress(vm)
+    if err != nil {
+        return false, fmt.Errorf("failed to get IP address: %w", err)
+    }
 
-	for {
-		cmd := "df -kh"
-		output, err := RunCommandInVM(ipAddress, cmd)
-		if err != nil {
-			return false, fmt.Errorf("failed to run command in VM: %w", err)
-		}
-		log.Infof("Disk usage output for VM [%s]:\n%s", vm.Name, output)
+    lastDiskUsage := make(map[string]int)  //Track last known usage per disk
+    lastUpdateTime := make(map[string]time.Time) //Track when each disk was last updated
+    checkInterval := 5 * time.Second
+    maxWaitTime := 5 * time.Minute
 
-		for _, mount := range targetMounts {
-			if isMountUsageFull(output, mount) {
-				log.Infof("Disk usage for [%s] has reached 100%%", mount)
-				return true, nil
-			}
-		}
-		log.Infof("Rechecking disk usage after 10 seconds...")
-		time.Sleep(10 * time.Second)
-	}
+    for {
+        log.Infof("Checking disk usage for VM [%s]...", vm.Name)
+
+        cmd := "df -kh"
+        output, err := RunCommandInVM(ipAddress, cmd)
+        if err != nil {
+            return false, fmt.Errorf("failed to run command in VM: %w", err)
+        }
+        log.Infof("Disk usage output for VM [%s]:\n%s", vm.Name, output)
+
+        diskUsage, err := getDiskSize(output)
+        if err != nil {
+            return false, fmt.Errorf("failed to check disk usage, error : [%v]", err)
+        }
+        log.Infof("Current Disk Usage: %v", diskUsage)
+
+        allFull := true
+        for mount, usage := range diskUsage {
+            log.Infof("Checking disk [%s]: usage [%v%%]", mount, usage)
+            if usage < 100 {
+                allFull = false
+            }
+        }
+
+        if allFull {
+            log.Infof("All disks are full. Exiting successfully...")
+            return true, nil
+        }
+
+        // Check each disk separately for 5 minutes of no progress
+        for mount, currentUsage := range diskUsage {
+            lastUsage, exists := lastDiskUsage[mount]
+
+            if !exists || currentUsage > lastUsage {
+                // Disk usage increased → Reset timer for this disk
+                lastUpdateTime[mount] = time.Now()
+                log.Infof("Disk [%s] usage increased from [%d%%] to [%d%%]. Resetting timer.", mount, lastUsage, currentUsage)
+            } else {
+                // Disk usage has NOT increased → Check if 5 minutes have passed
+                timeUnchanged := time.Since(lastUpdateTime[mount])
+                log.Infof("Disk [%s] has been at [%d%%] for [%v] seconds.", mount, currentUsage, timeUnchanged.Seconds())
+
+                if timeUnchanged >= maxWaitTime {
+                    log.Errorf("Disk [%s] usage has been stuck at [%d%%] for 5 minutes. Exiting...", mount, currentUsage)
+                    return false, fmt.Errorf("Disk [%s] usage unchanged at [%d%%] for 5 minutes. Exiting.", mount, currentUsage)
+                }
+            }
+        }
+
+        // Update last known disk usage for next iteration
+        lastDiskUsage = diskUsage
+        log.Infof("Not all disks are full. Retrying in [%v]...", checkInterval)
+        time.Sleep(checkInterval) // Sleep before retrying
+    }
 }
 
-// isMountUsageFull parses the `df -kh` output and checks if the specified mount has 100% usage.
-func isMountUsageFull(output, mount string) bool {
-	lines := strings.Split(output, "\n")
-	for _, line := range lines {
-		if strings.Contains(line, mount) {
-			parts := strings.Fields(line)
-			if len(parts) < 5 {
-				continue
-			}
-			usageStr := parts[4] // Use% column
-			if strings.HasSuffix(usageStr, "%") {
-				usage, err := strconv.Atoi(strings.TrimSuffix(usageStr, "%"))
-				if err == nil && usage == 100 {
-					log.Infof("Mount %s is at 100%% usage.", mount)
-					return true
-				}
-			}
-		}
-	}
-	return false
+// Updated `getDiskSize` function to handle multiple disks
+func getDiskSize(output string) (map[string]int, error) {
+    lines := strings.Split(output, "\n")
+    diskUsage := make(map[string]int) 
+
+    for _, line := range lines {
+        parts := strings.Fields(line)
+        if len(parts) < 6 {
+            continue
+        }
+
+        mountPoint := parts[len(parts)-1]
+        if strings.HasPrefix(mountPoint, "/mnt/disks/") { 
+            usageStr := parts[4] // "Use%" column
+            if strings.HasSuffix(usageStr, "%") {
+                usage, err := strconv.Atoi(strings.TrimSuffix(usageStr, "%"))
+                if err != nil {
+                    return nil, fmt.Errorf("Failed to parse usage for mount point [%s]: [%v]", mountPoint, err)
+                }
+
+                // Store disk usage in map
+                diskUsage[mountPoint] = usage
+                log.Infof("Captured disk [%s] with usage [%v%%]", mountPoint, usage)
+            }
+        }
+    }
+
+    if len(diskUsage) == 0 {
+        log.Errorf("No valid disks found in `df -kh` output! This might be an issue.")
+        return nil, fmt.Errorf("No valid disk usage found")
+    }
+    log.Infof("Final Disk Usage Data: %v", diskUsage)
+    return diskUsage, nil
 }
 
 func UpgradePortworxDriverForKubevirtVM(upgradeEndpoints string) error {
