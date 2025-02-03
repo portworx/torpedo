@@ -7337,6 +7337,139 @@ var _ = Describe("{CreateCloudSnapAndDeleteKvdbLeaderNode}", Label("p0", "negati
 	})
 })
 
+var _ = Describe("{BulkFastpathVolumeAttachAndDetach}", Label("p1", "negative", "px_vol_ops"), func() {
+	// JIRA ID : https://purestorage.atlassian.net/browse/HAZEL-1555
+	/*
+		1.Create and attach volumes in bulk
+		2.Mount volumes
+		3.Detach and delete volumes
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("BulkFastpathVolumeAttachAndDetach", "DMTHIN Fastpath perform Bulk attach and Detach", nil, 0)
+	})
+
+	type vol struct {
+		volID   string
+		volName string
+	}
+
+	var (
+		pxNode    node.Node
+		contexts  []*scheduler.Context
+		volSize   = 100
+		repl      = 1
+		volumes   []vol
+		mountPath string
+	)
+
+	itLog := "DMTHIN Fastpath perform Bulk attach and Detach"
+	It(itLog, func() {
+		log.InfoD(itLog)
+
+		applist := Inst().AppList
+		revertAppList := func() {
+			Inst().AppList = applist
+		}
+		defer revertAppList()
+		stepLog = "Get all the Storage nodes and select a node for test"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			// Get all the Nodes
+			pxNodes, err := GetStorageNodes()
+			log.FailOnError(err, "Unable to get the storage nodes")
+
+			// Select random Storage node for the test
+			if len(pxNodes) > 0 {
+				pxNode = GetRandomNode(pxNodes)
+			} else {
+				log.FailOnError(errors.New("No Storage Node Availiable"), "Error occured while selecting StorageNode")
+			}
+
+			log.Infof("The Selected node for Fast path label is %v : ", pxNode.Name)
+
+			// Remove if node-type label is set before the test
+			err = RemoveLabelsAllNodes(k8s.NodeType, true, false)
+			log.FailOnError(err, "error removing label on node ")
+		})
+
+		defer func() {
+			stepLog = "Detach volumes and destroy apps"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, v := range volumes {
+					err = AttachOrDetachVolume(v.volName, pxNode, false)
+					log.FailOnError(err, fmt.Sprintf("Failed to detach volume [%v]", v.volName))
+
+					err = Inst().V.DeleteVolume(v.volID)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verify volume [%v] deleted successfully", v.volName))
+				}
+
+				stepLog = "Remove the Label from the selected node"
+				Step(stepLog, func() {
+					var err error
+					log.InfoD(stepLog)
+					err = Inst().S.RemoveLabelOnNode(pxNode, k8s.NodeType)
+					log.FailOnError(err, "error removing label on node [%s]", pxNode.Name)
+				})
+
+				DestroyApps(contexts, nil)
+			})
+		}()
+
+		stepLog = "Schedule application and Add label on the selected storage node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			var err error
+			// Add label on the selected node
+			err = Inst().S.AddLabelOnNode(pxNode, k8s.NodeType, k8s.FastpathNodeType)
+			log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", pxNode.Name))
+			Inst().AppList = []string{"fio-fastpath-repl1"}
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < 3; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("fastpath-%d", i))...)
+			}
+			ValidateApplications(contexts)
+		})
+
+		allVolumeIds, err := Inst().V.ListAllVolumes()
+		log.FailOnError(err, "failed to list all the volume")
+		log.Info(fmt.Sprintf("total number of volumes present in the cluster [%v]", len(allVolumeIds)))
+		remainingVolCount := 50 - len(allVolumeIds)
+
+		for i := 0; i < remainingVolCount; i++ {
+			volName := fmt.Sprintf("fastpathvol-%d", i)
+			volumeId, err := CreateAndAttachFPVolume(pxNode, volName, pxNode.Id, volSize, repl, false)
+			log.FailOnError(err, fmt.Sprintf("Failed to create or attach volume [%v]", volName))
+			volumes = append(volumes, vol{volName: volName, volID: volumeId})
+
+			mountPath = fmt.Sprintf("/var/lib/osd/mounts/%s", volName)
+			err = MountOrUnmountVolume(mountPath, volName, pxNode, true)
+			log.FailOnError(err, fmt.Sprintf("Failed to mount volume [%v]", volName))
+			log.InfoD("volume [%s] mounted [%v]", volName, mountPath)
+		}
+
+		stepLog = "Get app volumes and Check fast path is active on the node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
+				log.FailOnError(err, "fastpath volume validation failed")
+			}
+
+			for _, v := range volumes {
+				volume, err := Inst().V.InspectVolume(v.volID)
+				log.FailOnError(err, "Failed to inspect volume %v", v.volID)
+
+				err = FastpathVolumeValidation(volume, opsapi.FastpathStatus_FASTPATH_ACTIVE)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Validate %v has active fastpath volume", volume.Id))
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
 var _ = Describe("{CloudsnapVerification}", Label("staging", "p0", "positive", "px_ops"), func() {
 	/*
 	   ticket id: https://purestorage.atlassian.net/browse/HAZEL-1055

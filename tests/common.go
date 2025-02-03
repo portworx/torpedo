@@ -16833,6 +16833,101 @@ func CreateAndValidateMigrationSched(migSchedName, cpName, migNs string, extraAr
 	return migrations, nil
 }
 
+func CreateAndAttachFPVolume(n node.Node, volumeName, nodeID string, volSize, haLevel int, secure bool) (string, error) {
+	log.Infof("Creating fast path secure volume")
+	pxctlCreateVolumeCmd := fmt.Sprintf("volume create %s --fastpath --size %v --repl %v --nodes %v", volumeName, volSize, haLevel, nodeID)
+	if secure {
+		pxctlCreateVolumeCmd += " --secure"
+	}
+	out, err := Inst().V.GetPxctlCmdOutputConnectionOpts(n, pxctlCreateVolumeCmd, node.ConnectionOpts{
+		Timeout:         1 * time.Minute,
+		TimeBeforeRetry: 5 * time.Second,
+		Sudo:            true,
+	}, false)
+	if err != nil {
+		return "", err
+	}
+
+	output := strings.Split(strings.TrimSpace(out), ":")[1]
+	volumeId := strings.TrimSpace(output)
+	log.InfoD("volume [%s] created", volumeId)
+
+	err = AttachOrDetachVolume(volumeName, n, true)
+	if err != nil {
+		return "", err
+	}
+	return volumeId, nil
+}
+
+func AttachOrDetachVolume(volName string, n node.Node, attach bool) error {
+	attachCmd := fmt.Sprintf("pxctl host attach %s", volName)
+	cmdConnectionOpts := node.ConnectionOpts{
+		Timeout:         15 * time.Second,
+		TimeBeforeRetry: 5 * time.Second,
+		Sudo:            true,
+	}
+	if !attach {
+		attachCmd = fmt.Sprintf("pxctl host detach %s", volName)
+	}
+	_, err := Inst().N.RunCommandWithNoRetry(n, attachCmd, cmdConnectionOpts)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func MountOrUnmountVolume(mountPath, volName string, n node.Node, mount bool) error {
+	creatDir := fmt.Sprintf("mkdir %s", mountPath)
+	mountCmd := fmt.Sprintf("pxctl host unmount --path %s %s", fmt.Sprintf("/var/lib/osd/mounts/%s", volName), volName)
+	cmdConnectionOpts := node.ConnectionOpts{
+		Timeout:         15 * time.Second,
+		TimeBeforeRetry: 5 * time.Second,
+		Sudo:            true,
+	}
+	if mount {
+		mountCmd = fmt.Sprintf("pxctl host mount --path %s %s", mountPath, volName)
+		log.Infof("Running command %s on %s", creatDir, n.Name)
+		_, err := Inst().N.RunCommandWithNoRetry(n, creatDir, cmdConnectionOpts)
+		if err != nil {
+			return err
+		}
+	}
+
+	log.Infof("Running command %s on %s", mountCmd, n.Name)
+	_, err := Inst().N.RunCommandWithNoRetry(n, mountCmd, cmdConnectionOpts)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func FastpathVolumeValidation(appVol *opsapi.Volume, expectedStatus opsapi.FastpathStatus) error {
+	if decommissionedNode.Name != "" && decommissionedNode.Id == appVol.FpConfig.Replicas[0].NodeUuid {
+		expectedStatus = opsapi.FastpathStatus_FASTPATH_INACTIVE
+	}
+
+	fpConfig := appVol.FpConfig
+	log.Infof("fpconfig: %+v", fpConfig)
+	if len(fpConfig.Replicas) > 1 {
+		expectedStatus = opsapi.FastpathStatus_FASTPATH_INACTIVE
+	}
+	if fpConfig.Status == expectedStatus {
+		log.Infof("Fastpath status is %v", fpConfig.Status)
+		if fpConfig.Status == opsapi.FastpathStatus_FASTPATH_ACTIVE {
+			if fpConfig.Dirty {
+				return fmt.Errorf("fastpath vol %s is dirty", appVol.Id)
+			}
+			if !fpConfig.Promote {
+				return fmt.Errorf("fastpath vol %s is not promoted", appVol.Id)
+			}
+		}
+	} else {
+		return fmt.Errorf("expected Fastpath Status: %v, Actual: %v", expectedStatus, fpConfig.Status)
+	}
+
+	return nil
+}
+
 // ToggleIscsiPorts toggles the iscsi ports on FA
 func ToggleIscsiPorts(PureFaClientVif *newflasharray.Client, faMgmtIP string, enabled bool) ([]string, error) {
 	var LastDisabledInterface []string
