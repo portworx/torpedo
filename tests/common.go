@@ -16749,26 +16749,10 @@ func CreateNamespaceAndResourceQuota(namespace string, storageLimit string) erro
 // or an error if something goes wrong during the process.
 func SearchPodLogs(podLabelSelector map[string]string, namespace, searchString string) (bool, error) {
 
-	podList, err := k8sCore.ListPods(podLabelSelector)
+	logs, err := PrintPodLogs(podLabelSelector, namespace)
 	if err != nil {
-		return false, fmt.Errorf("error listing pods for job with labels %v : %w", podLabelSelector, err)
+		return false, fmt.Errorf("error getting logs from pod with labels %v in namespace %q: %w", podLabelSelector, namespace, err)
 	}
-
-	// Make sure we found at least one pod
-	if len(podList.Items) == 0 {
-		return false, fmt.Errorf("no pods found for job with labels %v in namespace %q", podLabelSelector, namespace)
-	}
-
-	// Get logs from the first pod found
-	podName := podList.Items[0].Name
-	logOpts := &corev1.PodLogOptions{}
-	logs, err := k8sCore.GetPodLog(podName, namespace, logOpts)
-	if err != nil {
-		return false, fmt.Errorf("error getting log stream for pod %q: %w", podName, err)
-	}
-
-	// Print the full log
-	log.Infof("Logs from pod %q in namespace %q:\n%s", podName, namespace, logs)
 
 	// Check if logs contain the search string
 	if strings.Contains(logs, searchString) {
@@ -16776,6 +16760,31 @@ func SearchPodLogs(podLabelSelector map[string]string, namespace, searchString s
 	}
 
 	return false, nil
+}
+
+// PrintPodLogs prints logs from the first pod with the podLabelSelector in the given namespace.
+func PrintPodLogs(podLabelSelector map[string]string, namespace string) (string, error) {
+	podList, err := k8sCore.ListPods(podLabelSelector)
+	if err != nil {
+		return "", fmt.Errorf("error listing pods for job with labels %v : %w", podLabelSelector, err)
+	}
+
+	// Make sure we found at least one pod
+	if len(podList.Items) == 0 {
+		return "", fmt.Errorf("no pods found for job with labels %v in namespace %q", podLabelSelector, namespace)
+	}
+
+	// Get logs from the first pod found
+	podName := podList.Items[0].Name
+	logOpts := &corev1.PodLogOptions{}
+	logs, err := k8sCore.GetPodLog(podName, namespace, logOpts)
+	if err != nil {
+		return "", fmt.Errorf("error getting log stream for pod %q: %w", podName, err)
+	}
+
+	// Print the full log
+	log.Infof("Logs from pod %q in namespace %q:\n%s", podName, namespace, logs)
+	return logs, nil
 }
 
 // GetDefaultStorageClass attempts to find the default StorageClass. If no default is found,

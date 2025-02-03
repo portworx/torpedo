@@ -13208,6 +13208,18 @@ func InstallPxBackup(version, branch, namespace string, vals map[string]interfac
 	installStart := time.Now()
 	rel, err := installPxBackupChart(version, branch, cfg, vals, namespace)
 	if err != nil {
+		log.Errorf("Failed to install px-backup chart: %v", err)
+
+		_, err1 := PrintPodLogs(map[string]string{"job-name": "preflight-check"}, namespace)
+		if err1 != nil {
+			log.Errorf("Failed to print logs for preflight-check job: %v", err1)
+		}
+
+		_, err1 = PrintPodLogs(map[string]string{"job-name": "pre-install-check"}, namespace)
+		if err1 != nil {
+			log.Errorf("Failed to print logs for pre-install-check job: %v", err1)
+		}
+
 		return nil, fmt.Errorf("px-backup chart installation failed: %w", err)
 	}
 	log.InfoD("Release notes:\n%s\n", rel.Info.Notes)
@@ -13429,6 +13441,17 @@ func HelmUpgradePxBackup(targetVersion, helmBranchVersion, namespace string, cus
 	upgradeStart := time.Now()
 	rel, err := UpgradePxBackupChart(cfg, customValues, namespace, targetVersion, helmBranchVersion)
 	if err != nil {
+		log.Errorf("Failed to install px-backup chart: %v", err)
+
+		_, err1 := PrintPodLogs(map[string]string{"job-name": "preflight-check"}, namespace)
+		if err1 != nil {
+			log.Errorf("Failed to print logs for preflight-check job: %v", err1)
+		}
+
+		_, err1 = PrintPodLogs(map[string]string{"job-name": "pre-upgrade-check"}, namespace)
+		if err1 != nil {
+			log.Errorf("Failed to print logs for pre-upgrade-check job: %v", err1)
+		}
 		return nil, fmt.Errorf("px-backup chart upgrade failed: %w", err)
 	}
 	log.InfoD("Release notes: %s ", rel.Info.Notes)
