@@ -7973,36 +7973,29 @@ func (k *K8s) snapshotAndVerify(size resource.Quantity, data, snapName, namespac
 			return fmt.Errorf("restored volume does NOT contain data from original volume: expected to contain '%s', got '%s'", data, string(fileContent))
 		}
 
-		supportedPxVersion, err := version.NewVersion("3.2.2.0")
+		supportedPxVersion, err := version.NewVersion("3.3.0.0")
 		if err != nil {
-			return fmt.Errorf("failed to parse version: %s", err)
+			return fmt.Errorf("failed to parse version: %v", err)
 		}
-		var unsupportedCsiVersions []*version.Version
-		unsupportedCsiVersions = append(unsupportedCsiVersions,
-			version.Must(version.NewVersion("25.1.0")),
-			version.Must(version.NewVersion("25.2.0")),
-		)
-		pxVersion, err := k.GetPortworxVersionFromCli()
+		unsupportedCsiVersion, err := version.NewVersion("25.1.0")
 		if err != nil {
-			return fmt.Errorf("failed to get portworx version: %s", err)
+			return fmt.Errorf("failed to parse version: %v", err)
 		}
 		allowedVersion := false
-		if pxVersion.GreaterThanOrEqual(supportedPxVersion) {
-			for _, unsupportedVersion := range unsupportedCsiVersions {
-				if pxVersion.Equal(unsupportedVersion) {
-					allowedVersion = false
-					break
-				} else {
-					allowedVersion = true
-				}
-			}
+		pxVersion, err := k.GetPortworxVersionFromCli()
+		if err != nil {
+			return fmt.Errorf("failed to get portworx version: %v", err)
 		}
-		// Perform this test for PX versions above 3.2.2 excluding PX-CSI 25.1.0
+
+		if pxVersion.GreaterThanOrEqual(supportedPxVersion) && !pxVersion.Equal(unsupportedCsiVersion) {
+			allowedVersion = true
+		}
+		// Perform this test for PX versions above 3.3.0.0 excluding PX-CSI 25.1.0
 		if allowedVersion {
 			log.InfoD("Validating inspect output for restored volume")
 			pxPodList, err := k.GetPortworxPodList()
 			if err != nil {
-				return fmt.Errorf("failed to get portworx pods: %s", err)
+				return fmt.Errorf("failed to get portworx pods: %v", err)
 			}
 			if len(pxPodList.Items) == 0 {
 				return fmt.Errorf("no portworx pods found")
@@ -8011,12 +8004,12 @@ func (k *K8s) snapshotAndVerify(size resource.Quantity, data, snapName, namespac
 
 			restoredPVC, err := k8sCore.GetPersistentVolumeClaim(restoredPVCName, namespace)
 			if err != nil {
-				return fmt.Errorf("failed to get restored PVC to inspect: %s", err)
+				return fmt.Errorf("failed to get restored PVC to inspect: %v", err)
 			}
 			cmds := []string{"nsenter", "--mount=/host_proc/1/ns/mnt", "/bin/bash", "-c", fmt.Sprintf("pxctl volume inspect %s", restoredPVC.Spec.VolumeName)}
 			output, err := k8sCore.RunCommandInPod(cmds, pxPod.Name, "portworx", pxPod.Namespace)
 			if err != nil {
-				return fmt.Errorf("failed to inspect volume: %s", err)
+				return fmt.Errorf("failed to inspect volume: %v", err)
 			}
 			outputLines := strings.Split(output, "\n")
 			for _, line := range outputLines {
@@ -8025,14 +8018,14 @@ func (k *K8s) snapshotAndVerify(size resource.Quantity, data, snapName, namespac
 					bytesUsed := strings.Split(strings.TrimSpace(strings.Split(line, ":")[1]), " ")[0]
 					bytesUsedNumber, err := strconv.ParseFloat(bytesUsed, 64)
 					if err != nil {
-						return fmt.Errorf("failed to parse bytes used: %s", err)
+						return fmt.Errorf("failed to parse bytes used: %v", err)
 					}
 					if bytesUsedNumber == 0 {
 						return fmt.Errorf("cloned volume has 0 bytes used")
 					}
 				}
 				if strings.HasPrefix(line, "Error in stats") {
-					return fmt.Errorf("error in stats: %s", line)
+					return fmt.Errorf("error in stats: %v", line)
 				}
 			}
 		}
@@ -8122,36 +8115,29 @@ func (k *K8s) cloneAndVerify(size resource.Quantity, data, namespace, storageCla
 			return fmt.Errorf("cloned volume does NOT contain data from original volume: expected to contain '%s', got '%s'", data, string(fileContent))
 		}
 
-		supportedPxVersion, err := version.NewVersion("3.2.2.0")
+		supportedPxVersion, err := version.NewVersion("3.3.0.0")
 		if err != nil {
-			return fmt.Errorf("failed to parse version: %s", err)
+			return fmt.Errorf("failed to parse version: %v", err)
 		}
-		var unsupportedCsiVersions []*version.Version
-		unsupportedCsiVersions = append(unsupportedCsiVersions,
-			version.Must(version.NewVersion("25.1.0")),
-			version.Must(version.NewVersion("25.2.0")),
-		)
-		pxVersion, err := k.GetPortworxVersionFromCli()
+		unsupportedCsiVersion, err := version.NewVersion("25.1.0")
 		if err != nil {
-			return fmt.Errorf("failed to get portworx version: %s", err)
+			return fmt.Errorf("failed to parse version: %v", err)
 		}
 		allowedVersion := false
-		if pxVersion.GreaterThanOrEqual(supportedPxVersion) {
-			for _, unsupportedVersion := range unsupportedCsiVersions {
-				if pxVersion.Equal(unsupportedVersion) {
-					allowedVersion = false
-					break
-				} else {
-					allowedVersion = true
-				}
-			}
+		pxVersion, err := k.GetPortworxVersionFromCli()
+		if err != nil {
+			return fmt.Errorf("failed to get portworx version: %v", err)
 		}
-		// Perform this test for PX versions above 3.2.2 excluding PX-CSI 25.1.0
+
+		if pxVersion.GreaterThanOrEqual(supportedPxVersion) && !pxVersion.Equal(unsupportedCsiVersion) {
+			allowedVersion = true
+		}
+		// Perform this test for PX versions above 3.3.0.0 excluding PX-CSI 25.1.0
 		if allowedVersion {
 			log.InfoD("Validating inspect output for cloned volume")
 			pxPodList, err := k.GetPortworxPodList()
 			if err != nil {
-				return fmt.Errorf("failed to get portworx pods: %s", err)
+				return fmt.Errorf("failed to get portworx pods: %v", err)
 			}
 			if len(pxPodList.Items) == 0 {
 				return fmt.Errorf("no portworx pods found")
@@ -8160,12 +8146,12 @@ func (k *K8s) cloneAndVerify(size resource.Quantity, data, namespace, storageCla
 			// Get cloned pvc object again to get the volume name
 			clonedPVC, err := k8sCore.GetPersistentVolumeClaim(clonedPVCName, namespace)
 			if err != nil {
-				return fmt.Errorf("failed to get cloned PVC to inspect: %s", err)
+				return fmt.Errorf("failed to get cloned PVC to inspect: %v", err)
 			}
 			cmds := []string{"nsenter", "--mount=/host_proc/1/ns/mnt", "/bin/bash", "-c", fmt.Sprintf("pxctl volume inspect %s", clonedPVC.Spec.VolumeName)}
 			output, err := k8sCore.RunCommandInPod(cmds, pxPod.Name, "portworx", pxPod.Namespace)
 			if err != nil {
-				return fmt.Errorf("failed to inspect volume: %s", err)
+				return fmt.Errorf("failed to inspect volume: %v", err)
 			}
 			outputLines := strings.Split(output, "\n")
 			for _, line := range outputLines {
@@ -8174,14 +8160,14 @@ func (k *K8s) cloneAndVerify(size resource.Quantity, data, namespace, storageCla
 					bytesUsed := strings.Split(strings.TrimSpace(strings.Split(line, ":")[1]), " ")[0]
 					bytesUsedNumber, err := strconv.ParseFloat(bytesUsed, 64)
 					if err != nil {
-						return fmt.Errorf("failed to parse bytes used: %s", err)
+						return fmt.Errorf("failed to parse bytes used: %v", err)
 					}
 					if bytesUsedNumber == 0 {
 						return fmt.Errorf("cloned volume has 0 bytes used")
 					}
 				}
 				if strings.HasPrefix(line, "Error in stats") {
-					return fmt.Errorf("error in stats: %s", line)
+					return fmt.Errorf("error in stats: %v", line)
 				}
 			}
 		}
@@ -8234,17 +8220,19 @@ func (k *K8s) GetPortworxVersionStringFromCli() (string, error) {
 	}
 	pxPod := pxPodList.Items[0]
 	cmds := []string{"nsenter", "--mount=/host_proc/1/ns/mnt", "/bin/bash", "-c", "pxctl --version"}
-	output, err := k8sCore.RunCommandInPod(cmds, pxPod.Name, "portworx", pxPod.Namespace)
-	if err != nil {
-		return "", fmt.Errorf("failed to get pxctl status: %s", err)
+	output, stdErr, err := k.RunCommandInPodVerbose(cmds, pxPod.Name, "portworx", pxPod.Namespace)
+	log.Infof("result of pxctl -v: output: %v, stdErr: %v, err: %v", output, stdErr, err)
+	if output == "" {
+		return "", fmt.Errorf("no portworx version string found")
 	}
 	versionRegex := regexp.MustCompile(`\d+\.\d+\.\d+(\.\d+)?`)
-	version := versionRegex.FindString(output)
+	parsedVersion := versionRegex.FindString(output)
 
-	if version == "" {
-		return "", fmt.Errorf("failed to find version in pxctl status output")
+	if parsedVersion == "" {
+		return "", fmt.Errorf("failed to find version in pxctl -v output")
 	}
-	return version, nil
+
+	return parsedVersion, nil
 }
 
 func (k *K8s) GetPortworxVersionFromCli() (*version.Version, error) {
@@ -8253,6 +8241,16 @@ func (k *K8s) GetPortworxVersionFromCli() (*version.Version, error) {
 		return nil, fmt.Errorf("failed to get portworx version: %s", err)
 	}
 	return version.NewVersion(versionString)
+}
+
+func (k *K8s) RunCommandInPodVerbose(cmds []string, podName, containerName, namespace string) (string, string, error) {
+	var execOut, execErr bytes.Buffer
+
+	err := k8sCore.RunCommandInPodEx(&core.RunCommandInPodExRequest{
+		cmds, podName, containerName, namespace, false, nil, &execOut, &execErr,
+	})
+
+	return execOut.String(), execErr.String(), err
 }
 
 // MakePod Returns a pod definition based on the namespace. The pod references the PVC's
