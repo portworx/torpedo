@@ -2119,8 +2119,19 @@ func GetDynamicKubeClient() (dynamic.Interface, error) {
 }
 
 var _ = Describe("{SingleVMLiveMigration}", Label("p0", "positive", "kubevirt", "MiniScale", "LiveMigration"), func() {
-	var app, volType string
-	var present bool
+	var (
+		app           string
+		volType       string
+		present       bool
+		canSsh        bool
+		appCtxs       []*scheduler.Context
+		namespace     string
+		wg            sync.WaitGroup
+		initialUptime map[string]time.Duration
+		vm            kubevirtv1.VirtualMachine
+		vmNodeName    string
+	)
+
 	JustBeforeEach(func() {
 		StartTorpedoTest("SingleVMLiveMigration", "Live migrate single kubevirt VM", nil, 0)
 		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
@@ -2131,23 +2142,19 @@ var _ = Describe("{SingleVMLiveMigration}", Label("p0", "positive", "kubevirt", 
 			app = "kubevirt-raw-vol"
 		} else if volType == "fada-raw" {
 			app = "kubevirt-fada-raw-fio"
+		} else if volType == "windows" {
+			app = "kubevirt-windows-mssql"
+		} else {
+			app = "kubevirt-debian-fio-minimal"
 		}
 		log.InfoD("Setting app for this test to be : %s", app)
 	})
-	var appCtxs []*scheduler.Context
-	var namespace string
-	var wg sync.WaitGroup
-	var canSsh bool
-	var initialUptime map[string]time.Duration
-	var vm kubevirtv1.VirtualMachine
-	var vmNodeName string
 
 	itLog := "Live migrate single kubevirt VM"
 	It(itLog, func() {
 		pxNs, err := Inst().V.GetVolumeDriverNamespace()
 		log.FailOnError(err, "Failed to get volume driver namespace")
 		defer ListEvents(pxNs)
-		canSsh = false
 		stepLog := "Schedule a KubeVirt VM"
 		log.InfoD(stepLog)
 		appList := Inst().AppList
@@ -2173,12 +2180,20 @@ var _ = Describe("{SingleVMLiveMigration}", Label("p0", "positive", "kubevirt", 
 		log.Infof("Hard Sleep for 2 minutes to let VMs come up")
 		time.Sleep(2 * time.Minute)
 
-		canSsh = CreateSSHPodAndSetCanSsh()
-		ValidateFioInVMs(appCtxs, canSsh)
+		if volType == "windows" {
+			canSsh = false
+		} else {
+			canSsh = CreateSSHPodAndSetCanSsh()
+			ValidateFioInVMs(appCtxs, canSsh)
+		}
 
 		initialUptime = make(map[string]time.Duration)
 		stepLog = "Get initial uptime of VMs and current node"
 		Step(stepLog, func() {
+			if volType == "windows" {
+				log.InfoD("Skipping initial uptime calculation as volType is windows")
+				return
+			}
 			log.InfoD(stepLog)
 			var wg sync.WaitGroup
 			for _, appCtx := range appCtxs {
@@ -2189,7 +2204,7 @@ var _ = Describe("{SingleVMLiveMigration}", Label("p0", "positive", "kubevirt", 
 					vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
 					log.FailOnError(err, "Failed to get VMs from appCtx")
 					for _, vm := range vms {
-						uptime, err := GetVMUptime(vm)
+						uptime, err := GetVMUptime(vm, canSsh)
 						log.FailOnError(err, "Failed to get uptime from VM %s", vm.Name)
 						vmKey := fmt.Sprintf("%s/%s", vm.Namespace, vm.Name)
 						initialUptime[vmKey] = uptime
@@ -2241,9 +2256,12 @@ var _ = Describe("{SingleVMLiveMigration}", Label("p0", "positive", "kubevirt", 
 			}
 		})
 
-		ValidateVMUptime(appCtxs, canSsh, initialUptime)
-
-		ValidateFioInVMs(appCtxs, canSsh)
+		if canSsh {
+			ValidateVMUptime(appCtxs, canSsh, initialUptime)
+			ValidateFioInVMs(appCtxs, canSsh)
+		} else {
+			log.Infof("Skipping fio validation and VM Uptime validation as canSsh is false")
+		}
 
 		stepLog = "Destroy Applications"
 		Step(stepLog, func() {
@@ -2330,7 +2348,7 @@ var _ = Describe("{SingleVMLiveMigrationStorkUpgrade}", Label("p0", "positive", 
 					vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
 					log.FailOnError(err, "Failed to get VMs from appCtx")
 					for _, vm := range vms {
-						uptime, err := GetVMUptime(vm)
+						uptime, err := GetVMUptime(vm, canSsh)
 						log.FailOnError(err, "Failed to get uptime from VM %s", vm.Name)
 						vmKey := fmt.Sprintf("%s/%s", vm.Namespace, vm.Name)
 						initialUptime[vmKey] = uptime

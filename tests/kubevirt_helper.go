@@ -5,12 +5,12 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/rand"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+	"os"
 
 	"k8s.io/apimachinery/pkg/api/resource"
 	cdiv1 "kubevirt.io/containerized-data-importer-api/pkg/apis/core/v1beta1"
@@ -1252,7 +1252,14 @@ func CheckVMUptime(vm kubevirtv1.VirtualMachine, initialUptime map[string]time.D
 	return nil
 }
 
-func GetVMUptime(vm kubevirtv1.VirtualMachine) (time.Duration, error) {
+func GetVMUptime(vm kubevirtv1.VirtualMachine, canSsh ...bool) (time.Duration, error) {
+	sshEnabled := true
+	if len(canSsh) > 0 {
+		sshEnabled = canSsh[0]
+	}
+	if !sshEnabled {
+		return 0, fmt.Errorf("canSsh is false")
+	}
 	ipAddress, err := GetVMIPAddress(vm)
 	if err != nil {
 		return 0, err
