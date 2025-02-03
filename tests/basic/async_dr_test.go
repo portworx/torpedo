@@ -4474,3 +4474,270 @@ var _ = Describe("{AsyncDRMigrationWithKVDBRunFlatStateOnSource}", Label("stagin
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
+
+var _ = Describe("{AsyncDRMigrationWithKVDBRunFlatStateOnDestination}", Label("staging", "p1", "negative", "AsyncDR", "kvdb_ops"), func() {
+	/*
+		https://purestorage.atlassian.net/browse/HAZEL-1944
+		1. Deploy applications
+		2. Create migration schedule
+		3. while migration is in progress, px stop on two kvdb members and validate cluster is in runflat state on destination
+		4. Validate migration
+		5. Perform failover
+	*/
+	var (
+		testrailID          = 0
+		runID               int
+		contexts            []*scheduler.Context
+		taskNamePrefix      = "source-runflat"
+		defaultNs           = "kube-system"
+		migrationNamespaces []string
+		kubeConfigPath      = map[int]string{}
+		migrationSchedName  string
+		schedulePolicy      *storkapi.SchedulePolicy
+		clusterPairName     string
+		migNamespaces       string
+		schedulePolicyName  = "async-policy"
+		migrationInterval   = 15
+		selectedKvdbNodes   []KvdbNode
+	)
+	BeforeEach(func() {
+		if !kubeConfigWritten {
+			WriteKubeconfigToFiles()
+			kubeConfigWritten = true
+		}
+	})
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("AsyncDRMigrationWithKVDBRunFlatStateOnDestination", "Perform failover with run-flat state on source cluster", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	stepLog := "Bring cluster in to run-flat state on destination, perform failover, and validate the operation"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+
+		cleanup := func() {
+			log.Infof("Perform cleanup task")
+			if len(contexts) > 0 {
+				for _, ctx := range contexts {
+					ctx.SkipVolumeValidation = true
+					TearDownContext(ctx, map[string]bool{
+						SkipClusterScopedObjects:                    true,
+						scheduler.OptionsWaitForResourceLeakCleanup: true,
+						scheduler.OptionsWaitForDestroy:             true,
+					})
+				}
+			}
+			log.Infof("Remove migrations from namespace [%v]", defaultNs)
+			migrationSchedules, err := storkops.Instance().ListMigrationSchedules(defaultNs)
+			log.FailOnError(err, "Failed to get migration schedule list from the namespace %v", defaultNs)
+			if len(migrationSchedules.Items) > 0 {
+				for _, migrSched := range migrationSchedules.Items {
+					err := asyncdr.DeleteAndWaitForMigrationSchedDeletion(migrSched.Name, defaultNs)
+					log.FailOnError(err, "Failed to deleting migration schedule")
+				}
+			}
+			log.Infof("Remove volumes")
+			volList, err := Inst().V.ListAllVolumes()
+			log.FailOnError(err, "Failed to get volume list")
+			if len(volList) > 0 {
+				for _, volName := range volList {
+					_ = Inst().V.DeleteVolume(volName)
+				}
+			}
+		}
+		defer cleanup()
+
+		stepLog = "Scheduling applications and creating a schedule policy for migration"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			migrationNamespaces, contexts = initialSetupApps(taskNamePrefix, false, false)
+			migNamespaces = strings.Join(migrationNamespaces, ",")
+
+			for _, cluster := range []int{asyncdr.FirstCluster, asyncdr.SecondCluster} {
+				kubeConfigPath[cluster], err = GetCustomClusterConfigPath(cluster)
+				log.FailOnError(err, "Getting error while fetching path for %v cluster", cluster)
+			}
+
+			schedulePolicy, err = asyncdr.CreateSchedulePolicy(schedulePolicyName, migrationInterval)
+			log.FailOnError(err, "Failed to create schedule policy")
+		})
+
+		extraArgs := map[string]string{
+			"namespaces":           migNamespaces,
+			"kubeconfig":           kubeConfigPath[asyncdr.FirstCluster],
+			"schedule-policy-name": schedulePolicy.Name,
+		}
+
+		stepLog = "Creating cluster pair and starting migration schedule"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			clusterPairName = defaultClusterPairName + time.Now().Format("15h03m05s")
+			err = ScheduleBidirectionalClusterPair(clusterPairName, defaultNs, "", storkapi.BackupLocationType(defaultBackupLocation), defaultSecret, "async-dr", asyncdr.FirstCluster, asyncdr.SecondCluster, nil)
+			log.FailOnError(err, "Failed creating bidirectional cluster pair")
+
+			log.InfoD("Start migration schedule")
+			migrationSchedName = migrationSchedKey + time.Now().Format("15h03m05s")
+			err = storkctlcli.ScheduleStorkctlMigrationSched(migrationSchedName, clusterPairName, defaultNs, extraArgs)
+			log.FailOnError(err, "Error creating migrationschedule: [%v] on destination cluster", migrationSchedName)
+		})
+
+		stepLog = "Bring the cluster to a run-flat state and validate migration schedule"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			// Check if migration is in progress
+			isMigrationInProgress := func() (interface{}, bool, error) {
+				isInprogress, err := IsMigrationInProgress(migrationSchedName, defaultNs)
+				if err != nil {
+					return nil, true, err
+				}
+				if isInprogress {
+					return nil, false, nil
+				}
+				return nil, true, fmt.Errorf("retrying: no migration is in progress")
+			}
+			_, err = task.DoRetryWithTimeout(isMigrationInProgress, migrationRetryTimeout, migrationRetryInterval)
+			log.FailOnError(err, "Failed to deleting px pods while migration in progress on source cluster")
+
+			err := SwitchCluster(kubeConfigPath[asyncdr.SecondCluster], asyncdr.SecondCluster)
+			log.FailOnError(err, "Failed to switch source to destination cluster")
+
+			// Bring cluster to run flat state
+			log.InfoD("Bringing cluster to run flat state")
+			kvdbNodes, err := GetAllKvdbNodes()
+			log.FailOnError(err, "Failed to retrieve KVDB nodes")
+
+			selectedKvdbNodes = kvdbNodes[1:]
+			log.InfoD("Selected KVDB nodes for PX service stop: %v", selectedKvdbNodes)
+			for _, kvdbNode := range selectedKvdbNodes {
+				nodeDetails, err := node.GetNodeDetailsByNodeID(kvdbNode.ID)
+				log.FailOnError(err, "Unable to retrieve node details for NodeID [%v]", kvdbNode.ID)
+
+				StopVolDriverAndWait([]node.Node{nodeDetails})
+				log.InfoD("PX service successfully stopped on node: %v", nodeDetails)
+			}
+
+			// Verify cluster is in run flat state
+			pxNode, err := node.GetNodeDetailsByNodeID(kvdbNodes[0].ID)
+			output, err := runCmd("pxctl status", pxNode)
+			log.FailOnError(err, "Failed to execute 'pxctl status' on node: %v", pxNode.Name)
+
+			log.Infof("pxctl status output: %v\n", output)
+			expect_out := "Volume and node operations may be unavailable but I/O will continue"
+			dash.VerifyFatal(strings.Contains(output, expect_out), true, "Is cluster in run-flat state?")
+
+			// Bring back kvdb quorum
+			log.InfoD("Selected KVDB nodes for PX service start: %v", selectedKvdbNodes)
+			for _, n := range selectedKvdbNodes {
+				nodeDetails, err := node.GetNodeDetailsByNodeID(n.ID)
+				log.FailOnError(err, "Failed to retrieve node details for NodeID [%v]", n.ID)
+				err = Inst().V.StartDriver(nodeDetails)
+				log.FailOnError(err, "Failed to start Portworx driver on node %s", nodeDetails.Name)
+			}
+
+			storagenode := node.GetStorageNodes()
+			for _, n := range storagenode {
+				err = Inst().V.WaitDriverUpOnNode(n, 15*time.Minute)
+				log.FailOnError(err, "Failed to waiting for Portworx driver to start on node %s", n.Name)
+				log.InfoD("Successfully started Portworx on KVDB node: %v", n.Name)
+
+				nodeStatus, err := Inst().V.GetNodeStatus(n)
+				log.FailOnError(err, fmt.Sprintf("failed to get px status on node [%s]", n.Name))
+				dash.VerifyFatal(*nodeStatus, opsapi.Status_STATUS_OK, fmt.Sprintf("validate PX status on node %s", n.Name))
+			}
+
+			kvdbMembers, err := GetAllKvdbNodes()
+			log.FailOnError(err, "Failed to retrieve KVDB members list")
+			dash.VerifyFatal(len(kvdbMembers) == 3, true, fmt.Sprintf("Is KVDB quorum restored?. Actual members: [%v]", len(kvdbMembers)))
+
+			err = SwitchCluster(kubeConfigPath[asyncdr.FirstCluster], asyncdr.FirstCluster)
+			log.FailOnError(err, "Failed to switch source to destination cluster")
+
+			// Validate migration schedule
+			_, err = storkops.Instance().ValidateMigrationSchedule(migrationSchedName, defaultNs, migrationRetryTimeout, migrationRetryInterval)
+			log.FailOnError(err, "Error validating migrationschedule [%v] in the namespace [%v] on the source cluster, %v", migrationSchedName, defaultNs, err)
+		})
+
+		stepLog = "Performing failover on the destination cluster"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := SwitchCluster(kubeConfigPath[asyncdr.SecondCluster], asyncdr.SecondCluster)
+			log.FailOnError(err, "Failed to switch source to destination cluster")
+
+			schedulePolicy, err = asyncdr.CreateSchedulePolicy(schedulePolicyName, migrationInterval)
+			log.FailOnError(err, "Failed to create schedule policy")
+
+			extraArgsFailoverFailback := map[string]string{
+				"kubeconfig": kubeConfigPath[asyncdr.SecondCluster],
+			}
+			failoverParam := failoverFailbackParam{
+				action:                    "failover",
+				failoverOrFailbackNs:      defaultNs,
+				migrationSchedName:        migrationSchedName,
+				configPath:                kubeConfigPath[asyncdr.SecondCluster],
+				single:                    false,
+				skipSourceOp:              false,
+				includeNs:                 false,
+				excludeNs:                 false,
+				extraArgsFailoverFailback: extraArgsFailoverFailback,
+				contexts:                  contexts,
+			}
+			performFailoverFailback(failoverParam)
+			time.Sleep(1 * time.Minute)
+		})
+
+		stepLog = "Create reverse migration and Perform failback"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = hardSetConfig(kubeConfigPath[asyncdr.SecondCluster])
+			log.FailOnError(err, "Error setting destination config: %v", err)
+			extraArgs["kubeconfig"] = kubeConfigPath[asyncdr.SecondCluster]
+			extraArgsFailoverFailback := map[string]string{
+				"kubeconfig": kubeConfigPath[asyncdr.SecondCluster],
+			}
+
+			newMigSched := migrationSchedName + "-rev"
+			createMigSchdAndValidateMigration(newMigSched, clusterPairName, defaultNs, kubeConfigPath[asyncdr.SecondCluster], extraArgs)
+			log.InfoD("Migration schedule [%v] created and validated successfuly on namespace [%v]", newMigSched, defaultNs)
+
+			failoverback := failoverFailbackParam{
+				action:                    "failback",
+				failoverOrFailbackNs:      defaultNs,
+				migrationSchedName:        newMigSched,
+				configPath:                kubeConfigPath[asyncdr.SecondCluster],
+				single:                    false,
+				skipSourceOp:              false,
+				includeNs:                 false,
+				excludeNs:                 false,
+				extraArgsFailoverFailback: extraArgsFailoverFailback,
+				contexts:                  contexts,
+			}
+			performFailoverFailback(failoverback)
+		})
+
+		stepLog = "Destroy applications on the destination cluster"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			cleanup()
+		})
+
+		stepLog = "Destroy applications on the source cluster"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := SwitchCluster(kubeConfigPath[asyncdr.FirstCluster], asyncdr.FirstCluster)
+			log.FailOnError(err, "Failed to switch destination to source cluster")
+			stNodes := node.GetStorageNodes()
+			for _, eachNode := range stNodes {
+				err = Inst().V.WaitDriverUpOnNode(eachNode, Inst().DriverStartTimeout)
+				log.FailOnError(err, "Failed to wait for px up on node %v", eachNode.Name)
+			}
+			cleanup()
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
