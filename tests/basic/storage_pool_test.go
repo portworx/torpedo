@@ -3,6 +3,17 @@ package tests
 import (
 	"errors"
 	"fmt"
+	"math"
+	"math/rand"
+	"reflect"
+	"regexp"
+	"slices"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/portworx/sched-ops/k8s/talisman"
 	"github.com/portworx/talisman/pkg/apis/portworx/v1beta1"
 	talisman_v1beta2 "github.com/portworx/talisman/pkg/apis/portworx/v1beta2"
@@ -14,16 +25,6 @@ import (
 	storageApi "k8s.io/api/storage/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
-	"math"
-	"math/rand"
-	"reflect"
-	"regexp"
-	"slices"
-	"sort"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
 
 	"github.com/pure-px/torpedo/drivers/volume/portworx"
 
@@ -13321,6 +13322,149 @@ var _ = Describe("{PXInstallWithPXRestart}", Label("p1", "px_install", "hal_init
 
 			log.Info("Validate driver up on rejoined node after rejoining succeed")
 
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{PoolExpandAndHAUpdate}", Label("p1", "poolExpand", "pool_ops", "add_disk", "Px-Enterprise", "Ready-for-review", "staging"), func() {
+
+	/*
+		1. Incremental pool expand starting from 4GB till 100GB,Increase 10G every time.( 1 Pool from each node )
+		2. While this in progress, HA Update from 1 to 2 to 3 and reverse on all the Volumes created continuously.
+	*/
+
+	var (
+		contexts []*scheduler.Context
+		errChan  chan error
+		wg       sync.WaitGroup
+	)
+
+	BeforeEach(func() {
+		StartTorpedoTest("PoolExpandAndHAUpdate", "Incremental pool expand and HA Update on all the Volumes", nil, 0)
+		errChan = make(chan error, 1)
+	})
+
+	ItLog := "PoolExpandAndHAUpdate"
+	It(ItLog, func() {
+
+		stepLog := "schedule Application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("ha-update-pool-expand-%d", i))...)
+			}
+		})
+
+		ValidateApplications(contexts)
+		log.InfoD("schedule Application successful")
+		defer DestroyApps(contexts, nil)
+
+		stepLog = "Incremental pool expand"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			stNodes := node.GetStorageNodes()
+			log.InfoD("Total nodes: [%v]", len(stNodes))
+
+			isjournal, err := IsJournalEnabled()
+			log.FailOnError(err, "Failed to check if Journal enabled")
+
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				defer GinkgoRecover()
+				for _, selectedNode := range stNodes {
+					poolList, err := GetPoolsDetailsOnNode(&selectedNode)
+					if err != nil {
+						err = fmt.Errorf("Failed to get all Pools present in Node [%s] , err : %v", selectedNode.Name, err)
+						errChan <- err
+						return
+					}
+					log.InfoD("Length of pools present on Node [%v] =  [%v]", selectedNode.Name, len(poolList))
+
+					if len(poolList) == 0 {
+						continue
+					}
+
+					poolSelectedToResize := poolList[0]
+
+					for i := 4; i <= 100; i += 10 {
+						poolToBeResized, err := GetStoragePoolByUUID(poolSelectedToResize.Uuid)
+						if err != nil {
+							err = fmt.Errorf("error getting pool by using uuid %s , err : %v", poolSelectedToResize.Uuid, err)
+							errChan <- err
+							return
+						}
+
+						expectedSize := poolToBeResized.TotalSize/units.GiB + uint64(i)
+						err = Inst().V.ExpandPool(poolToBeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
+						if err != nil {
+							err = fmt.Errorf("Failed to expand pool with add disk in Node [%s] , err : %v", selectedNode.Name, err)
+							errChan <- err
+							return
+						}
+
+						err = waitForPoolToBeResized(expectedSize, poolToBeResized.Uuid, isjournal)
+						if err != nil {
+							err = fmt.Errorf("Failed to wait for pool to be resized in Node [%s] , err : %v", selectedNode.Name, err)
+							errChan <- err
+							return
+						}
+						log.InfoD("Pool expand successful on pool: [%v] with size: [%v]", poolSelectedToResize.Uuid, expectedSize)
+					}
+				}
+			}()
+		})
+		defer func() {
+			wg.Wait()
+			close(errChan)
+		}()
+
+		stepLog = "HA Update on all the Volumes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			for _, eachContext := range contexts {
+				vols, err := Inst().S.GetVolumes(eachContext)
+				log.FailOnError(err, "Failed to get volumes from context")
+				log.InfoD("Total volumes are: [%v] ", len(vols))
+
+				for _, vol := range vols {
+					select {
+					case err := <-errChan:
+						log.FailOnError(err, "error received from channel while performing pool expansion")
+						return
+					default:
+						curReplSet, err := Inst().V.GetReplicationFactor(vol)
+						log.FailOnError(err, "Failed to get volumes replica set for volume: %v", vol.ID)
+						log.InfoD("Current replica set for volume: [%v] is [%d]", vol.ID, curReplSet)
+
+						if curReplSet == 1 {
+							for curReplSet < 3 {
+								newRepl := int64(curReplSet + 1)
+								err := Inst().V.SetReplicationFactor(vol, newRepl, nil, nil, true)
+								log.FailOnError(err, "failed to set replication value of Volume [%v]", vol.Name)
+								log.InfoD("Replica set for volume: [%v] is successfully set to [%d]", vol.ID, newRepl)
+								curReplSet = newRepl
+							}
+						}
+
+						if curReplSet == 3 {
+							for curReplSet > 1 {
+								newRepl := int64(curReplSet - 1)
+								err := Inst().V.SetReplicationFactor(vol, newRepl, nil, nil, true)
+								log.FailOnError(err, "failed to set replication value of Volume [%v]", vol.Name)
+								log.InfoD("Replica set for volume: [%v] is successfully set to [%d]", vol.ID, newRepl)
+								curReplSet = newRepl
+							}
+						}
+					}
+				}
+			}
 		})
 	})
 	JustAfterEach(func() {
