@@ -5472,7 +5472,11 @@ func (d *portworx) updateAndValidateStorageCluster(cluster *v1.StorageCluster, f
 		}
 	}
 	storageClusterValidateTimeout := time.Duration(len(node.GetStorageDriverNodes())*9) * time.Minute
-	if err = optest.ValidateStorageCluster(imageList, stc, storageClusterValidateTimeout, defaultRetryInterval, true); err != nil {
+	skipValidation := false
+	if skipPxUpgradeValidation := os.Getenv("SKIP_PX_UPGRADE_VALIDATION"); skipPxUpgradeValidation != "" {
+		skipValidation, _ = strconv.ParseBool(skipPxUpgradeValidation)
+	}
+	if err = optest.ValidateStorageCluster(imageList, stc, storageClusterValidateTimeout, defaultRetryInterval, true); !skipValidation && err != nil {
 		return nil, err
 	}
 	return stc, nil

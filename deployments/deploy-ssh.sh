@@ -156,6 +156,10 @@ if [ -z "${PX_POD_RESTART_CHECK}" ]; then
     PX_POD_RESTART_CHECK=false
 fi
 
+if [ -z "${SKIP_PX_UPGRADE_VALIDATION}" ]; then
+    SKIP_PX_UPGRADE_VALIDATION=false
+fi
+
 CONFIGMAP=""
 if [ -n "${CONFIG_MAP}" ]; then
     CONFIGMAP="${CONFIG_MAP}"
@@ -880,6 +884,8 @@ spec:
       value: "${VOLUME_COUNT_FOR_PARALLEL_DELETE}"
     - name: SIMULATE_FB_FQDN
       value: "${SIMULATE_FB_FQDN}"
+    - name: SKIP_PX_UPGRADE_VALIDATION
+      value: "${SKIP_PX_UPGRADE_VALIDATION}"
     - name: NON_DEFAULT_ADMIN_USERNAME
       value: "${NON_DEFAULT_ADMIN_USERNAME}"
     - name: NON_DEFAULT_ADMIN_PASSWORD

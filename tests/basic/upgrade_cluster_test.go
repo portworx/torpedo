@@ -3,6 +3,7 @@ package tests
 import (
 	"fmt"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -443,6 +444,121 @@ var _ = Describe("{UpgradeClusterAndPoolResize}", Label("p0", "positive", "node_
 		for err := range errChan {
 			log.FailOnError(err, "verify px upgrade and pool resize complete")
 		}
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
+var _ = Describe("{UpgradeClusterWithKvdbMemberDown}", Label("p0", "negative", "node_ops", "Upgrade"), func() {
+	/*
+		https://purestorage.atlassian.net/browse/HAZEL-1603
+		1.Trigger Px Upgrade
+		2.While upgrade is happening, bring one kvdb member down using labels etc
+		3.Once PX upgrade finishes, bring up the failed kvdb node by removing all labels
+		4.Validate this node also gets upgraded and joins kvdb cluster
+	*/
+	var (
+		nodesNotInKvdbNodes []node.Node
+		kvdbNodeSelected    KvdbNode
+		kvdbFailedNode      node.Node
+		wg                  sync.WaitGroup
+		errChan             chan error
+	)
+	JustBeforeEach(func() {
+		StartTorpedoTest("UpgradeClusterWithKvdbMemberDown", "Perform px upgrades with one of KVDB node down and ensure after upgrade non-kvdb member joins KVDB cluster (PWX-34865) ", nil, 0)
+		errChan = make(chan error, 1)
+	})
+
+	itLog := "Perform px upgrades with one of KVDB node down and ensure after upgrade non-kvdb member joins KVDB cluster (PWX-34865)"
+	It(itLog, func() {
+		log.InfoD(itLog)
+
+		nodes, err := GetStorageNodes()
+		log.FailOnError(err, "failed to get storage nodes")
+
+		log.InfoD("Get all KVDB nodes")
+		kvdbNodes, err := GetAllKvdbNodes()
+		log.FailOnError(err, "Unable to retrieve KVDB nodes")
+		log.Infof("Initally kvdb node in the cluster: [%v]", kvdbNodes)
+		stepLog = "Getting non KVDB nodes in the cluster"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			kvdbNodeMap := make(map[string]bool)
+			for _, kvdbNode := range kvdbNodes {
+				kvdbNodeMap[kvdbNode.ID] = true
+			}
+			for _, storageNode := range nodes {
+				if _, exists := kvdbNodeMap[storageNode.Id]; !exists {
+					nodesNotInKvdbNodes = append(nodesNotInKvdbNodes, storageNode)
+				}
+			}
+			log.Infof("All storage nodes List which are not part of KVDB members: [%v]", nodesNotInKvdbNodes)
+		})
+
+		kvdbNodeSelected = kvdbNodes[0]
+		kvdbFailedNode, err = node.GetNodeDetailsByNodeID(kvdbNodeSelected.ID)
+		log.FailOnError(err, "Unable to retrieve node details for NodeID [%v]", kvdbNodeSelected.ID)
+
+		err = os.Setenv("SKIP_PX_UPGRADE_VALIDATION", "true")
+		log.FailOnError(err, "failed to set env var SKIP_PX_UPGRADE_VALIDATION to true")
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer GinkgoRecover()
+			stepLog := "Upgrade portworx driver"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				err := UpgradePortworxDriver(Inst().UpgradeStorageDriverEndpointList)
+				if err != nil {
+					errChan <- err
+					return
+				}
+				log.InfoD("PX upgrade completed successfully")
+			})
+		}()
+
+		stepLog = "Add label px/metadata-node=false to the non-kvdb nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, node := range nodesNotInKvdbNodes {
+				err = Inst().S.AddLabelOnNode(node, "px/metadata-node", "false")
+				log.FailOnError(err, "Failed to add label 'px/metadata-node=false' to node [%s]", node.Name)
+				log.Infof("Successfully added label 'px/metadata-node=false' to node [%s]", node.Name)
+			}
+		})
+
+		stepLog = "Bring down one KVDB node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			StopVolDriverAndWait([]node.Node{kvdbFailedNode})
+		})
+
+		wg.Wait()
+		close(errChan)
+		for err := range errChan {
+			log.FailOnError(err, "px upgrade failed")
+		}
+
+		stepLog = "Bring up the failed KVDB node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			StartVolDriverAndWait([]node.Node{kvdbFailedNode})
+		})
+
+		stepLog = "verify failed node joins kvdb members"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			kvdbNodesAfterPxUpgrade, err := GetAllKvdbNodes()
+			log.FailOnError(err, "Unable to retrieve KVDB nodes")
+			kvdbNodeMapAfterpxUpgrade := make(map[string]bool)
+			for _, kvdbNode := range kvdbNodesAfterPxUpgrade {
+				kvdbNodeMapAfterpxUpgrade[kvdbNode.ID] = true
+			}
+			_, exists := kvdbNodeMapAfterpxUpgrade[kvdbNodeSelected.ID]
+			dash.VerifyFatal(exists, true, "verify failed node joins kvdb members")
+		})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
