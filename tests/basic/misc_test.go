@@ -15,7 +15,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pure-px/torpedo/drivers/scheduler/anthos"
 	"github.com/pure-px/torpedo/drivers/scheduler/k8s"
+	"github.com/pure-px/torpedo/drivers/scheduler/openshift"
 	"github.com/pure-px/torpedo/drivers/volume"
 	"github.com/pure-px/torpedo/drivers/volume/portworx"
 	"github.com/pure-px/torpedo/drivers/volume/portworx/schedops"
@@ -31,6 +33,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/pure-px/sched-ops/k8s/apps"
 	"github.com/pure-px/sched-ops/k8s/core"
+	"github.com/pure-px/sched-ops/k8s/operator"
 	"github.com/pure-px/sched-ops/task"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/scheduler"
@@ -4183,7 +4186,7 @@ var _ = Describe("{ValidateKillingNewNodeAfterKVDBFailOver}", Label("p1", "kvdb_
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(postContexts, testrailID, runID)
-  })
+	})
 })
 
 // keep restarting etcd node till 3 mins.
@@ -4431,4 +4434,218 @@ var _ = Describe("{RestartPxOnStorageLessNodeForMultipleTimes}", Label("staging"
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
- 
+
+var _ = Describe("{AddNewNodeWhenClusterInRunFlatState}", Label("staging", "kvdb_ops", "p1", "negative"), func() {
+	/*
+				   Ticket ID: https://purestorage.atlassian.net/browse/HAZEL-1048
+				   Step 1: Bring system in run flat state
+		           Step 2: Add a node to the setup
+				   Step 3: Validate node addition is successful
+				   Step 4: Validate px status on all nodes (including new one) → pxctl status
+				   Step 5: Exit run flat state
+				   Step 6: Validate apps
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("AddNewNodeWhenClusterInRunFlatState",
+			"Simulate a run-flat state, add new node to cluster, validate PX status, Exit run flat state and validate apps", nil, 0)
+	})
+	var (
+		contexts                      []*scheduler.Context
+		selectedKvdbNodes             []KvdbNode
+		kvdbNodes                     []KvdbNode
+		numOfStorageNodes             int
+		maxStorageNodesPerZone        uint32
+		updatedMaxStorageNodesPerZone uint32 = 0
+		zones                         []string
+		SelectednodeDetails           []node.Node
+	)
+
+	itLog := "Simulate a run-flat state, add new node to cluster, validate PX status, Exit run flat state and validate apps"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		stepLog = "Schedule application"
+		Step(stepLog, func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("runflat-%d", i))...)
+			}
+		})
+
+		ValidateApplications(contexts)
+
+		cleanup := func() {
+			log.Info("Executing cleanup tasks")
+			if len(selectedKvdbNodes) > 0 {
+				for _, n := range selectedKvdbNodes {
+					nodeDetails, err := node.GetNodeDetailsByNodeID(n.ID)
+					log.FailOnError(err, "Failed to retrieve node details for NodeID [%v]", n.ID)
+					err = Inst().V.StartDriver(nodeDetails)
+					log.FailOnError(err, "Failed to start Portworx driver on node %s", nodeDetails.Name)
+					err = Inst().V.WaitDriverUpOnNode(nodeDetails, 10*time.Minute)
+					log.FailOnError(err, "Failed to waiting for Portworx driver to start on node %s", nodeDetails.Name)
+					log.InfoD("Successfully started Portworx on KVDB node: %v", nodeDetails.Name)
+				}
+			}
+			DestroyApps(contexts, nil)
+		}
+		defer cleanup()
+		// Validate total node count
+		currentNodeCount, err := Inst().S.GetASGClusterSize()
+		log.FailOnError(err, "Failed to Get ASG Cluster Size")
+		log.Infof("Current nodes before adding node:[d]", currentNodeCount)
+
+		stepLog = "Stopping Portworx service on selected KVDB nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			kvdbNodes, err = GetAllKvdbNodes()
+			log.FailOnError(err, "Failed to retrieve KVDB nodes")
+
+			selectedKvdbNodes = kvdbNodes[1:]
+			log.InfoD("Selected KVDB nodes for PX service stop: %v", selectedKvdbNodes)
+			for _, kvdbNode := range selectedKvdbNodes {
+				nodeDetails, err := node.GetNodeDetailsByNodeID(kvdbNode.ID)
+				log.FailOnError(err, "Unable to retrieve node details for NodeID [%v]", kvdbNode.ID)
+
+				StopVolDriverAndWait([]node.Node{nodeDetails})
+				log.InfoD("PX service successfully stopped on node: %v", nodeDetails)
+				SelectednodeDetails = append(SelectednodeDetails, nodeDetails)
+
+			}
+		})
+
+		stepLog = " Verify cluster is in run-flat state"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pxNode, err := node.GetNodeDetailsByNodeID(kvdbNodes[0].ID)
+			output, err := runCmd("pxctl status", pxNode)
+			log.FailOnError(err, "Failed to execute 'pxctl status' on node: %v", pxNode.Name)
+
+			log.Infof("pxctl status output: %v\n", output)
+			expect_out := "All operations (get/update/delete) are unavailable."
+			dash.VerifyFatal(strings.Contains(output, expect_out), true, "Is cluster in run-flat state?")
+		})
+
+		Step(stepLog, func() {
+			stepLog = "update maxStorageNodesPerZone in storage cluster spec"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				stc, err := Inst().V.GetDriver()
+
+				log.FailOnError(err, "error getting volume driver")
+				maxStorageNodesPerZone = *stc.Spec.CloudStorage.MaxStorageNodesPerZone
+				numOfStorageNodes = len(node.GetStorageNodes())
+				log.Infof("maxStorageNodesPerZone %d", int(maxStorageNodesPerZone))
+				log.Infof("numOfStorageNodes %d", numOfStorageNodes)
+
+				actualPerZoneCount := numOfStorageNodes
+				if Inst().S.String() != openshift.SchedName && Inst().S.String() != anthos.SchedName {
+					zones, err = Inst().S.GetZones()
+					dash.VerifyFatal(err, nil, "Verify Get zones")
+
+					actualPerZoneCount = numOfStorageNodes / len(zones)
+				}
+
+				if int(maxStorageNodesPerZone) <= actualPerZoneCount {
+					updatedMaxStorageNodesPerZone = uint32(actualPerZoneCount + 1)
+				}
+
+				if updatedMaxStorageNodesPerZone != 0 {
+					stc.Spec.CloudStorage.MaxStorageNodesPerZone = &updatedMaxStorageNodesPerZone
+					log.InfoD("updating maxStorageNodesPerZone from %d to %d", maxStorageNodesPerZone, updatedMaxStorageNodesPerZone)
+					pxOperator := operator.Instance()
+					_, err = pxOperator.UpdateStorageCluster(stc)
+					log.FailOnError(err, "error updating storage cluster")
+
+				}
+				PrintPxctlStatus()
+				expReplicas := len(node.GetStorageDriverNodes()) + 1
+				log.InfoD("scaling up the cluster to replicas %d", expReplicas)
+				Scale(int64(expReplicas))
+				stepLog = fmt.Sprintf("wait for %s minutes for auto recovery of storage nodes",
+					Inst().AutoStorageNodeRecoveryTimeout.String())
+
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					time.Sleep(Inst().AutoStorageNodeRecoveryTimeout)
+				})
+				NodeCountAfterNewNode, err := Inst().S.GetASGClusterSize()
+				log.FailOnError(err, "Failed to Get ASG Cluster Size")
+				log.Infof("Nodes count After adding new node:[d]", currentNodeCount)
+				dash.VerifyFatal(NodeCountAfterNewNode > currentNodeCount, true, "Node is added?")
+
+			})
+			stepLog = "Starting Portworx on selected KVDB nodes"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, n := range selectedKvdbNodes {
+					nodeDetails, err := node.GetNodeDetailsByNodeID(n.ID)
+					log.FailOnError(err, "Failed to retrieve node details for NodeID [%v]", n.ID)
+					StartVolDriverAndWait([]node.Node{nodeDetails})
+					log.InfoD("Successfully started Portworx on KVDB node: %v", nodeDetails.Name)
+				}
+			})
+
+			stepLog = "validate PX on all nodes after adding a storage node"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				time.Sleep(10 * time.Minute)
+				err = Inst().S.RefreshNodeRegistry()
+				log.FailOnError(err, "Verify node registry refresh")
+				err = Inst().V.RefreshDriverEndpoints()
+				log.FailOnError(err, "Verify driver end points refresh")
+				nodes := node.GetStorageDriverNodes()
+				for _, n := range nodes {
+					log.InfoD("Check PX status on %v", n.Name)
+					err := Inst().V.WaitForPxPodsToBeUp(n)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("verify px is up on  node %s", n.Name))
+				}
+				PrintPxctlStatus()
+				expectedPerZone := maxStorageNodesPerZone
+				if updatedMaxStorageNodesPerZone != 0 {
+					expectedPerZone = updatedMaxStorageNodesPerZone
+				}
+				numOfZones := 1
+				if len(zones) != 0 {
+					numOfZones = len(zones)
+				}
+				expectedStorageNodesCount := int(expectedPerZone) * numOfZones
+
+				if expectedStorageNodesCount >= len(node.GetStorageNodes()) {
+					expectedStorageNodesCount = len(node.GetStorageNodes())
+				}
+
+				updatedStorageNodesCount := len(node.GetStorageNodes())
+				dash.VerifyFatal(expectedStorageNodesCount, updatedStorageNodesCount, "verify new storage node is added")
+			})
+
+		})
+		stepLog = "Verify all KVDB nodes are running and in a healthy state"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, kvdbNode := range kvdbNodes {
+				nodeInfo, err := node.GetNodeDetailsByNodeID(kvdbNode.ID)
+				log.FailOnError(err, "Failed to get details for KVDB node ID: %s", kvdbNode.ID)
+				nodeStatus, err := Inst().V.GetNodeStatus(nodeInfo)
+				dash.VerifyFatal(*nodeStatus, opsapi.Status_STATUS_OK, fmt.Sprintf("validate PX status on node %s", kvdbNode.ID))
+			}
+
+			storagenode := node.GetStorageNodes()
+			kvdbMembers, err := Inst().V.GetKvdbMembers(storagenode[0])
+			log.FailOnError(err, "Failed to retrieve KVDB members list")
+
+			err = kvdbutils.ValidateKVDBMembers(kvdbMembers)
+			log.FailOnError(err, "Failed to validate KVDB members")
+
+			output, err := runCmd("pxctl status", storagenode[0])
+			log.FailOnError(err, "Failed to execute pxctl status on node: %v", storagenode[0].Name)
+			dash.VerifyFatal(!strings.Contains(output, "Warning"), true, "Output contains warnings. Is the cluster healthy?")
+		})
+
+		ValidateApplications(contexts)
+	})
+
+	JustAfterEach(func() {
+		EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
