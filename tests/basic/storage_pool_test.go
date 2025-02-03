@@ -13330,6 +13330,171 @@ var _ = Describe("{PXInstallWithPXRestart}", Label("p1", "px_install", "hal_init
 	})
 })
 
+var _ = Describe("{VolumeCloneSnapAndPoolExpand}", Label("p1", "px_vol_ops", "pool_ops", "poolExpand", "staging"), func() {
+
+	/*
+		1. Create a repl-2 volume(100gb or something)
+		2. Start doing ios to Volume.
+		3. Parallely  while ios are happening trigger clone and snapshot.
+		4. Do a Ha-update to a target node
+		5. On the target node do a Pool-expand with both add-disk and resize-disk, if it is dmthin do only resizedisk.
+		6. Verify pool expand has proceeded and repl-2 -> repl-3
+		7. Delete the volume.
+	*/
+
+	BeforeEach(func() {
+		StartTorpedoTest("VolumeCloneSnapAndPoolExpand", "VolumeCloneSnapAndPoolExpand", nil, 0)
+	})
+
+	var (
+		contexts        []*scheduler.Context
+		clonedVolumeId  string
+		targetNode      node.Node
+		poolTobeResized *api.StoragePool
+		selectedVol     *volume.Volume
+		setRepl         = 3
+	)
+
+	ItLog := "VolumeCloneSnapAndPoolExpand"
+	It(ItLog, func() {
+		log.InfoD(ItLog)
+		stepLog = "Schedule applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("volume-clone-pool-expand-%d", i))...)
+			}
+		})
+
+		ValidateApplications(contexts)
+		defer DestroyApps(contexts, nil)
+
+		selectedVol, err = getVolumeWithMinRepl(contexts, 2)
+		log.FailOnError(err, "error identifying volume")
+
+		log.InfoD("Selected Volume is:  [%s] ", selectedVol.ID)
+
+		currRep, err := Inst().V.GetReplicationFactor(selectedVol)
+		log.FailOnError(err, fmt.Sprintf("err getting repl factor for  vol : %s", selectedVol.Name))
+
+		log.InfoD("Selected Volume currRep is:  [%d] ", currRep)
+
+		if currRep != 0 {
+			//Reduce replication factor
+			if currRep == 3 {
+				log.Infof("Current replication is  3, reducing before proceeding")
+				opts := volume.Options{
+					ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
+				}
+				err = Inst().V.SetReplicationFactor(selectedVol, currRep-1, nil, nil, true, opts)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Validate set repl factor to %d", currRep-1))
+			}
+		}
+
+		stepLog = "Clone volume"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			clonedVolumeId, err = Inst().V.CloneVolume(selectedVol.ID)
+			log.FailOnError(err, "volume cloning failed on the cluster with volume id [%s]", selectedVol.ID)
+			log.InfoD("Volume cloning with id [%s] is successful", clonedVolumeId)
+		})
+
+		stepLog = "Take snap of cloned volume"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			uuidCreated := uuid.New()
+			snapshotName := fmt.Sprintf("snapshot_%s_%s", clonedVolumeId, uuidCreated.String())
+			snapshotResponse, err := Inst().V.CreateSnapshot(clonedVolumeId, snapshotName)
+			log.FailOnError(err, "error identifying volume [%s]", clonedVolumeId)
+			log.InfoD("Snapshot [%s] created with ID [%s]", snapshotName, snapshotResponse.GetSnapshotId())
+		})
+
+		stepLog = "Ha-update to a target node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			appVol, err := Inst().V.InspectVolume(selectedVol.ID)
+			log.FailOnError(err, fmt.Sprintf("err inspecting vol : %s", selectedVol.ID))
+
+			replicaSets := appVol.ReplicaSets
+			found := false
+			//pick a node which is not present in replicaset
+			for _, n := range replicaSets {
+				for _, storageNode := range node.GetStorageNodes() {
+					log.Infof("Storage node: %v", storageNode.Id)
+					for _, node := range n.Nodes {
+						log.InfoD("replica set: %v", node)
+						if storageNode.Id == node {
+							found = true
+							break
+						}
+					}
+					if !found {
+						targetNode = storageNode
+						break
+					}
+					found = false
+				}
+			}
+			log.InfoD("Node selected: %v", targetNode.Id)
+
+			poolsUuid, err := GetAllPoolsOnNode(targetNode.Id)
+			log.FailOnError(err, "Failed to get pool using node %s", targetNode.Id)
+
+			poolTobeResizedUuid := poolsUuid[0]
+			log.InfoD("pool selected for pool expand: %v", poolTobeResizedUuid)
+
+			poolTobeResized, err = GetStoragePoolByUUID(poolTobeResizedUuid)
+			log.FailOnError(err, "Failed to get pool using UUID %s", poolTobeResizedUuid)
+
+			log.InfoD(fmt.Sprintf("setting repl factor  to %d for  vol : %s", setRepl, selectedVol.ID))
+			err = Inst().V.SetReplicationFactor(selectedVol, int64(setRepl), []string{targetNode.Id}, []string{poolTobeResizedUuid}, false)
+			log.FailOnError(err, fmt.Sprintf("err setting repl factor  to %d for  vol : %s", setRepl, selectedVol.ID))
+		})
+
+		stepLog = "Pool-expand with both add-disk and resize-disk on target node"
+		Step(stepLog, func() {
+			isJournalEnabled, _ = IsJournalEnabled()
+			expectedSize := poolTobeResized.TotalSize/units.GiB + 100
+			err = Inst().V.ExpandPool(poolTobeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
+			log.FailOnError(err, "Failed to expand pool with add disk")
+			err = waitForPoolToBeResized(expectedSize, poolTobeResized.Uuid, isJournalEnabled)
+			log.FailOnError(err, "Failed to wait for pool to be resized")
+
+			isDMthin, _ := IsDMthin()
+
+			if !isDMthin {
+				expectedSize = poolTobeResized.TotalSize/units.GiB + 150
+				err = Inst().V.ExpandPool(poolTobeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
+				log.FailOnError(err, "Failed to expand pool with add disk")
+				err = waitForPoolToBeResized(expectedSize, poolTobeResized.Uuid, isJournalEnabled)
+				log.FailOnError(err, "Failed to wait for pool to be resized")
+			}
+		})
+
+		stepLog = "Verify repl-2 -> repl-3"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = ValidateReplFactorUpdate(selectedVol, int64(setRepl))
+			if err != nil {
+				replStatus, err1 := GetVolumeReplicationStatus(selectedVol)
+				log.FailOnError(err1, fmt.Sprintf("failed to get repl status for the vol %s", selectedVol.Name))
+				log.Infof("got replication status for the vol %s as %s", selectedVol.Name, replStatus)
+				log.FailOnError(err, "error in ha-increase after pool resize")
+			}
+			log.Infof("verified HA update for the vol %s", selectedVol.ID)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
 var _ = Describe("{PoolExpandAndHAUpdate}", Label("p1", "poolExpand", "pool_ops", "add_disk", "Px-Enterprise", "Ready-for-review", "staging"), func() {
 
 	/*
@@ -13786,11 +13951,6 @@ var _ = Describe("{StoragePoolMultipleExpandDiskResize}", Label("p0", "negative"
 
 var _ = Describe("{PoolResizeAndPXRestartWithVolumeResync}", Label("p0", "negative", "staging", "hal_ops_disruption", "HA_Increase_Decrease", "PoolDelete", "functional"), func() {
 	/*
-	   **Do not execute this case in the production pipeline.**
-	   This test failed in staging pipeline as HA Did not get updated to desired value . The HA update gets struck in Resync state even after 4 hours of timeout . Below are the reference to the Staging pipeline run
-	   https://jenkins.pwx.dev.purestorage.com/job/project-hazel/job/users/job/Pvenkatesan/job/PXE-QA/job/FACD-DMTHIN/25/consoleFull
-	   https://jenkins.pwx.dev.purestorage.com/job/project-hazel/job/users/job/Pvenkatesan/job/PXE-QA/job/tp_facd/153/consoleFull
-
 	   https://purestorage.atlassian.net/browse/HAZEL-1014
 	   1. Create apps/volumes atleast 50 in number
 	   2. Trigger resync
