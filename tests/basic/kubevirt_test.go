@@ -2600,6 +2600,10 @@ var _ = Describe("{LiveMigrationsOfVMsInALoop}", Label("p0", "positive", "kubevi
 			app = "kubevirt-raw-vol"
 		} else if volType == "fada-raw" {
 			app = "kubevirt-fada-raw-fio"
+		} else if volType == "windows" {
+			app = "kubevirt-windows-mssql"
+		} else {
+			app = "kubevirt-debian-fio-minimal"
 		}
 		log.InfoD("Setting app for this test to be : %s", app)
 	})
@@ -2615,7 +2619,6 @@ var _ = Describe("{LiveMigrationsOfVMsInALoop}", Label("p0", "positive", "kubevi
 		pxNs, err := Inst().V.GetVolumeDriverNamespace()
 		log.FailOnError(err, "Failed to get volume driver namespace")
 		defer ListEvents(pxNs)
-		canSsh = false
 		appList := Inst().AppList
 		defer func() {
 			Inst().AppList = appList
@@ -2642,8 +2645,12 @@ var _ = Describe("{LiveMigrationsOfVMsInALoop}", Label("p0", "positive", "kubevi
 		log.Infof("Sleeping for 2 minutes to let VMs come up")
 		time.Sleep(2 * time.Minute)
 
-		canSsh = CreateSSHPodAndSetCanSsh()
-		ValidateFioInVMs(appCtxs, canSsh)
+		if volType == "windows" {
+			canSsh = false
+		} else {
+			canSsh = CreateSSHPodAndSetCanSsh()
+			ValidateFioInVMs(appCtxs, canSsh)
+		}
 
 		initialUptime = make(map[string]time.Duration)
 		initialNodeName = make(map[string]string)
@@ -2651,6 +2658,10 @@ var _ = Describe("{LiveMigrationsOfVMsInALoop}", Label("p0", "positive", "kubevi
 		stepLog = "Get initial uptime of VMs and current nodes"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
+			if volType == "windows" {
+				log.InfoD("Skipping initial uptime calculation as volType is windows")
+				return
+			}
 			var wg sync.WaitGroup
 			for _, appCtx := range appCtxs {
 				wg.Add(1)
@@ -2661,7 +2672,7 @@ var _ = Describe("{LiveMigrationsOfVMsInALoop}", Label("p0", "positive", "kubevi
 					log.FailOnError(err, "Failed to get VMs from appCtx")
 					for _, vm := range vms {
 						vmKey := fmt.Sprintf("%s/%s", vm.Namespace, vm.Name)
-						uptime, err := GetVMUptime(vm)
+						uptime, err := GetVMUptime(vm, canSsh)
 						log.FailOnError(err, "Failed to get uptime from VM %s", vm.Name)
 						log.Infof("Initial uptime for VM %s is %v", vmKey, uptime)
 
@@ -2730,7 +2741,11 @@ var _ = Describe("{LiveMigrationsOfVMsInALoop}", Label("p0", "positive", "kubevi
 					}
 					wg.Wait()
 				})
-				ValidateFioInVMs(appCtxs, canSsh)
+				if canSsh {
+					ValidateFioInVMs(appCtxs, canSsh)
+				} else {
+					log.Infof("Skipping fio validation as canSsh is false")
+				}
 			})
 		}
 
@@ -2747,8 +2762,14 @@ var _ = Describe("{LiveMigrationsOfVMsInALoop}", Label("p0", "positive", "kubevi
 })
 
 var _ = Describe("{ColdAddNewDiskToKubevirtVM}", Label("p0", "positive", "kubevirt"), func() {
-	var app, volType string
-	var present bool
+	var (
+		app     string
+		volType string
+		present   bool
+		canSsh    bool
+		appCtxs   []*scheduler.Context
+		namespace string
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("ColdAddNewDiskToKubevirtVM", "Cold add a new disk to a kubevirtVM", nil, 0)
 		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
@@ -2759,14 +2780,13 @@ var _ = Describe("{ColdAddNewDiskToKubevirtVM}", Label("p0", "positive", "kubevi
 			app = "kubevirt-raw-vol"
 		} else if volType == "fada-raw" {
 			app = "kubevirt-fada-raw-fio"
+		} else if volType == "windows" {
+			app = "kubevirt-windows-mssql"
 		} else {
 			app = "kubevirt-debian-fio-minimal"
 		}
 		log.InfoD("Setting app for this test to be : %s", app)
 	})
-	var appCtxs []*scheduler.Context
-	var namespace string
-	var canSsh bool
 
 	itLog := "Cold add a new disk to a kubevirtVM"
 	It(itLog, func() {
@@ -2801,8 +2821,12 @@ var _ = Describe("{ColdAddNewDiskToKubevirtVM}", Label("p0", "positive", "kubevi
 		log.Infof("Sleeping for 2 minutes to let VMs come up")
 		time.Sleep(2 * time.Minute)
 
-		canSsh = CreateSSHPodAndSetCanSsh()
-		ValidateFioInVMs(appCtxs, canSsh)
+		if volType == "windows" {
+			canSsh = false
+		} else {
+			canSsh = CreateSSHPodAndSetCanSsh()
+			ValidateFioInVMs(appCtxs, canSsh)
+		}
 
 		stepLog = "Cold add one disk to the kubevirt VM"
 		Step(stepLog, func() {
@@ -2811,7 +2835,11 @@ var _ = Describe("{ColdAddNewDiskToKubevirtVM}", Label("p0", "positive", "kubevi
 			log.FailOnError(err, "Failed to add disks to kubevirt VM")
 			dash.VerifyFatal(true, true, "Disk added to kubevirt VM")
 		})
-		ValidateFioInVMs(appCtxs, canSsh)
+		if canSsh {
+			ValidateFioInVMs(appCtxs, canSsh)
+		} else {
+			log.Infof("Skipping fio validation and VM Uptime validation as canSsh is false")
+		}
 		stepLog = "Destroy Applications"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -3349,6 +3377,8 @@ var _ = Describe("{PxKillAfterColdAddDiskToVM}", Label("p1", "negative", "kubevi
 			app = "kubevirt-raw-vol"
 		} else if volType == "fada-raw" {
 			app = "kubevirt-fada-raw-fio"
+		} else if volType == "windows" {
+			app = "kubevirt-windows-mssql"
 		} else {
 			app = "kubevirt-debian-fio-minimal"
 		}
@@ -3358,7 +3388,7 @@ var _ = Describe("{PxKillAfterColdAddDiskToVM}", Label("p1", "negative", "kubevi
 	var appCtxs []*scheduler.Context
 	var nodes []string
 	var namespace string
-	var canSsh bool = false
+	var canSsh bool
 	var initialUptime map[string]time.Duration
 	var initialNodeName map[string]string
 	var mu sync.Mutex
@@ -3393,8 +3423,12 @@ var _ = Describe("{PxKillAfterColdAddDiskToVM}", Label("p1", "negative", "kubevi
 		log.Infof("Sleeping for 2 minutes to let VMs come up")
 		time.Sleep(2 * time.Minute)
 
-		canSsh = CreateSSHPodAndSetCanSsh()
-		ValidateFioInVMs(appCtxs, canSsh)
+		if volType == "windows" {
+			canSsh = false
+		} else {
+			canSsh = CreateSSHPodAndSetCanSsh()
+			ValidateFioInVMs(appCtxs, canSsh)
+		}
 
 		stepLog = "Add one disk to the KubeVirt VM"
 		Step(stepLog, func() {
@@ -3408,6 +3442,10 @@ var _ = Describe("{PxKillAfterColdAddDiskToVM}", Label("p1", "negative", "kubevi
 		initialNodeName = make(map[string]string)
 		Step("Get initial uptime of VMs and current nodes", func() {
 			log.InfoD("Get initial uptime of VMs and current nodes")
+			if volType == "windows" {
+				log.InfoD("Skipping initial uptime calculation as volType is windows")
+				return
+			}
 			var wg sync.WaitGroup
 			for _, appCtx := range appCtxs {
 				wg.Add(1)
@@ -3418,7 +3456,7 @@ var _ = Describe("{PxKillAfterColdAddDiskToVM}", Label("p1", "negative", "kubevi
 					log.FailOnError(err, "Failed to get VMs from appCtx")
 					for _, vm := range vms {
 						vmKey := fmt.Sprintf("%s/%s", vm.Namespace, vm.Name)
-						uptime, err := GetVMUptime(vm)
+						uptime, err := GetVMUptime(vm, canSsh)
 						log.FailOnError(err, "Failed to get uptime from VM %s", vm.Name)
 						log.Infof("Initial uptime for VM %s is %v", vmKey, uptime)
 
@@ -3473,7 +3511,12 @@ var _ = Describe("{PxKillAfterColdAddDiskToVM}", Label("p1", "negative", "kubevi
 			}
 		})
 
-		ValidateVMUptime(appCtxs, canSsh, initialUptime)
+		if canSsh {
+			log.Infof("Performing  VM Uptime validation as canSsh is true")
+			ValidateVMUptime(appCtxs, canSsh, initialUptime)
+		} else {
+			log.Infof("Skipping fio validation and VM Uptime validation as canSsh is false")
+		}
 
 		stepLog = "Add another disk to the KubeVirt VM"
 		Step(stepLog, func() {
@@ -3483,7 +3526,11 @@ var _ = Describe("{PxKillAfterColdAddDiskToVM}", Label("p1", "negative", "kubevi
 			dash.VerifyFatal(true, true, "Disk added to KubeVirt VM")
 		})
 
-		ValidateFioInVMs(appCtxs, canSsh)
+		if canSsh {
+			ValidateFioInVMs(appCtxs, canSsh)
+		} else {
+			log.Infof("Skipping fio validation and VM Uptime validation as canSsh is false")
+		}
 
 		stepLog = "Destroy Applications"
 		Step(stepLog, func() {
@@ -5508,6 +5555,8 @@ var _ = Describe("{AddNewHotPlugDiskToKubevirtVM}", Label("p0", "positive", "kub
 			app = "kubevirt-raw-vol"
 		} else if volType == "fada-raw" {
 			app = "kubevirt-fada-raw-fio"
+		} else if volType == "windows" {
+			app = "kubevirt-windows-mssql"
 		} else {
 			app = "kubevirt-debian-fio-minimal"
 		}
@@ -5555,12 +5604,20 @@ var _ = Describe("{AddNewHotPlugDiskToKubevirtVM}", Label("p0", "positive", "kub
 		log.Infof("Sleeping for 2 minutes to let VMs come up fully")
 		time.Sleep(2 * time.Minute)
 
-		canSsh = CreateSSHPodAndSetCanSsh()
-		ValidateFioInVMs(appCtxs, canSsh)
+		if volType == "windows" {
+			canSsh = false
+		} else {
+			canSsh = CreateSSHPodAndSetCanSsh()
+			ValidateFioInVMs(appCtxs, canSsh)
+		}
 		initialUptime = make(map[string]time.Duration)
 		stepLog = "Get initial uptime of VMs and current node"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
+			if volType == "windows" {
+				log.InfoD("Skipping initial uptime calculation as volType is windows")
+				return
+			}
 			var wg sync.WaitGroup
 			for _, appCtx := range appCtxs {
 				wg.Add(1)
@@ -5570,7 +5627,7 @@ var _ = Describe("{AddNewHotPlugDiskToKubevirtVM}", Label("p0", "positive", "kub
 					vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
 					log.FailOnError(err, "Failed to get VMs from appCtx")
 					for _, vm := range vms {
-						uptime, err := GetVMUptime(vm)
+						uptime, err := GetVMUptime(vm, canSsh)
 						log.FailOnError(err, "Failed to get uptime from VM %s", vm.Name)
 						vmKey := fmt.Sprintf("%s/%s", vm.Namespace, vm.Name)
 						initialUptime[vmKey] = uptime
@@ -5593,8 +5650,12 @@ var _ = Describe("{AddNewHotPlugDiskToKubevirtVM}", Label("p0", "positive", "kub
 			dash.VerifyFatal(true, true, "DataVolume hot-plugged to KubeVirt VM")
 		})
 
-		ValidateFioInVMs(appCtxs, canSsh)
-		ValidateVMUptime(appCtxs, canSsh, initialUptime)
+		if canSsh {
+			ValidateVMUptime(appCtxs, canSsh, initialUptime)
+			ValidateFioInVMs(appCtxs, canSsh)
+		} else {
+			log.Infof("Skipping fio validation and VM Uptime validation as canSsh is false")
+		}
 		log.Infof("Sleeping for 30 minutes")
 		time.Sleep(30 * time.Minute)
 		stepLog = "Destroy Applications"
@@ -6143,6 +6204,7 @@ var _ = Describe("{LMAfterAddNewHotPlugDiskToKubevirtVM}", Label("p0", "positive
 		if !present {
 			app = "kubevirt-debian-fio-minimal"
 		}
+		volType = "windows"
 		if volType == "pxe-raw" {
 			app = "kubevirt-raw-vol"
 		} else if volType == "fada-raw" {
@@ -6194,12 +6256,20 @@ var _ = Describe("{LMAfterAddNewHotPlugDiskToKubevirtVM}", Label("p0", "positive
 		log.Infof("Sleeping for 2 minutes to let VMs come up fully")
 		time.Sleep(2 * time.Minute)
 
-		canSsh = CreateSSHPodAndSetCanSsh()
-		ValidateFioInVMs(appCtxs, canSsh)
+		if volType == "windows" {
+			canSsh = false
+		} else {
+			canSsh = CreateSSHPodAndSetCanSsh()
+			ValidateFioInVMs(appCtxs, canSsh)
+		}
 		initialUptime = make(map[string]time.Duration)
 		stepLog = "Get initial uptime of VMs and current node"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
+			if volType == "windows" {
+				log.InfoD("Skipping initial uptime calculation as volType is windows")
+				return
+			}
 			var wg sync.WaitGroup
 			for _, appCtx := range appCtxs {
 				wg.Add(1)
@@ -6241,8 +6311,12 @@ var _ = Describe("{LMAfterAddNewHotPlugDiskToKubevirtVM}", Label("p0", "positive
 			}
 		})
 
-		ValidateFioInVMs(appCtxs, canSsh)
-		ValidateVMUptime(appCtxs, canSsh, initialUptime)
+		if canSsh {
+			ValidateVMUptime(appCtxs, canSsh, initialUptime)
+			ValidateFioInVMs(appCtxs, canSsh)
+		} else {
+			log.Infof("Skipping fio validation and VM Uptime validation as canSsh is false")
+		}
 
 		stepLog = "Destroy Applications"
 		Step(stepLog, func() {
