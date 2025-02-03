@@ -9379,7 +9379,7 @@ func ChangeStorkAdminNamespace(namespace string) (*v1.StorageCluster, error) {
 	time.Sleep(30 * time.Second)
 
 	checkCurrentAdminNamespace := func() (interface{}, bool, error) {
-		currentAdminNamespace, err := getCurrentAdminNamespace()
+		currentAdminNamespace, err := GetCurrentAdminNamespace()
 		if err != nil {
 			return nil, true, fmt.Errorf("Error occurred while checking admin namespace - [%s]", err.Error())
 		}
@@ -9442,8 +9442,8 @@ func ChangeStorkAdminNamespace(namespace string) (*v1.StorageCluster, error) {
 	return stc, nil
 }
 
-// getCurrentAdminNamespace returns the value of current admin namespace set
-func getCurrentAdminNamespace() (string, error) {
+// GetCurrentAdminNamespace returns the value of current admin namespace set
+func GetCurrentAdminNamespace() (string, error) {
 	isOpBased, _ := Inst().V.IsOperatorBasedInstall()
 	if isOpBased {
 		stc, err := Inst().V.GetDriver()
@@ -9472,7 +9472,7 @@ func getCurrentAdminNamespace() (string, error) {
 func validateBackupCRs(backupName string, clusterName string, orgID string, clusterUID string,
 	backupNameSpaces []string, ctx context1.Context) error {
 
-	currentAdminNamespace, _ := getCurrentAdminNamespace()
+	currentAdminNamespace, _ := GetCurrentAdminNamespace()
 	if len(backupNameSpaces) == 1 {
 		currentAdminNamespace = backupNameSpaces[0]
 	}
@@ -9512,7 +9512,7 @@ func validateBackupCRs(backupName string, clusterName string, orgID string, clus
 // Validates Restore CRs created
 func ValidateRestoreCRs(restoreName string, clusterName string, orgID string, clusterUID string,
 	restoreNameSpaces map[string]string, ctx context1.Context) error {
-	currentAdminNamespace, _ := getCurrentAdminNamespace()
+	currentAdminNamespace, _ := GetCurrentAdminNamespace()
 	if len(restoreNameSpaces) == 1 {
 		for _, val := range restoreNameSpaces {
 			currentAdminNamespace = val
@@ -10000,7 +10000,7 @@ func validateCRCleanup(resourceInterface interface{},
 		resourceName = currentObject.Name
 	}
 
-	currentAdminNamespace, _ := getCurrentAdminNamespace()
+	currentAdminNamespace, _ := GetCurrentAdminNamespace()
 	if len(resourceNamespaces) == 1 {
 		currentAdminNamespace = resourceNamespaces[0]
 	}

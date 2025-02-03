@@ -2,7 +2,6 @@ package tests
 
 import (
 	"fmt"
-	"github.com/pure-px/stork/pkg/k8sutils"
 	"time"
 
 	"strings"
@@ -62,7 +61,7 @@ var _ = Describe("{DeleteNfsExecutorPodWhileBackupAndRestoreInProgress}", Label(
 		customResourceBackup = "customResourceBackup"
 		singleNamespaceBkp = "singleNamespaceBkp"
 		scheduledAppContexts = make([]*scheduler.Context, 0)
-		MultiAppNfsPodDeploymentNamespace, err = k8sutils.GetStorkPodNamespace()
+		MultiAppNfsPodDeploymentNamespace, err = GetCurrentAdminNamespace()
 		log.FailOnError(err, "Fetching stork pod namespace")
 		for i := 0; i < 5; i++ {
 			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
