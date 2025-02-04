@@ -2593,26 +2593,27 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", Label(TestCaseLabelsMap[PXBacku
 // This testcase validates Azure cred change after upgrading Px-Backup from pre-2.7.0 to latest
 var _ = Describe("{PXBackupUpgradeWithAzureCredChange}", Label(TestCaseLabelsMap[PXBackupUpgradeWithAzureCredChange]...), func() {
 	var (
-		scheduledAppContexts      []*scheduler.Context
-		controlChannel            chan string
-		errorGroup                *errgroup.Group
-		cloudCredName             string
-		backupLocationName        string
-		cloudCredUID              string
-		backupLocationUID         string
-		backupLocationMap         map[string]string
-		providers                 []string
-		sourceClusterUid          string
-		destClusterUid            string
-		preUpgradeBackupName      string
-		postUpgradeBackupName     string
-		namespaceMap              map[string]string
-		labelSelectors            map[string]string
-		upgradePxBackupImageStr   string
-		upgradeStorkImageStr      string
-		pxbackupVersion           string
-		preUpgradePxBackupVersion *version.Version
-		pxbackupVersion270        *version.Version
+		scheduledAppContexts       []*scheduler.Context
+		controlChannel             chan string
+		errorGroup                 *errgroup.Group
+		cloudCredName              string
+		backupLocationName         string
+		cloudCredUID               string
+		backupLocationUID          string
+		backupLocationMap          map[string]string
+		providers                  []string
+		sourceClusterUid           string
+		destClusterUid             string
+		preUpgradeBackupName       string
+		postUpgradeBackupName      string
+		namespaceMap               map[string]string
+		labelSelectors             map[string]string
+		upgradePxBackupImageStr    string
+		upgradeStorkImageStr       string
+		pxbackupVersion            string
+		preUpgradePxBackupVersion  *version.Version
+		postUpgradePxBackupVersion *version.Version
+		pxbackupVersion270         *version.Version
 	)
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("PXBackupUpgradeWithAzureCredChange", "Verify that upgrading Px-Backup and updating the azure cred change does not affect backup and "+
@@ -2712,6 +2713,11 @@ var _ = Describe("{PXBackupUpgradeWithAzureCredChange}", Label(TestCaseLabelsMap
 			log.InfoD("Upgrade Px Backup to version %s", upgradePxBackupImageStr)
 			err := PxBackupUpgrade(upgradePxBackupImageStr)
 			dash.VerifyFatal(err, nil, "Verifying Px Backup upgrade completion")
+			pxbackupVersion, err = GetPxBackupVersionSemVer()
+			log.FailOnError(err, "Fetching Px-Backup version")
+			log.InfoD("Px-Backup version after upgrade is [%s]", pxbackupVersion)
+			postUpgradePxBackupVersion, err = version.NewSemver(pxbackupVersion)
+			log.FailOnError(err, "Parsing Px-Backup version after after upgrade")
 		})
 
 		Step("Upgrade the stork version", func() {
@@ -2773,7 +2779,7 @@ var _ = Describe("{PXBackupUpgradeWithAzureCredChange}", Label(TestCaseLabelsMap
 
 		Step("Restoring the backed up namespaces from backup taken before upgrade", func() {
 			if preUpgradePxBackupVersion.GreaterThanOrEqual(pxbackupVersion270) {
-				// Restore should be successful if the backup was taken before 2.7.0 because there is no dependency on the azure creds since the backup will be csi based
+				// Restore should be successful if the backup was taken after 2.7.0 because there is no dependency on the azure creds since the backup will be csi based
 				log.InfoD("Restoring the backed up namespaces from backup taken before upgrade and expecting success")
 				ctx, err := backup.GetAdminCtxFromSecret()
 				log.FailOnError(err, "Fetching px-central-admin ctx")
@@ -2813,7 +2819,7 @@ var _ = Describe("{PXBackupUpgradeWithAzureCredChange}", Label(TestCaseLabelsMap
 		})
 
 		Step("Restoring the backed up namespaces from backup taken after upgrade", func() {
-			if preUpgradePxBackupVersion.GreaterThanOrEqual(pxbackupVersion270) {
+			if postUpgradePxBackupVersion.GreaterThanOrEqual(pxbackupVersion270) {
 				log.InfoD("Restoring the backed up namespaces from backup taken after upgrade")
 				ctx, err := backup.GetAdminCtxFromSecret()
 				log.FailOnError(err, "Fetching px-central-admin ctx")
@@ -2843,7 +2849,6 @@ var _ = Describe("{PXBackupUpgradeWithAzureCredChange}", Label(TestCaseLabelsMap
 				cloudCred, err := Inst().Backup.InspectCloudCredential(ctx, credInspectRequest)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching cloud credential [%s] for org [%s]", cloudCredName, BackupOrgID))
 				azureCredConfig := cloudCred.CloudCredential.CloudCredentialInfo.GetAzureConfig()
-				log.Infof("Cred details before update: %v", azureCredConfig)
 
 				// Update the cloud credential with only the mandatory fields
 				credUpdateRequest = &api.CloudCredentialUpdateRequest{
@@ -2877,7 +2882,6 @@ var _ = Describe("{PXBackupUpgradeWithAzureCredChange}", Label(TestCaseLabelsMap
 				cloudCred, err = Inst().Backup.InspectCloudCredential(ctx, credInspectRequest)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching cloud credential [%s] for org [%s]", cloudCredName, BackupOrgID))
 				azureCredConfig = cloudCred.CloudCredential.CloudCredentialInfo.GetAzureConfig()
-				log.Infof("Cred details after update: %v", azureCredConfig)
 
 				log.InfoD("Restoring the backed up namespaces from backup taken before and after upgrade")
 				restoreName := fmt.Sprintf("%s-%s", "restore-pre-upgrade-backup", RandomString(4))
@@ -2919,6 +2923,49 @@ var _ = Describe("{PXBackupUpgradeWithAzureCredChange}", Label(TestCaseLabelsMap
 		opts[SkipClusterScopedObjects] = true
 		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
 		log.FailOnError(err, "Data validations failed")
+		// if the pre-upgrade version if less than 2.7.0, then backups created before upgrade would require all parameters in cloud cred to delete the backup
+		if preUpgradePxBackupVersion.LessThan(pxbackupVersion270) {
+			log.InfoD("Update the azure cloud account creds to have all the fields")
+			tenantID, clientID, clientSecret, subscriptionID, _, _ := GetAzureCredsFromEnv()
+			var credInspectRequest *api.CloudCredentialInspectRequest
+			var credUpdateRequest *api.CloudCredentialUpdateRequest
+			ctx, err = backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			// Create the inspect request for cloud credential
+			credInspectRequest = &api.CloudCredentialInspectRequest{
+				OrgId:          BackupOrgID,
+				Name:           cloudCredName,
+				IncludeSecrets: true,
+			}
+			cloudCred, err := Inst().Backup.InspectCloudCredential(ctx, credInspectRequest)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching cloud credential [%s] for org [%s]", cloudCredName, BackupOrgID))
+			azureCredConfig := cloudCred.CloudCredential.CloudCredentialInfo.GetAzureConfig()
+
+			// Update the cloud credential with only the mandatory fields
+			credUpdateRequest = &api.CloudCredentialUpdateRequest{
+				CreateMetadata: &api.CreateMetadata{
+					Name:  cloudCred.GetCloudCredential().GetName(),
+					OrgId: BackupOrgID,
+					Uid:   cloudCred.GetCloudCredential().GetUid(),
+				},
+				CloudCredential: &api.CloudCredentialInfo{
+					Type: api.CloudCredentialInfo_Azure,
+					Config: &api.CloudCredentialInfo_AzureConfig{
+						AzureConfig: &api.AzureConfig{
+							TenantId:       tenantID,
+							ClientId:       clientID,
+							ClientSecret:   clientSecret,
+							AccountName:    azureCredConfig.GetAccountName(),
+							AccountKey:     azureCredConfig.GetAccountKey(),
+							SubscriptionId: subscriptionID,
+						},
+					},
+				},
+			}
+			_, err = Inst().Backup.UpdateCloudCredential(ctx, credUpdateRequest)
+			log.FailOnError(err, fmt.Sprintf("Updating cloud credential [%s] for org [%s]", cloudCredName, BackupOrgID))
+		}
 		// Need to delete the cluster before deleting the cloud credential
 		clusterNames := []string{SourceClusterName, DestinationClusterName}
 		for _, clusterName := range clusterNames {

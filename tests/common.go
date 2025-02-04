@@ -5528,7 +5528,7 @@ func CreateDuplicateApplicationClusters(orgID string, ctx context1.Context, clus
 
 	clusterCreation := func(clusterCredName string, clusterCredUid string, clusterName string, configPath string) error {
 		err := CreateCluster(clusterName, configPath, orgID, clusterCredName, clusterCredUid, ctx)
-		if err != nil && !strings.Contains(err.Error(), "already exists with status: Online") {
+		if err != nil && !(strings.Contains(err.Error(), "already exists with status: Online") || strings.Contains(err.Error(), "object already exists")) {
 			return err
 		}
 
@@ -5665,7 +5665,7 @@ func AddAzureApplicationClusters(orgID string, clusterCredName string, clusterCr
 		clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
 		clusterStatus := func() (interface{}, bool, error) {
 			err = CreateCluster(clusterName, ClusterConfigPathMap[clusterName], orgID, clusterCredName, clusterCredUid, ctx)
-			if err != nil && !strings.Contains(err.Error(), "already exists with status: Online") {
+			if err != nil && !(strings.Contains(err.Error(), "already exists with status: Online") || strings.Contains(err.Error(), "object already exists")) {
 				return "", true, err
 			}
 			srcClusterStatus, err := Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
