@@ -2308,6 +2308,8 @@ var _ = Describe("{RestartPXBackupDuringLargeResourceScheduledBackup}", Label(Te
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed applications")
 		DestroyApps(scheduledAppContexts, opts)
+		err = SuspendAndDeleteSchedule(scheduleBackupName, periodicSchPolicyName, SourceClusterName, sourceClusterUid, BackupOrgID, ctx, true)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Suspending and deleting backup schedule - %s", scheduleBackupName))
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
@@ -2619,6 +2621,8 @@ var _ = Describe("{RestartStorkDuringLargeResourceScheduledBackup}", Label(TestC
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed applications")
 		DestroyApps(scheduledAppContexts, opts)
+		err = SuspendAndDeleteSchedule(scheduleBackupName, periodicSchPolicyName, SourceClusterName, sourceClusterUid, BackupOrgID, ctx, true)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Suspending and deleting backup schedule - %s", scheduleBackupName))
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
@@ -2893,6 +2897,8 @@ var _ = Describe("{RebootNodesDuringLargeResourceScheduledBackup}", Label(TestCa
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed applications")
 		DestroyApps(scheduledAppContexts, opts)
+		err = SuspendAndDeleteSchedule(scheduleBackupName, periodicSchPolicyName, SourceClusterName, sourceClusterUid, BackupOrgID, ctx, true)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Suspending and deleting backup schedule - %s", scheduleBackupName))
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
