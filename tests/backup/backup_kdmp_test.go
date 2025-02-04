@@ -65,6 +65,7 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", Label(TestCaseLabelsMap[Exclude
 		postRuleUid                   string
 		periodicSchedulePolicyName    string
 		periodicSchedulePolicyUid     string
+		testAppList                   []string
 		mutex                         sync.Mutex
 		wg                            sync.WaitGroup
 	)
@@ -76,6 +77,16 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", Label(TestCaseLabelsMap[Exclude
 
 		log.InfoD(fmt.Sprintf("App list %v", Inst().AppList))
 		scheduledAppContexts = make([]*scheduler.Context, 0)
+		testAppList = []string{"vdbench-fbda-one-vol"}
+		actualAppList := Inst().AppList
+		defer func() {
+			Inst().AppList = actualAppList
+			err := Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+			log.FailOnError(err, "Failed while rescanning specs")
+		}()
+		Inst().AppList = testAppList
+		err := Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+		log.FailOnError(err, "Failed to rescan specs from %s for storage provider %s", Inst().SpecDir, Inst().V.String())
 		log.InfoD("Starting to deploy applications")
 		for i := 0; i < numDeployments; i++ {
 			log.InfoD(fmt.Sprintf("Iteration %v of deploying applications", i))
@@ -354,7 +365,7 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", Label(TestCaseLabelsMap[Exclude
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, namespace := range bkpNamespaces {
-				backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
+				backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, RandomString(3))
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
 				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
@@ -368,7 +379,7 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", Label(TestCaseLabelsMap[Exclude
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, namespace := range bkpNamespaces {
-				scheduleName := fmt.Sprintf("%s-schedule-with-rules-%s", BackupNamePrefix, RandomString(4))
+				scheduleName := fmt.Sprintf("%s-sch-rules-%s", BackupNamePrefix, RandomString(3))
 				log.InfoD("Creating a schedule backup of namespace [%s] without pre and post exec rules", namespace)
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
 				scheduleBackupName, err := CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, clusterUid, bkpLocationName, backupLocationUID, appContextsToBackup,
@@ -396,19 +407,19 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", Label(TestCaseLabelsMap[Exclude
 				}{
 					{
 						"test-custom-restore-single-ns",
-						map[string]string{backupNamespaceMap[backupName]: fmt.Sprintf("custom1-%s-%d", backupNamespaceMap[backupName], index)},
+						map[string]string{backupNamespaceMap[backupName]: fmt.Sprintf("cust1-%s-%d", backupNamespaceMap[backupName], index)},
 						make(map[string]string),
 						ReplacePolicyRetain,
 					},
 					{
 						"test-replace-restore-single-ns",
-						map[string]string{backupNamespaceMap[backupName]: fmt.Sprintf("custom1-rep-%s-%d", backupNamespaceMap[backupName], index)},
+						map[string]string{backupNamespaceMap[backupName]: fmt.Sprintf("cust1-rep-%s-%d", backupNamespaceMap[backupName], index)},
 						make(map[string]string),
 						ReplacePolicyDelete,
 					},
 				}
 				for _, config := range restoreConfigs {
-					restoreName := fmt.Sprintf("%s-%s", config.namePrefix, RandomString(4))
+					restoreName := fmt.Sprintf("%s-%s", config.namePrefix, RandomString(3))
 					log.InfoD("Restoring backup [%s] in cluster [%s] with restore [%s] and namespace mapping %v", backupName, DestinationClusterName, restoreName, config.namespaceMapping)
 					if config.replacePolicy == ReplacePolicyRetain {
 						appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{backupNamespaceMap[backupName]})
@@ -540,7 +551,7 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", Label(TestCaseLabelsMap[Exclude
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			backupNames := make([]string, 0)
 			for _, namespace := range bkpNamespaces {
-				backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
+				backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, RandomString(3))
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
 				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
@@ -556,7 +567,7 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", Label(TestCaseLabelsMap[Exclude
 			restoredNamespaces = make([]string, 0)
 			for _, backupName := range backupNames {
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{backupNamespaceMap[backupName]})
-				restoreName = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
+				restoreName = fmt.Sprintf("%s-%v", RestoreNamePrefix, RandomString(3))
 				restoreNamespace := "custom2-" + backupNamespaceMap[backupName]
 				namespaceMapping := map[string]string{backupNamespaceMap[backupName]: restoreNamespace}
 				restoredNamespaces = append(restoredNamespaces, restoreNamespace)
@@ -647,7 +658,7 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", Label(TestCaseLabelsMap[Exclude
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			backupNames = make([]string, 0)
 			for _, namespace := range bkpNamespaces {
-				backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
+				backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, RandomString(3))
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
 				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
@@ -663,8 +674,8 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", Label(TestCaseLabelsMap[Exclude
 			restoredNamespaces = make([]string, 0)
 			for _, backupName := range backupNames {
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{backupNamespaceMap[backupName]})
-				restoreName = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-				restoreNamespace := "custom3-" + backupNamespaceMap[backupName]
+				restoreName = fmt.Sprintf("%s-%v", RestoreNamePrefix, RandomString(3))
+				restoreNamespace := "cust3-" + backupNamespaceMap[backupName]
 				namespaceMapping := map[string]string{backupNamespaceMap[backupName]: restoreNamespace}
 				restoredNamespaces = append(restoredNamespaces, restoreNamespace)
 				err = CreateRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, appContextsToBackup)
@@ -795,6 +806,7 @@ var _ = Describe("{ExcludeInvalidDirectoryFileBackup}", Label(TestCaseLabelsMap[
 		postRuleUid                   string
 		periodicSchedulePolicyName    string
 		periodicSchedulePolicyUid     string
+		testAppList                   []string
 		mutex                         sync.Mutex
 		restoredNamespaces            = make([]string, 0)
 		wg                            sync.WaitGroup
@@ -806,9 +818,16 @@ var _ = Describe("{ExcludeInvalidDirectoryFileBackup}", Label(TestCaseLabelsMap[
 
 		log.InfoD(fmt.Sprintf("App list %v", Inst().AppList))
 		scheduledAppContexts = make([]*scheduler.Context, 0)
+		testAppList = []string{"vdbench-fbda-one-vol"}
+		actualAppList := Inst().AppList
+		defer func() {
+			Inst().AppList = actualAppList
+		}()
+		Inst().AppList = testAppList
 		log.InfoD("Starting to deploy applications")
 		for i := 0; i < numDeployments; i++ {
 			log.InfoD(fmt.Sprintf("Iteration %v of deploying applications", i))
+			log.Infof(fmt.Sprintf("Taskname Prefix is : %s", TaskNamePrefix))
 			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
 			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
@@ -1029,7 +1048,7 @@ var _ = Describe("{ExcludeInvalidDirectoryFileBackup}", Label(TestCaseLabelsMap[
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, namespace := range bkpNamespaces {
-				backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
+				backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, RandomString(3))
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
 				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
@@ -1043,7 +1062,7 @@ var _ = Describe("{ExcludeInvalidDirectoryFileBackup}", Label(TestCaseLabelsMap[
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, namespace := range bkpNamespaces {
-				scheduleName := fmt.Sprintf("%s-schedule-with-rules-%s", BackupNamePrefix, RandomString(4))
+				scheduleName := fmt.Sprintf("%s-schedule-with-rules-%s", BackupNamePrefix, RandomString(3))
 				log.InfoD("Creating a schedule backup of namespace [%s] without pre and post exec rules", namespace)
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
 				scheduleBackupName, err := CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, clusterUid, bkpLocationName, backupLocationUID, appContextsToBackup,
@@ -1071,19 +1090,19 @@ var _ = Describe("{ExcludeInvalidDirectoryFileBackup}", Label(TestCaseLabelsMap[
 				}{
 					{
 						"test-custom-restore-single-ns",
-						map[string]string{backupNamespaceMap[backupName]: fmt.Sprintf("custom1-%s-%d", backupNamespaceMap[backupName], index)},
+						map[string]string{backupNamespaceMap[backupName]: fmt.Sprintf("cust1-%s-%d", backupNamespaceMap[backupName], index)},
 						make(map[string]string),
 						ReplacePolicyRetain,
 					},
 					{
 						"test-replace-restore-single-ns",
-						map[string]string{backupNamespaceMap[backupName]: fmt.Sprintf("custom1-rep-%s-%d", backupNamespaceMap[backupName], index)},
+						map[string]string{backupNamespaceMap[backupName]: fmt.Sprintf("cust1-rep-%s-%d", backupNamespaceMap[backupName], index)},
 						make(map[string]string),
 						ReplacePolicyDelete,
 					},
 				}
 				for _, config := range restoreConfigs {
-					restoreName := fmt.Sprintf("%s-%s", config.namePrefix, RandomString(4))
+					restoreName := fmt.Sprintf("%s-%s", config.namePrefix, RandomString(3))
 					log.InfoD("Restoring backup [%s] in cluster [%s] with restore [%s] and namespace mapping %v", backupName, DestinationClusterName, restoreName, config.namespaceMapping)
 					if config.replacePolicy == ReplacePolicyRetain {
 						appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{backupNamespaceMap[backupName]})
@@ -1195,7 +1214,7 @@ var _ = Describe("{ExcludeInvalidDirectoryFileBackup}", Label(TestCaseLabelsMap[
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			backupNames = make([]string, 0)
 			for _, namespace := range bkpNamespaces {
-				backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
+				backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, RandomString(3))
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
 				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
@@ -1211,7 +1230,7 @@ var _ = Describe("{ExcludeInvalidDirectoryFileBackup}", Label(TestCaseLabelsMap[
 			restoredNamespaces = make([]string, 0)
 			for _, backupName := range backupNames {
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{backupNamespaceMap[backupName]})
-				restoreName = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
+				restoreName = fmt.Sprintf("%s-%v", RestoreNamePrefix, RandomString(3))
 				restoreNamespace := "custom2-" + backupNamespaceMap[backupName]
 				namespaceMapping := map[string]string{backupNamespaceMap[backupName]: restoreNamespace}
 				restoredNamespaces = append(restoredNamespaces, restoreNamespace)
@@ -1302,7 +1321,7 @@ var _ = Describe("{ExcludeInvalidDirectoryFileBackup}", Label(TestCaseLabelsMap[
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			backupNames = make([]string, 0)
 			for _, namespace := range bkpNamespaces {
-				backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
+				backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, RandomString(3))
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
 				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
@@ -1318,7 +1337,7 @@ var _ = Describe("{ExcludeInvalidDirectoryFileBackup}", Label(TestCaseLabelsMap[
 			restoredNamespaces = make([]string, 0)
 			for _, backupName := range backupNames {
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{backupNamespaceMap[backupName]})
-				restoreName = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
+				restoreName = fmt.Sprintf("%s-%v", RestoreNamePrefix, RandomString(3))
 				restoreNamespace := "custom3-" + backupNamespaceMap[backupName]
 				namespaceMapping := map[string]string{backupNamespaceMap[backupName]: restoreNamespace}
 				restoredNamespaces = append(restoredNamespaces, restoreNamespace)
