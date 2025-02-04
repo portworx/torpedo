@@ -14650,7 +14650,7 @@ func TriggerPxCSIFadaAttachLimit(contexts *[]*scheduler.Context, recordChan *cha
 			sem := make(chan struct{}, 10)
 			for x := 0; x < remVolumeTobeAttached; x++ {
 				pvcName := fmt.Sprintf("%s-%d", pvcNamePrefix, x)
-				namespace := fmt.Sprintf("%s-%s-%d", fadaNamespacePrefix, n.Name, x)
+				namespace := fmt.Sprintf("%s-%s-%d", fadaNamespacePrefix, strings.ReplaceAll(n.Addresses[0], ".", "-"), x)
 				deploymentName := fmt.Sprintf("%s-%d", fadaScName, x)
 				wg.Add(1)
 				sem <- struct{}{}
