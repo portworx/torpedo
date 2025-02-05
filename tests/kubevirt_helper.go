@@ -5,12 +5,12 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/rand"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-	"os"
 
 	"k8s.io/apimachinery/pkg/api/resource"
 	cdiv1 "kubevirt.io/containerized-data-importer-api/pkg/apis/core/v1beta1"
@@ -59,8 +59,65 @@ var (
 		the signal is sent only once even if there are multiple DVs to be added (for loop).
 		Make sure to set this to false in JustAfterEach block of test once test completes
 	*/
-	SignalSent bool
+	SignalSent   bool
+	testErrChan  chan error
+	errChannelMu sync.Mutex
 )
+
+// InitTestErrorChannel initializes (or resets) the global error channel.
+func InitTestErrorChannel() {
+	errChannelMu.Lock()
+	defer errChannelMu.Unlock()
+	testErrChan = make(chan error, 100)
+}
+
+// ResetErrorChannel discards any current errors in the channel.
+func ResetErrorChannel() {
+	errChannelMu.Lock()
+	defer errChannelMu.Unlock()
+
+	for len(testErrChan) > 0 {
+		<-testErrChan
+	}
+}
+
+// LogErrorInTest pushes an error into the global channel (if err != nil).
+func LogErrorInTest(err error) {
+	if err == nil {
+		return
+	}
+	select {
+	case testErrChan <- err:
+	default:
+		log.Warnf("Error channel is full; dropping error: %v", err)
+	}
+}
+
+// LogAndReturnIfErr If err != nil, log it to the channel and return true.
+func LogAndReturnIfErr(err error, format string, args ...interface{}) bool {
+	if err != nil {
+		LogErrorInTest(fmt.Errorf(format, args...))
+		return true
+	}
+	return false
+}
+
+// ValidateForErrors reads out all errors from the channel, aggregates them,
+// and returns a combined error if any exist.
+func ValidateForErrors() error {
+	errChannelMu.Lock()
+	defer errChannelMu.Unlock()
+
+	var errs []string
+	for len(testErrChan) > 0 {
+		e := <-testErrChan
+		errs = append(errs, e.Error())
+	}
+	if len(errs) == 0 {
+		return nil
+	}
+	return fmt.Errorf("Encountered the following errors:\n%s", strings.Join(errs, "\n"))
+}
 
 // AddDisksToKubevirtVM is a function which takes number of disks to add and adds them to the kubevirt VMs passed (Please provide size in Gi)
 func AddDisksToKubevirtVM(virtualMachines []*scheduler.Context, numberOfDisks int, size string) (bool, error) {
@@ -1577,10 +1634,15 @@ func ValidateFioInVMs(appCtxs []*scheduler.Context, canSsh bool) {
 					defer GinkgoRecover()
 					defer wg.Done()
 					vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
-					log.FailOnError(err, "Failed to get VMs from appCtx")
+					if LogAndReturnIfErr(err, "Failed to get VMs from appCtx: %v", err) {
+						return
+					}
+
 					for _, vm := range vms {
 						err = CheckFioIsRunningInVM(vm)
-						log.FailOnError(err, "Failed to validate fio in VM %s", vm.Name)
+						if LogAndReturnIfErr(err, "Failed to validate fio in VM %s: %v", vm.Name, err) {
+							return
+						}
 					}
 				}(appCtx)
 			}
@@ -1601,10 +1663,15 @@ func ValidateVMUptime(appCtxs []*scheduler.Context, canSsh bool, initialUptime m
 					defer GinkgoRecover()
 					defer wg.Done()
 					vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
-					log.FailOnError(err, "Failed to get VMs from appCtx")
+					if LogAndReturnIfErr(err, "Failed to get VMs from appCtx: %v", err) {
+						return
+					}
+
 					for _, vm := range vms {
 						err = CheckVMUptime(vm, initialUptime)
-						log.FailOnError(err, "Failed to validate uptime in VM %s", vm.Name)
+						if LogAndReturnIfErr(err, "Failed to validate uptime in VM %s: %v", vm.Name, err) {
+							return
+						}
 					}
 				}(appCtx)
 			}
@@ -1724,105 +1791,105 @@ func WaitForHotplugVolumeDetached(namespace, vmName, dvName string, timeout, ret
 }
 
 func CheckIsDiskSizeFullInVM(vm kubevirtv1.VirtualMachine) (bool, error) {
-    ipAddress, err := GetVMIPAddress(vm)
-    if err != nil {
-        return false, fmt.Errorf("failed to get IP address: %w", err)
-    }
+	ipAddress, err := GetVMIPAddress(vm)
+	if err != nil {
+		return false, fmt.Errorf("failed to get IP address: %w", err)
+	}
 
-    lastDiskUsage := make(map[string]int)  //Track last known usage per disk
-    lastUpdateTime := make(map[string]time.Time) //Track when each disk was last updated
-    checkInterval := 5 * time.Second
-    maxWaitTime := 5 * time.Minute
+	lastDiskUsage := make(map[string]int)        //Track last known usage per disk
+	lastUpdateTime := make(map[string]time.Time) //Track when each disk was last updated
+	checkInterval := 5 * time.Second
+	maxWaitTime := 5 * time.Minute
 
-    for {
-        log.Infof("Checking disk usage for VM [%s]...", vm.Name)
+	for {
+		log.Infof("Checking disk usage for VM [%s]...", vm.Name)
 
-        cmd := "df -kh"
-        output, err := RunCommandInVM(ipAddress, cmd)
-        if err != nil {
-            return false, fmt.Errorf("failed to run command in VM: %w", err)
-        }
-        log.Infof("Disk usage output for VM [%s]:\n%s", vm.Name, output)
+		cmd := "df -kh"
+		output, err := RunCommandInVM(ipAddress, cmd)
+		if err != nil {
+			return false, fmt.Errorf("Failed to run command in VM: %w", err)
+		}
+		log.Infof("Disk usage output for VM [%s]:\n%s", vm.Name, output)
 
-        diskUsage, err := getDiskSize(output)
-        if err != nil {
-            return false, fmt.Errorf("failed to check disk usage, error : [%v]", err)
-        }
-        log.Infof("Current Disk Usage: %v", diskUsage)
+		diskUsage, err := getDiskSize(output)
+		if err != nil {
+			return false, fmt.Errorf("Failed to check disk usage, error : [%v]", err)
+		}
+		log.Infof("Current Disk Usage: %v", diskUsage)
 
-        allFull := true
-        for mount, usage := range diskUsage {
-            log.Infof("Checking disk [%s]: usage [%v%%]", mount, usage)
-            if usage < 100 {
-                allFull = false
-            }
-        }
+		allFull := true
+		for mount, usage := range diskUsage {
+			log.Infof("Checking disk [%s]: usage [%v%%]", mount, usage)
+			if usage < 100 {
+				allFull = false
+			}
+		}
 
-        if allFull {
-            log.Infof("All disks are full. Exiting successfully...")
-            return true, nil
-        }
+		if allFull {
+			log.Infof("All disks are full. Exiting successfully...")
+			return true, nil
+		}
 
-        // Check each disk separately for 5 minutes of no progress
-        for mount, currentUsage := range diskUsage {
-            lastUsage, exists := lastDiskUsage[mount]
+		// Check each disk separately for 5 minutes of no progress
+		for mount, currentUsage := range diskUsage {
+			lastUsage, exists := lastDiskUsage[mount]
 
-            if !exists || currentUsage > lastUsage {
-                // Disk usage increased → Reset timer for this disk
-                lastUpdateTime[mount] = time.Now()
-                log.Infof("Disk [%s] usage increased from [%d%%] to [%d%%]. Resetting timer.", mount, lastUsage, currentUsage)
-            } else {
-                // Disk usage has NOT increased → Check if 5 minutes have passed
-                timeUnchanged := time.Since(lastUpdateTime[mount])
-                log.Infof("Disk [%s] has been at [%d%%] for [%v] seconds.", mount, currentUsage, timeUnchanged.Seconds())
+			if !exists || currentUsage > lastUsage {
+				// Disk usage increased → Reset timer for this disk
+				lastUpdateTime[mount] = time.Now()
+				log.Infof("Disk [%s] usage increased from [%d%%] to [%d%%]. Resetting timer.", mount, lastUsage, currentUsage)
+			} else {
+				// Disk usage has NOT increased → Check if 5 minutes have passed
+				timeUnchanged := time.Since(lastUpdateTime[mount])
+				log.Infof("Disk [%s] has been at [%d%%] for [%v] seconds.", mount, currentUsage, timeUnchanged.Seconds())
 
-                if timeUnchanged >= maxWaitTime {
-                    log.Errorf("Disk [%s] usage has been stuck at [%d%%] for 5 minutes. Exiting...", mount, currentUsage)
-                    return false, fmt.Errorf("Disk [%s] usage unchanged at [%d%%] for 5 minutes. Exiting.", mount, currentUsage)
-                }
-            }
-        }
+				if timeUnchanged >= maxWaitTime {
+					log.Errorf("Disk [%s] usage has been stuck at [%d%%] for 5 minutes. Exiting...", mount, currentUsage)
+					return false, fmt.Errorf("Disk [%s] usage unchanged at [%d%%] for 5 minutes. Exiting...", mount, currentUsage)
+				}
+			}
+		}
 
-        // Update last known disk usage for next iteration
-        lastDiskUsage = diskUsage
-        log.Infof("Not all disks are full. Retrying in [%v]...", checkInterval)
-        time.Sleep(checkInterval) // Sleep before retrying
-    }
+		// Update last known disk usage for next iteration
+		lastDiskUsage = diskUsage
+		log.Infof("Not all disks are full. Retrying in [%v]...", checkInterval)
+		time.Sleep(checkInterval) // Sleep before retrying
+	}
 }
 
 // Updated `getDiskSize` function to handle multiple disks
 func getDiskSize(output string) (map[string]int, error) {
-    lines := strings.Split(output, "\n")
-    diskUsage := make(map[string]int) 
+	lines := strings.Split(output, "\n")
+	diskUsage := make(map[string]int)
 
-    for _, line := range lines {
-        parts := strings.Fields(line)
-        if len(parts) < 6 {
-            continue
-        }
+	for _, line := range lines {
+		parts := strings.Fields(line)
+		if len(parts) < 6 {
+			continue
+		}
 
-        mountPoint := parts[len(parts)-1]
-        if strings.HasPrefix(mountPoint, "/mnt/disks/") { 
-            usageStr := parts[4] // "Use%" column
-            if strings.HasSuffix(usageStr, "%") {
-                usage, err := strconv.Atoi(strings.TrimSuffix(usageStr, "%"))
-                if err != nil {
-                    return nil, fmt.Errorf("Failed to parse usage for mount point [%s]: [%v]", mountPoint, err)
-                }
+		mountPoint := parts[len(parts)-1]
+		if strings.HasPrefix(mountPoint, "/mnt/disks/") {
+			usageStr := parts[4] // "Use%" column
+			if strings.HasSuffix(usageStr, "%") {
+				usage, err := strconv.Atoi(strings.TrimSuffix(usageStr, "%"))
+				if err != nil {
+					return nil, fmt.Errorf("Failed to parse usage for mount point [%s]: [%v]", mountPoint, err)
+				}
 
-                // Store disk usage in map
-                diskUsage[mountPoint] = usage
-                log.Infof("Captured disk [%s] with usage [%v%%]", mountPoint, usage)
-            }
-        }
-    }
+				// Store disk usage in map
+				diskUsage[mountPoint] = usage
+				log.Infof("Captured disk [%s] with usage [%v%%]", mountPoint, usage)
+			}
+		}
+	}
 
-    if len(diskUsage) == 0 {
-        log.Errorf("No valid disks found in `df -kh` output! This might be an issue.")
-        return nil, fmt.Errorf("No valid disk usage found")
-    }
-    log.Infof("Final Disk Usage Data: %v", diskUsage)
-    return diskUsage, nil
+	if len(diskUsage) == 0 {
+		log.Errorf("No valid disks found in `df -kh` output! This might be an issue.")
+		return nil, fmt.Errorf("No valid disk usage found")
+	}
+	log.Infof("Final Disk Usage Data: %v", diskUsage)
+	return diskUsage, nil
 }
 
 func UpgradePortworxDriverForKubevirtVM(upgradeEndpoints string) error {
@@ -2233,4 +2300,44 @@ func ColdPlugDataVolumesToKubevirtVM(virtualMachines []*scheduler.Context, numbe
 		}
 	}
 	return true, nil
+}
+
+// GatherInitialUptimeAndNode gathers the initial uptime and node of the VMs
+func GatherInitialUptimeAndNode(appCtxs []*scheduler.Context) (map[string]time.Duration, map[string]string, error) {
+	initialUptime := make(map[string]time.Duration)
+	initialNodeName := make(map[string]string)
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	for _, appCtx := range appCtxs {
+		wg.Add(1)
+		go func(appCtx *scheduler.Context) {
+			defer GinkgoRecover()
+			defer wg.Done()
+
+			vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
+			if LogAndReturnIfErr(err, "Failed to get VMs from appCtx: %v", err) {
+				return
+			}
+			for _, vm := range vms {
+				uptime, err := GetVMUptime(vm)
+				if LogAndReturnIfErr(err, "Failed to get uptime from VM %s: %v", vm.Name, err) {
+					return
+				}
+				nodeName, err := GetNodeOfVM(vm)
+				if LogAndReturnIfErr(err, "Failed to get node of VM %s: %v", vm.Name, err) {
+					return
+				}
+				mu.Lock()
+				initialUptime[fmt.Sprintf("%s/%s", vm.Namespace, vm.Name)] = uptime
+				initialNodeName[fmt.Sprintf("%s/%s", vm.Namespace, vm.Name)] = nodeName
+				mu.Unlock()
+			}
+		}(appCtx)
+	}
+	wg.Wait()
+	if aggregatedErr := ValidateForErrors(); aggregatedErr != nil {
+		return nil, nil, aggregatedErr
+	}
+	return initialUptime, initialNodeName, nil
 }
