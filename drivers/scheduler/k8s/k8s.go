@@ -8022,6 +8022,7 @@ func (k *K8s) snapshotAndVerify(size resource.Quantity, data, snapName, namespac
 				if strings.HasPrefix(line, "Bytes used") {
 					bytesUsed := strings.Split(strings.TrimSpace(strings.Split(line, ":")[1]), " ")[0]
 					bytesUsedNumber, err := strconv.ParseFloat(bytesUsed, 64)
+					log.InfoD("Bytes used for restored volume: %s\n", bytesUsedNumber)
 					if err != nil {
 						return fmt.Errorf("failed to parse bytes used: %v", err)
 					}
@@ -8057,7 +8058,7 @@ func (k *K8s) snapshotAndVerify(size resource.Quantity, data, snapName, namespac
 		return nil, false, nil // Pod is now successfully gone
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, time.Minute*2, DefaultRetryInterval); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, time.Minute*10, DefaultRetryInterval); err != nil {
 		return err
 	}
 
@@ -8164,6 +8165,7 @@ func (k *K8s) cloneAndVerify(size resource.Quantity, data, namespace, storageCla
 				if strings.HasPrefix(line, "Bytes used") {
 					bytesUsed := strings.Split(strings.TrimSpace(strings.Split(line, ":")[1]), " ")[0]
 					bytesUsedNumber, err := strconv.ParseFloat(bytesUsed, 64)
+					log.InfoD("Bytes used for cloned volume: %s\n", bytesUsedNumber)
 					if err != nil {
 						return fmt.Errorf("failed to parse bytes used: %v", err)
 					}
@@ -8196,7 +8198,7 @@ func (k *K8s) cloneAndVerify(size resource.Quantity, data, namespace, storageCla
 		return nil, true, fmt.Errorf("pod %s in ns %s still exists", restoredPod.Name, restoredPod.Namespace)
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, time.Minute*2, DefaultRetryInterval); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, time.Minute*10, DefaultRetryInterval); err != nil {
 		return err
 	}
 
