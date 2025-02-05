@@ -969,25 +969,25 @@ func IsPoolAddDiskSupported() bool {
 	DMthin, err := IsDMthin()
 	log.FailOnError(err, "Error occured while checking if DMthin is enabled")
 	if DMthin {
-		dmthinSupportedPxVersion, px_err := semver.NewVersion("3.1.0")
-		if px_err != nil {
-			log.FailOnError(px_err, "Error occured :%s")
+		dmthinSupportedPxVersion, pxErr := semver.NewVersion("3.1.0")
+		if pxErr != nil {
+			log.FailOnError(pxErr, "Error occured :%s")
 		}
-		driverVersion, version_err := Inst().V.GetDriverVersion()
-		if version_err != nil {
-			log.FailOnError(version_err, "Error occured while fetching current version")
+		driverVersion, versionErr := Inst().V.GetDriverVersion()
+		if versionErr != nil {
+			log.FailOnError(versionErr, "Error occured while fetching current version")
 		}
-		var new_trimmedVersion string
+		var newTrimmedversion string
 		parts := strings.Split(driverVersion, "-")
 		trimmedVersion := strings.Split(parts[0], ".")
 		if len(trimmedVersion) > 3 {
-			new_trimmedVersion = strings.Join(trimmedVersion[:3], ".")
+			newTrimmedversion = strings.Join(trimmedVersion[:3], ".")
 		} else {
-			new_trimmedVersion = parts[0]
+			newTrimmedversion = parts[0]
 		}
-		currentPxVersionOnCluster, semver_err := semver.NewVersion(new_trimmedVersion)
-		if semver_err != nil {
-			log.FailOnError(semver_err, "Error occured while comparing the current and expected version")
+		currentPxVersionOnCluster, semverErr := semver.NewVersion(newTrimmedversion)
+		if semverErr != nil {
+			log.FailOnError(semverErr, "Error occured while comparing the current and expected version")
 		}
 		log.InfoD(fmt.Sprintf("The current version on the cluster is :%s", currentPxVersionOnCluster))
 		if currentPxVersionOnCluster.GreaterThan(dmthinSupportedPxVersion) {
@@ -9773,7 +9773,6 @@ func GetPoolExpansionEligibility(stNode *node.Node, expandType opsapi.SdkStorage
 						if expectedNodeDrivesAfterExpansion > maxCloudDrives {
 							log.Infof("node %s  will reach max drives if pool %s expanded to size [%v] using add-drive", stNode.Name, pool.Uuid, targetSizeGiB)
 							eligibilityMap[pool.Uuid] = false
-							eligibilityMap[stNode.Id] = false
 						}
 
 					}

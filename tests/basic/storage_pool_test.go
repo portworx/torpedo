@@ -721,6 +721,10 @@ var _ = Describe("{AddNewPoolWhileRebalance}", Label("p0", "positive", "pool_ops
 	stepLog := "has to schedule apps, and expand it by resizing a disk"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
+		isPoolAddDiskSupported := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			Skip("Add disk operation is not supported for DMThin Setup")
+		}
 		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -751,7 +755,7 @@ var _ = Describe("{AddNewPoolWhileRebalance}", Label("p0", "positive", "pool_ops
 			}
 		}
 
-		if &nodeSelected == nil {
+		if &nodeSelected == nil || nodeSelected.Name == "" {
 			dash.VerifyFatal(false, true, "unable to identify the node for add new pool")
 		}
 	poolloop:
@@ -8699,6 +8703,10 @@ var _ = Describe("{ResyncFailedPoolOutOfRebalance}", Label("p1", "positive", "po
 
 	stepLog := "Resync volume after rebalance"
 	It(stepLog, func() {
+		isPoolAddDiskSupported := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			Skip("Add disk operation is not supported for DMThin Setup")
+		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
