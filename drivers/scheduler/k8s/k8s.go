@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	baseErrors "errors"
 	"fmt"
-	"github.com/hashicorp/go-version"
 	"io"
 	"io/ioutil"
 	random "math/rand"
@@ -22,6 +21,8 @@ import (
 	"sync"
 	"text/template"
 	"time"
+
+	"github.com/hashicorp/go-version"
 
 	pxutil "github.com/pure-px/px-operator/drivers/storage/portworx/util"
 
@@ -3794,6 +3795,8 @@ func (k *K8s) DeleteTasks(ctx *scheduler.Context, opts *scheduler.DeleteTasksOpt
 				}
 			}
 		} else {
+			scaledTimeout := deleteTasksWaitTimeout + time.Duration(len(pods))*3*time.Second
+			log.Infof("k8s %s scaled pod deletion timeout to %v for %v pods", fn, scaledTimeout, len(pods))
 			if err := k8sOps.DeletePods(pods, false); err != nil {
 				return &scheduler.ErrFailedToDeleteTasks{
 					App:   ctx.App,
@@ -3803,10 +3806,12 @@ func (k *K8s) DeleteTasks(ctx *scheduler.Context, opts *scheduler.DeleteTasksOpt
 
 			// Ensure the pods are deleted and removed from the system
 			for _, pod := range pods {
-				err = k8sOps.WaitForPodDeletion(pod.UID, pod.Namespace, deleteTasksWaitTimeout)
+				err = k8sOps.WaitForPodDeletion(pod.UID, pod.Namespace, scaledTimeout)
 				if err != nil {
-					log.Errorf("k8s %s failed to wait for pod: [%s] %s to terminate. err: %v", fn, pod.Namespace, pod.Name, err)
-					return fmt.Errorf("k8s %s failed to wait for pod: [%s] %s to terminate. err: %v", fn, pod.Namespace, pod.Name, err)
+					wrappedErr := fmt.Errorf("k8s %s failed to wait for pod %s/%s on node %s to terminate in %v: %w",
+						fn, pod.Namespace, pod.Name, pod.Spec.NodeName, scaledTimeout, err)
+					log.Errorf("%v", wrappedErr)
+					return wrappedErr
 				}
 			}
 		}
