@@ -8022,7 +8022,6 @@ func (k *K8s) snapshotAndVerify(size resource.Quantity, data, snapName, namespac
 				if strings.HasPrefix(line, "Bytes used") {
 					bytesUsed := strings.Split(strings.TrimSpace(strings.Split(line, ":")[1]), " ")[0]
 					bytesUsedNumber, err := strconv.ParseFloat(bytesUsed, 64)
-					log.InfoD("Bytes used for restored volume: %s\n", bytesUsedNumber)
 					if err != nil {
 						return fmt.Errorf("failed to parse bytes used: %v", err)
 					}
@@ -8165,7 +8164,6 @@ func (k *K8s) cloneAndVerify(size resource.Quantity, data, namespace, storageCla
 				if strings.HasPrefix(line, "Bytes used") {
 					bytesUsed := strings.Split(strings.TrimSpace(strings.Split(line, ":")[1]), " ")[0]
 					bytesUsedNumber, err := strconv.ParseFloat(bytesUsed, 64)
-					log.InfoD("Bytes used for cloned volume: %s\n", bytesUsedNumber)
 					if err != nil {
 						return fmt.Errorf("failed to parse bytes used: %v", err)
 					}
