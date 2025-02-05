@@ -17,7 +17,7 @@ import (
 )
 
 // This test case verifies if we can Add only three S3 backuplocation and take two backups as part of each BL and then delete one backup from each BL and verify
-var _ = Describe("{AddOnlyThreeS3BackupLocationAndTakeTwoBackupsAsPartOfEachBLAndThenDeleteOneBackupFromEachBLAndVerify}", Label(TestCaseLabelsMap[DeleteS3BackupFilesVerifyCloudBackupMissing]...), func() {
+var _ = Describe("{AddS3BackupLocationsAndTakeBackupsAsPartOfEachBLAndThenDeleteBackups}", Label(TestCaseLabelsMap[DeleteS3BackupFilesVerifyCloudBackupMissing]...), func() {
 	var (
 		backupName           string
 		scheduledAppContexts []*scheduler.Context
@@ -189,7 +189,7 @@ var _ = Describe("{AddOnlyThreeS3BackupLocationAndTakeTwoBackupsAsPartOfEachBLAn
 })
 
 // This test case verifies if we can Add multiple NFS backup location and then take multiple backup as part of each BL and delete some backups from NFS location
-var _ = Describe("{AddMultipleNFSBackupLocationAndTakeMultipleBackupAsPartOfEachBLAndDeleteSomeBackupsFromNFSLocation}", Label(TestCaseLabelsMap[RemoveJSONFilesFromNFSBackupLocation]...), func() {
+var _ = Describe("{AddNFSBackupLocationAndTakeMultipleBackupsAndDeleteSomeBackups}", Label(TestCaseLabelsMap[DeleteS3BackupFilesVerifyCloudBackupMissing]...), func() {
 	var (
 		backupName           string
 		scheduledAppContexts []*scheduler.Context
@@ -384,7 +384,7 @@ var _ = Describe("{AddMultipleNFSBackupLocationAndTakeMultipleBackupAsPartOfEach
 })
 
 // This test case verifies if we can Add two NFS BL and Add a S3 BL, create two backup as part of each BL, delete one backup content from each BL and verify
-var _ = Describe("{AddTwoNFSBLAndAddAS3BLCreateTwoBackupAsPartOfEachBLDeleteOneBackupContentFromEachBLAndVerify}", Label(TestCaseLabelsMap[RemoveJSONFilesFromNFSBackupLocation]...), func() {
+var _ = Describe("{AddNFSandS3BLCreateTwoBackupAsPartOfEachBLDeleteBackupContent}", Label(TestCaseLabelsMap[DeleteS3BackupFilesVerifyCloudBackupMissing]...), func() {
 	var (
 		backupName           string
 		scheduledAppContexts []*scheduler.Context
