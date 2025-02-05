@@ -35,6 +35,7 @@ var _ = Describe("{MultipleBackupLocationWithSameEndpoint}", Label(TestCaseLabel
 		cloudCredName                 string
 		cloudCredUID                  string
 		clusterUid                    string
+		destClusterUid                string
 		labelSelectors                map[string]string
 		wg                            sync.WaitGroup
 		userBackupMap                 = make(map[int]map[string]string)
@@ -50,6 +51,11 @@ var _ = Describe("{MultipleBackupLocationWithSameEndpoint}", Label(TestCaseLabel
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("MultipleBackupLocationWithSameEndpoint", "Create Backup and Restore for Multiple backup location added using same endpoint", nil, 84902, Ak, Q3FY24)
 		log.InfoD("scheduling applications")
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		Inst().AppList = []string{"mysql-backup"}
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
@@ -107,6 +113,8 @@ var _ = Describe("{MultipleBackupLocationWithSameEndpoint}", Label(TestCaseLabel
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
 			clusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
 		})
 		Step(fmt.Sprintf("Taking [%d] backup for the each application from px-admin", numberOfBackups), func() {
 			log.InfoD(fmt.Sprintf("Taking [%d] backup for the each application from px-admin", numberOfBackups))
@@ -158,7 +166,7 @@ var _ = Describe("{MultipleBackupLocationWithSameEndpoint}", Label(TestCaseLabel
 						namespaceMapping := map[string]string{namespace: customNamespace}
 						restoreNsMapping[restoreName] = namespaceMapping
 						mu.Unlock()
-						err := CreateRestore(restoreName, backupName, namespaceMapping, SourceClusterName, clusterUid, BackupOrgID, ctx, make(map[string]string))
+						err := CreateRestore(restoreName, backupName, namespaceMapping, DestinationClusterName, destClusterUid, BackupOrgID, ctx, make(map[string]string))
 						if err != nil {
 							mu.Lock()
 							errors = append(errors, fmt.Sprintf("Failed while taking restore [%s]. Error - [%s]", restoreName, err.Error()))
@@ -170,7 +178,6 @@ var _ = Describe("{MultipleBackupLocationWithSameEndpoint}", Label(TestCaseLabel
 			wg.Wait()
 			dash.VerifyFatal(len(errors), 0, fmt.Sprintf("Creating restores : -\n%s", strings.Join(errors, "}\n{")))
 			log.InfoD("All  mapping list %v", restoreNsMapping)
-
 		})
 
 		Step("Validating all restores", func() {
@@ -180,6 +187,15 @@ var _ = Describe("{MultipleBackupLocationWithSameEndpoint}", Label(TestCaseLabel
 			var mutex sync.Mutex
 			errors := make([]string, 0)
 			var wg sync.WaitGroup
+			defer func() {
+				log.InfoD("Switching cluster context back to cluster path to source cluster [%s]", SourceClusterName)
+				err = SetSourceKubeConfig()
+				log.FailOnError(err, "Failed switching cluster context back to cluster path  to source cluster [%s]", SourceClusterName)
+
+			}()
+			log.InfoD("switching to destination context")
+			err = SetDestinationKubeConfig()
+			log.FailOnError(err, "failed to switch to context to destination cluster")
 			for restoreName, namespaceMapping := range restoreNsMapping {
 				wg.Add(1)
 				go func(restoreName string, namespaceMapping map[string]string) {
@@ -193,6 +209,13 @@ var _ = Describe("{MultipleBackupLocationWithSameEndpoint}", Label(TestCaseLabel
 						mutex.Unlock()
 						return
 					}
+					err = RestoreSuccessCheck(restoreName, BackupOrgID, MaxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx)
+					if err != nil {
+						mutex.Lock()
+						errors = append(errors, fmt.Sprintf("Failed while checking restore [%s]. Error - [%s]", restoreName, err.Error()))
+						mutex.Unlock()
+						return
+					}
 					err = ValidateRestore(ctx, restoreName, BackupOrgID, []*scheduler.Context{expectedRestoredAppContext}, make([]string, 0))
 					if err != nil {
 						mutex.Lock()
@@ -203,7 +226,6 @@ var _ = Describe("{MultipleBackupLocationWithSameEndpoint}", Label(TestCaseLabel
 			}
 			wg.Wait()
 			dash.VerifyFatal(len(errors), 0, fmt.Sprintf("Validating restores of individual backups -\n%s", strings.Join(errors, "}\n{")))
-
 		})
 		Step("Delete all Backup locations from px-admin", func() {
 			log.InfoD("Delete Backup locations from px-admin")

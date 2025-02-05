@@ -3544,7 +3544,7 @@ var _ = Describe("{RebootNodesWhileCRRestoreIsInProgress}", Label(TestCaseLabels
 		Step("Validating the restore", func() {
 			log.InfoD("Validating the restore")
 			wg.Wait()
-			err = RestoreSuccessCheck(restoreName, BackupOrgID, 2*MaxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx)
+			err = RestoreSuccessCheck(restoreName, BackupOrgID, MaxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restore [%s]", restoreName))
 		})
 	})
@@ -3569,6 +3569,12 @@ var _ = Describe("{RebootNodesWhileCRRestoreIsInProgress}", Label(TestCaseLabels
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed applications")
 		DestroyApps(scheduledAppContexts, opts)
+		restoreNames, err := GetAllRestoresAdmin()
+		dash.VerifySafely(err, nil, "Fetching all restores")
+		for _, restore := range restoreNames {
+			err = DeleteRestore(restore, BackupOrgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore %s", restore))
+		}
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
