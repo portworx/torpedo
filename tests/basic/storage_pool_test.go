@@ -9360,6 +9360,8 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", Label("p1", "negative", "p
 		// Get Pool with running IO on the cluster
 		poolUUID := pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, 0)
 		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
+		poolNode, err := GetNodeWithGivenPoolID(poolUUID)
+		log.FailOnError(err, "failed to get node with pool id [%s]", poolUUID)
 
 		terminate := false
 		var deleteMutex sync.Mutex
@@ -9389,7 +9391,25 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", Label("p1", "negative", "p
 				if terminate {
 					break
 				}
-				err := WaitForKVDBMembers()
+
+				masterNode, err := GetKvdbMasterNode()
+				if err != nil {
+					stopRoutine()
+					log.FailOnError(err, "failed getting details of KVDB master node")
+				}
+
+				// Get KVDB Master PID
+				pid, err := GetKvdbMasterPID(*masterNode)
+				if err != nil {
+					stopRoutine()
+					log.FailOnError(err, "failed getting PID of KVDB master node")
+				}
+				log.InfoD("KVDB Master is [%v] and PID is [%v]", masterNode.Name, pid)
+
+				// Kill kvdb master PID for regular intervals
+				log.FailOnError(KillKvdbMemberUsingPid(*masterNode), "failed to kill KVDB Node")
+
+				err = WaitForKVDBMembers()
 				if err != nil {
 					stopRoutine()
 					log.FailOnError(err, "not all kvdb members in healthy state")
@@ -9413,7 +9433,15 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", Label("p1", "negative", "p
 			//Remove it once SdkStoragePool_RESIZE_TYPE_ADD_DISK is supported in dmthin
 			if dmthin, err := IsDMthin(); err == nil {
 				if !dmthin {
-					poolResizeType = append(poolResizeType, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
+					pNode, err := node.GetNodeByName(poolNode.Name)
+					eligibilityMap, err := GetPoolExpansionEligibility(&pNode, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize)
+					if err != nil {
+						return err
+					}
+					if eligibilityMap[pNode.Id] && eligibilityMap[poolUUID] {
+						poolResizeType = append(poolResizeType, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
+					}
+
 				}
 			}
 			randomIndex := rand.Intn(len(poolResizeType))

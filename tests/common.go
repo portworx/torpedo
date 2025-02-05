@@ -9752,7 +9752,18 @@ func GetPoolExpansionEligibility(stNode *node.Node, expandType opsapi.SdkStorage
 						targetIncrementInGiB = baseDiskSizeInGib
 					}
 					targetSizeGiB := poolSize + targetIncrementInGiB
+					roundUpValue := func(toRound uint64) uint64 {
+
+						if toRound%10 == 0 {
+							return toRound
+						}
+						rs := (10 - toRound%10) + toRound
+						return rs
+
+					}
+					targetSizeGiB = roundUpValue(targetSizeGiB)
 					expectedPoolDrivesAfterExpansion := int(math.Ceil(float64(targetSizeGiB) / float64(baseDiskSizeInGib)))
+					log.Infof("Expected pool drives after expansion for pool [%s] from [%d] to [%d] is [%d]", pool.Uuid, poolSize, targetSizeGiB, expectedPoolDrivesAfterExpansion)
 					if expectedPoolDrivesAfterExpansion > POOL_MAX_CLOUD_DRIVES {
 						log.Infof("pool %s will reach max drives if expanded to size [%v] using add-drive", pool.Uuid, targetSizeGiB)
 						eligibilityMap[pool.Uuid] = false
