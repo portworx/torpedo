@@ -2829,7 +2829,7 @@ var _ = Describe("{ColdAddNewDiskToKubevirtVM}", Label("p0", "positive", "kubevi
 		if canSsh {
 			ValidateFioInVMs(appCtxs, canSsh)
 		} else {
-			log.Infof("Skipping fio validation and VM Uptime validation as canSsh is false")
+			log.Infof("Skipping fio validation as canSsh is false")
 		}
 		stepLog = "Destroy Applications"
 		Step(stepLog, func() {
@@ -3502,10 +3502,9 @@ var _ = Describe("{PxKillAfterColdAddDiskToVM}", Label("p1", "negative", "kubevi
 		})
 
 		if canSsh {
-			log.Infof("Performing  VM Uptime validation as canSsh is true")
 			ValidateVMUptime(appCtxs, canSsh, initialUptime)
 		} else {
-			log.Infof("Skipping fio validation and VM Uptime validation as canSsh is false")
+			log.Infof("Skipping VM Uptime validation as canSsh is false")
 		}
 
 		stepLog = "Add another disk to the KubeVirt VM"
@@ -6212,11 +6211,12 @@ var _ = Describe("{LMAfterAddNewHotPlugDiskToKubevirtVM}", Label("p0", "positive
 		if !present {
 			app = "kubevirt-debian-fio-minimal"
 		}
-		volType = "windows"
 		if volType == "pxe-raw" {
 			app = "kubevirt-raw-vol"
 		} else if volType == "fada-raw" {
 			app = "kubevirt-fada-raw-fio"
+		} else if volType == "windows" {
+			app = "kubevirt-windows-mssql"
 		} else {
 			app = "kubevirt-debian-fio-minimal"
 		}
