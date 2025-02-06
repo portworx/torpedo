@@ -10226,8 +10226,8 @@ var _ = Describe("{PoolExpandRebalanceShutdownNode}", Label("p1", "negative", "n
 		err = WaitForExpansionToStart(poolToBeResized.Uuid)
 		log.FailOnError(err, "error when waiting for pool expansion on pool %s", poolToBeResized.Uuid)
 		var connect node.ConnectionOpts
-		connect.Timeout = 60
-		connect.TimeBeforeRetry = 10
+		connect.Timeout = 60 * time.Second
+		connect.TimeBeforeRetry = 10 * time.Second
 		err = Inst().N.ShutdownNode(*nodeDetail, node.ShutdownNodeOpts{
 			Force:          true,
 			ConnectionOpts: connect,
