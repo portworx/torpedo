@@ -8252,7 +8252,7 @@ func (k *K8s) RunCommandInPodVerbose(cmds []string, podName, containerName, name
 	var execOut, execErr bytes.Buffer
 
 	err := k8sCore.RunCommandInPodEx(&core.RunCommandInPodExRequest{
-		cmds, podName, containerName, namespace, false, nil, &execOut, &execErr,
+		Command: cmds, PODName: podName, ContainerName: containerName, Namespace: namespace, Stdout: &execOut, Stderr: &execErr,
 	})
 
 	return execOut.String(), execErr.String(), err
