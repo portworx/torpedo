@@ -3098,7 +3098,7 @@ func DeletePodWithWithoutLabelInNamespace(namespace string, label map[string]str
 		}
 		return "", false, nil
 	}
-	_, err = DoRetryWithTimeoutWithGinkgoRecover(podList, 5*time.Minute, 30*time.Second)
+	_, err = DoRetryWithTimeoutWithGinkgoRecover(podList, 5*time.Minute, 1*time.Second)
 	if err != nil {
 		return err
 	}

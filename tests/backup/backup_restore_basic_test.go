@@ -1134,7 +1134,7 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", Label(TestCaseLabelsMap[
 // BackupSyncBasicTest take a good number of backups check if backup sync is working
 var _ = Describe("{BackupSyncBasicTest}", Label(TestCaseLabelsMap[BackupSyncBasicTest]...), func() {
 	numberOfBackups, _ := strconv.Atoi(GetEnv(MaxBackupsToBeCreated, "10"))
-	timeBetweenConsecutiveBackups := 10 * time.Second
+	timeBetweenConsecutiveBackups := 20 * time.Second
 	backupNames := make([]string, 0)
 	numberOfSimultaneousBackups := 20
 	var (

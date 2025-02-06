@@ -21,35 +21,36 @@ import (
 // DeleteNfsExecutorPodWhileBackupAndRestoreInProgress deletes the nfs executor pod while backup and restore are in progress and validates their status
 var _ = Describe("{DeleteNfsExecutorPodWhileBackupAndRestoreInProgress}", Label(TestCaseLabelsMap[DeleteNfsExecutorPodWhileBackupAndRestoreInProgress]...), func() {
 	var (
-		bkpLocationName                   string
-		backupLocationUID                 string
-		schedulePolicyName                string
-		schedulePolicyUID                 string
-		scheduleName                      string
-		firstSchBackupName                string
-		customResourceBackupName          string
-		clusterUid                        string
-		singleNamespaceBackup             string
-		multiNamespaceRestore             string
-		singleNamespaceRestore            string
-		currentBackupName                 string
-		scheduleBackup                    string
-		customResourceBackup              string
-		singleNamespaceBkp                string
-		appNamespaces                     []string
-		restoreNames                      []string
-		schedulePolicyInterval            = int64(15)
-		currentContext                    []*scheduler.Context
-		contexts                          []*scheduler.Context
-		appContexts                       []*scheduler.Context
-		scheduledAppContexts              []*scheduler.Context
-		appContextsToBackup               []*scheduler.Context
-		schedulePolicyInfo                *api.SchedulePolicyInfo
-		controlChannel                    chan string
-		errorGroup                        *errgroup.Group
-		destClusterUid                    string
-		backupLocationMap                 map[string]string
-		MultiAppNfsPodDeploymentNamespace string
+		bkpLocationName                                        string
+		backupLocationUID                                      string
+		schedulePolicyName                                     string
+		schedulePolicyUID                                      string
+		scheduleName                                           string
+		firstSchBackupName                                     string
+		customResourceBackupName                               string
+		clusterUid                                             string
+		singleNamespaceBackup                                  string
+		multiNamespaceRestore                                  string
+		singleNamespaceRestore                                 string
+		currentBackupName                                      string
+		scheduleBackup                                         string
+		customResourceBackup                                   string
+		singleNamespaceBkp                                     string
+		appNamespaces                                          []string
+		restoreNames                                           []string
+		schedulePolicyInterval                                 = int64(15)
+		currentContext                                         []*scheduler.Context
+		contexts                                               []*scheduler.Context
+		appContexts                                            []*scheduler.Context
+		scheduledAppContexts                                   []*scheduler.Context
+		appContextsToBackup                                    []*scheduler.Context
+		schedulePolicyInfo                                     *api.SchedulePolicyInfo
+		controlChannel                                         chan string
+		errorGroup                                             *errgroup.Group
+		destClusterUid                                         string
+		backupLocationMap                                      map[string]string
+		MultiAppNfsPodDeploymentNamespace                      string
+		MultiAppNfsPodDeploymentNamespaceForDestinationCluster string
 	)
 
 	JustBeforeEach(func() {
@@ -183,18 +184,20 @@ var _ = Describe("{DeleteNfsExecutorPodWhileBackupAndRestoreInProgress}", Label(
 			log.InfoD("Validating restore status after deleting the respective nfs executor pod while restore is in progress")
 			multiNamespaceRestore = fmt.Sprintf("multi-ns-%s-%s-%v", RestoreNamePrefix, firstSchBackupName, RandomString(5))
 			singleNamespaceRestore = fmt.Sprintf("single-ns-%s-%s-%v", RestoreNamePrefix, singleNamespaceBackup, RandomString(5))
-			restoreToNfsExecutorPodNamespaceAndBackupMapping := map[string][]string{multiNamespaceRestore: {MultiAppNfsPodDeploymentNamespace, firstSchBackupName}, singleNamespaceRestore: {appNamespaces[0], singleNamespaceBackup}}
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			log.Infof("Switching the context to destination cluster as restore nfs executor pod are created in destination cluster")
 			err = SetDestinationKubeConfig()
 			log.FailOnError(err, "Switching context to destination cluster failed")
+			MultiAppNfsPodDeploymentNamespaceForDestinationCluster, err = GetCurrentAdminNamespace()
+			log.FailOnError(err, "Fetching stork pod namespace")
+			restoreToNfsExecutorPodNamespaceAndBackupMapping := map[string][]string{multiNamespaceRestore: {MultiAppNfsPodDeploymentNamespaceForDestinationCluster, firstSchBackupName}, singleNamespaceRestore: {appNamespaces[0], singleNamespaceBackup}}
 			for restoreName, namespaceBackup := range restoreToNfsExecutorPodNamespaceAndBackupMapping {
 				log.InfoD("Restoring the backup %s without check", namespaceBackup[1])
 				_, err = CreateRestoreWithoutCheck(restoreName, namespaceBackup[1], make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating in-progress restore [%s] from backup %s", restoreName, namespaceBackup[1]))
 				restoreNames = append(restoreNames, restoreName)
-				log.InfoD("Deleting nfs executor pod while restore %s is in progress", restoreName)
+				log.InfoD("Deleting nfs executor pod in namespace %s while restore %s is in progress", namespaceBackup[0], restoreName)
 				err = DeletePodWhileRestoreInProgress(ctx, BackupOrgID, restoreName, namespaceBackup[0], NfsRestoreExecutorPodLabel)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting nfs executor pod while restore %s is in progress", restoreName))
 				log.InfoD("Verifying restore %s status after deleting nfs executor pod", restoreName)

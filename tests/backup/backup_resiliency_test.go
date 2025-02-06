@@ -1352,11 +1352,11 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", Label(TestCaseLabelsMa
 			}
 		})
 		Step("Validating the deployed applications after node reboot", func() {
-			log.InfoD("Validating the deployed applications on destination cluster after node reboot")
+			log.InfoD("Validating the deployed applications on destination cluster after two worker nodes are reboot")
 			ValidateApplications(scheduledAppContexts)
 		})
-		Step("Validating backup after one worker node on application cluster is rebooted", func() {
-			log.InfoD("Validating backup after one worker node on application cluster is rebooted")
+		Step("Validating backup after two worker node on application cluster are rebooted", func() {
+			log.InfoD("Validating backup after two worker node on application cluster are rebooted")
 			for _, backupName := range newBackupNames {
 				err := ValidateBackup(ctx, backupName, BackupOrgID, newAppContextsToBackupMap[backupName], []string{})
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Validating backup %s", backupName))
