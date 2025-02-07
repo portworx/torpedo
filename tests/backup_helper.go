@@ -151,7 +151,7 @@ const (
 	MaxBackupsToBeCreated                     = "MAX_BACKUPS"
 	VolCountForParallelDelete                 = "TOTAL_VOLUME_COUNT"
 	MaxWaitPeriodForBackupCompletionInMinutes = 40
-	MaxWaitPeriodForRestoreCompletionInMinute = 180
+	MaxWaitPeriodForRestoreCompletionInMinute = 600
 	MaxWaitPeriodForBackupJobCancellation     = 20
 	MaxWaitPeriodForRestoreJobCancellation    = 20
 	RestoreJobCancellationRetryTime           = 30

@@ -1409,7 +1409,7 @@ var _ = Describe("{ValidateParallelScheduleWithNetworkLatency}", Label(TestCaseL
 			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
 			appContexts := ScheduleApplications(taskName)
 			for _, appCtx := range appContexts {
-				appCtx.ReadinessTimeout = 300 * time.Minute
+				appCtx.ReadinessTimeout = 600 * time.Minute
 				scheduledAppContexts = append(scheduledAppContexts, appCtx)
 				namespaces = append(namespaces, appCtx.ScheduleOptions.Namespace)
 				appNodes, _ := Inst().S.GetNodesForApp(appCtx)
@@ -1431,15 +1431,15 @@ var _ = Describe("{ValidateParallelScheduleWithNetworkLatency}", Label(TestCaseL
 			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
-		Step("Setting cluster-wide average network bandwidth to 300MiB/s", func() {
-			err := ThrottleNetworkSpeed(300)
-			dash.VerifyFatal(err, nil, "Setting cluster-wide average network bandwidth to 300MiB/s")
+		Step("Setting cluster-wide average network bandwidth to 200MiB/s", func() {
+			err := ThrottleNetworkSpeed(200)
+			dash.VerifyFatal(err, nil, "Setting cluster-wide average network bandwidth to 200MiB/s")
 
 			err = SetDestinationKubeConfig()
 			log.FailOnError(err, "Switching context to destination cluster failed")
 
-			err = ThrottleNetworkSpeed(300)
-			dash.VerifyFatal(err, nil, "Setting cluster-wide average network bandwidth to 300MiB/s")
+			err = ThrottleNetworkSpeed(200)
+			dash.VerifyFatal(err, nil, "Setting cluster-wide average network bandwidth to 200MiB/s")
 
 			defer func() {
 				err = SetSourceKubeConfig()
@@ -1513,6 +1513,14 @@ var _ = Describe("{ValidateParallelScheduleWithNetworkLatency}", Label(TestCaseL
 			dash.VerifyFatal(err, nil, "Checking if first local Snapshots are created or not")
 		})
 
+		Step("Writing data into the application pods", func() {
+			log.InfoD("Writing data into the application pods")
+			for _, namespace := range namespaces {
+				err := PopulateDataInNamespacePods(namespace, 1024)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Writing data to the pods in namespace [%s]", namespaces))
+			}
+		})
+
 		Step("Waiting for second schedule backup of application from source cluster when network delay is injected", func() {
 			log.InfoD("Waiting for second schedule backup of application from source cluster when network delay is injected")
 			ctx, err := backup.GetAdminCtxFromSecret()
@@ -1529,6 +1537,14 @@ var _ = Describe("{ValidateParallelScheduleWithNetworkLatency}", Label(TestCaseL
 			backupNames = append(backupNames, secondScheduleBackupName)
 			err = ValidateLocalSnapshotCompleted(secondScheduleBackupName, BackupOrgID, 1, ctx)
 			dash.VerifyFatal(err, nil, "Checking if second local Snapshots are created or not")
+		})
+
+		Step("Writing data into the application pods", func() {
+			log.InfoD("Writing data into the application pods")
+			for _, namespace := range namespaces {
+				err := PopulateDataInNamespacePods(namespace, 1024)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Writing data to the pods in namespace [%s]", namespaces))
+			}
 		})
 
 		Step("waiting for the third schedule backup to complete with success state", func() {
@@ -1626,7 +1642,7 @@ var _ = Describe("{ValidateParallelScheduleWithNetworkLatency}", Label(TestCaseL
 						mutex.Unlock()
 						return
 					}
-					err = RestoreSuccessCheck(restoreName, BackupOrgID, MaxWaitPeriodForRestoreCompletionInMinute*10*time.Minute, 30*time.Second, ctx)
+					err = RestoreSuccessCheck(restoreName, BackupOrgID, MaxWaitPeriodForRestoreCompletionInMinute*15*time.Minute, 30*time.Second, ctx)
 					if err != nil {
 						mutex.Lock()
 						errors = append(errors, fmt.Sprintf("Failed while checking restore [%s]. Error - [%s]", restoreName, err.Error()))
