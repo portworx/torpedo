@@ -1832,6 +1832,11 @@ func CheckIsDiskSizeFullInVM(vm kubevirtv1.VirtualMachine) (bool, error) {
 
 		// Check each disk separately for 5 minutes of no progress
 		for mount, currentUsage := range diskUsage {
+			if currentUsage == 100 {
+				log.Infof("Disk [%s] is full (100%%). Skipping checks for this disk.", mount)
+				continue
+			}
+
 			lastUsage, exists := lastDiskUsage[mount]
 
 			if !exists || currentUsage > lastUsage {
