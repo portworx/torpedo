@@ -1587,7 +1587,7 @@ func GetVolumeWithMinimumSize(contexts []*scheduler.Context, size uint64) (*volu
 		}
 		return nil, true, fmt.Errorf("error getting volume with size atleast %d GiB used", size)
 	}
-	_, err := task.DoRetryWithTimeout(f, 120*time.Minute, retryTimeout)
+	_, err := task.DoRetryWithTimeout(f, 180*time.Minute, retryTimeout)
 	return volSelected, err
 }
 
@@ -5896,12 +5896,15 @@ var _ = Describe("{PoolIncreaseSize20TB}", Label("p1", "positive", "pool_ops", "
 			}
 		})
 
+		isDmthinCluster, err := IsDMthin()
+		log.FailOnError(err, "Failed to check if DMthin enabled")
+
 		var expectedSize uint64
 		var expectedSizeWithJournal uint64
 
 		// Marking the expected size to be 20TiB
 		expectedSize = ((2048 * 1024 * 1024 * 1024 * 1024) / units.TiB) * 10
-		if IsEksCluster() {
+		if IsEksCluster() || isDmthinCluster {
 			// Marking the expected size to be 15TiB
 			expectedSize = (15 * 1024 * 1024 * 1024 * 1024 * 1024) / units.TiB
 		}
@@ -6317,7 +6320,7 @@ func appsValidateAndDestroy(contexts []*scheduler.Context) {
 var _ = Describe("{VolDeletePoolExpand}", Label("p0", "positive", "px_vol_ops", "pool_ops", "PoolExpand"), func() {
 	/*
 		1) Deploy px with cloud drive.
-		2) Create a large volume on that pool and write 200G on the volume.
+		2) Create a large volume on that pool and write 150G on the volume.
 		3) Update the label for the pool before expand
 		4) perform volume delete
 		5) Expand by resize the pool when delete is in progress
@@ -6330,14 +6333,14 @@ var _ = Describe("{VolDeletePoolExpand}", Label("p0", "positive", "px_vol_ops", 
 	var runID int
 	JustBeforeEach(func() {
 
-		StartTorpedoTest("VolDeletePoolExpand", "Delete volume which has ~200G data and do an expansion of pool by resize", nil, testrailID)
+		StartTorpedoTest("VolDeletePoolExpand", "Delete volume which has ~150G data and do an expansion of pool by resize", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 
 	})
 	var contexts []*scheduler.Context
 	var newContexts []*scheduler.Context
 
-	stepLog := "should get the existing storage node and write ~200G data to a volume"
+	stepLog := "should get the existing storage node and write ~150G data to a volume"
 
 	It(stepLog, func() {
 
@@ -6357,14 +6360,14 @@ var _ = Describe("{VolDeletePoolExpand}", Label("p0", "positive", "px_vol_ops", 
 
 		ValidateApplications(contexts)
 
-		log.Infof("Need to check if volume is close to 200G occupied")
-		vol, err := GetVolumeWithMinimumSize(contexts, 200)
+		log.Infof("Need to check if volume is close to 150G occupied")
+		vol, err := GetVolumeWithMinimumSize(contexts, 150)
 
 		dash.VerifyFatal(err, nil, "Checking if the desired volume is obtained")
 		volID := vol.ID
 		volName := vol.Name
 
-		log.Infof("The volume that is having size used around 200G is %s with name %s", volID, volName)
+		log.Infof("The volume that is having size used around 150G is %s with name %s", volID, volName)
 
 		var poolIDToResize string
 		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
@@ -12083,44 +12086,51 @@ var _ = Describe("{PoolResizeWhenReplOneVolinPool}", Label("p0", "positive", "po
 
 	itLog := "PoolResizeWhenReplOneVolinPool"
 	It(itLog, func() {
+		var contexts []*scheduler.Context
 		// Create px volumes with repl factor 1
-		volName := "pool-resize-repl1"
-
-		var Wg sync.WaitGroup
 		stepLog := "Create px volumes with repl factor 1"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			// Create 100 volumes with repl 1
-			Wg.Add(1)
-			go func() {
-				defer Wg.Done()
-				defer GinkgoRecover()
-				for i := 0; i < 100; i++ {
-					name := fmt.Sprintf("%s-%d", volName, i)
-					vol, err := Inst().V.CreateVolume(name, 5, 1)
-					log.FailOnError(err, "Failed to create volume")
-					log.Infof("Volume created with ID: %s", vol)
 
-				}
+			AppList := Inst().AppList
+			Inst().AppList = []string{"fio-repl1"}
+
+			defer func() {
+				Inst().AppList = AppList
 			}()
-			// Wait for 30s for some volumes to be created
-			time.Sleep(30 * time.Second)
 
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pool-vol-r1-%d", i))...)
+			}
 		})
+
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		stepLog = "Resize pool with resize disk"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			// Resize pool with resize disk
-			name := "pool-resize-repl1-0"
-			pool, err := GetPoolIDsFromVolName(name)
-			log.FailOnError(err, "Failed to get pool id's from volume name: %v", name)
+
+			var poolID string
+		outer:
+			for _, ctx := range contexts {
+				vols, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "Failed to get volumes")
+				for _, vol := range vols {
+					appVol, err := Inst().V.InspectVolume(vol.ID)
+					log.FailOnError(err, "Failed to inspect volume with id: %v", vol.ID)
+					replPools := appVol.ReplicaSets[0].PoolUuids
+					if len(replPools) == 1 {
+						poolID = replPools[0]
+						break outer
+					}
+				}
+			}
 
 			isjournal, err := IsJournalEnabled()
 			log.FailOnError(err, "Failed to check is Journal enabled")
-			//TODO Need to handle the case for multiple pools
 
-			poolID := pool[0]
 			poolToResize, err = GetStoragePoolByUUID(poolID)
 			log.FailOnError(err, "Failed to get pool using UUID %s", poolID)
 
@@ -12138,25 +12148,12 @@ var _ = Describe("{PoolResizeWhenReplOneVolinPool}", Label("p0", "positive", "po
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d' if pool has journal", expectedSize, expectedSizeWithJournal))
 
 		})
-		Wg.Wait()
 
-		//Delete all the volumes created
-		stepLog = "Delete all the volumes created"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			for i := 0; i < 100; i++ {
-				Wg.Add(1)
-				go func(i int) {
-					defer Wg.Done()
-					defer GinkgoRecover()
-					name := fmt.Sprintf("%s-%d", volName, i)
-					err := Inst().V.DeleteVolume(name)
-					log.FailOnError(err, "Failed to delete volume with name: %v", name)
-					log.InfoD("Successfully deleted volume with name: %v", name)
-				}(i)
-			}
-		})
-		Wg.Wait()
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
 	})
 })
 
@@ -14545,7 +14542,17 @@ var _ = Describe("{RebootKVDBLeaderDuringPoolResize}", Label("p0", "positive", "
 
 	It("reboots the KVDB leader node during pool resize and verifies cluster adjustments", func() {
 		// Identify the KVDB leader node & get the pool to be resized
-		stepLog := "Identify the KVDB leader node & get the pool to be resized"
+
+		var contexts []*scheduler.Context
+		stepLog := "schedule Application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rbt-kvdb-rsz-%d", i))...)
+			}
+
+		})
+		stepLog = "Identify the KVDB leader node & get the pool to be resized"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 

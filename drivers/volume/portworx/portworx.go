@@ -851,21 +851,38 @@ func (d *portworx) ListAllVolumes() ([]string, error) {
 
 func (d *portworx) CreateVolume(volName string, size uint64, haLevel int64) (string, error) {
 	volDriver := d.getVolDriver()
-	resp, err := volDriver.Create(d.getContext(),
-		&api.SdkVolumeCreateRequest{
-			Name: volName,
-			Spec: &api.VolumeSpec{
-				Size:    size,
-				HaLevel: haLevel,
-				Format:  api.FSType_FS_TYPE_EXT4,
-			},
-		})
-	if err != nil {
-		return "", fmt.Errorf("failed to create volume, Err: %v", err)
+	t := func() (interface{}, bool, error) {
+		resp, err := volDriver.Create(d.getContext(),
+			&api.SdkVolumeCreateRequest{
+				Name: volName,
+				Spec: &api.VolumeSpec{
+					Size:    size,
+					HaLevel: haLevel,
+					Format:  api.FSType_FS_TYPE_EXT4,
+				},
+			})
+
+		if err != nil {
+			if strings.Contains(err.Error(), "create failed error: exit status 5") {
+				return nil, true, fmt.Errorf("volume [%s] creation failed. Err: %v retrying", volName, err)
+			}
+			return nil, false, err
+		}
+
+		return resp.VolumeId, false, nil
 	}
 
-	log.Infof("Successfully created Portworx volume [%s], size %v, ha %v", resp.VolumeId, size, haLevel)
-	return resp.VolumeId, nil
+	gctx := context.Background()
+	gctx = context.WithValue(gctx, torpedotask.TimeBeforeRetryKey, defaultRetryInterval)
+	gctx = context.WithValue(gctx, torpedotask.TimeoutKey, defaultTimeout)
+	gctx = context.WithValue(gctx, torpedotask.TestNameKey, log.GetTestName())
+	volID, err := torpedotask.DoRetryWithTimeoutWithCtx(t, gctx)
+	if err != nil {
+		return "", fmt.Errorf("timeout after %v waiting to volume to created. Err: %v", defaultTimeout, err)
+	}
+
+	log.Infof("Successfully created Portworx volume [%s], size %v, ha %v", volID.(string), size, haLevel)
+	return volID.(string), nil
 }
 
 // CreateVolumeUsingPxctlCmd resizes a pool of a given UUID using CLI command
