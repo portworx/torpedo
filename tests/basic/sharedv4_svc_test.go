@@ -1519,6 +1519,7 @@ var _ = Describe("{CreateMlWorkloadOnSharedv4SvcWithCronJob}", Label("p0", "posi
 	})
 
 	JustAfterEach(func() {
+		defer EndTorpedoTest()
 		opts := make(map[string]bool)
 		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 		defer func() {
@@ -1537,6 +1538,8 @@ var _ = Describe("{CreateMlWorkloadOnSharedv4SvcWithCronJob}", Label("p0", "posi
 			TearDownContext(ctx, opts)
 		}
 		log.Infof("Restored original App list : [%v]", Inst().AppList)
+
+		AfterEachTest(contexts)
 	})
 })
 
