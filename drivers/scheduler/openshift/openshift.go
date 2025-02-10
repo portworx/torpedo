@@ -377,7 +377,7 @@ func (k *openshift) UpgradeScheduler(version string) error {
 	}
 	k.openshiftVersion = ocpVersion
 
-	clientVersion, err := getClientVersion()
+	clientVersion, err := GetClientVersion()
 	if err != nil {
 		return err
 	}
@@ -407,19 +407,19 @@ func (k *openshift) UpgradeScheduler(version string) error {
 		return err
 	}
 
-	if err := waitUpgradeCompletion(clientVersion); err != nil {
+	if err := WaitUpgradeCompletion(clientVersion); err != nil {
 		return err
 	}
 
 	log.Info("Waiting for all the nodes to become ready...")
-	if err := waitNodesToBeReady(); err != nil {
+	if err := WaitNodesToBeReady(); err != nil {
 		return err
 	}
 	log.Infof("Cluster is now %s", upgradeVersion)
 	return nil
 }
 
-func getClientVersion() (string, error) {
+func GetClientVersion() (string, error) {
 	t := func() (interface{}, bool, error) {
 		var output []byte
 		cmd := "oc version --client -o json|jq -r .releaseClientVersion"
@@ -625,7 +625,7 @@ func startUpgrade(upgradeVersion string) error {
 	return nil
 }
 
-func waitUpgradeCompletion(upgradeVersion string) error {
+func WaitUpgradeCompletion(upgradeVersion string) error {
 	t := func() (interface{}, bool, error) {
 		clusterVersion, err := k8sOpenshift.GetClusterVersion("version")
 		if err != nil {
@@ -656,8 +656,8 @@ func waitUpgradeCompletion(upgradeVersion string) error {
 	return nil
 }
 
-// waitNodesToBeReady waits for all nodes to become Ready and using the same k8s version
-func waitNodesToBeReady() error {
+// WaitNodesToBeReady waits for all nodes to become Ready and using the same k8s version
+func WaitNodesToBeReady() error {
 	t := func() (interface{}, bool, error) {
 		var count int
 		var k8sVersions = make(map[string]string)
@@ -668,7 +668,14 @@ func waitNodesToBeReady() error {
 			return nil, true, fmt.Errorf("failed to get nodes, Err:%v", err)
 		}
 
+		skipPXDisabledNode := false
+		var pxDisabledNodeCount int
 		for _, k8sNode := range nodeList.Items {
+			if val, ok := k8sNode.Labels["px/enabled"]; ok && val == "false" {
+				skipPXDisabledNode = true
+				pxDisabledNodeCount++
+				continue
+			}
 			for _, status := range k8sNode.Status.Conditions {
 				if status.Type == corev1.NodeReady && status.Status == corev1.ConditionTrue {
 					count++
@@ -681,6 +688,9 @@ func waitNodesToBeReady() error {
 		}
 
 		totalNodes := len(nodeList.Items)
+		if skipPXDisabledNode {
+			totalNodes = totalNodes - pxDisabledNodeCount
+		}
 		if count < totalNodes {
 			return nil, true, fmt.Errorf("nodes not ready, expected [%d] actual [%d]", totalNodes, count)
 		}

@@ -218,6 +218,9 @@ import (
 	// import scheduler drivers to invoke it's init
 	_ "github.com/pure-px/torpedo/drivers/scheduler/iks"
 
+	// import scheduler drivers to invoke it's init
+	_ "github.com/pure-px/torpedo/drivers/scheduler/rosa"
+
 	// import ocp driver to invoke it's init
 	_ "github.com/pure-px/torpedo/drivers/volume/ocp"
 
