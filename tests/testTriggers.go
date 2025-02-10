@@ -733,7 +733,7 @@ const (
 	// PowerOffNBy2PlusOneNodes power off N/2 + 1 in px-csi cluster
 	PowerOffNBy2PlusOneNodes = "powerOffNBy2PlusOneNodes"
 
-	//Add Hot Pluggable Disk to live kubevirt VM
+	//Add Hot Pluggable Disk to kubevirt VM and then live migrate
 	AddHotPlugDiskToVMAndLiveMigrate = "addHotPlugDiskToVMAndLiveMigrate"
 
 	// Bring down the node with max storage drives associated with it, verify the drives and pools on the new node.
@@ -741,6 +741,9 @@ const (
 
 	// AsyncDR node restart on source runs Async DR migration between two clusters with px restart
 	AsyncDRNodeRestartSource = "asyncdrnoderestartsource"
+
+	//Add Hot Pluggable Disk to all kubevirt VM and then live migrate
+	AddHotPlugDiskToAllVMAndLiveMigrate = "addHotPlugDiskToallVMAndLiveMigrate"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -15629,4 +15632,127 @@ func TriggerAsyncDRNodeRestartSource(contexts *[]*scheduler.Context, recordChan 
 		}
 	})
 	updateMetrics(*event)
+}
+
+func TriggerAddHotPlugDiskToAllVMAndLiveMigrate(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(AddHotPlugDiskToAllVMAndLiveMigrate)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: AddHotPlugDiskToAllVMAndLiveMigrate,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+
+	initialUptime := make(map[string]time.Duration)
+
+	stepLog := "Hot-plug a new disk to all running KubeVirt VM"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		if err != nil {
+			UpdateOutcome(event, err)
+			log.FailOnError(err, "Failed to get volume driver namespace")
+		}
+		defer ListEvents(pxNs)
+
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+
+		stepLog := "Fetching KubeVirt VMs"
+		Step(stepLog, func() {
+			vms, err := GetAllVMsFromScheduledContexts(*contexts)
+			if err != nil {
+				UpdateOutcome(event, err)
+				log.FailOnError(err, "Failed to get VMs from appCtx")
+				return
+			}
+			if len(vms) == 0 {
+				err = fmt.Errorf("No VMs found")
+				UpdateOutcome(event, err)
+				log.FailOnError(err, "No VMs found")
+				return
+			}
+			for _, vm := range vms {
+				vmNamespace := vm.Namespace
+				for _, vmCtx := range *contexts {
+					if vmCtx.App.NameSpace != vmNamespace {
+						continue //If not VM context, it would be ignored
+					}
+					app := vmCtx.App.Key // Extracting the scheduled app sepecific to VM
+
+					ValidateApplications([]*scheduler.Context{vmCtx})
+
+					//Validating bind mount, except raw apps
+					if !strings.Contains(app, "raw") {
+						log.Infof("Checking bind mount for app : [%v]", app)
+						bindMount, err := IsVMBindMounted(vmCtx, false)
+						log.FailOnError(err, "Failed to verify bind mount")
+						dash.VerifyFatal(bindMount, true, "Successfully verified bind mount ?")
+					}
+
+					//Setting volume mode based on app
+					var volumeMode string
+					if strings.Contains(app, "raw") {
+						volumeMode = "Block"
+					} else {
+						volumeMode = ""
+					}
+
+					//Creating ssh pod and setting canSsh as true for apps other than windows
+					var canSsh bool
+					if !strings.Contains(app, "windows") {
+						canSsh = CreateSSHPodAndSetCanSsh()
+						ValidateFioInVMs([]*scheduler.Context{vmCtx}, canSsh)
+					}
+					log.Infof("For VM : [%v], Scheduled app : [%v] and volumeMode : [%v] and canSsh set to : [%v]", vm.Name, app, volumeMode, canSsh)
+
+					//uptime calculation for non windows apps
+					if !strings.Contains(app, "windows") {
+						uptime, err := GetVMUptime(vm)
+						log.FailOnError(err, "Failed to get uptime from VM %s", vm.Name)
+						initialUptime[vm.Name] = uptime
+						ValidateFioInVMs([]*scheduler.Context{vmCtx}, canSsh)
+					}
+
+					vmNodeName, err := GetNodeOfVM(vm)
+					log.FailOnError(err, "Failed to get node of VM %v", vm.Name)
+					log.Infof("VM %s is currently running on node %s", vm.Name, vmNodeName)
+
+					//Adding hot pluggable disk
+					numberOfVolumes := 1
+					numberOfVMs := 1
+					log.Infof("Number of VMs selected to adding Hot Pluggable disk [%v]", numberOfVMs)
+					isHotPlugged, err := HotPlugDataVolumesToKubevirtVM([]*scheduler.Context{vmCtx}, numberOfVolumes, "50Gi", volumeMode, false, numberOfVMs)
+					log.FailOnError(err, "Failed to hot-plug DataVolume to KubeVirt VM")
+					dash.VerifyFatal(isHotPlugged, true, "Successfully Hot Plugged Data Volume to KubeVirt VM ?")
+
+					//Live migrating VM
+					err = StartAndWaitForVMIMigration(vmCtx, ctxt.TODO())
+					log.FailOnError(err, "Failed to live migrate KubeVirt VM")
+
+					//Validating bind mount, for non windows apps
+					if !strings.Contains(app, "windows") {
+						ValidateFioInVMs([]*scheduler.Context{vmCtx}, canSsh)
+						ValidateVMUptime([]*scheduler.Context{vmCtx}, canSsh, initialUptime)
+					}
+					updateMetrics(*event)
+
+				}
+			}
+			if isSSIERun() {
+				validateContexts(event, contexts)
+			}
+		})
+	})
 }
