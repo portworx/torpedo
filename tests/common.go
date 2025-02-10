@@ -4022,6 +4022,7 @@ func AfterEachTest(contexts []*scheduler.Context, ids ...int) {
 		log.Infof(">>>> FAILED TEST: %s", currentSpecReport.FullText())
 		CollectSupport()
 		DescribeNamespace(contexts)
+		PrintPxctlStatus()
 		testStatus = "Fail"
 	}
 	if len(ids) >= 2 {

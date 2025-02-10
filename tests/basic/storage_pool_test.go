@@ -9827,7 +9827,7 @@ func CreateNewPoolsOnMultipleNodesInParallel(nodes []node.Node) error {
 	}
 
 	log.InfoD("Pool Details and total pools present [%v]", poolList)
-	errChan := make(chan error, len(nodes))
+	errChan := make(chan error, len(nodes)*2)
 
 	for _, eachNode := range nodes {
 		wg.Add(1)
@@ -9849,10 +9849,18 @@ func CreateNewPoolsOnMultipleNodesInParallel(nodes []node.Node) error {
 		}(eachNode, errChan)
 	}
 	// Close the error channel once all goroutines are done
-	go func() {
-		wg.Wait()
-		close(errChan)
-	}()
+
+	wg.Wait()
+
+	for _, eachNode := range nodes {
+
+		err := Inst().V.WaitDriverUpOnNode(eachNode, addDriveUpTimeOut)
+		if err != nil {
+			errChan <- err
+		}
+	}
+
+	close(errChan)
 
 	var addCloudDriveErrs []string
 
@@ -9865,7 +9873,6 @@ func CreateNewPoolsOnMultipleNodesInParallel(nodes []node.Node) error {
 	if len(addCloudDriveErrs) > 0 {
 		concatenatedError := errors.New(strings.Join(addCloudDriveErrs, "; "))
 		return concatenatedError
-
 	}
 
 	err = Inst().V.RefreshDriverEndpoints()
