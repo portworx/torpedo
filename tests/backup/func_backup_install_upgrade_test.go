@@ -286,7 +286,7 @@ var _ = Describe("{InstallPxBackupStorageClassAndImagesCheck}", Label(TestCaseLa
 
 		Step("Validate the preflight job pod logs", func() {
 			log.InfoD("Validate the preflight job pod logs")
-			searchString := "Preflight Check failed: failed to validate images: ValidateImages: image validation failed"
+			searchString := "Preflight Check failed: failed to validate images: Image validation failed"
 			present, err := SearchPodLogs(map[string]string{"job-name": "preflight-check"}, namespace, searchString)
 			log.FailOnError(err, "Failed to search pod logs")
 			dash.VerifyFatal(present, true, "Found the expected string in the pod logs")
@@ -314,7 +314,7 @@ var _ = Describe("{InstallPxBackupStorageClassAndImagesCheck}", Label(TestCaseLa
 
 		Step("Validate the preflight job pod logs", func() {
 			log.InfoD("Validate the preflight job pod logs")
-			searchString := "Preflight Check failed: storage class check failed: failed to get storage class"
+			searchString := "Preflight Check failed: storage class check failed: Failed to get storage class"
 			present, err := SearchPodLogs(map[string]string{"job-name": "preflight-check"}, namespace, searchString)
 			log.FailOnError(err, "Failed to search pod logs")
 			dash.VerifyFatal(present, true, "Found the expected string in the pod logs")
@@ -573,7 +573,7 @@ var _ = Describe("{UpgradePxBackupStorageClassAndImagesCheck}", Label(TestCaseLa
 		namespace            string
 	)
 	JustBeforeEach(func() {
-		StartPxBackupTorpedoTest("UpgradePxBackupStorageClassAndImagesCheck", "Installing Px Backup and checking if storage class and images are validated", nil, 304880, Mkoppal, Q4FY25)
+		StartPxBackupTorpedoTest("UpgradePxBackupStorageClassAndImagesCheck", "Upgrading Px Backup and checking if storage class and images are validated", nil, 304880, Mkoppal, Q4FY25)
 		appList = Inst().AppList
 		namespace = "px-backup"
 		backupLocationMap = make(map[string]string)
@@ -610,7 +610,7 @@ var _ = Describe("{UpgradePxBackupStorageClassAndImagesCheck}", Label(TestCaseLa
 
 		Step("Validate the preflight job pod logs", func() {
 			log.InfoD("Validate the preflight job pod logs")
-			searchString := "Preflight Check failed: failed to validate images: ValidateImages: image validation failed"
+			searchString := "Preflight Check failed: failed to validate images: Image validation failed"
 			present, err := SearchPodLogs(map[string]string{"job-name": "preflight-check"}, namespace, searchString)
 			log.FailOnError(err, "Failed to search pod logs")
 			dash.VerifyFatal(present, true, "Found the expected string in the pod logs")
@@ -632,7 +632,7 @@ var _ = Describe("{UpgradePxBackupStorageClassAndImagesCheck}", Label(TestCaseLa
 
 		Step("Validate the preflight job pod logs", func() {
 			log.InfoD("Validate the preflight job pod logs")
-			searchString := "Preflight Check failed: storage class check failed: failed to get storage class"
+			searchString := "Preflight Check failed: storage class check failed: Failed to get storage class"
 			present, err := SearchPodLogs(map[string]string{"job-name": "preflight-check"}, namespace, searchString)
 			log.FailOnError(err, "Failed to search pod logs")
 			dash.VerifyFatal(present, true, "Found the expected string in the pod logs")
