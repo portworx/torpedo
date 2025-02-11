@@ -25,6 +25,7 @@ import (
 	"github.com/pure-px/torpedo/drivers/scheduler/iks"
 	"github.com/pure-px/torpedo/drivers/scheduler/oke"
 	"github.com/pure-px/torpedo/drivers/scheduler/rke"
+	"github.com/pure-px/torpedo/drivers/scheduler/rosa"
 	"github.com/pure-px/torpedo/pkg/log"
 	"github.com/pure-px/torpedo/pkg/units"
 	. "github.com/pure-px/torpedo/tests"
@@ -162,11 +163,11 @@ var _ = Describe("{UpgradeCluster}", Label("p0", "positive", "node_ops", "Upgrad
 					time.Sleep(30 * time.Minute)
 				}
 
-				// Sleep needed for EKS cluster upgrades
-				if Inst().S.String() == eks.SchedName {
-					log.Warnf("This is [%s] scheduler, during Node Group upgrades, EKS creates an extra node. "+
-						"After the Node Group upgrade is complete, EKS deletes this extra node, but it takes some time.", Inst().S.String())
-					log.Infof("Sleeping for 30 minutes to let the cluster stabilize after the upgrade..")
+				// Sleep needed for EKS or ROSA cluster upgrades
+				if Inst().S.String() == eks.SchedName || Inst().S.String() == rosa.SchedName {
+					log.Warnf("Detected [%s] scheduler. During cluster upgrades, additional nodes may be created. "+
+						"Once the upgrade is complete, these extra nodes are removed, but this process takes time.", Inst().S.String())
+					log.Infof("Sleeping for 30 minutes to allow the cluster to stabilize after the upgrade...")
 					time.Sleep(30 * time.Minute)
 				}
 
