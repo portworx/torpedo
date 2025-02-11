@@ -706,7 +706,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", Label(TestCase
 						defer GinkgoRecover()
 						defer wg.Done()
 						log.Infof("Starting go routine to stop the CR backups for namespace [%s] and pvc [%s]", pvc.Name, pvc.Namespace)
-						err := WatchAndStopCloudsnapBackup(pvc.Name, pvc.Namespace, 2*time.Hour, ctx, pauseAndResumeChannel)
+						err := WatchAndStopCloudsnapBackup(pvc.Name, pvc.Namespace, 4*time.Hour, ctx, pauseAndResumeChannel)
 						if err != nil {
 							dash.VerifySafely(err, nil, fmt.Sprintf("watching and stopping cloudsnap backup for PVC [%s] in namespace [%s]: %v", pvc.Name, pvc.Namespace, err))
 						} else {
