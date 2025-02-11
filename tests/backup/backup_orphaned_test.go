@@ -259,8 +259,14 @@ var _ = Describe("{DeleteSameNameObjectsByMultipleUsersFromAdmin}", Label(TestCa
 				log.InfoD(fmt.Sprintf("Deleting user %s schedule backups, backup schedule and schedule policy from the admin", user))
 				nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
 				log.FailOnError(err, "failed to fetch user %s ctx", user)
+				// Suspending the schedule backup before starting the schedule backup deletion
+				for _, schedulePolicyName := range userSchedulePolicyMap[user] {
+					err = SuspendBackupSchedule(userScheduleNameMap[user], schedulePolicyName, BackupOrgID, nonAdminCtx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Suspending schedule policy %s of user %s", userScheduleNameMap[user], user))
+				}
 				allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(nonAdminCtx, userScheduleNameMap[user], BackupOrgID)
 				log.FailOnError(err, "failed to get all schedule backup names with schedule name %s of the user %s", userScheduleNameMap[user], user)
+				log.InfoD("All schedule backups are %v", allScheduleBackupNames)
 				for i := len(allScheduleBackupNames) - 1; i >= 0; i-- {
 					backupName := allScheduleBackupNames[i]
 					backupUid, err := Inst().Backup.GetBackupUID(nonAdminCtx, backupName, BackupOrgID)
