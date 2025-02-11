@@ -83,7 +83,7 @@ func pureWriteRoutine(ctx *scheduler.Context, podName string, dataDir string, sh
 		if *shouldStop {
 			return
 		}
-		// Proceed to the write
+		// Proceed to write
 
 		// Get the current time in unix timestamp
 		filename := fmt.Sprintf("purewritetest-%s-%d", podName, time.Now().Unix())
@@ -2009,7 +2009,7 @@ var _ = Describe("{DrainAllNodes}", Label("p2", "positive", "node_ops"), func() 
 		    5. Uncordon node
 			6. kill the px on uncordon node
 		    6. Pick next node
-		    7. Do again steps from 3-5
+		    7. Do again step from 3-5
 	*/
 	var testrailID = 0
 	var runID int
@@ -4325,7 +4325,7 @@ var _ = Describe("{RestartPxOnStorageLessNodeForMultipleTimes}", Label("staging"
 		Step 1: few atleast 3 storageless nodes in the cluster
 		Step 2:  top Px on any one storage node - which should be a kvdb node also
 		Step 3: Restart Px on atleast 3 storageless nodes and keep killing Px atleast 5 times in quick succession
-		Step 4: Validate all apps / nodes status afterwards
+		Step 4: Validate all apps / nodes status afterward
 	*/
 
 	var (
@@ -4628,15 +4628,15 @@ var _ = Describe("{AddNewNodeWhenClusterInRunFlatState}", Label("staging", "kvdb
 				dash.VerifyFatal(*nodeStatus, opsapi.Status_STATUS_OK, fmt.Sprintf("validate PX status on node %s", kvdbNode.ID))
 			}
 
-			storagenode := node.GetStorageNodes()
-			kvdbMembers, err := Inst().V.GetKvdbMembers(storagenode[0])
+			storageNodes := node.GetStorageNodes()
+			kvdbMembers, err := Inst().V.GetKvdbMembers(storageNodes[0])
 			log.FailOnError(err, "Failed to retrieve KVDB members list")
 
 			err = kvdbutils.ValidateKVDBMembers(kvdbMembers)
 			log.FailOnError(err, "Failed to validate KVDB members")
 
-			output, err := runCmd("pxctl status", storagenode[0])
-			log.FailOnError(err, "Failed to execute pxctl status on node: %v", storagenode[0].Name)
+			output, err := runCmd("pxctl status", storageNodes[0])
+			log.FailOnError(err, "Failed to execute pxctl status on node: %v", storageNodes[0].Name)
 			dash.VerifyFatal(!strings.Contains(output, "Warning"), true, "Output contains warnings. Is the cluster healthy?")
 		})
 
@@ -4825,5 +4825,314 @@ var _ = Describe("{RecoverOldKVDBDuringBootstrap}", Label("kvdb_ops", "p1", "neg
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+// Keep volumes in resync state with one replica being in clean state , transition to no-kvdb quorum state, IOs should continue on clean node
+var _ = Describe("{HaUpdateWhenClusterInRunFlatState}", Label("staging", "kvdb_ops", "p1", "positive", "HA_Increase_Decrease"), func() {
+	/*
+		Ticket ID: https://purestorage.atlassian.net/browse/HAZEL-1051
+		Deploys apps and make sure volumes are attached to only non-kvdb nodes.
+		Increase the repl on all the volumes and at the same time make 2 kvdb nodes down
+		Validate apps are running
+
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("HaUpdateWhenClusterInRunFlatState",
+			"Keep volumes in resync state with one replica being in clean state , transition to no-kvdb quorum state, IOs should continue on clean node", nil, 0)
+	})
+
+	itLog := "Keep volumes in resync state with one replica being in clean state , transition to no-kvdb quorum state, IOs should continue on clean node"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		var (
+			contexts          []*scheduler.Context
+			selectedKvdbNodes []KvdbNode
+			kvdbNodes         []KvdbNode
+			nonKvdbNodes      []node.Node
+			wg                sync.WaitGroup
+			expectedRepl      int64
+		)
+		stepLog = "Get KVDB and Non-KVDB Nodes"
+		Step(stepLog, func() {
+			kvdbNodes, err = GetAllKvdbNodes()
+			log.FailOnError(err, "Failed to retrieve KVDB nodes")
+			storageNodes, err := GetStorageNodes()
+			log.FailOnError(err, "Failed to retrieve storage nodes")
+
+			kvdbNodeMap := make(map[string]bool)
+			for _, kvdbNode := range kvdbNodes {
+				kvdbNodeMap[kvdbNode.ID] = true
+			}
+			for _, storageNode := range storageNodes {
+				if _, exists := kvdbNodeMap[storageNode.Id]; !exists {
+					nonKvdbNodes = append(nonKvdbNodes, storageNode)
+				}
+			}
+			log.Infof("All storage nodes List are part of KVDB members: [%v]", nonKvdbNodes)
+		})
+
+		stepLog = "Schedule application on Non-KVDB node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				taskName := fmt.Sprintf("beforerunflat-%v", i)
+				context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+					AppKeys: Inst().AppList,
+					Nodes:   nonKvdbNodes,
+				})
+				log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+				contexts = append(contexts, context...)
+			}
+		})
+
+		ValidateApplications(contexts)
+
+		type volMap struct {
+			ReplSet int64
+			volObj  *volume.Volume
+		}
+		volHAMap := make([]*volMap, 0)
+
+		revertReplica := func() {
+			log.InfoD("Reverting Replicas based on volHAMap")
+			for _, eachvol := range volHAMap {
+				getReplicaSets, err := Inst().V.GetReplicaSets(eachvol.volObj)
+				log.FailOnError(err, "Failed to get replication factor on the volume")
+				if len(getReplicaSets[0].Nodes) != int(eachvol.ReplSet) {
+					log.Infof("Reverting Replication factor on Volume [%v] with ID [%v] to [%v]",
+						eachvol.volObj.Name, eachvol.volObj.ID, eachvol.ReplSet)
+					err := Inst().V.SetReplicationFactor(eachvol.volObj, eachvol.ReplSet,
+						nil, nil, true)
+					log.FailOnError(err, "failed to set replication value of Volume [%v]", eachvol.volObj.Name)
+				}
+			}
+		}
+
+		setReplOnVolumes := func(volumeSelected *volume.Volume, wait bool, wg *sync.WaitGroup, setReplErrChan chan error) {
+			defer wg.Done()
+			defer GinkgoRecover()
+			var setRepl int64
+			currRepl, err := Inst().V.GetReplicationFactor(volumeSelected)
+			if err != nil {
+				log.Infof("Failed to get Repl factor for vol %s", volumeSelected.Name)
+				setReplErrChan <- err
+				return
+			}
+
+			if currRepl == 3 {
+				log.InfoD("The current repl factor is 3, Decrease HA of all PVCs in this app to (current repl - 1) Before HA Increase!")
+				stepLog = "Decrease HA of all PVCs in this app to (current repl - 1)"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					opts := volume.Options{ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout}
+					err = Inst().V.SetReplicationFactor(volumeSelected, currRepl-1, nil, nil, true, opts)
+					if err != nil {
+						err = fmt.Errorf("err setting repl factor  to %d for  vol : %s", setRepl, volumeSelected.Name)
+						log.Infof("error while setting the repl factor %v", err)
+						setReplErrChan <- err
+					}
+				})
+			}
+
+			log.InfoD("Increase HA of all PVCs in this app to (current repl + 1)")
+			currRepl, err = Inst().V.GetReplicationFactor(volumeSelected)
+			if err != nil {
+				log.Infof("Failed to get Repl factor for vol %s", volumeSelected.Name)
+				setReplErrChan <- err
+				return
+			}
+			opts := volume.Options{ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout}
+			err = Inst().V.SetReplicationFactor(volumeSelected, currRepl+1, nil, nil, wait, opts)
+			if err != nil {
+				err = fmt.Errorf("err setting repl factor  to %d for  vol : %s", setRepl, volumeSelected.Name)
+				log.Infof("error while setting the repl factor %v", err)
+				setReplErrChan <- err
+			}
+		}
+
+		getReplFactors := func(vol *volume.Volume, wg *sync.WaitGroup) {
+			defer wg.Done()
+			defer GinkgoRecover()
+			volDet := volMap{}
+			curReplSet, err := Inst().V.GetReplicationFactor(vol)
+			log.FailOnError(err, "failed to get replication factor of the volume")
+			volDet.volObj = vol
+			volDet.ReplSet = curReplSet
+			expectedRepl = curReplSet
+			if curReplSet != 3 {
+				expectedRepl = curReplSet + 1
+			}
+			log.Infof("Volume [%v] is with HA [%v]", volDet.volObj.Name, volDet.ReplSet)
+			volHAMap = append(volHAMap, &volDet)
+		}
+
+		for _, eachCtx := range contexts {
+			vols, err := Inst().S.GetVolumes(eachCtx)
+			log.FailOnError(err, "Failed to get list of Volumes in the cluster")
+
+			for _, eachVol := range vols {
+
+				// Check if volumes are Pure FA/FB DA volumes
+				isPureVol, err := Inst().V.IsPureVolume(eachVol)
+				log.FailOnError(err, "Failed to check is PURE volume")
+				dash.VerifyFatal(isPureVol, false, fmt.Sprintf("Repl increase on Pure DA Volume [%s] not supported.Skiping this operation", eachVol.Name))
+
+				wg.Add(1)
+				log.Infof("Get Repl factor for Volume [%v]", eachVol.Name)
+				go getReplFactors(eachVol, &wg)
+			}
+		}
+		wg.Wait()
+
+		cleanup := func() {
+			log.InfoD("Executing cleanup tasks")
+			if len(selectedKvdbNodes) > 0 {
+				for _, n := range selectedKvdbNodes {
+					nodeDetails, err := node.GetNodeDetailsByNodeID(n.ID)
+					log.FailOnError(err, "Failed to retrieve node details for NodeID [%v]", n.ID)
+
+					err = Inst().V.StartDriver(nodeDetails)
+					log.FailOnError(err, "Failed to start Portworx driver on node %s", nodeDetails.Name)
+					err = Inst().V.WaitDriverUpOnNode(nodeDetails, 10*time.Minute)
+					log.FailOnError(err, "Failed to waiting for Portworx driver to start on node %s", nodeDetails.Name)
+					log.InfoD("Successfully started Portworx on KVDB node: %v", nodeDetails.Name)
+				}
+			}
+			DestroyApps(contexts, nil)
+		}
+		defer cleanup()
+
+		stepLog = "perform HA update on Volumes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			batchSize := 5
+			errOccured := false
+			// Set Repl Factor on all the volumes at ones
+			for i := 0; i < len(volHAMap); i += batchSize {
+				n := i + batchSize
+				if n > len(volHAMap) {
+					n = len(volHAMap)
+				}
+				setReplErrChan := make(chan error, batchSize)
+				for _, eachVol := range volHAMap[i:n] {
+					wg.Add(1)
+					go setReplOnVolumes(eachVol.volObj, false, &wg, setReplErrChan)
+				}
+				wg.Wait()
+				close(setReplErrChan)
+
+				for err := range setReplErrChan {
+					log.Errorf("failed to set repl factor to curr+1: %v", err)
+					errOccured = true
+				}
+				if errOccured {
+					log.FailOnError(fmt.Errorf("one or more errors occured while setting repl factor to curr+1"), "failed to set repl factor to curr+1 for the volumes")
+				}
+			}
+		})
+
+		stepLog = "Verify volume replica are in resync state"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			// Sleep for some time before checking if any resync to start
+			time.Sleep(2 * time.Minute)
+			for _, eachVol := range volHAMap {
+				if !WaitTillVolumeInResync(eachVol.volObj.ID) {
+					log.FailOnError(fmt.Errorf("volume are not in resync state"), "Failed to get Volume in Resync state [%s]", eachVol.volObj.ID)
+				}
+			}
+		})
+
+		stepLog = "Stopping Portworx service on selected KVDB nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			selectedKvdbNodes = kvdbNodes[1:]
+			log.InfoD("Selected KVDB nodes for PX service stop: %v", selectedKvdbNodes)
+			for _, kvdbNode := range selectedKvdbNodes {
+				nodeDetails, err := node.GetNodeDetailsByNodeID(kvdbNode.ID)
+				log.FailOnError(err, "Unable to retrieve node details for NodeID [%v]", kvdbNode.ID)
+
+				StopVolDriverAndWait([]node.Node{nodeDetails})
+				log.InfoD("PX service successfully stopped on node: %v", nodeDetails)
+			}
+		})
+
+		stepLog = " Verify cluster is in run-flat state"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pxNode, err := node.GetNodeDetailsByNodeID(kvdbNodes[0].ID)
+			output, err := runCmd("pxctl status", pxNode)
+			log.FailOnError(err, "Failed to execute 'pxctl status' on node: %v", pxNode.Name)
+
+			log.Infof("pxctl status output: %v\n", output)
+			expectOut := "Volume and node operations may be unavailable but I/O will continue"
+			dash.VerifyFatal(strings.Contains(output, expectOut), true, "Is cluster in run-flat state?")
+		})
+
+		stepLog = "Starting Portworx on selected KVDB nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, n := range selectedKvdbNodes {
+				nodeDetails, err := node.GetNodeDetailsByNodeID(n.ID)
+				log.FailOnError(err, "Failed to retrieve node details for NodeID [%v]", n.ID)
+
+				err = Inst().V.StartDriver(nodeDetails)
+				log.FailOnError(err, "Failed to start Portworx driver on node %s", nodeDetails.Name)
+				err = Inst().V.WaitDriverUpOnNode(nodeDetails, 10*time.Minute)
+				log.FailOnError(err, "Failed to waiting for Portworx driver to start on node %s", nodeDetails.Name)
+
+				log.InfoD("Successfully started Portworx on KVDB node: %v", nodeDetails.Name)
+			}
+		})
+
+		stepLog = "Verify all KVDB nodes are running and in a healthy state"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, kvdbNode := range kvdbNodes {
+				nodeInfo, err := node.GetNodeDetailsByNodeID(kvdbNode.ID)
+				log.FailOnError(err, "Failed to get details for KVDB node ID: %s", kvdbNode.ID)
+				nodeStatus, err := Inst().V.GetNodeStatus(nodeInfo)
+				dash.VerifyFatal(*nodeStatus, opsapi.Status_STATUS_OK, fmt.Sprintf("validate PX status on node %s", kvdbNode.ID))
+			}
+
+			storageNodes := node.GetStorageNodes()
+			kvdbMembers, err := Inst().V.GetKvdbMembers(storageNodes[0])
+			log.FailOnError(err, "Failed to retrieve KVDB members list")
+
+			err = kvdbutils.ValidateKVDBMembers(kvdbMembers)
+			log.FailOnError(err, "Failed to validate KVDB members")
+
+			output, err := runCmd("pxctl status", storageNodes[0])
+			log.FailOnError(err, "Failed to execute pxctl status on node: %v", storageNodes[0].Name)
+			dash.VerifyFatal(!strings.Contains(output, "Warning"), true, "Output contains warnings. Is the cluster healthy?")
+		})
+
+		stepLog = "Verify HA update is successful"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, vol := range volHAMap {
+				err = ValidateReplFactorUpdate(vol.volObj, expectedRepl)
+				if err != nil {
+					replStatus, err1 := GetVolumeReplicationStatus(vol.volObj)
+					log.FailOnError(err1, fmt.Sprintf("failed to get repl status for the vol %s", vol.volObj.Name))
+					log.Infof("got replication status for the vol %s as %s", vol.volObj.Name, replStatus)
+					log.FailOnError(err, "error in ha-increase after pool resize")
+				}
+				log.Infof("verified HA update for the vol %s", vol.volObj.ID)
+			}
+		})
+
+		stepLog = "Revert replica and validate applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			revertReplica()
+			ValidateApplications(contexts)
+		})
+	})
+
+	JustAfterEach(func() {
+		EndTorpedoTest()
+		AfterEachTest(contexts)
 	})
 })
