@@ -741,9 +741,13 @@ const (
 
 	// AsyncDR node restart on source runs Async DR migration between two clusters with px restart
 	AsyncDRNodeRestartSource = "asyncdrnoderestartsource"
-
-	//Add Hot Pluggable Disk to all kubevirt VM and then live migrate
+  
+  //Add Hot Pluggable Disk to all kubevirt VM and then live migrate
 	AddHotPlugDiskToAllVMAndLiveMigrate = "addHotPlugDiskToallVMAndLiveMigrate"
+
+	// AsyncDR node restart on destination runs Async DR migration between two clusters with px restart
+	AsyncDRNodeRestartDestination = "asyncdrnoderestartdestination"
+
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -15755,4 +15759,139 @@ func TriggerAddHotPlugDiskToAllVMAndLiveMigrate(contexts *[]*scheduler.Context, 
 			}
 		})
 	})
+}
+
+// TriggerAsyncDRNodeRestartDestination triggers Async DR with node restart on source
+func TriggerAsyncDRNodeRestartDestination(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(AsyncDRNodeRestartDestination)
+	defer ginkgo.GinkgoRecover()
+	log.Infof("Async DR Node restart on destination trigger triggered at: %v", time.Now())
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: AsyncDRNodeRestartDestination,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	chaosLevel := ChaosMap[AsyncDRNodeRestartDestination]
+	var (
+		migrationNamespaces   []string
+		clusterPairName       string
+		defaultBackupLocation = "s3"
+		defaultNs             = "kube-system"
+		defaultSecret         = "s3secret"
+		allMigrations         []*storkv1.Migration
+	)
+
+	stepLog := fmt.Sprintf("Deploy applications for migration, with frequency: %v", chaosLevel)
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+		err := asyncdr.WriteKubeconfigToFiles()
+		if err != nil {
+			log.Errorf("Failed to write kubeconfig: %v", err)
+			UpdateOutcome(event, err)
+			return
+		}
+
+		err = SetSourceKubeConfig()
+		if err != nil {
+			log.Errorf("Failed to Set source kubeconfig: %v", err)
+			UpdateOutcome(event, err)
+			return
+		}
+
+		stepLog := "Get migration namespace from application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range *contexts {
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, "")
+				migrationNamespaces = append(migrationNamespaces, namespace)
+			}
+			ValidateApplications(*contexts)
+			log.Infof("Migration Namespaces: %v", migrationNamespaces)
+		})
+
+		stepLog = "Creating cluster pair and starting migration schedule"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			clusterPairName = asyncdr.DefaultClusterPairName + strconv.Itoa(int(time.Now().Unix()))
+			err = ScheduleBidirectionalClusterPair(clusterPairName, defaultNs, "", storkapi.BackupLocationType(defaultBackupLocation), defaultSecret, "async-dr", asyncdr.FirstCluster, asyncdr.SecondCluster, nil)
+			if err != nil {
+				log.Errorf("failed to create clusterpair: %v", err)
+				UpdateOutcome(event, err)
+				return
+			}
+			log.InfoD("Clusterpair [%v] created and validated successfuly on namespace [%v]", clusterPairName, defaultNs)
+		})
+	})
+
+	stepLog = "Restart node on the destination while migration is in progress"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+
+		for i, currMigNamespace := range migrationNamespaces {
+			migrationName := migrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
+			currMig, err := asyncdr.CreateMigration(migrationName, defaultNs, clusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag, nil)
+			if err != nil {
+				UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
+				return
+			}
+			allMigrations = append(allMigrations, currMig)
+
+			Step("Restart Portworx", func() {
+				err = SetDestinationKubeConfig()
+				if err != nil {
+					log.Errorf("Failed to Set destination kubeconfig: %v", err)
+					UpdateOutcome(event, err)
+					return
+				}
+
+				nodesToRestart := node.GetStorageNodes()
+				nodeIndex := rand.Intn(len(nodesToRestart))
+				log.Infof("Restarting node: %v", nodesToRestart[nodeIndex].Name)
+				err = Inst().N.RebootNodeAndWait(nodesToRestart[nodeIndex])
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("failed to reboot node  %v. Error: [%v]", nodesToRestart[nodeIndex].Name, err))
+					return
+				}
+				err = Inst().V.WaitDriverUpOnNode(nodesToRestart[nodeIndex], 10*time.Minute)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("failed to wait for px up on node  %v. Error: [%v]", nodesToRestart[nodeIndex].Name, err))
+					return
+				}
+
+				err = SetSourceKubeConfig()
+				if err != nil {
+					log.Errorf("Failed to Set source kubeconfig: %v", err)
+					UpdateOutcome(event, err)
+					return
+				}
+			})
+		}
+
+		for _, mig := range allMigrations {
+			err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
+			if err != nil {
+				UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
+				return
+			}
+			log.InfoD("Migration [%s] in namespace [%s] has status: [%s]", mig.Name, mig.Namespace, mig.Status.Status)
+			dashStats := stats.GetStorkMigrationStats(mig)
+			updateLongevityStats(AsyncDRNodeRestartSource, stats.AsyncDREventName, dashStats)
+		}
+	})
+	updateMetrics(*event)
 }

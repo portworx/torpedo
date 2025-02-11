@@ -406,6 +406,7 @@ func populateTriggerFuncs() {
 		RebootNodeWithMaxPools:              TriggerRebootNodesWithMaxPools,
 		AsyncDRNodeRestartSource:            TriggerAsyncDRNodeRestartSource,
 		AddHotPlugDiskToAllVMAndLiveMigrate: TriggerAddHotPlugDiskToAllVMAndLiveMigrate,
+    AsyncDRNodeRestartDestination:       TriggerAsyncDRNodeRestartDestination,
 	}
 
 	//Creating a distinct trigger to make sure email triggers at regular intervals
@@ -942,7 +943,8 @@ func populateIntervals() {
 	triggerInterval[AddHotPlugDiskToVMAndLiveMigrate] = make(map[int]time.Duration)
 	triggerInterval[RebootNodeWithMaxPools] = make(map[int]time.Duration)
 	triggerInterval[AsyncDRNodeRestartSource] = make(map[int]time.Duration)
-	triggerInterval[AddHotPlugDiskToAllVMAndLiveMigrate] = make(map[int]time.Duration)
+  triggerInterval[AddHotPlugDiskToAllVMAndLiveMigrate] = make(map[int]time.Duration)
+	triggerInterval[AsyncDRNodeRestartDestination] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -2239,8 +2241,8 @@ func populateIntervals() {
 	triggerInterval[AsyncDRNodeRestartSource][3] = 21 * baseInterval
 	triggerInterval[AsyncDRNodeRestartSource][2] = 24 * baseInterval
 	triggerInterval[AsyncDRNodeRestartSource][1] = 27 * baseInterval
-
-	triggerInterval[AddHotPlugDiskToAllVMAndLiveMigrate][10] = 1 * baseInterval
+  
+  triggerInterval[AddHotPlugDiskToAllVMAndLiveMigrate][10] = 1 * baseInterval
 	triggerInterval[AddHotPlugDiskToAllVMAndLiveMigrate][9] = 3 * baseInterval
 	triggerInterval[AddHotPlugDiskToAllVMAndLiveMigrate][8] = 6 * baseInterval
 	triggerInterval[AddHotPlugDiskToAllVMAndLiveMigrate][7] = 9 * baseInterval
@@ -2250,6 +2252,17 @@ func populateIntervals() {
 	triggerInterval[AddHotPlugDiskToAllVMAndLiveMigrate][3] = 21 * baseInterval
 	triggerInterval[AddHotPlugDiskToAllVMAndLiveMigrate][2] = 24 * baseInterval
 	triggerInterval[AddHotPlugDiskToAllVMAndLiveMigrate][1] = 27 * baseInterval
+
+	triggerInterval[AsyncDRNodeRestartDestination][10] = 1 * baseInterval
+	triggerInterval[AsyncDRNodeRestartDestination][9] = 3 * baseInterval
+	triggerInterval[AsyncDRNodeRestartDestination][8] = 6 * baseInterval
+	triggerInterval[AsyncDRNodeRestartDestination][7] = 9 * baseInterval
+	triggerInterval[AsyncDRNodeRestartDestination][6] = 12 * baseInterval
+	triggerInterval[AsyncDRNodeRestartDestination][5] = 15 * baseInterval
+	triggerInterval[AsyncDRNodeRestartDestination][4] = 18 * baseInterval
+	triggerInterval[AsyncDRNodeRestartDestination][3] = 21 * baseInterval
+	triggerInterval[AsyncDRNodeRestartDestination][2] = 24 * baseInterval
+	triggerInterval[AsyncDRNodeRestartDestination][1] = 27 * baseInterval
 
 	// Chaos Level of 0 means disable test trigger
 	triggerInterval[DeployApps][0] = 0
@@ -2365,7 +2378,7 @@ func populateIntervals() {
 	triggerInterval[RebootNodeWithMaxPools][0] = 0
 	triggerInterval[AsyncDRNodeRestartSource][0] = 0
 	triggerInterval[AddHotPlugDiskToAllVMAndLiveMigrate][0] = 0
-
+	triggerInterval[AsyncDRNodeRestartDestination][0] = 0
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {
