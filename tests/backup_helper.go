@@ -175,6 +175,8 @@ const (
 	BackupLocationDeleteTimeout           = 120 * time.Minute
 	ScaleBackupLocationDeleteTimeout      = 120 * time.Minute
 	BackupLocationDeleteRetryTime         = 30 * time.Second
+	IptablesCommandExecutionTimeout       = 10 * time.Minute
+	IptablesCommandRetryTime              = 1 * time.Minute
 	RebootNodeTimeout                     = 1 * time.Minute
 	RebootNodeTimeBeforeRetry             = 5 * time.Second
 	LatestPxBackupVersion                 = "2.8.3"
@@ -14865,4 +14867,46 @@ func ConnectNetworkOnNode(node node.Node, url string) error {
 	_, err := RunCmdGetOutput(cmd, node)
 	return err
 
+}
+
+// Function to fetch endpoint based on provider (AWS, NFS, or other cloud providers)
+func GetEndpointFromEnv(provider string) (string, error) {
+	var endpoint string
+	if provider == "nfs" {
+		endpoint = os.Getenv("NFS_SERVER_ADDR")
+		if endpoint == "" {
+			return "", fmt.Errorf("NFS_SERVER_ADDR not set in environment for provider: %s", provider)
+		}
+	} else {
+		endpoint = os.Getenv("S3_ENDPOINT")
+		if endpoint == "" {
+			return "", fmt.Errorf("S3_ENDPOINT not set in environment for provider: %s", provider)
+		}
+	}
+	return endpoint, nil
+}
+
+// This function blocks or unblocks traffic to a specific endpoint on a node using iptables
+func ManageTrafficRule(action, endpoint string, selectedNode node.Node) error {
+	if action != "block" && action != "unblock" {
+		return fmt.Errorf("invalid action %s; must be either 'block' or 'unblock'", action)
+	}
+	// Prepare the iptables command based on action
+	var iptablesCommand string
+	if action == "block" {
+		iptablesCommand = fmt.Sprintf("iptables -A OUTPUT -d %s -j DROP", endpoint) // Block traffic
+	} else if action == "unblock" {
+		iptablesCommand = fmt.Sprintf("iptables -D OUTPUT -d %s -j DROP", endpoint) // Unblock traffic
+	}
+	// Run the iptables command on the selected node
+	log.Infof("Executing iptables command on node %s: %s", selectedNode.Name, iptablesCommand)
+	output, err := Inst().N.RunCommand(selectedNode, iptablesCommand, node.ConnectionOpts{
+		Timeout:         IptablesCommandExecutionTimeout,
+		TimeBeforeRetry: IptablesCommandRetryTime,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to execute iptables command on node %s: %v", selectedNode.Name, err)
+	}
+	log.Infof("Successfully %sed traffic to endpoint %s on node %s: %s", action, endpoint, selectedNode.Name, output)
+	return nil
 }

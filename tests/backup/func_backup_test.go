@@ -6,6 +6,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -2091,6 +2092,7 @@ var _ = Describe("{UpdateClusterObjectDuringBackupDeletion}", Label(TestCaseLabe
 			backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
 			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
 			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, nil, BackupOrgID, clusterUID, "", "", "", "")
+
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 			err = backupDriver.WaitForBackupCompletion(ctx, backupName, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, BackupLocationValidationRetryTime)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Waiting for completion of backup [%s]", backupName))
@@ -2099,9 +2101,11 @@ var _ = Describe("{UpdateClusterObjectDuringBackupDeletion}", Label(TestCaseLabe
 		Step("Delete the Backup Object While in Deleting State, Update the Cluster Object", func() {
 			log.InfoD("Delete the Backup Object While in Deleting State, Update the Cluster Object")
 			log.Infof("About to delete backup - %s", backupName)
+
 			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, BackupOrgID)
 			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
 			log.Infof("Got backup UID: %s", backupUID)
+
 			_, err = DeleteBackup(backupName, backupUID, BackupOrgID, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup deletion : %v", backupName))
 
@@ -2111,6 +2115,7 @@ var _ = Describe("{UpdateClusterObjectDuringBackupDeletion}", Label(TestCaseLabe
 			_, err = UpdateClusterWithKubeConfig(SourceClusterName, clusterUID, configPath, ctx)
 			dash.VerifyFatal(err, nil, "Cluster updated successfully")
 
+			// Wait for backup deletion to complete
 			log.InfoD("Waiting for backup deletion to complete")
 			err = Inst().Backup.WaitForBackupDeletion(ctx, backupName, BackupOrgID, BackupDeleteTimeout, BackupDeleteRetryTime)
 			log.FailOnError(err, fmt.Sprintf("Backup deletion did not complete for [%s] within the expected time", backupName))
@@ -2119,11 +2124,15 @@ var _ = Describe("{UpdateClusterObjectDuringBackupDeletion}", Label(TestCaseLabe
 	})
 
 	JustAfterEach(func() {
+		ctx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		DestroyApps(scheduledAppContexts, opts)
+		err = DeleteNamespaces(bkpNamespaces)
+		dash.VerifySafely(err, nil, "Deleting app namespace")
 		CleanupCloudSettingsAndClusters(nil, cloudCredName, cloudCredUID, ctx)
 	})
 })
@@ -2298,5 +2307,191 @@ var _ = Describe("{TestBackupFailureWhenMinioEndpointUnreachable}", Label(TestCa
 		// Clean up the cluster
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
+})
 
+// This test case verifies if the backup deletion process completes successfully despite network disruptions to the object store during deletion.
+var _ = Describe("{ValidateBackupDeletionWorkflowUnderObjectStoreDisruptions}", Label(TestCaseLabelsMap[PxBackupLabel]...), func() {
+
+	var (
+		scheduledAppContexts []*scheduler.Context
+		ctx                  context.Context
+		backupLocationName   string
+		backupLocationUID    string
+		cloudCredName        string
+		cloudCredUID         string
+		backupName           string
+		clusterUid           string
+		bkpNamespaces        []string
+		providers            []string
+		backupDriver         backup.Driver
+		pxBackupNodeSet      map[string]node.Node
+		nodesToBlock         map[string]node.Node
+		err                  error
+	)
+
+	JustBeforeEach(func() {
+
+		StartPxBackupTorpedoTest("ValidateBackupDeletionWorkflowUnderObjectStoreDisruptions", "Validating Backup Deletion Under Network Interruptions", nil, 300498, Nvettaiyan, Q1FY25)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		bkpNamespaces = make([]string, 0)
+		providers = GetBackupProviders()
+		backupDriver = Inst().Backup
+		pxBackupNodeSet = make(map[string]node.Node)
+
+		log.InfoD("Scheduling Applications")
+		appContexts := ScheduleApplications(TaskNamePrefix)
+		for _, appCtx := range appContexts {
+			appCtx.ReadinessTimeout = AppReadinessTimeout
+			namespace := GetAppNamespace(appCtx, TaskNamePrefix)
+			bkpNamespaces = append(bkpNamespaces, namespace)
+			scheduledAppContexts = append(scheduledAppContexts, appCtx)
+		}
+	})
+
+	It("Ensuring Backup Deletion Completes Successfully Despite Network Interruptions to Object Storage", func() {
+
+		ctx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+
+		Step("Validate applications", func() {
+			log.InfoD("Validating applications")
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		Step("Creating backup location and cloud setting", func() {
+			log.InfoD("Creating backup location and cloud setting")
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, RandomString(5))
+				backupLocationName = fmt.Sprintf("%s-%s-%v-bl", provider, getGlobalBucketName(provider), RandomString(5))
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				err = CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocationName))
+			}
+		})
+
+		Step("Register cluster for backup", func() {
+			log.InfoD("Register cluster for backup")
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+			clusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			clusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			log.InfoD("Uid of [%s] cluster is %s", SourceClusterName, clusterUid)
+		})
+
+		Step("Taking backup of applications", func() {
+			log.InfoD("Taking backup of applications")
+			backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, RandomString(5))
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+			_, err = CreateBackupWithoutCheck(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, nil, BackupOrgID, clusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", backupName))
+		})
+
+		Step("Delete Backup and While in Deleting State Simulate Network Disruption", func() {
+			log.InfoD("Delete Backup and While in Deleting State Simulate Network Disruption")
+
+			// Get the px-backup pod and its node
+			pxbNamespace, err := backup.GetPxBackupNamespace()
+			log.FailOnError(err, "Failed to get px-backup namespace")
+			log.InfoD("px-backup namespace: %v", pxbNamespace)
+
+			pxbPods, err := core.Instance().GetPods(pxbNamespace, nil)
+			log.FailOnError(err, "Failed to get px-backup pods")
+			log.InfoD("Fetched px-backup pods")
+
+			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, BackupOrgID)
+			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
+			log.Infof("Got backup UID: %s", backupUID)
+
+			// Fetch nodes hosting px-backup pod
+			for _, pod := range pxbPods.Items {
+				if strings.HasPrefix(pod.Name, "px-backup") {
+					nodeName := pod.Spec.NodeName
+					backupNode, err := node.GetNodeByName(nodeName)
+					log.FailOnError(err, fmt.Sprintf("Failed to get node %s", nodeName))
+					if _, exists := pxBackupNodeSet[nodeName]; !exists {
+						pxBackupNodeSet[nodeName] = backupNode
+						log.InfoD("Found px-backup pod on node %s", backupNode.Name)
+					}
+				}
+			}
+
+			nodesToBlock = make(map[string]node.Node)
+			for _, provider := range providers {
+				if provider == "nfs" {
+					workerNodes := node.GetWorkerNodes()
+					for _, selectedNode := range workerNodes {
+						nodesToBlock[selectedNode.Name] = selectedNode
+					}
+				} else {
+					nodesToBlock = pxBackupNodeSet
+				}
+			}
+
+			// Trigger the backup delete
+			log.Infof("Initiating backup deletion: %s", backupName)
+			_, err = DeleteBackup(backupName, backupUID, BackupOrgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup deletion: %v", backupName))
+
+			// Block the network for the relevant nodes concurrently using goroutines
+			log.InfoD("Blocking traffic to backup provider nodes")
+			var wg sync.WaitGroup
+			for _, selectedNode := range nodesToBlock {
+				wg.Add(1)
+				go func(nodeName string, provider string) {
+					defer wg.Done()
+					endpoint, err := GetEndpointFromEnv(provider)
+					log.FailOnError(err, "Endpoint not found for the provider")
+					err = ManageTrafficRule("block", endpoint, selectedNode)
+					log.FailOnError(err, "Failed to block traffic")
+				}(selectedNode.Name, providers[0])
+			}
+			wg.Wait()
+
+			// Simulate traffic disruption for 5 minutes
+			log.InfoD("Simulating network disruption for 5 minutes")
+			time.Sleep(5 * time.Minute)
+
+			// Unblock the network for the relevant nodes concurrently using goroutines
+			log.InfoD("Unblocking traffic after disruption")
+			for _, selectedNode := range nodesToBlock {
+				wg.Add(1)
+				go func(nodeName string, provider string) {
+					defer wg.Done()
+					endpoint, err := GetEndpointFromEnv(provider)
+					log.FailOnError(err, "Endpoint not found for the provider")
+					err = ManageTrafficRule("unblock", endpoint, selectedNode)
+					log.FailOnError(err, "Failed to unblock traffic")
+				}(selectedNode.Name, providers[0])
+			}
+			wg.Wait()
+		})
+
+		Step("Wait for Backup Deletion to complete", func() {
+			log.InfoD("Wait for backup deletion to complete")
+			err = Inst().Backup.WaitForBackupDeletion(ctx, backupName, BackupOrgID, BackupDeleteTimeout, BackupDeleteRetryTime)
+			log.FailOnError(err, fmt.Sprintf("Backup deletion did not complete for [%s] within the expected time", backupName))
+			log.InfoD("Backup deletion completed successfully")
+		})
+	})
+
+	JustAfterEach(func() {
+		ctx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		log.InfoD("Deleting the deployed apps after the testcase")
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		DestroyApps(scheduledAppContexts, opts)
+		err = DeleteNamespaces(bkpNamespaces)
+		dash.VerifySafely(err, nil, "Deleting app namespace")
+		err = DeleteBackupLocation(backupLocationName, backupLocationUID, BackupOrgID, false)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", backupLocationName))
+		CleanupCloudSettingsAndClusters(nil, cloudCredName, cloudCredUID, ctx)
+	})
 })
