@@ -192,6 +192,9 @@ const (
 	cdiImportComplete                 = "Import Complete"
 	cdiImageImportTimeout             = 20 * time.Minute
 	cdiImageImportRetry               = 30 * time.Second
+
+	pvcDeletionTimeout = 10 * time.Minute
+	pvcCheckRetry      = 1 * time.Minute
 )
 
 const (
@@ -2120,18 +2123,65 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 				newPvcObj.Spec.Resources.Requests[corev1.ResourceStorage] = newPvcSize
 			}
 		}
-		pvc, err := k8sCore.CreatePersistentVolumeClaim(newPvcObj)
-		if k8serrors.IsAlreadyExists(err) {
-			if pvc, err = k8sCore.GetPersistentVolumeClaim(newPvcObj.Name, newPvcObj.Namespace); err == nil {
-				log.Infof("[%v] Found existing PVC: %v", app.Key, pvc.Name)
+		pvc, err := k8sCore.GetPersistentVolumeClaim(newPvcObj.Name, newPvcObj.Namespace)
+		if err == nil {
+			log.Infof("[%v] Found existing PVC: %v", app.Key, pvc.Name)
+			log.Infof("[%v] PVC: %v, Status: %v", app.Key, pvc.Name, pvc.Status.Phase)
+			log.Infof("PVC Details: %v", pvc)
+			// Check if the PVC is in a terminating state
+			if pvc.DeletionTimestamp != nil {
+				log.Infof("PVC %s is terminating, waiting for deletion. "+
+					"Deletion triggered at: %v", pvc.Name, pvc.DeletionTimestamp)
 
-				// This is a hack because the `Kind` field is empty due to K8s bug.
-				// Refer https://github.com/pure-px/torpedo/pull/1345
-				pvc.Kind = "PersistentVolumeClaim"
+				t1 := func() (interface{}, bool, error) {
+					_, err := k8sCore.GetPersistentVolumeClaim(newPvcObj.Name, newPvcObj.Namespace)
+					if k8serrors.IsNotFound(err) {
+						return nil, false, nil // PVC is deleted
+					}
+					if err != nil {
+						return nil, true, fmt.Errorf("error fetching PVC status: %v", err)
+					}
+					return nil, true, fmt.Errorf("PVC %s in namespace %s is still in terminating phase",
+						newPvcObj.Name, newPvcObj.Namespace)
+				}
 
-				return pvc, nil
+				if _, err := task.DoRetryWithTimeout(t1, pvcDeletionTimeout, pvcCheckRetry); err != nil {
+					log.Errorf("Timed out waiting for PVC - %v to terminate: %v", newPvcObj.Name, err)
+					return nil, &scheduler.ErrFailedToScheduleApp{
+						App:   app,
+						Cause: fmt.Sprintf("Timed out waiting for PVC - %v to terminate: %v", newPvcObj.Name, err),
+					}
+				}
+				log.Infof("PVC %s has been deleted, proceeding to create a new one with same name", newPvcObj.Name)
+			} else {
+				if pvc.Status.Phase == v1.ClaimBound {
+					log.Infof("PVC %s already bound. Skipping creation.", pvc.Name)
+					pvc.Kind = "PersistentVolumeClaim"
+					return pvc, nil
+				} else {
+					return nil, &scheduler.ErrFailedToScheduleApp{
+						App:   app,
+						Cause: fmt.Sprintf("PVC %v is in - %v phase. Unable to continue. Please delete PVC manually and rerun test.", newPvcObj.Name, pvc.Status.Phase),
+					}
+				}
+			}
+		} else if !k8serrors.IsNotFound(err) {
+			log.Infof("[%v] Did not find any existing PVC with name: %v. Creating PVC...", app.Key, newPvcObj.Name)
+		}
+
+		pvc, err = k8sCore.CreatePersistentVolumeClaim(newPvcObj)
+		if err == nil {
+			log.Infof("[%v] Created PVC Successfully: %v", app.Key, pvc.Name)
+			// This is a hack because the `Kind` field is empty due to K8s bug.
+			// Refer https://github.com/pure-px/torpedo/pull/1345
+			pvc.Kind = "PersistentVolumeClaim"
+		} else {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create PVC - %v. Error: %v", newPvcObj.Name, err),
 			}
 		}
+
 		if clonedPVC {
 			endpointAnnotation, ok := pvc.Annotations[cdiPvcImportEndpointAnnotationKey]
 			if ok && endpointAnnotation != "" {

@@ -390,27 +390,41 @@ if [ -n "${INTERNAL_DOCKER_REGISTRY}" ]; then
     TORPEDO_IMG="${INTERNAL_DOCKER_REGISTRY}/${TORPEDO_IMG}"
 fi
 
-CUSTOM_VOLUME="{ \"name\": \"custom-spec-volume\", \"hostPath\": { \"path\": \"${CUSTOM_SPEC_DIR}\", \"type\": \"Directory\" } }"
-
-if [ -z "${KUBEVIRT_VOL_TYPE}" ]; then
-    # if KUBEVIRT_VOL_TYPE is not set, default to kubevirt-debian-fio-minimal
-    CUSTOM_VOLUME_MOUNT="{ \"name\": \"custom-spec-volume\", \"mountPath\": \"/go/src/github.com/pure-px/torpedo/drivers/scheduler/k8s/specs/kubevirt-debian-fio-minimal\" }"
-elif [ "${KUBEVIRT_VOL_TYPE}" == "fada-raw" ]; then
-    # if KUBEVIRT_VOL_TYPE is fada-raw
-    CUSTOM_VOLUME_MOUNT="{ \"name\": \"custom-spec-volume\", \"mountPath\": \"/go/src/github.com/pure-px/torpedo/drivers/scheduler/k8s/specs/kubevirt-fada-raw-fio\" }"
-elif [ "${KUBEVIRT_VOL_TYPE}" == "pxe-raw" ]; then
-    # if KUBEVIRT_VOL_TYPE is pxe-raw
-    CUSTOM_VOLUME_MOUNT="{ \"name\": \"custom-spec-volume\", \"mountPath\": \"/go/src/github.com/pure-px/torpedo/drivers/scheduler/k8s/specs/kubevirt-raw-vol\" }"
-else
-    # Default case
-    CUSTOM_VOLUME_MOUNT="{ \"name\": \"custom-spec-volume\", \"mountPath\": \"/go/src/github.com/pure-px/torpedo/drivers/scheduler/k8s/specs/kubevirt-debian-fio-minimal\" }"
-fi
+#
+#if [ -z "${KUBEVIRT_VOL_TYPE}" ]; then
+#    # if KUBEVIRT_VOL_TYPE is not set, default to kubevirt-debian-fio-minimal
+#    CUSTOM_VOLUME_MOUNT="{ \"name\": \"custom-spec-volume\", \"mountPath\": \"/go/src/github.com/pure-px/torpedo/drivers/scheduler/k8s/specs/${APP}\" }"
+#elif [ "${KUBEVIRT_VOL_TYPE}" == "fada-raw" ]; then
+#    # if KUBEVIRT_VOL_TYPE is fada-raw
+#    CUSTOM_VOLUME_MOUNT="{ \"name\": \"custom-spec-volume\", \"mountPath\": \"/go/src/github.com/pure-px/torpedo/drivers/scheduler/k8s/specs/kubevirt-fada-raw-fio\" }"
+#elif [ "${KUBEVIRT_VOL_TYPE}" == "pxe-raw" ]; then
+#    # if KUBEVIRT_VOL_TYPE is pxe-raw
+#    CUSTOM_VOLUME_MOUNT="{ \"name\": \"custom-spec-volume\", \"mountPath\": \"/go/src/github.com/pure-px/torpedo/drivers/scheduler/k8s/specs/kubevirt-raw-vol\" }"
+#else
+#    # Default case
+#    CUSTOM_VOLUME_MOUNT="{ \"name\": \"custom-spec-volume\", \"mountPath\": \"/go/src/github.com/pure-px/torpedo/drivers/scheduler/k8s/specs/kubevirt-debian-fio-minimal\" }"
+#fi
+#CUSTOM_VOLUME="{ \"name\": \"custom-spec-volume\", \"hostPath\": { \"path\": \"${CUSTOM_SPEC_DIR}\", \"type\": \"Directory\" } }"
+#CUSTOM_VOLUME_MOUNT="{ \"name\": \"custom-spec-volume\", \"mountPath\": \"/go/src/github.com/pure-px/torpedo/drivers/scheduler/k8s/specs\" }"
+#
+#if [ -n "${CUSTOM_SPEC_DIR}" ]; then
+#    echo "Will use custom spec directory $CUSTOM_SPEC_DIR deploying app VMs"
+#    echo "CUSTOM VOLUME = $CUSTOM_VOLUME"
+#    VOLUMES="${VOLUMES},${CUSTOM_VOLUME}"
+#    VOLUME_MOUNTS="${VOLUME_MOUNTS},${CUSTOM_VOLUME_MOUNT}"
+#fi
 
 if [ -n "${CUSTOM_SPEC_DIR}" ]; then
-    echo "Will use custom spec directory $CUSTOM_SPEC_DIR deploying app VMs"
-    echo "CUSTOM VOLUME = $CUSTOM_VOLUME"
-    VOLUMES="${VOLUMES},${CUSTOM_VOLUME}"
-    VOLUME_MOUNTS="${VOLUME_MOUNTS},${CUSTOM_VOLUME_MOUNT}"
+    echo "Running test with CUSTOM_SPEC_DIR=${CUSTOM_SPEC_DIR} and APP_LIST=${APP_LIST}"
+
+    for APP in $(echo "$APP_LIST" | tr ',' ' '); do
+        CUSTOM_VOLUME="{ \"name\": \"custom-spec-volume-${APP}\", \"hostPath\": { \"path\": \"${CUSTOM_SPEC_DIR}/${APP}\", \"type\": \"Directory\" } }"
+        CUSTOM_VOLUME_MOUNT="{ \"name\": \"custom-spec-volume-${APP}\", \"mountPath\": \"/go/src/github.com/pure-px/torpedo/drivers/scheduler/k8s/specs/${APP}\" }"
+
+        echo "CUSTOM VOLUME for ${APP} = $CUSTOM_VOLUME"
+        VOLUMES="${VOLUMES},${CUSTOM_VOLUME}"
+        VOLUME_MOUNTS="${VOLUME_MOUNTS},${CUSTOM_VOLUME_MOUNT}"
+    done
 fi
 
 echo "VOLUMES = ${VOLUMES}"
@@ -565,7 +579,7 @@ spec:
           $TEST_SUITE \
           -- \
           --spec-dir=$SPEC_DIR \
-          --app-list="$APP_LIST" \
+          --app-list=$APP_LIST \
           --deploy-pds-apps=$DEPLOY_PDS_APPS \
           --pds-driver="$PDS_DRIVER" \
           --secure-apps="$SECURE_APP_LIST" \
@@ -643,6 +657,8 @@ spec:
           fieldPath: spec.nodeName
     - name: K8S_VENDOR
       value: "${K8S_VENDOR}"
+    - name: APP_LIST
+      value: "${APP_LIST}"
     - name: TORPEDO_SSH_USER
       value: "${TORPEDO_SSH_USER}"
     - name: LB_SUBNET_KEY

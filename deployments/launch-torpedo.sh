@@ -6,16 +6,18 @@ export TORPEDO_IMG="localhost/torpedo:master"
 
 # Change below variables as needed
 ## Tests to run
-export FOCUS_TESTS="MultipleVMVolHaDecrease"
+export FOCUS_TESTS="SingleVMLiveMigration"
+export APP_LIST=kubevirt-debian-fio-minimal
 export TEST_DESC="px-ocp-kubevirt-all"
-export PROVISIONER="portworx"
+export PROVISIONER="csi"
 export STORAGE_DRIVER="pxd"
 export SCHEDULER="openshift"
 export SCALE_FACTOR="1"
-export KUBEVIRT_VOL_TYPE="fada-raw" #select either fada-raw, pxe-raw, or leave it blank for sharedV4 volumes
+export KUBEVIRT_VOL_TYPE=""
+#select either fada-raw, pxe-raw, or leave it blank for sharedV4 volumes
 
 #Modifiable variables
-export CUSTOM_SPEC_DIR="" #"$WORKSPACE/custom_spec"
+export CUSTOM_SPEC_DIR="$WORKSPACE/custom_spec"
 export TIMEOUT="720h0m0s"
 export PURE_SAN_TYPE="ISCSI"
 export LICENSE_EXPIRY_TIMEOUT_HOURS="1h0m0s"
@@ -46,12 +48,15 @@ podman load -i "$WORKSPACE/$TORPEDO_TAR"
 # List images to verify
 podman images
 
+#enable podman socket
+sudo systemctl enable podman.socket
+
 # Change directory to workspace
 cd "$WORKSPACE"
 
 # Start local server to host debian image endpoint for kubevirt VM pvc
-export HOST_IP=$(hostname -I | awk '{print $1}')
-python3 -m http.server 8000 --directory "$WORKSPACE" &
+export HOST_IP=$(hostname -i | awk '{print $1}')
+nohup python3 -m http.server --bind "$HOST_IP" 8000 --directory "$WORKSPACE" > local_server.out &
 SERVER_PID=$!
 
 # Trap to ensure the server is stopped when the script exits
@@ -62,6 +67,7 @@ echo "HTTP server running on $HOST_IP with PID $SERVER_PID"
 # Copy Torpedo data into the workspace
 podman run --rm --privileged -v "$WORKSPACE:$WORKSPACE" --entrypoint '' "$TORPEDO_IMG" cp -r /torpedo "$WORKSPACE"
 
+#Keep below line commented out. Only uncomment for debugging purposes
 cp /opt/workspace/deploy-ssh-ocp-standalone.sh "$WORKSPACE/torpedo/deployments/"
 
 # Run the Torpedo test suite
@@ -77,14 +83,14 @@ podman run --rm -t --privileged --net=host \
 -e SCALE_FACTOR=1 \
 -e SCHEDULER="$SCHEDULER" \
 -e K8S_VENDOR="$K8S_VENDOR" \
+-e APP_LIST="$APP_LIST" \
 -e FAIL_FAST=true \
 -e PROVISIONER="$PROVISIONER" \
 -e HOST_IP="$HOST_IP" \
 -e KUBEVIRT_VM_PWD="$KUBEVIRT_VM_PWD" \
--e KUBEVIRT_VOL_TYPE="$KUBEVIRT_VOL_TYPE"
+-e KUBEVIRT_VOL_TYPE="$KUBEVIRT_VOL_TYPE" \
 -e TEST_DESC="$TEST_DESC" \
 -e CUSTOM_SPEC_DIR="$CUSTOM_SPEC_DIR" \
 --entrypoint /bin/sh \
 lachlanevenson/k8s-kubectl \
 /deployments/$LAUNCHER_SCRIPT
-

@@ -75,7 +75,7 @@ var _ = Describe("{AddNewDiskToKubevirtVM}", Label("p0", "positive", "kubevirt")
 		for _, appCtx := range appCtxs {
 			bindMount, err := IsVMBindMounted(appCtx, false)
 			log.FailOnError(err, "Failed to verify bind mount")
-			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+			dash.VerifyFatal(bindMount, true, "Verify bind mount")
 		}
 		stepLog = "Add one disk to the kubevirt VM"
 		Step(stepLog, func() {
@@ -138,7 +138,7 @@ var _ = Describe("{KubeVirtLiveMigration}", Label("p0", "positive", "kubevirt", 
 		for _, appCtx := range appCtxs {
 			bindMount, err := IsVMBindMounted(appCtx, false)
 			log.FailOnError(err, "Failed to verify bind mount")
-			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+			dash.VerifyFatal(bindMount, true, "Verify bind mount")
 		}
 		stepLog = "Live migrate the kubevirt VM"
 		Step(stepLog, func() {
@@ -190,7 +190,7 @@ var _ = Describe("{PxKillBeforeAddDiskToVM}", Label("p1", "negative", "kubevirt"
 		for _, appCtx := range appCtxs {
 			bindMount, err := IsVMBindMounted(appCtx, false)
 			log.FailOnError(err, "Failed to verify bind mount")
-			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+			dash.VerifyFatal(bindMount, true, "Verify bind mount")
 		}
 		stepLog = "Kill Px on node hosting VM"
 		Step(stepLog, func() {
@@ -296,7 +296,7 @@ var _ = Describe("{PxKillAfterAddDiskToVM}", Label("p1", "negative", "kubevirt",
 		for _, appCtx := range appCtxs {
 			bindMount, err := IsVMBindMounted(appCtx, false)
 			log.FailOnError(err, "Failed to verify bind mount")
-			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+			dash.VerifyFatal(bindMount, true, "Verify bind mount")
 		}
 		stepLog = "Add one disk to the kubevirt VM"
 		Step(stepLog, func() {
@@ -409,7 +409,7 @@ var _ = Describe("{KubevirtVMVolHaIncrease}", Label("p0", "positive", "kubevirt"
 		for _, appCtx := range appCtxs {
 			bindMount, err := IsVMBindMounted(appCtx, false)
 			log.FailOnError(err, "Failed to verify bind mount")
-			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+			dash.VerifyFatal(bindMount, true, "Verify bind mount")
 		}
 		stepLog = "Increase the volume HA of the kubevirt VM Volumes"
 		Step(stepLog, func() {
@@ -487,7 +487,7 @@ var _ = Describe("{KubevirtVMVolHaDecrease}", Label("p0", "positive", "kubevirt"
 		for _, appCtx := range appCtxs {
 			bindMount, err := IsVMBindMounted(appCtx, false)
 			log.FailOnError(err, "Failed to verify bind mount")
-			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+			dash.VerifyFatal(bindMount, true, "Verify bind mount")
 		}
 
 		stepLog = "Decrease the volume HA of the kubevirt VM Volumes"
@@ -564,7 +564,7 @@ var _ = Describe("{LiveMigrationBeforeAddDisk}", Label("p0", "positive", "kubevi
 		for _, appCtx := range appCtxs {
 			bindMount, err := IsVMBindMounted(appCtx, false)
 			log.FailOnError(err, "Failed to verify bind mount")
-			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+			dash.VerifyFatal(bindMount, true, "Verify bind mount")
 		}
 		stepLog = "Live migrate the kubevirt VM"
 		Step(stepLog, func() {
@@ -633,7 +633,7 @@ var _ = Describe("{AddDiskAndLiveMigrate}", Label("p0", "positive", "kubevirt", 
 		for _, appCtx := range appCtxs {
 			bindMount, err := IsVMBindMounted(appCtx, false)
 			log.FailOnError(err, "Failed to verify bind mount")
-			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+			dash.VerifyFatal(bindMount, true, "Verify bind mount")
 		}
 		stepLog = "Add one disk to the kubevirt VM"
 		Step(stepLog, func() {
@@ -1017,7 +1017,7 @@ var _ = Describe("{RebootRootDiskAttachedNode}", Label("p1", "negative", "error_
 		for _, appCtx := range appCtxs {
 			bindMount, err := IsVMBindMounted(appCtx, false)
 			log.FailOnError(err, "Failed to verify bind mount after initial deploy")
-			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount after intial deploy")
+			dash.VerifyFatal(bindMount, true, "Verify bind mount after intial deploy")
 		}
 
 		stepLog = "Get node where VM's root disk is attached and reboot that node"
@@ -1026,7 +1026,7 @@ var _ = Describe("{RebootRootDiskAttachedNode}", Label("p1", "negative", "error_
 			for _, virtualMachineCtx := range appCtxs {
 				bindMount, err := IsVMBindMounted(virtualMachineCtx, false)
 				log.FailOnError(err, "Failed to verify bind mount pre node reboot in namespace: %s", virtualMachineCtx.App.NameSpace)
-				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount pre node reboot")
+				dash.VerifyFatal(bindMount, true, "Verify bind mount pre node reboot")
 
 				vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{virtualMachineCtx})
 				log.FailOnError(err, "Failed to get VMs from scheduled contexts")
@@ -1055,7 +1055,7 @@ var _ = Describe("{RebootRootDiskAttachedNode}", Label("p1", "negative", "error_
 				}
 				bindMount, err = IsVMBindMounted(virtualMachineCtx, false)
 				log.FailOnError(err, "Failed to verify bind mount post node reboot in namespace: %s", virtualMachineCtx.App.NameSpace)
-				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount pre node reboot")
+				dash.VerifyFatal(bindMount, true, "Verify bind mount pre node reboot")
 			}
 			ValidateApplications(appCtxs)
 		})
@@ -1104,7 +1104,7 @@ var _ = Describe("{ParallelAddDiskToVM}", Label("p1", "postive", "kubevirt", "sh
 		for _, appCtx := range appCtxs {
 			bindMount, err := IsVMBindMounted(appCtx, false)
 			log.FailOnError(err, "Failed to verify bind mount")
-			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+			dash.VerifyFatal(bindMount, true, "Verify bind mount")
 		}
 
 		stepLog = "Add one disk to multiple kubevirt VM at the same time"
@@ -1179,7 +1179,7 @@ var _ = Describe("{MultipleKubeVirtLiveMigration}", Label("p0", "postive", "kube
 		for _, appCtx := range appCtxs {
 			bindMount, err := IsVMBindMounted(appCtx, false)
 			log.FailOnError(err, "Failed to verify bind mount")
-			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+			dash.VerifyFatal(bindMount, true, "Verify bind mount")
 		}
 
 		log.Infof("Hard Sleep for 2 minutes to let VMs come up")
@@ -1292,7 +1292,7 @@ var _ = Describe("{AddDiskAndLiveMigrateMultipleVm}", Label("p1", "postive", "ku
 		for _, appCtx := range appCtxs {
 			bindMount, err := IsVMBindMounted(appCtx, false)
 			log.FailOnError(err, "Failed to verify bind mount")
-			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+			dash.VerifyFatal(bindMount, true, "Verify bind mount")
 		}
 
 		stepLog = "Add one disk to the kubevirt VM's and check if new added disk is bind mounted and live migrate the vms parallely"
@@ -1364,7 +1364,7 @@ var _ = Describe("{LiveMigrationBeforeAddDiskMultipleVm}", Label("p1", "postive"
 		for _, appCtx := range appCtxs {
 			bindMount, err := IsVMBindMounted(appCtx, false)
 			log.FailOnError(err, "Failed to verify bind mount")
-			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+			dash.VerifyFatal(bindMount, true, "Verify bind mount")
 		}
 		stepLog = "Live migrate the kubevirt VM's,Add one disk to the kubevirt VM and verify the new disk added is also bind mounted"
 		Step(stepLog, func() {
@@ -1431,7 +1431,7 @@ var _ = Describe("{MultipleVMVolHaIncrease}", Label("p1", "postive", "kubevirt",
 		for _, appCtx := range appCtxs {
 			bindMount, err := IsVMBindMounted(appCtx, false)
 			log.FailOnError(err, "Failed to verify bind mount")
-			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+			dash.VerifyFatal(bindMount, true, "Verify bind mount")
 		}
 		stepLog = "Increase the volume HA of the multiple kubevirt VM Volumes and check if they are bind mounted parallely"
 		Step(stepLog, func() {
@@ -1513,7 +1513,7 @@ var _ = Describe("{MultipleVMVolHaDecrease}", Label("p1", "postive", "kubevirt",
 		for _, appCtx := range appCtxs {
 			bindMount, err := IsVMBindMounted(appCtx, false)
 			log.FailOnError(err, "Failed to verify bind mount")
-			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+			dash.VerifyFatal(bindMount, true, "Verify bind mount")
 		}
 
 		stepLog = "Decrease the volume HA of the multiple kubevirt VM Volumes and check if they are bind mounted"
@@ -1603,7 +1603,7 @@ var _ = Describe("{LiveMigrateWhileNodeInMaintenance}", Label("p2", "negative", 
 			for _, appCtx := range appCtxs {
 				bindMount, err := IsVMBindMounted(appCtx, false)
 				log.FailOnError(err, "Failed to verify bind mount")
-				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Verify bind mount")
 			}
 		})
 
@@ -1713,7 +1713,7 @@ var _ = Describe("{LiveMigrateCordonNonReplicaNode}", Label("p2", "negative", "k
 			for _, appCtx := range appCtxs {
 				bindMount, err := IsVMBindMounted(appCtx, false)
 				log.FailOnError(err, "Failed to verify bind mount")
-				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Verify bind mount")
 			}
 		})
 
@@ -1869,7 +1869,7 @@ var _ = Describe("{StopPxOnNodeWhereVMIsProvisioned}", Label("p1", "negative", "
 			for _, appCtx := range appCtxs {
 				bindMount, err := IsVMBindMounted(appCtx, false)
 				log.FailOnError(err, "Failed to verify bind mount")
-				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Verify bind mount")
 			}
 		})
 
@@ -1908,7 +1908,7 @@ var _ = Describe("{StopPxOnNodeWhereVMIsProvisioned}", Label("p1", "negative", "
 			for _, appCtx := range appCtxs {
 				bindMount, err := IsVMBindMounted(appCtx, false)
 				log.FailOnError(err, "Failed to verify bind mount")
-				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Verify bind mount")
 			}
 		})
 
@@ -1962,7 +1962,7 @@ var _ = Describe("{RestartPXAndCheckIfVmBindMount}", Label("p1", "negative", "er
 			for _, appCtx := range appCtxs {
 				bindMount, err := IsVMBindMounted(appCtx, false)
 				log.FailOnError(err, "Failed to verify bind mount")
-				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Verify bind mount")
 			}
 		})
 
@@ -2070,7 +2070,7 @@ var _ = Describe("{FillVMRootDisk}", Label("p2", "negative", "error_injection", 
 			for _, appCtx := range appCtxs {
 				bindMount, err := IsVMBindMounted(appCtx, false)
 				log.FailOnError(err, "Failed to verify bind mount")
-				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Verify bind mount")
 			}
 
 		})
@@ -2091,7 +2091,7 @@ var _ = Describe("{FillVMRootDisk}", Label("p2", "negative", "error_injection", 
 			for _, appCtx := range appCtxs {
 				bindMount, err := IsVMBindMounted(appCtx, false)
 				log.FailOnError(err, "Failed to verify bind mount")
-				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Verify bind mount")
 			}
 		})
 
@@ -2176,7 +2176,7 @@ var _ = Describe("{SingleVMLiveMigration}", Label("p0", "positive", "kubevirt", 
 			for _, appCtx := range appCtxs {
 				bindMount, err := IsVMBindMounted(appCtx, false)
 				log.FailOnError(err, "Failed to verify bind mount")
-				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Verify bind mount")
 			}
 		}
 		log.Infof("Hard Sleep for 2 minutes to let VMs come up")
@@ -2316,7 +2316,7 @@ var _ = Describe("{SingleVMLiveMigrationStorkUpgrade}", Label("p0", "positive", 
 			for _, appCtx := range appCtxs {
 				bindMount, err := IsVMBindMounted(appCtx, false)
 				log.FailOnError(err, "Failed to verify bind mount")
-				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Verify bind mount")
 			}
 		}
 		log.Infof("Hard Sleep for 2 minutes to let VMs come up")
@@ -2471,7 +2471,7 @@ var _ = Describe("{MultipleParallelLiveMigration}", Label("p0", "positive", "kub
 			for _, appCtx := range appCtxs {
 				bindMount, err := IsVMBindMounted(appCtx, false)
 				log.FailOnError(err, "Failed to verify bind mount")
-				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Verify bind mount")
 			}
 		}
 
@@ -2629,7 +2629,7 @@ var _ = Describe("{LiveMigrationsOfVMsInALoop}", Label("p0", "positive", "kubevi
 			for _, appCtx := range appCtxs {
 				bindMount, err := IsVMBindMounted(appCtx, false)
 				log.FailOnError(err, "Failed to verify bind mount")
-				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Verify bind mount")
 			}
 		}
 
@@ -2805,7 +2805,7 @@ var _ = Describe("{ColdAddNewDiskToKubevirtVM}", Label("p0", "positive", "kubevi
 			for _, appCtx := range appCtxs {
 				bindMount, err := IsVMBindMounted(appCtx, false)
 				log.FailOnError(err, "Failed to verify bind mount")
-				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Verify bind mount")
 			}
 		}
 
@@ -2896,7 +2896,7 @@ var _ = Describe("{LMAfterColdAddDiskToVM}", Label("p0", "positive", "kubevirt",
 			for _, appCtx := range appCtxs {
 				bindMount, err := IsVMBindMounted(appCtx, false)
 				log.FailOnError(err, "Failed to verify bind mount")
-				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Verify bind mount")
 			}
 		}
 
@@ -3062,7 +3062,7 @@ var _ = Describe("{LMBeforeColdAddDiskToVM}", Label("p0", "positive", "kubevirt"
 			for _, appCtx := range appCtxs {
 				bindMount, err := IsVMBindMounted(appCtx, false)
 				log.FailOnError(err, "Failed to verify bind mount")
-				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Verify bind mount")
 			}
 		}
 		log.Infof("Sleeping for 2 minutes to let VMs come up")
@@ -3230,7 +3230,7 @@ var _ = Describe("{LMAndColdAddDiskToVMInALoop}", Label("p0", "positive", "kubev
 			for _, appCtx := range appCtxs {
 				bindMount, err := IsVMBindMounted(appCtx, false)
 				log.FailOnError(err, "Failed to verify bind mount")
-				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Verify bind mount")
 			}
 		}
 		log.Infof("Sleeping for 2 minutes to let VMs come up")
@@ -3407,7 +3407,7 @@ var _ = Describe("{PxKillAfterColdAddDiskToVM}", Label("p1", "negative", "kubevi
 			for _, appCtx := range appCtxs {
 				bindMount, err := IsVMBindMounted(appCtx, false)
 				log.FailOnError(err, "Failed to verify bind mount")
-				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Verify bind mount")
 			}
 		}
 		log.Infof("Sleeping for 2 minutes to let VMs come up")
@@ -3586,7 +3586,7 @@ var _ = Describe("{AddDiskKillPxLMAgainAddDisk}", Label("p1", "negative", "kubev
 		for _, appCtx := range appCtxs {
 			bindMount, err := IsVMBindMounted(appCtx, false)
 			log.FailOnError(err, "Failed to verify bind mount")
-			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+			dash.VerifyFatal(bindMount, true, "Verify bind mount")
 		}
 		log.Infof("Sleeping for 2 minutes to let VMs come up")
 		time.Sleep(2 * time.Minute)
@@ -5129,7 +5129,7 @@ var _ = Describe("{AddNewMixedDiskToKubevirtVMAndLM}", Label("p0", "positive", "
 			for _, appCtx := range appCtxs {
 				bindMount, err := IsVMBindMounted(appCtx, false)
 				log.FailOnError(err, "Failed to verify bind mount")
-				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Verify bind mount")
 			}
 		}
 
@@ -5598,7 +5598,7 @@ var _ = Describe("{AddNewHotPlugDiskToKubevirtVM}", Label("p0", "positive", "kub
 			for _, appCtx := range appCtxs {
 				bindMount, err := IsVMBindMounted(appCtx, false)
 				log.FailOnError(err, "Failed to verify bind mount")
-				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Verify bind mount")
 			}
 		}
 
@@ -5745,7 +5745,7 @@ var _ = Describe("{RebootNodeAfterAddNewHotPlugDiskToKubevirtVM}", Label("p1", "
 			for _, appCtx := range appCtxs {
 				bindMount, err = IsVMBindMounted(appCtx, false)
 				log.FailOnError(err, "Failed to verify bind mount")
-				dash.VerifyFatal(bindMount, true, "VM bind mount verified")
+				dash.VerifyFatal(bindMount, true, "Verify bind mount")
 			}
 		}
 
@@ -5932,7 +5932,7 @@ var _ = Describe("{PxRestartAfterAddNewHotPlugDiskToKubevirtVM}", Label("p1", "n
 			for _, appCtx := range appCtxs {
 				bindMount, err = IsVMBindMounted(appCtx, false)
 				log.FailOnError(err, "Failed to verify bind mount")
-				dash.VerifyFatal(bindMount, true, "VM bind mount verified")
+				dash.VerifyFatal(bindMount, true, "Verify bind mount")
 			}
 		}
 
@@ -6116,7 +6116,7 @@ var _ = Describe("{VMLiveMigrationHavingMultipleSC}", Label("p1", "positive", "k
 		// for _, appCtx := range appCtxs {
 		// 	bindMount, err := IsVMBindMounted(appCtx, false)
 		// 	log.FailOnError(err, "Failed to verify bind mount")
-		// 	dash.VerifyFatal(bindMount, true, "VM bind mount verified")
+		// 	dash.VerifyFatal(bindMount, true, "Verify bind mount")
 		// }
 
 		log.Infof("Hard Sleep for 2 minutes to let VMs come up")
@@ -6251,7 +6251,7 @@ var _ = Describe("{LMAfterAddNewHotPlugDiskToKubevirtVM}", Label("p0", "positive
 			for _, appCtx := range appCtxs {
 				bindMount, err := IsVMBindMounted(appCtx, false)
 				log.FailOnError(err, "Failed to verify bind mount")
-				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Verify bind mount")
 			}
 		}
 
@@ -6398,7 +6398,7 @@ var _ = Describe("{Add26NewHotPlugDiskToKubevirtVM}", Label("p0", "positive", "k
 			for _, appCtx := range appCtxs {
 				bindMount, err := IsVMBindMounted(appCtx, false)
 				log.FailOnError(err, "Failed to verify bind mount")
-				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Verify bind mount")
 			}
 		}
 
@@ -6536,7 +6536,7 @@ var _ = Describe("{PxRestartDuringAddNewHotPlugDiskToKubevirtVM}", Label("p1", "
 			for _, appCtx := range appCtxs {
 				bindMount, err = IsVMBindMounted(appCtx, false)
 				log.FailOnError(err, "Failed to verify bind mount")
-				dash.VerifyFatal(bindMount, true, "VM bind mount verified")
+				dash.VerifyFatal(bindMount, true, "Verify bind mount")
 			}
 		}
 
@@ -6744,7 +6744,7 @@ var _ = Describe("{RebootNodeDuringAddNewHotPlugDiskToKubevirtVM}", Label("p1", 
 			for _, appCtx := range appCtxs {
 				bindMount, err = IsVMBindMounted(appCtx, false)
 				log.FailOnError(err, "Failed to verify bind mount")
-				dash.VerifyFatal(bindMount, true, "VM bind mount verified")
+				dash.VerifyFatal(bindMount, true, "Verify bind mount")
 			}
 		}
 
@@ -6933,7 +6933,7 @@ var _ = Describe("{RebootSourceNodeDuringMigration}", Label("p1", "negative", "k
 			for _, appCtx := range appCtxs {
 				bindMount, err = IsVMBindMounted(appCtx, false)
 				log.FailOnError(err, "Failed to verify bind mount")
-				dash.VerifyFatal(bindMount, true, "VM bind mount verified")
+				dash.VerifyFatal(bindMount, true, "Verify bind mount")
 			}
 		}
 
@@ -7299,7 +7299,7 @@ var _ = Describe("{AddAndRemoveNewHotPlugDiskToKubevirtVM}", Label("p0", "positi
 			for _, appCtx := range appCtxs {
 				bindMount, err := IsVMBindMounted(appCtx, false)
 				log.FailOnError(err, "Failed to verify bind mount")
-				dash.VerifyFatal(bindMount, true, "Successfully verified bind mount to VM ?")
+				dash.VerifyFatal(bindMount, true, "Verify bind mount")
 			}
 		}
 
@@ -7499,7 +7499,7 @@ var _ = Describe("{FillPoolOnSourceAndTargetNodeAndLiveMigrateVM}", Label("p1", 
 		for _, appCtx := range appCtxs {
 			bindMount, err = IsVMBindMounted(appCtx, false)
 			log.FailOnError(err, "Failed to verify bind mount")
-			dash.VerifyFatal(bindMount, true, "VM bind mount verified")
+			dash.VerifyFatal(bindMount, true, "Verify bind mount")
 		}
 
 		log.Infof("Sleeping for 2 minutes to let VMs come up fully")
@@ -7741,7 +7741,7 @@ var _ = Describe("{UpgradePXWhileAddingColdDiskHotDiskAndLiveMigrationInProgress
 			for _, appCtx := range appCtxs {
 				bindMount, err := IsVMBindMounted(appCtx, false)
 				log.FailOnError(err, "Failed to verify bind mount")
-				dash.VerifyFatal(bindMount, true, "Successfully verified bind mount to VM ?")
+				dash.VerifyFatal(bindMount, true, "Verify bind mount")
 			}
 		}
 		log.Infof("Sleeping for 2 minutes to let VMs come up fully")
@@ -7994,7 +7994,7 @@ var _ = Describe("{SingleVMLiveMigrationPostCopy}", Label("p1", "positive", "kub
 		for _, appCtx := range appCtxs {
 			bindMount, err := IsVMBindMounted(appCtx, false)
 			log.FailOnError(err, "Failed to verify bind mount")
-			dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+			dash.VerifyFatal(bindMount, true, "Verify bind mount")
 		}
 
 		log.Infof("Hard Sleep for 2 minutes to let VMs come up")
@@ -8145,7 +8145,7 @@ var _ = Describe("{LMAfterAddingHotAndColdDiskToKubevirtVMMultipleTimes}", Label
 			for _, appCtx := range appCtxs {
 				bindMount, err := IsVMBindMounted(appCtx, false)
 				log.FailOnError(err, "Failed to verify bind mount")
-				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Verify bind mount")
 			}
 		}
 
@@ -8306,7 +8306,7 @@ var _ = Describe("{FAFailoverWithLiveMigrationOfKubevirtVM}", Label("p1", "negat
 			for _, appCtx := range appCtxs {
 				bindMount, err := IsVMBindMounted(appCtx, false)
 				log.FailOnError(err, "Failed to verify bind mount")
-				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Verify bind mount")
 			}
 		}
 
@@ -8477,7 +8477,7 @@ var _ = Describe("{FAFailoverWithHotPlugDiskToKubevirtVM}", Label("p1", "negativ
 			for _, appCtx := range appCtxs {
 				bindMount, err := IsVMBindMounted(appCtx, false)
 				log.FailOnError(err, "Failed to verify bind mount")
-				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Verify bind mount")
 			}
 		}
 
@@ -8648,7 +8648,7 @@ var _ = Describe("{FAFailoverWithColdAddDiskToKubevirtVM}", Label("p1", "negativ
 			for _, appCtx := range appCtxs {
 				bindMount, err := IsVMBindMounted(appCtx, false)
 				log.FailOnError(err, "Failed to verify bind mount")
-				dash.VerifyFatal(bindMount, true, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Verify bind mount")
 			}
 		}
 
