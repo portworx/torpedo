@@ -13159,6 +13159,7 @@ func InstallPxBackup(version, branch, namespace string, vals map[string]interfac
 	if !(clusterProvider == "vanilla" ||
 		clusterProvider == "openshift" ||
 		clusterProvider == "rke" ||
+		clusterProvider == "charmed" ||
 		clusterProvider == "") {
 		log.Infof("Cluster provider is not on-prem.")
 
@@ -13268,8 +13269,15 @@ func InstallPxBackup(version, branch, namespace string, vals map[string]interfac
 // initHelmActionConfig initializes the Helm action configuration for the given namespace.
 func initHelmActionConfig(namespace string) (*action.Configuration, error) {
 	cfg := new(action.Configuration)
+	currentKubeconfigPath := CurrentClusterConfigPath
+	//In case of GKE change the CurrentClusterConfigPath to point to in-cluster config
+	provider := GetClusterProvider()
+	if provider == drivers.ProviderGke {
+		currentKubeconfigPath = ""
+	}
+
 	if err := cfg.Init(
-		kube.GetConfig(CurrentClusterConfigPath, "", namespace),
+		kube.GetConfig(currentKubeconfigPath, "", namespace),
 		namespace,
 		os.Getenv("HELM_DRIVER"),
 		func(format string, v ...interface{}) {
