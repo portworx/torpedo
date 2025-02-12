@@ -3587,3 +3587,63 @@ var _ = Describe("{AddDataDriveWithMetadrive}", Label("staging", "p0", "postive"
 		defer EndTorpedoTest()
 	})
 })
+
+
+var _ = Describe("{AddDataDriveWithoutMetadrive}", Label("staging", "p0", "postive", "adddrive"), func() {
+	/*
+		ticket id : https://purestorage.atlassian.net/browse/HAZEL-1549
+		Prerequsites:
+		    At least one storageless nodes are required to run this test.
+		step1 : Add drive on storeless node without adding metadrive
+		step2: verify add data drive should not happen and verify the msg
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("AddDataDriveWithoutMetadrive", "Add a data drive on storage less node without adding metadrive", nil, 0)
+	})
+
+	itLog := "Add a drive on a storageless node without a metadrive and verify that data drive addition is blocked with an error message"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		const (
+			expect_out = "Failed to get /adddrive: system metadata device not found, it is mandatory for this configuration"
+		)
+		storagelessNode := node.GetStorageLessNodes()
+		log.InfoD("Checking number of storageless nodes: %d", len(storagelessNode))
+		if len(storagelessNode) < 1 {
+			Skip("At least one storageless nodes are required to run this test!...")
+		}
+
+		stepLog := "Check if the node has a metadata disk (DMTHIN cluster) or add a data drive (BTRFS cluster)"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.InfoD("Check if the cluster is DMTHIN")
+			isDmthin, _ := IsDMthin()
+			if !isDmthin {
+				Skip("Cluster is not DMTHIN, skipping metadata disk addition.")
+			}
+			nodeSelected := storagelessNode[0]
+			driveSpecs, err := GetCloudDriveDeviceSpecs()
+			log.FailOnError(err, "Error getting cloud drive specs")
+			deviceSpec := driveSpecs[0]
+			deviceSpecParams := strings.Split(deviceSpec, ",")
+			paramsArr := make([]string, 0)
+			for _, param := range deviceSpecParams {
+				if strings.Contains(param, "size") {
+					paramsArr = append(paramsArr, fmt.Sprintf("size=%d,", 70))
+				} else {
+					paramsArr = append(paramsArr, param)
+				}
+			}
+			newSpec := strings.Join(paramsArr, ",")
+			log.InfoD("Attempting to add a regular data drive of size  to node [%s]", nodeSelected.Name)
+			err = Inst().V.AddCloudDrive(&nodeSelected, newSpec, -1)
+			dash.VerifyFatal(strings.Contains(err.Error(), expect_out), true, "Error message not as expected")
+
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+
+})
+
