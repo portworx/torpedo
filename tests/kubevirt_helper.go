@@ -329,6 +329,8 @@ func StartAndWaitForVMIMigration(virtualMachineCtx *scheduler.Context, ctx conte
 		}
 		log.Infof("VM [%s] in namespace [%s] is scheduled on node [%s]", vmiName, vmiNamespace, nodeName)
 
+		startTime := time.Now()
+
 		// Start the VM migration
 		migration, err := kubevirtdy.Instance().CreateVirtualMachineInstanceMigration(ctx, vmiNamespace, vmiName)
 		if err != nil {
@@ -373,6 +375,10 @@ func StartAndWaitForVMIMigration(virtualMachineCtx *scheduler.Context, ctx conte
 		if err != nil {
 			return err
 		}
+
+		duration := time.Since(startTime)
+		log.Infof("VM migration for [%s] in namespace [%s] completed in %.2f seconds", vmiName, vmiNamespace, duration.Seconds())
+
 	}
 	return nil
 }
