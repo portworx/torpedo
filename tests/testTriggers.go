@@ -741,13 +741,15 @@ const (
 
 	// AsyncDR node restart on source runs Async DR migration between two clusters with px restart
 	AsyncDRNodeRestartSource = "asyncdrnoderestartsource"
-  
-  //Add Hot Pluggable Disk to all kubevirt VM and then live migrate
+
+	//Add Hot Pluggable Disk to all kubevirt VM and then live migrate
 	AddHotPlugDiskToAllVMAndLiveMigrate = "addHotPlugDiskToallVMAndLiveMigrate"
 
 	// AsyncDR node restart on destination runs Async DR migration between two clusters with px restart
 	AsyncDRNodeRestartDestination = "asyncdrnoderestartdestination"
 
+	//Generic Kubevirt VM live migration event handles already existing VMs as well
+	GenericKubevirtVMLiveMigration = "genericKubevirtVMLiveMigration"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -15759,6 +15761,59 @@ func TriggerAddHotPlugDiskToAllVMAndLiveMigrate(contexts *[]*scheduler.Context, 
 			}
 		})
 	})
+}
+
+// TriggerGenericKubevirtVMLiveMigration triggers live migration of KubeVirt VM
+func TriggerGenericKubevirtVMLiveMigration(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(KubevirtVMLiveMigration)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: GenericKubevirtVMLiveMigration,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+	var selectedVM kubevirtv1.VirtualMachine
+
+	stepLog := "Fetching KubeVirt VMs and selecting random VM for Live migarion"
+	Step(stepLog, func() {
+		vms, err := GetAllVMsFromAllNamespaces()
+		if err != nil {
+			UpdateOutcome(event, err)
+			log.FailOnError(err, "Failed to get VMs from appCtx")
+			return
+		}
+		if len(vms) == 0 {
+			err = fmt.Errorf("No VMs found")
+			UpdateOutcome(event, err)
+			log.FailOnError(err, "No VMs found")
+			return
+		}
+		log.Infof("Total number of VMs : [%v]", len(vms))
+		randomIndex := rand.Intn(len(vms))
+		selectedVM = vms[randomIndex]
+		log.Infof("Selected VM [%v] in namespace [%v] for Live migration", selectedVM.Name, selectedVM.Namespace)
+	})
+
+	//Live migartion of VM
+	stepLog = "Live migration of VM"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		err := GenericStartAndWaitForVMMigration(selectedVM, ctxt.TODO())
+		if err != nil {
+			UpdateOutcome(event, err)
+			log.FailOnError(err, "Failed to migrate VM")
+		}
+	})
+	updateMetrics(*event)
 }
 
 // TriggerAsyncDRNodeRestartDestination triggers Async DR with node restart on source

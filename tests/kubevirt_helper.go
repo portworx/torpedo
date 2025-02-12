@@ -2352,3 +2352,56 @@ func GatherInitialUptimeAndNode(appCtxs []*scheduler.Context) (map[string]time.D
 	}
 	return initialUptime, initialNodeName, nil
 }
+
+func GetAllVMsFromAllNamespaces() ([]kubevirtv1.VirtualMachine, error) {
+	k8sKubevirt := kubevirt.Instance()
+	vms, err := k8sKubevirt.ListVirtualMachines("")
+	if err != nil {
+		return nil, err
+	}
+	return vms.Items, nil
+}
+
+func GenericStartAndWaitForVMMigration(vm kubevirtv1.VirtualMachine, ctx context1.Context) error {
+	log.Infof("Intiating VM migration for VM [%v] in namespace [%v]", vm.Name, vm.Namespace)
+	nodeName, err := GetNodeOfVM(vm)
+	if err != nil {
+		log.FailOnError(err, "Failed to get the node name of VM [%v]", vm.Name)
+	}
+	log.Infof("VM [%v] in namespace [%v] is scheduled on node [%v]", vm.Name, vm.Namespace, nodeName)
+
+	migration, err := kubevirtdy.Instance().CreateVirtualMachineInstanceMigration(ctx, vm.Namespace, vm.Name)
+	if err != nil {
+		return err
+	}
+	log.Infof("VM migration created for VM [%v] in namespace [%v]", vm.Name, vm.Namespace)
+
+	t := func() (interface{}, bool, error) {
+		migr, err := kubevirtdy.Instance().GetVirtualMachineInstanceMigration(context1.TODO(), vm.Namespace, migration.Name)
+		if err != nil {
+			log.Infof("Error getting migration: [%v]", err)
+			return nil, true, err
+		}
+		if migr.Phase == string(kubevirtv1.MigrationSucceeded) {
+			log.Infof("Migration has succeeded")
+			return nil, false, nil
+		} else if migr.Phase == string(kubevirtv1.MigrationFailed) {
+			return nil, false, fmt.Errorf("Migration has failed for VMI [%s]", vm.Name)
+		}
+		return nil, true, fmt.Errorf("Migration not yet completed for VMI [%s]", vm.Name)
+	}
+
+	_, err = task.DoRetryWithTimeout(t, defaultMigrationTimeout, defaultMigrationRetryInterval)
+	if err != nil {
+		return fmt.Errorf("Failed to wait for migration to complete for VMI [%s]: [%v]", vm.Name, err)
+	}
+	log.Infof("Sleeping for 10 seconds for the migration to complete")
+	time.Sleep(10 * time.Second)
+
+	//Validate Migration
+	err = ValidateVMMigration(vm, nodeName)
+	if err != nil {
+		return err
+	}
+	return nil
+}

@@ -8959,7 +8959,7 @@ func GetVirtLauncherPodObject(vm kubevirtv1.VirtualMachine) (*corev1.Pod, error)
 		return nil, err
 	}
 	for _, pod := range pods.Items {
-		if strings.Contains(pod.Name, fmt.Sprintf("%s-%s", "virt-launcher", vm.Name)) {
+		if strings.Contains(pod.Name, fmt.Sprintf("%s-%s", "virt-launcher", vm.Name)) && pod.Status.Phase == corev1.PodRunning {
 			log.InfoD("virt-launcher pod found for vm [%s] is [%s]", vm.Name, pod.Name)
 			return &pod, nil
 		}
