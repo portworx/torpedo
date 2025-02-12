@@ -8979,6 +8979,88 @@ func GetNumberOfDisksInVM(vm kubevirtv1.VirtualMachine) (int, error) {
 	return diskCount, nil
 }
 
+// GetNumberOfInterfacesForAllVMs retrieves the number of network interfaces for all VMs.
+func GetNumberOfInterfacesForAllVMs(appCtxs []*scheduler.Context) (map[string]int, error) {
+	var wg sync.WaitGroup
+	var mu sync.Mutex // Synchronizes access to the vmInterfaces map and errors
+	vmInterfaces := make(map[string]int)
+
+	log.Infof("Retrieving network interface count for VMs")
+	vms, err := GetAllVMsFromScheduledContexts(appCtxs)
+	if err != nil {
+		return vmInterfaces, fmt.Errorf("failed to get VMs from appCtxs: %v", err)
+	}
+	// Channel to signal an error
+	errChan := make(chan error, len(vms))
+
+	for _, vm := range vms {
+		wg.Add(1)
+		go func(vm kubevirtv1.VirtualMachine) {
+			defer GinkgoRecover()
+			defer wg.Done()
+
+			interfaceCount, err := GetVMInterfaceCount(vm)
+			if err != nil {
+				errChan <- fmt.Errorf("failed to get interface count for VM %s: %v", vm.Name, err)
+				return
+			}
+
+			vmKey := fmt.Sprintf("%s/%s", vm.Namespace, vm.Name)
+			mu.Lock()
+			vmInterfaces[vmKey] = interfaceCount
+			mu.Unlock()
+
+			log.Infof("Interface count for VM %s is %d", vmKey, interfaceCount)
+		}(vm)
+	}
+
+	wg.Wait()
+	close(errChan)
+
+	// Check if there was an error from the goroutines
+	select {
+	case err := <-errChan:
+		return vmInterfaces, err
+	default:
+		return vmInterfaces, nil
+	}
+}
+
+// GetVMInterfaceCount retrieves the number of network interfaces for a given VM.
+func GetVMInterfaceCount(vm kubevirtv1.VirtualMachine) (int, error) {
+	// Ensure SSH pod is created before proceeding
+	sshPodCreated := CreateSSHPodAndSetCanSsh()
+	if !sshPodCreated {
+		return 0, fmt.Errorf("failed to create SSH pod")
+	}
+
+	ipAddress, err := GetVMIPAddress(vm)
+	if err != nil {
+		return 0, err
+	}
+	log.Infof("VM Name - %s", vm.Name)
+	log.Infof("IP Address - %s", ipAddress)
+
+	err = TestSSHConnectivity(ipAddress)
+	if err != nil {
+		return 0, err
+	}
+
+	cmd := "/sbin/ip link show | grep -E \"^[0-9]+:\" | wc -l"
+	output, err := RunCommandInVM(ipAddress, cmd)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get network interface count in VM: %v", err)
+	}
+
+	output = strings.TrimSpace(output)
+	interfaceCount, err := strconv.Atoi(output)
+	if err != nil {
+		return 0, fmt.Errorf("failed to convert network interface count to int: %v", err)
+	}
+
+	return interfaceCount, nil
+}
+
 // GetVMsInBackup returns the list of VMs in the backup
 func GetVMsInBackup(ctx context1.Context, backupName string) ([]string, error) {
 	backupDriver := Inst().Backup
