@@ -204,6 +204,7 @@ const (
 	BackupAndRestoreWithParallelBackupScheduleAndLargeVol                              TestCaseName = "BackupAndRestoreWithParallelBackupScheduleAndLargeVo"
 	StorkInstallClusterStatusCheck                                                     TestCaseName = "StorkInstallClusterStatusCheck"
 	RestoreFromBackupsTakenByStork                                                     TestCaseName = "RestoreFromBackupsTakenByStork"
+	AddBackupLocationWhileNfsValidatorPodIsRunning                                     TestCaseName = "AddBackupLocationWhileNfsValidatorPodIsRunning"
 )
 
 // Test case labels
@@ -402,6 +403,7 @@ const (
 	BackupAndRestoreWithParallelBackupScheduleAndLargeVolLabel                              TestCaseLabel = "BackupAndRestoreWithParallelBackupScheduleAndLargeVol"
 	StorkInstallClusterStatusCheckLabel                                                     TestCaseLabel = "StorkInstallClusterStatusCheck"
 	RestoreFromBackupsTakenByStorkLabel                                                     TestCaseLabel = "RestoreFromBackupsTakenByStork"
+	AddBackupLocationWhileNfsValidatorPodIsRunningLabel                                     TestCaseLabel = "AddBackupLocationWhileNfsValidatorPodIsRunning"
 )
 
 // Common Labels
