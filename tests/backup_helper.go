@@ -25,6 +25,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/blang/semver"
 	"github.com/pure-px/torpedo/drivers/applications/databases"
 
 	"github.com/gogo/protobuf/types"
@@ -15247,4 +15248,104 @@ func PopulateMangeClusterBuldAddRequest(cloudCredName, cloudCredUID, region stri
 	bulkAddRequestconfig := &api.ManagedClusterBulkAddRequest_AWSConfig{Region: region}
 	req := &api.ManagedClusterBulkAddRequest{OrgId: BackupOrgID, CloudCredential: cloudCred, ClusterName: clusterNames, Provider: api.ManagedClusterBulkAddRequest_AWS, Config: &api.ManagedClusterBulkAddRequest_AwsConfig{AwsConfig: bulkAddRequestconfig}}
 	return req
+}
+
+func GetHelmVersions(settings *cli.EnvSettings, repoName, chartName string) ([]semver.Version, error) {
+	repoFile := settings.RepositoryConfig
+	file, err := repo.LoadFile(repoFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load repository file: %w", err)
+	}
+
+	repoEntry := file.Get(repoName)
+	if repoEntry == nil {
+		return nil, fmt.Errorf("repository %s not found", repoName)
+	}
+
+	repository, err := repo.NewChartRepository(repoEntry, getter.All(settings))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create repository: %w", err)
+	}
+
+	indexFilePath, err := repository.DownloadIndexFile()
+	if err != nil {
+		return nil, fmt.Errorf("failed to download index file: %w", err)
+	}
+
+	indexFile, err := repo.LoadIndexFile(indexFilePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load index file: %w", err)
+	}
+
+	var versions []semver.Version
+	for chart, versionsMap := range indexFile.Entries {
+		if strings.EqualFold(chart, chartName) {
+			for _, entry := range versionsMap {
+				v, err := semver.Parse(entry.Version)
+				if err == nil {
+					versions = append(versions, v)
+				}
+			}
+		}
+	}
+
+	sort.Sort(sort.Reverse(semver.Versions(versions))) // Sort versions descending
+	return versions, nil
+}
+
+func GetNthPxBackupVersion(latestVersion string, difference int, latestFlag bool) (semver.Version, error) {
+	var candidate semver.Version
+
+	latest, err := semver.Parse(latestVersion)
+	if err != nil {
+		return semver.Version{}, fmt.Errorf("failed to parse latest version %s: %w", latestVersion, err)
+	}
+
+	// Make sure the repo is available/updated
+	if err := addAndUpdateRepo(cli.New()); err != nil {
+		log.Errorf("failed to add/update Portworx repository: %w", err)
+		return semver.Version{}, err
+	}
+
+	versions, err := GetHelmVersions(cli.New(), "portworx", PxCentralReleaseName)
+	if err != nil {
+		log.Errorf("failed to get %s versions: %w", PxCentralReleaseName, err)
+		return semver.Version{}, err
+	}
+	found := false
+
+	for _, v := range versions {
+		if v.Major == latest.Major && int(v.Minor) == int(latest.Minor)-difference {
+			if latestFlag {
+				if !found || v.GT(candidate) {
+					candidate = v
+					found = true
+				}
+			} else {
+				if v.Patch == 0 {
+					return v, nil // Immediately return the .0 version if found
+				}
+				if !found {
+					candidate = v // Store the earliest available patch if .0 is missing
+					found = true
+				}
+			}
+		} else if v.Major == latest.Major-1 && int(latest.Minor) < difference {
+			if latestFlag {
+				if !found || v.GT(candidate) {
+					candidate = v
+					found = true
+				}
+			} else {
+				if v.Patch == 0 {
+					return v, nil
+				}
+				if !found {
+					candidate = v
+					found = true
+				}
+			}
+		}
+	}
+	return candidate, nil
 }

@@ -589,7 +589,8 @@ var _ = Describe("{UpgradePxBackupStorageClassAndImagesCheck}", Label(TestCaseLa
 		log.InfoD("Installing Px-Backup...")
 		valuesMap, err := ParseValuesFromFile("values1")
 		log.FailOnError(err, "Failed to parse values file")
-		_, err = InstallPxBackup("2.6.0", "master", namespace, valuesMap)
+		installVersion, err := GetNthPxBackupVersion(LatestPxBackupVersion, 2, false)
+		_, err = InstallPxBackup(installVersion.String(), "master", namespace, valuesMap)
 		log.FailOnError(err, "Failed to install px-backup")
 	})
 	It("Should check px-backup upgrade failure due to incorrect storage class and images", func() {
@@ -924,7 +925,8 @@ var _ = Describe("{UpgradePxBackupPortInfoCheck}", Label(TestCaseLabelsMap[Upgra
 		log.InfoD("Installing Px-Backup...")
 		valuesMap, err := ParseValuesFromFile("values1")
 		log.FailOnError(err, "Failed to parse values file")
-		rel, err = InstallPxBackup("2.8.0", "master", namespace, valuesMap)
+		installVersion, err := GetNthPxBackupVersion(LatestPxBackupVersion, 0, false)
+		rel, err = InstallPxBackup(installVersion.String(), "master", namespace, valuesMap)
 		log.FailOnError(err, "Failed to install px-backup")
 	})
 	It("Should check port info in the release notes for upgrade", func() {
@@ -1062,7 +1064,8 @@ var _ = Describe("{UpgradePxBackupWithSkipValidationsFlagTrue}", Label(TestCaseL
 		log.InfoD("Installing Px-Backup...")
 		valuesMap, err := ParseValuesFromFile("values1")
 		log.FailOnError(err, "Failed to parse values file")
-		_, err = InstallPxBackup("2.5.0", "master", namespace, valuesMap)
+		installVersion, err := GetNthPxBackupVersion(LatestPxBackupVersion, 3, false)
+		_, err = InstallPxBackup(installVersion.String(), "master", namespace, valuesMap)
 		log.FailOnError(err, "Failed to install px-backup")
 	})
 	// Upgrade with skipValidations flag set to false and verify that the report has the string "Issues detected during validations."
@@ -1176,10 +1179,10 @@ var _ = Describe("{UpgradePxBackupWithSkipValidationsFlagTrue}", Label(TestCaseL
 	})
 })
 
-var _ = Describe("{UpgradePxBackupWhenInstallVersionIsInValid}", Label(TestCaseLabelsMap[UpgradePxBackupWhenInstallVersionIsInValid]...), func() {
+var _ = Describe("{UpgradePxBackupWhenInstallVersionIsInvalid}", Label(TestCaseLabelsMap[UpgradePxBackupWhenInstallVersionIsInvalid]...), func() {
 	var namespace string
 	JustBeforeEach(func() {
-		StartPxBackupTorpedoTest("UpgradePxBackupWhenInstallVersionIsInValid", "Upgrading Px-Backup when the current installed version is lesser than n-2 of target version", nil, 304877, Kgarg, Q4FY25)
+		StartPxBackupTorpedoTest("UpgradePxBackupWhenInstallVersionIsInvalid", "Upgrading Px-Backup when the current installed version is lesser than n-2 of target version", nil, 304877, Kgarg, Q4FY25)
 		log.InfoD("Uninstalling Px-Backup...")
 		err := UninstallPxBackup()
 		log.FailOnError(err, "Failed to delete px-backup")
@@ -1188,12 +1191,13 @@ var _ = Describe("{UpgradePxBackupWhenInstallVersionIsInValid}", Label(TestCaseL
 		log.InfoD("Installing Px-Backup...")
 		valuesMap, err := ParseValuesFromFile("values1")
 		log.FailOnError(err, "Failed to parse values file")
-		_, err = InstallPxBackup("2.5.0", "master", namespace, valuesMap)
+		installVersion, err := GetNthPxBackupVersion(LatestPxBackupVersion, 3, false)
+		_, err = InstallPxBackup(installVersion.String(), "master", namespace, valuesMap)
 		log.FailOnError(err, "Failed to install px-backup")
 	})
 
 	It("Should upgrade Px Backup when the current installed version is lesser than n-2 of target version", func() {
-		Step("Upgrade Px Backup to a version greater than n-2 of the target version and validate that the upgradatation fails", func() {
+		Step("Upgrade Px Backup to a version greater than n-2 of the target version and validate that the upgrade fails", func() {
 			log.InfoD("Upgrade to latest Px Backup with skipValidations flag set to true")
 			valuesMap, err := ParseValuesFromFile("values1")
 			log.FailOnError(err, "Failed to parse configuration file values1")
@@ -1256,7 +1260,8 @@ var _ = Describe("{UpgradePxBackupPodReadinessCheck}", Label(TestCaseLabelsMap[U
 		log.InfoD("Installing Px-Backup...")
 		valuesMap, err := ParseValuesFromFile("values1")
 		log.FailOnError(err, "Failed to parse values file")
-		_, err = InstallPxBackup("2.8.0", "master", namespace, valuesMap)
+		installVersion, err := GetNthPxBackupVersion(LatestPxBackupVersion, 0, false)
+		_, err = InstallPxBackup(installVersion.String(), "master", namespace, valuesMap)
 		log.FailOnError(err, "Failed to install px-backup")
 		timeout = 5 * time.Minute
 		retryInterval = 10 * time.Second
@@ -1410,7 +1415,8 @@ var _ = Describe("{UpgradePxBackupKubernetesVersionCheck}", Label(TestCaseLabels
 		log.InfoD("Installing Px-Backup...")
 		valuesMap, err := ParseValuesFromFile("values1")
 		log.FailOnError(err, "Failed to parse values file")
-		_, err = InstallPxBackup("2.7.0", "master", namespace, valuesMap)
+		installVersion, err := GetNthPxBackupVersion(LatestPxBackupVersion, 1, false)
+		_, err = InstallPxBackup(installVersion.String(), "master", namespace, valuesMap)
 		log.FailOnError(err, "Failed to install px-backup")
 	})
 	It("Should check if a warning is logged in a config map if the kubernetes version is less than the minimum required version", func() {
@@ -1484,7 +1490,8 @@ var _ = Describe("{UpgradePxBackupPostInstallJobCheck}", Label(TestCaseLabelsMap
 			valuesMap, err := ParseValuesFromFile("values1")
 			log.FailOnError(err, "Failed to parse values file")
 			log.InfoD("Attempting to fail the post-install job")
-			_, err = InstallPxBackup("2.8.0", "master", namespace, valuesMap)
+			installVersion, err := GetNthPxBackupVersion(LatestPxBackupVersion, 0, false)
+			_, err = InstallPxBackup(installVersion.String(), "master", namespace, valuesMap)
 			log.FailOnError(err, "Failed to install px-backup")
 		})
 

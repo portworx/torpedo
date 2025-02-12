@@ -194,7 +194,7 @@ const (
 	RestartMultipleComponentsWhenParallelBackupScheduleInProgress                      TestCaseName = "RestartMultipleComponentsWhenParallelBackupScheduleInProgress"
 	ParallelScheduleWithPartialBackup                                                  TestCaseName = "ParallelScheduleWithPartialBackup"
 	ValidateParallelScheduleWithNetworkLatency                                         TestCaseName = "ValidateParallelScheduleWithNetworkLatency"
-	UpgradePxBackupWhenInstallVersionIsInValid                                         TestCaseName = "UpgradePxBackupWhenInstallVersionIsInValid"
+	UpgradePxBackupWhenInstallVersionIsInvalid                                         TestCaseName = "UpgradePxBackupWhenInstallVersionIsInvalid"
 	InstallPxBackupInNamespaceOtherThanPxBackup                                        TestCaseName = "InstallPxBackupInNamespaceOtherThanPxBackup"
 	InstallPxBackupStorageClassAndImagesCheck                                          TestCaseName = "InstallPxBackupStorageClassAndImagesCheck"
 	InstallPxBackupHelmRollbackCheck                                                   TestCaseName = "InstallPxBackupHelmRollbackCheck"
@@ -401,7 +401,7 @@ const (
 	RestartMultipleComponentsWhenParallelBackupScheduleInProgressLabel                      TestCaseLabel = "RestartMultipleComponentsWhenParallelBackupScheduleInProgress"
 	ParallelScheduleWithPartialBackupLabel                                                  TestCaseLabel = "ParallelScheduleWithPartialBackup"
 	ValidateParallelScheduleWithNetworkLatencyLabel                                         TestCaseLabel = "ValidateParallelScheduleWithNetworkLatency"
-	UpgradePxBackupWhenInstallVersionIsInValidLabel                                         TestCaseLabel = "UpgradePxBackupWhenInstallVersionIsInValid"
+	UpgradePxBackupWhenInstallVersionIsInvalidLabel                                         TestCaseLabel = "UpgradePxBackupWhenInstallVersionIsInvalid"
 	InstallPxBackupWithSkipValidationsFlagTrueLabel                                         TestCaseLabel = "InstallPxBackupWithSkipValidationsFlagTrue"
 	UpgradePxBackupWithSkipValidationsFlagTrueLabel                                         TestCaseLabel = "UpgradePxBackupWithSkipValidationsFlagTrue"
 	InstallPxBackupInNamespaceOtherThanPxBackupLabel                                        TestCaseLabel = "InstallPxBackupInNamespaceOtherThanPxBackup"
@@ -766,7 +766,7 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	RestartMultipleComponentsWhenParallelBackupScheduleInProgress:          {RestartMultipleComponentsWhenParallelBackupScheduleInProgressLabel, SystemTest, PxBackupLabel, ScaleTest, PxLabel},
 	ParallelScheduleWithPartialBackup:                                      {ParallelScheduleWithPartialBackupLabel, SystemTest, PxBackupLabel, ScaleTest, PxLabel},
 	ValidateParallelScheduleWithNetworkLatency:                             {ValidateParallelScheduleWithNetworkLatencyLabel, SystemTest, PxBackupLabel, ScaleTest, PxLabel},
-	UpgradePxBackupWhenInstallVersionIsInValid:                             {UpgradePxBackupWhenInstallVersionIsInValidLabel, FunctionalTest, PxBackupLabel, P0, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
+	UpgradePxBackupWhenInstallVersionIsInvalid:                             {UpgradePxBackupWhenInstallVersionIsInvalidLabel, FunctionalTest, PxBackupLabel, P0, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
 	InstallPxBackupInNamespaceOtherThanPxBackup:                            {InstallPxBackupInNamespaceOtherThanPxBackupLabel, FunctionalTest, PxBackupLabel, P0, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
 	InstallPxBackupStorageClassAndImagesCheck:                              {InstallPxBackupStorageClassAndImagesCheckLabel, FunctionalTest, PxBackupLabel, P0, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
 	InstallPxBackupHelmRollbackCheck:                                       {InstallPxBackupHelmRollbackCheckLabel, FunctionalTest, PxBackupLabel, P0, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
