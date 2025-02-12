@@ -840,6 +840,8 @@ func validateSpec(in interface{}) (interface{}, error) {
 		return specObj, nil
 	} else if specObj, ok := in.(*corev1.Namespace); ok {
 		return specObj, nil
+	} else if specObj, ok := in.(*monitoringv1.Alertmanager); ok {
+		return specObj, nil
 	} else if specObj, ok := in.(*apiextensionsv1beta1.CustomResourceDefinition); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*apiextensionsv1.CustomResourceDefinition); ok {

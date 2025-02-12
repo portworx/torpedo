@@ -2495,3 +2495,159 @@ var _ = Describe("{ValidateBackupDeletionWorkflowUnderObjectStoreDisruptions}", 
 		CleanupCloudSettingsAndClusters(nil, cloudCredName, cloudCredUID, ctx)
 	})
 })
+
+// Once a object is selected for deletion, check if a job pod is created on the PX-Backup cluster
+var _ = Describe("{BackupOperatorNamespaceAfterCrCreation}", Label(TestCaseLabelsMap[PxBackupLabel]...), func() {
+
+	var (
+		scheduledAppContexts []*scheduler.Context
+		bkpNamespaces        []string
+		clusterUid           string
+		clusterStatus        api.ClusterInfo_StatusInfo_Status
+		backupName           string
+		backupLocationUID    string
+		cloudCredName        string
+		cloudCredUID         string
+		bkpLocationName      string
+		backupNames          []string
+		providers            []string
+		ctx                  context.Context
+		err                  error
+		backupLocationMap    map[string]string
+		appList              []string
+		restoreNames         []string
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("VerifyBackupOperatorNamespaceAfterCrCreation", "Once a object is selected for deletion, check if a job pod is created on the PX-Backup cluster", nil, 300381, Pingle, Q3FY25)
+
+		ctx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+
+		providers = GetBackupProviders()
+		backupLocationMap = make(map[string]string)
+		bkpNamespaces = make([]string, 0)
+		backupNames = make([]string, 0)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		actualAppList := Inst().AppList
+		log.Infof("actual app list:%v", actualAppList)
+		appList = Inst().AppList
+		defer func() {
+			log.Infof("Resetting applist and removing the custom app config")
+			Inst().AppList = appList
+			err := Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+			log.FailOnError(err, "Failed while rescanning specs")
+		}()
+
+		Inst().AppList = PromAppsWithCRDs
+		log.Infof("custom app list: %v", Inst().AppList)
+		err := Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+		log.FailOnError(err, "Failed to rescan specs from %s for storage provider %s", Inst().SpecDir, Inst().V.String())
+
+		// Schedule an Application
+		log.InfoD("Deploying all provided applications in a multiple namespace")
+		for i := 0; i < len(actualAppList); i++ {
+			var namespace string
+			app := actualAppList[i]
+			ns, exists := AppNamespaceMap[app]
+			if exists {
+				namespace = ns
+			} else {
+				log.Infof("Application: %s, Namespace: Not Found", app)
+			}
+
+			appContexts := ScheduleApplicationsOnNamespace(namespace, TaskNamePrefix)
+			bkpNamespaces = append(bkpNamespaces, namespace)
+			for _, appCtx := range appContexts {
+				appCtx.ReadinessTimeout = AppReadinessTimeout
+				scheduledAppContexts = append(scheduledAppContexts, appCtx)
+			}
+			log.InfoD("app namespace is:%s", namespace)
+		}
+
+		log.InfoD("waiting (for 5 minutes) for any CRs to finish starting up.")
+		time.Sleep(AppReadinessTime)
+	})
+
+	//Testing operator backup with CRDs and CR configuration on k8s
+	It("Testing operator backup with CRDs and CR configuration on k8s", func() {
+		// 1. validate application
+		Step("Validate applications", func() {
+			log.InfoD("Validating apps")
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		// 3. Create cloud credentials and backup location
+		Step("Creating cloud credentials and backup location", func() {
+			log.InfoD("Creating cloud credentials and backup location")
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, time.Now().Unix())
+				bkpLocationName = fmt.Sprintf("%s-%s-%v-bl", provider, getGlobalBucketName(provider), time.Now().Unix())
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = bkpLocationName
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				err = CreateBackupLocation(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", bkpLocationName))
+			}
+		})
+
+		// 4. Create application cluster for backup
+		Step("Register cluster for backup", func() {
+			err := CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			clusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			log.InfoD("Uid of [%s] cluster is %s", SourceClusterName, clusterUid)
+		})
+
+		// 5. Taking backup of applications
+		Step("Taking backup of applications", func() {
+			for i := 0; i < len(bkpNamespaces); i++ {
+				backupName = fmt.Sprintf("%s-%s", BackupNamePrefix, RandomString(6))
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, make(map[string]string), BackupOrgID, clusterUid, "", "", "", "")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s] with namespace [%s]", backupName, bkpNamespaces[i]))
+				backupNames = append(backupNames, backupName)
+			}
+			log.InfoD("List of backups [%v]", backupNames)
+		})
+
+		// 6. Restore of backup
+		Step("Restore the backup to destination cluster", func() {
+			userDestClusterUid, err := Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
+			for _, backupName := range backupNames {
+				restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+				err = CreateRestoreWithValidation(ctx, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, userDestClusterUid, BackupOrgID, appContextsToBackup)
+				dash.VerifyNotNilFatal(err, fmt.Sprintf("Validation of Restore [%s] ", restoreName))
+
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+
+		// Delete the all restores
+		for _, restore := range restoreNames {
+			err = DeleteRestore(restore, BackupOrgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting Restore %s", restore))
+		}
+
+		// Delete all the backups
+		log.InfoD("Deleting backups")
+		err = DeleteAllBackups(ctx, BackupOrgID)
+		dash.VerifySafely(err, nil, "deleting all backups")
+
+		err = DeleteNamespaces(bkpNamespaces)
+		dash.VerifySafely(err, nil, "Deleting app namespace")
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+
+	})
+})

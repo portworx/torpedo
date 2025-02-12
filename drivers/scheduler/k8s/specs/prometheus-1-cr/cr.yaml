@@ -1,0 +1,214 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prom-operator
+  namespace: monitoring-1-cr
+  labels:
+    app.kubernetes.io/component: prom-operator
+rules:
+  - apiGroups:
+      - extensions
+    resources:
+      - thirdpartyresources
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups:
+      - apiextensions.k8s.io
+    resources:
+        - customresourcedefinitions
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups:
+      - monitoring.coreos.com
+    resources:
+        - alertmanagers
+        - alertmanagers/status
+        - alertmanagers/finalizers
+        - prometheuses
+        - prometheuses/finalizers
+        - prometheuses/status
+        - servicemonitors
+        - prometheusrules
+        - podmonitors
+        - thanosrulers
+        - alertmanagerconfigs
+        - probes
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups:
+      - apps
+    resources:
+      - statefulsets
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources:
+      - configmaps
+      - secrets
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources:
+      - pods
+    verbs: ["list", "delete"]
+  - apiGroups: [""]
+    resources:
+      - services
+      - endpoints
+    verbs: ["get", "create", "update"]
+  - apiGroups: [""]
+    resources:
+      - nodes
+    verbs: ["list", "watch"]
+  - apiGroups: [""]
+    resources:
+      - namespaces
+    verbs: ["list", "watch", "get"]
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prom-operator
+  namespace: monitoring-1-cr
+  labels:
+    app.kubernetes.io/component: prom-operator
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prom-operator
+  namespace: monitoring-1-cr
+  labels:
+    app.kubernetes.io/component: prom-operator
+subjects:
+  - kind: ServiceAccount
+    name: prom-operator
+    namespace: monitoring-1-cr
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prom-operator
+---  
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prom-operator-prometheus
+  namespace: monitoring-1-cr
+  labels:
+    app.kubernetes.io/component: prom-operator
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  - services
+  - endpoints
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+- nonResourceURLs:
+  - /metrics
+  - /federate
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prom-operator-prometheus
+  namespace: monitoring-1-cr
+  labels:
+    app.kubernetes.io/component: prom-operator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prom-operator-prometheus
+subjects:
+- kind: ServiceAccount
+  name: prom-operator-prometheus
+  namespace: monitoring-1-cr
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prom-operator-prometheus
+  namespace: monitoring-1-cr
+  labels:
+    app.kubernetes.io/component: prom-operator
+spec:
+  type: ClusterIP
+  ports:
+    - name: web
+      port: 9090
+      protocol: TCP
+      targetPort: 9090
+  selector:
+    prometheus: prom-operator-prometheus
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prom-operator-prometheus
+  namespace: monitoring-1-cr
+  labels:
+    app.kubernetes.io/component: prom-operator
+
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus-operator
+  namespace: monitoring-1-cr
+  labels:
+    app: prometheus-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus-operator
+  template:
+    metadata:
+      labels:
+        app: prometheus-operator
+    spec:
+      serviceAccountName: prom-operator
+      containers:
+        - name: prometheus-operator
+          image: quay.io/prometheus-operator/prometheus-operator:v0.73.0
+          env:
+            - name: METADATA_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          args:
+            - -namespaces=$(METADATA_NAMESPACE)
+            - --kubelet-service=monitoring-1-cr/kubelet
+            - --log-level=info
+            - --prometheus-config-reloader=quay.io/prometheus-operator/prometheus-config-reloader:v0.73.0
+          ports:
+            - name: web
+              containerPort: 8080
+          resources:
+            requests:
+              cpu: 100m
+              memory: 50Mi
+            limits:
+              cpu: 200m
+              memory: 100Mi
+              
+---
+apiVersion: monitoring.coreos.com/v1
+kind: Prometheus
+metadata:
+  name: main
+  namespace: monitoring-1-cr
+spec:
+  replicas: 1
+  serviceAccountName: prom-operator-prometheus              

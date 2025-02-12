@@ -249,6 +249,7 @@ const (
 	RESOURCEKIND                          = "Deployment"
 	RESOURCEVERSION                       = "v1"
 	DocRegistrySecret                     = "docregistry-secret"
+	AppReadinessTime                      = 5 * time.Minute
 )
 
 var (
@@ -292,6 +293,8 @@ var (
 	PSAAppMap                    = map[string]string{"postgres-backup": "postgres-restricted", "mysql-backup": "mysql-restricted"}
 	CurrentPxBackupVersion       string
 	WaitTimeForNodeConnection    = 10 * time.Minute
+	PromAppsWithCRDs             = []string{"prometheus", "prometheus-1-cr", "prometheus-3-cr"}
+	AppNamespaceMap              = map[string]string{"prometheus": "monitoring", "prometheus-1-cr": "monitoring-1-cr", "prometheus-3-cr": "monitoring-3-cr"}
 )
 
 type UserRoleAccess struct {
