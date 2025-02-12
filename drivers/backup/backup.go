@@ -83,7 +83,8 @@ type Driver interface {
 	Receiver
 	//Recipient interface
 	Recipient
-
+	// ManagedCluster interface
+	ManagedCluster
 	// Init initializes the backup driver under a given scheduler
 	Init(schedulerDriverName string, nodeDriverName string, volumeDriverName string, token string) error
 
@@ -528,6 +529,18 @@ type Recipient interface {
 
 	// UpdateRecipient updates a Recipient object
 	UpdateRecipient(ctx context.Context, req *api.RecipientUpdateRequest) (*api.RecipientUpdateResponse, error)
+}
+
+// Managed Cluster object interface
+type ManagedCluster interface {
+	// InspectManagedCluster inspect Managed Cluster object
+	InspectManagedCluster(ctx context.Context, req *api.ManagedClusterInspectRequest) (*api.ManagedClusterInspectResponse, error)
+
+	// EnumerateManagedCluster enumerate Managed Cluster object
+	EnumerateManagedCluster(ctx context.Context, req *api.ManagedClusterEnumerateRequest) (*api.ManagedClusterEnumerateResponse, error)
+
+	// BulkAddManagedCluster bulk add Managed Cluster object
+	BulkAddManagedCluster(ctx context.Context, req *api.ManagedClusterBulkAddRequest) (*api.ManagedClusterBulkAddResponse, error)
 }
 
 var backupDrivers = make(map[string]Driver)

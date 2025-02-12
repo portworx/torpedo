@@ -68,6 +68,7 @@ type portworx struct {
 	metricsManager          api.MetricsClient
 	receiverManager         api.ReceiverClient
 	recipientManager        api.RecipientClient
+	managedClusterManager   api.ManagedClustersClient
 
 	schedulerDriver scheduler.Driver
 	nodeDriver      node.Driver
@@ -195,7 +196,7 @@ func (p *portworx) testAndSetEndpoint(endpoint string) error {
 	p.roleManager = api.NewRoleClient(conn)
 	p.receiverManager = api.NewReceiverClient(conn)
 	p.recipientManager = api.NewRecipientClient(conn)
-
+	p.managedClusterManager = api.NewManagedClustersClient(conn)
 	log.Infof("Using %v as endpoint for portworx backup driver", pxEndpoint)
 
 	return err
@@ -2706,6 +2707,21 @@ func (p *portworx) UpdateRecipient(ctx context.Context, req *api.RecipientUpdate
 // InspectRecipient inspects recipient object
 func (p *portworx) InspectRecipient(ctx context.Context, req *api.RecipientInspectRequest) (*api.RecipientInspectResponse, error) {
 	return p.recipientManager.Inspect(ctx, req)
+}
+
+// InspectManagedCluster inspects managed cluster object
+func (p *portworx) InspectManagedCluster(ctx context.Context, req *api.ManagedClusterInspectRequest) (*api.ManagedClusterInspectResponse, error) {
+	return p.managedClusterManager.Inspect(ctx, req)
+}
+
+// EnumerateManagedCluster enumerate managed cluster object
+func (p *portworx) EnumerateManagedCluster(ctx context.Context, req *api.ManagedClusterEnumerateRequest) (*api.ManagedClusterEnumerateResponse, error) {
+	return p.managedClusterManager.Enumerate(ctx, req)
+}
+
+// BulkAddManagedCluster Bulk Add managed cluster object
+func (p *portworx) BulkAddManagedCluster(ctx context.Context, req *api.ManagedClusterBulkAddRequest) (*api.ManagedClusterBulkAddResponse, error) {
+	return p.managedClusterManager.BulkAdd(ctx, req)
 }
 
 func init() {
