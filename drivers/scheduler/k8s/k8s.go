@@ -7090,38 +7090,23 @@ func (k *K8s) WaitForRebalanceAROToComplete() error {
 		if len(listAutopilotRuleObjects.Items) == 0 {
 			return nil, true, fmt.Errorf("The list of autopilot rule objects is empty, please make sure that you have an appropriate autopilot rule")
 		}
-		// IF Reabalance summary started and it's timestamp before "ActiveActionsTaken" timestamp
-		// means rebalance has been started and action has been taken.
 		for _, aro := range listAutopilotRuleObjects.Items {
-			hasRebalanceStarted := false
-			var rebalanceStartedTimeStamp int64
+			isActiveActionTaken := false
 			log.InfoD("Rule Name %v", aro.GetObjectMeta().GetName())
 			for _, aroStatusItem := range aro.Status.Items {
 				if aroStatusItem.State == "" {
 					continue
 				}
-				if strings.Contains(aroStatusItem.Message, "Rebalance summary:") {
-					hasRebalanceStarted = true
-					log.InfoD("Rebalance has started ")
-					rebalanceStartedTimeStamp = aroStatusItem.LastProcessTimestamp.Unix()
-				}
 				if aroStatusItem.State == apapi.RuleStateActiveActionsTaken {
-					if aroStatusItem.LastProcessTimestamp.Unix() > rebalanceStartedTimeStamp && hasRebalanceStarted == true {
-						log.InfoD("Rebalance Action has been taken on ARO %s ", aro.GetObjectMeta().GetName())
-						return nil, false, nil
-					} else {
-						log.InfoD(" Expected  state: %s available but it is before Rebalance Started ", aroStatusItem.State)
-					}
+					isActiveActionTaken = true
+					continue
 				}
-				if aroStatusItem.State == apapi.RuleStateNormal && strings.Contains(aroStatusItem.Message, "ActiveActionsPending => Normal") {
-					if aroStatusItem.LastProcessTimestamp.Unix() > rebalanceStartedTimeStamp && hasRebalanceStarted == true {
-						log.InfoD("Rebalance Action has been taken on ARO %s ", aro.GetObjectMeta().GetName())
-						return nil, false, nil
-					} else {
-						log.InfoD(" Expected  state: %s available but it is before Rebalance Started ", aroStatusItem.State)
-					}
+				if isActiveActionTaken && aroStatusItem.State == apapi.RuleStateNormal {
+					log.InfoD("Rebalance Action has been taken on ARO %s ", aro.GetObjectMeta().GetName())
+					return nil, false, nil
 				}
 			}
+
 		}
 		return nil, true, fmt.Errorf("Rebalance ARO not completed or did not start yet")
 	}
