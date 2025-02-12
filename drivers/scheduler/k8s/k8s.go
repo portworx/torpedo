@@ -158,7 +158,9 @@ const (
 	AutopilotLabelValue   = "autopilot"
 	PortworxNotDeployed   = "portworx not deployed"
 	// MetadataLabel is added to node if node has to be made kvdb node or never become kvdb node according to key value
-	MetaDataLabel = "px/metadata-node"
+	MetaDataLabel               = "px/metadata-node"
+	StorageProvisonerAnnotation = "volume.kubernetes.io/storage-provisioner"
+	PureBackend                 = "backend"
 )
 
 const (
@@ -890,8 +892,14 @@ func (k *K8s) filterPureVolumesIfEnabledByPureVolBackend(claim *v1.PersistentVol
 func (k *K8s) filterPureTypeVolumeIfEnabled(claim *v1.PersistentVolumeClaim, volTypes []string) (bool, error) {
 
 	if !k.PureVolumes {
-		// If we aren't filtering for Pure volumes, all are valid
-		return true, nil
+		// If we aren't filtering for Pure volumes then checking for provisioner
+		pvc, _ := k8sCore.GetPersistentVolumeClaim(claim.Name, claim.Namespace)
+		provisioner, contains := pvc.Annotations[StorageProvisonerAnnotation]
+		// snapshots can be taken for CSI volumes as well
+		if contains && provisioner == CsiProvisioner {
+			return true, nil
+		}
+		return false, nil
 	}
 
 	scForPvc, err := k8sCore.GetStorageClassForPVC(claim)
@@ -7653,22 +7661,14 @@ func (k *K8s) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error
 
 // CreateCsiSnapsForVolumes create csi snapshots for Apps
 func (k *K8s) CreateCsiSnapsForVolumes(ctx *scheduler.Context, snapClass string) (map[string]*volsnapv1.VolumeSnapshot, error) {
-	// Only FA (pure_block) volume is supported
-	volTypes := []string{PureBlock}
 	var volSnapMap = make(map[string]*volsnapv1.VolumeSnapshot)
-
 	for _, specObj := range ctx.App.SpecList {
 
 		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
 			pvc, _ := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
-			snapshotOkay, err := k.filterPureTypeVolumeIfEnabled(pvc, volTypes)
+			snapshotOkay, err := k.isCSISnapshotSupportedForPVC(pvc)
 			if err != nil {
 				return nil, err
-			}
-			provisioner, contains := pvc.Annotations["volume.kubernetes.io/storage-provisioner"]
-			// snapshots can be taken for CSI volumes as well
-			if contains && provisioner == "pxd.portworx.com" {
-				snapshotOkay = true
 			}
 			if snapshotOkay {
 				snapName := "snap-" + pvc.Name + "-" + strconv.Itoa(int(time.Now().Unix()))
@@ -7698,7 +7698,7 @@ func (k *K8s) CreateCsiSnapsForVolumes(ctx *scheduler.Context, snapClass string)
 			}
 
 			for _, pvc := range pvcList.Items {
-				snapshotOkay, err := k.filterPureTypeVolumeIfEnabled(&pvc, volTypes)
+				snapshotOkay, err := k.isCSISnapshotSupportedForPVC(&pvc)
 				if err != nil {
 					return nil, err
 				}
@@ -8427,21 +8427,14 @@ func GeneratePVCCloneSpec(size resource.Quantity, ns string, name string, source
 
 // DeleteCsiSnapsForVolumes delete csi snapshots for Apps
 func (k *K8s) DeleteCsiSnapsForVolumes(ctx *scheduler.Context, retainCount int) error {
-	// Only FA (pure_block) volume is supported
-	volTypes := []string{PureBlock}
 
 	for _, specObj := range ctx.App.SpecList {
 
 		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
 			pvc, _ := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
-			snapshotOkay, err := k.filterPureTypeVolumeIfEnabled(pvc, volTypes)
+			snapshotOkay, err := k.isCSISnapshotSupportedForPVC(pvc)
 			if err != nil {
 				return err
-			}
-			provisioner, contains := pvc.Annotations["volume.kubernetes.io/storage-provisioner"]
-			// snapshots can be taken for CSI volumes as well
-			if contains && provisioner == "pxd.portworx.com" {
-				snapshotOkay = true
 			}
 			if snapshotOkay {
 				snaplistForDelete, err := k.GetCsiSnapshots(obj.Namespace, pvc.Name)
@@ -8480,7 +8473,7 @@ func (k *K8s) DeleteCsiSnapsForVolumes(ctx *scheduler.Context, retainCount int) 
 			}
 
 			for _, pvc := range pvcList.Items {
-				snapshotOkay, err := k.filterPureTypeVolumeIfEnabled(&pvc, volTypes)
+				snapshotOkay, err := k.isCSISnapshotSupportedForPVC(&pvc)
 				if err != nil {
 					return err
 				}
@@ -8547,12 +8540,11 @@ func (k *K8s) restoreAndValidate(
 // RestoreCsiSnapAndValidate restore the snapshot and validate the PVC
 func (k *K8s) RestoreCsiSnapAndValidate(ctx *scheduler.Context, scMap map[string]*storageapi.StorageClass) (map[string]v1.PersistentVolumeClaim, error) {
 	var pvcToRestorePVCMap = make(map[string]v1.PersistentVolumeClaim)
-	var pureBlkType = []string{PureBlock}
 	for _, specObj := range ctx.App.SpecList {
 		var resPvc *v1.PersistentVolumeClaim
 		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
 			pvc, _ := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
-			restoreOkay, err := k.filterPureTypeVolumeIfEnabled(pvc, pureBlkType)
+			restoreOkay, err := k.isCSISnapshotSupportedForPVC(pvc)
 			if err != nil {
 				return nil, err
 			}
@@ -8580,7 +8572,7 @@ func (k *K8s) RestoreCsiSnapAndValidate(ctx *scheduler.Context, scMap map[string
 			}
 
 			for _, pvc := range pvcList.Items {
-				restoreOkay, err := k.filterPureTypeVolumeIfEnabled(&pvc, pureBlkType)
+				restoreOkay, err := k.isCSISnapshotSupportedForPVC(&pvc)
 				if err != nil {
 					return nil, err
 				}
@@ -9010,12 +9002,11 @@ func (k *K8s) GetCsiSnapshots(namespace string, pvcName string) ([]*volsnapv1.Vo
 
 // ValidateCsiSnapshots validate all snapshots in the context
 func (k *K8s) ValidateCsiSnapshots(ctx *scheduler.Context, volSnapMap map[string]*volsnapv1.VolumeSnapshot) error {
-	var pureBlkType = []string{PureBlock}
 
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
 			pvc, _ := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
-			validateOkay, err := k.filterPureTypeVolumeIfEnabled(pvc, pureBlkType)
+			validateOkay, err := k.isCSISnapshotSupportedForPVC(pvc)
 			if err != nil {
 				return err
 			}
@@ -9049,7 +9040,7 @@ func (k *K8s) ValidateCsiSnapshots(ctx *scheduler.Context, volSnapMap map[string
 			}
 
 			for _, pvc := range pvcList.Items {
-				validateOkay, err := k.filterPureTypeVolumeIfEnabled(&pvc, pureBlkType)
+				validateOkay, err := k.isCSISnapshotSupportedForPVC(&pvc)
 				if err != nil {
 					return err
 				}
@@ -9452,4 +9443,30 @@ func (k *K8s) CreateResourceQuota(rq *v1.ResourceQuota) error {
 		return fmt.Errorf("failed to create resource quota in namespace %q: %w", rq.Namespace, err)
 	}
 	return nil
+}
+
+// isCSISnapshotSupportedForPVC will return true if CSI snapshot supported for PVC
+func (k *K8s) isCSISnapshotSupportedForPVC(claim *v1.PersistentVolumeClaim) (bool, error) {
+
+	scForPvc, err := k8sCore.GetStorageClassForPVC(claim)
+	if err != nil {
+		return false, err
+	}
+	backend, ok := scForPvc.Parameters[PureBackend]
+	if ok {
+		switch backend {
+		case PureFile:
+			return false, nil
+		case PureBlock:
+			return true, nil
+		}
+	}
+	// Checking for provisioner
+	pvc, _ := k8sCore.GetPersistentVolumeClaim(claim.Name, claim.Namespace)
+	provisioner, contains := pvc.Annotations[StorageProvisonerAnnotation]
+	// snapshots can be taken for CSI volumes as well
+	if contains && provisioner == CsiProvisioner {
+		return true, nil
+	}
+	return false, nil
 }
