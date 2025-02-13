@@ -894,14 +894,8 @@ func (k *K8s) filterPureVolumesIfEnabledByPureVolBackend(claim *v1.PersistentVol
 func (k *K8s) filterPureTypeVolumeIfEnabled(claim *v1.PersistentVolumeClaim, volTypes []string) (bool, error) {
 
 	if !k.PureVolumes {
-		// If we aren't filtering for Pure volumes then checking for provisioner
-		pvc, _ := k8sCore.GetPersistentVolumeClaim(claim.Name, claim.Namespace)
-		provisioner, contains := pvc.Annotations[StorageProvisonerAnnotation]
-		// snapshots can be taken for CSI volumes as well
-		if contains && provisioner == CsiProvisioner {
-			return true, nil
-		}
-		return false, nil
+		// If we aren't filtering for Pure volumes then return true for all volumes
+		return true, nil
 	}
 
 	scForPvc, err := k8sCore.GetStorageClassForPVC(claim)
