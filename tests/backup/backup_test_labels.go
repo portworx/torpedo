@@ -205,6 +205,7 @@ const (
 	StorkInstallClusterStatusCheck                                                     TestCaseName = "StorkInstallClusterStatusCheck"
 	RestoreFromBackupsTakenByStork                                                     TestCaseName = "RestoreFromBackupsTakenByStork"
 	AddBackupLocationWhileNfsValidatorPodIsRunning                                     TestCaseName = "AddBackupLocationWhileNfsValidatorPodIsRunning"
+	UninstallPxBackupAndRestoreFromTheBackup                                           TestCaseName = "UninstallPxBackupAndRestoreFromTheBackup"
 )
 
 // Test case labels
@@ -401,6 +402,7 @@ const (
 	InstallPxBackupKubernetesVersionCheckLabel                                              TestCaseLabel = "InstallPxBackupKubernetesVersionCheck"
 	UpgradePxBackupKubernetesVersionCheckLabel                                              TestCaseLabel = "UpgradePxBackupKubernetesVersionCheck"
 	BackupAndRestoreWithParallelBackupScheduleAndLargeVolLabel                              TestCaseLabel = "BackupAndRestoreWithParallelBackupScheduleAndLargeVol"
+	UninstallPxBackupAndRestoreFromTheBackupLabel                                           TestCaseLabel = "UninstallPxBackupAndRestoreFromTheBackup"
 	StorkInstallClusterStatusCheckLabel                                                     TestCaseLabel = "StorkInstallClusterStatusCheck"
 	RestoreFromBackupsTakenByStorkLabel                                                     TestCaseLabel = "RestoreFromBackupsTakenByStork"
 	AddBackupLocationWhileNfsValidatorPodIsRunningLabel                                     TestCaseLabel = "AddBackupLocationWhileNfsValidatorPodIsRunning"
@@ -657,6 +659,7 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	NamespaceMoveFromProjectToProjectToNoProjectWhileRestore:                           {NamespaceMoveFromProjectToProjectToNoProjectWhileRestoreLabel, rkePipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
 	NodeCountForLicensing:                                                              {NodeCountForLicensingLabel, allPipeline, SystemTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FBDALabel, FACDLabel, FADALabel, aksPipeline, NonPxLabel, gkePipeline, iksPipeline, KDMPLabel, CsiOffloadLabel, CsiLabel, roksPipeline},
 	PSALowerPrivilegeToHigherPrivilegeWithProjectMapping:                               {PSALowerPrivilegeToHigherPrivilegeWithProjectMappingLabel, rkePipeline, SystemTest, PxBackupLabel, P1, S3BackupLocationLabel, NfsBackupLocationLabel, PxLabel},
+	UninstallPxBackupAndRestoreFromTheBackup:                                           {UninstallPxBackupAndRestoreFromTheBackupLabel, rkePipeline, SystemTest, PxBackupLabel, P2, S3BackupLocationLabel, NfsBackupLocationLabel, PxLabel},
 	PXBackupClusterUpgradeTest:                                                         {PXBackupClusterUpgradeTestLabel, ocpPipeline, SystemTest, PxBackupLabel, P0},
 	PXBackupEndToEndBackupAndRestoreWithUpgrade:                                        {PXBackupEndToEndBackupAndRestoreWithUpgradeLabel, allPipeline, UpgradeTest, PxBackupLabel, P0, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, iksPipeline},
 	PXBackupUpgradeWithAzureCredChange:                                                 {PXBackupUpgradeWithAzureCredChangeLabel, AzureBackupLocationLabel, SystemTest, PxBackupLabel, P1, aksPipeline},

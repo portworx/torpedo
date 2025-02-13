@@ -3580,7 +3580,7 @@ var _ = Describe("{RebootNodesWhileCRRestoreIsInProgress}", Label(TestCaseLabels
 })
 
 // Install px-backup on destination cluster and taking px-backup on destination cluster, uninstall px-backup of destination cluster and restore from the backup on destination cluster
-var _ = Describe("{UninstallPxBackupAndRestoreFromTheBackup}", func() {
+var _ = Describe("{UninstallPxBackupAndRestoreFromTheBackup}", Label(TestCaseLabelsMap[UninstallPxBackupAndRestoreFromTheBackup]...), func() {
 
 	var err error
 	var ctx context.Context
