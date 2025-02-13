@@ -872,9 +872,11 @@ var _ = Describe("{RebootNodeWhileVolCreate}", Label("p1", "negative", "pure_ops
 	})
 	It("schedules nginx fada volumes on (n) * (NumberOfDeploymentsPerReboot) different namespaces and reboots a different node after every NumberOfDeploymentsPerReboot have been queued to schedule", func() {
 		//Provisioner for pure apps
-		var contexts = make([]*scheduler.Context, 0)
-		var wg sync.WaitGroup
-		//Scheduling app with volume placement strategy
+		var (
+			contexts = make([]*scheduler.Context, 0)
+			wg       sync.WaitGroup
+			err      error
+		)
 		//Scheduling app with volume placement strategy
 		applist := Inst().AppList
 		rand.Seed(time.Now().Unix())
@@ -883,7 +885,6 @@ var _ = Describe("{RebootNodeWhileVolCreate}", Label("p1", "negative", "pure_ops
 			workerNodes = node.GetStorageDriverNodes()
 		}
 		selectedNode := workerNodes[rand.Intn(len(workerNodes))]
-		var err error
 		defer func() {
 			Inst().AppList = applist
 			err = Inst().S.RemoveLabelOnNode(selectedNode, k8s.NodeType)
@@ -901,6 +902,7 @@ var _ = Describe("{RebootNodeWhileVolCreate}", Label("p1", "negative", "pure_ops
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
+				defer GinkgoRecover()
 				Step("Schedule applications", func() {
 					log.InfoD("Scheduling applications")
 					for j := 0; j < NumberOfDeploymentsPerReboot; j++ {
@@ -919,6 +921,7 @@ var _ = Describe("{RebootNodeWhileVolCreate}", Label("p1", "negative", "pure_ops
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
+				defer GinkgoRecover()
 				stepLog := "Pick a random storage node and reboot"
 				Step(stepLog, func() {
 
@@ -964,6 +967,7 @@ var _ = Describe("{RebootNodeWhileVolCreate}", Label("p1", "negative", "pure_ops
 				// Step 1: Reboot one random storage node
 				go func() {
 					defer wg.Done()
+					defer GinkgoRecover()
 					stepLog := "Reboot one random storage node"
 					Step(stepLog, func() {
 						err := Inst().N.RebootNode(selectedNode, node.RebootNodeOpts{
@@ -980,6 +984,7 @@ var _ = Describe("{RebootNodeWhileVolCreate}", Label("p1", "negative", "pure_ops
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
+					defer GinkgoRecover()
 					stepLog := "Destroy Application"
 					//this wait is added because while reboot some of the pods go to error state and takes time to comeback to normal state
 					log.InfoD("sleep for 2 and half minutes for pods to comeback to running state")
@@ -995,6 +1000,7 @@ var _ = Describe("{RebootNodeWhileVolCreate}", Label("p1", "negative", "pure_ops
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
+					defer GinkgoRecover()
 					stepLog = "Wait for node to come up"
 					Step(stepLog, func() {
 						nodeReadyStatus := func() (interface{}, bool, error) {
@@ -1070,6 +1076,7 @@ var _ = Describe("{RestartPXWhileVolCreate}", Label("p1", "negative", "px_ops", 
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
+					defer GinkgoRecover()
 					Step("Schedule applications", func() {
 						log.InfoD("Scheduling applications")
 						for j := 0; j < NumberOfDeploymentsPerRestart; j++ {
@@ -1089,6 +1096,7 @@ var _ = Describe("{RestartPXWhileVolCreate}", Label("p1", "negative", "px_ops", 
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
+					defer GinkgoRecover()
 					stepLog := "Restart Portworx"
 					Step(stepLog, func() {
 						log.Infof("Stop volume driver [%s] on node: [%s]", Inst().V.String(), selectedNode.Name)
@@ -1113,6 +1121,7 @@ var _ = Describe("{RestartPXWhileVolCreate}", Label("p1", "negative", "px_ops", 
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
+					defer GinkgoRecover()
 					stepLog := "Restart Portworx"
 					Step(stepLog, func() {
 						log.Infof("Stop volume driver [%s] on node: [%s]", Inst().V.String(), selectedNode.Name)
@@ -1126,6 +1135,7 @@ var _ = Describe("{RestartPXWhileVolCreate}", Label("p1", "negative", "px_ops", 
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
+					defer GinkgoRecover()
 					stepLog := "Destroy Application"
 					Step(stepLog, func() {
 						opts := make(map[string]bool)
