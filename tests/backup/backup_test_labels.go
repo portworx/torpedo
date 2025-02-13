@@ -204,6 +204,7 @@ const (
 	BackupAndRestoreWithParallelBackupScheduleAndLargeVol                              TestCaseName = "BackupAndRestoreWithParallelBackupScheduleAndLargeVo"
 	StorkInstallClusterStatusCheck                                                     TestCaseName = "StorkInstallClusterStatusCheck"
 	RestoreFromBackupsTakenByStork                                                     TestCaseName = "RestoreFromBackupsTakenByStork"
+	BackupAndRestoreJobWithNodeAffinity                                                TestCaseName = "BackupAndRestoreJobWithNodeAffinity"
 	AddBackupLocationWhileNfsValidatorPodIsRunning                                     TestCaseName = "AddBackupLocationWhileNfsValidatorPodIsRunning"
 	UninstallPxBackupAndRestoreFromTheBackup                                           TestCaseName = "UninstallPxBackupAndRestoreFromTheBackup"
 )
@@ -405,6 +406,7 @@ const (
 	UninstallPxBackupAndRestoreFromTheBackupLabel                                           TestCaseLabel = "UninstallPxBackupAndRestoreFromTheBackup"
 	StorkInstallClusterStatusCheckLabel                                                     TestCaseLabel = "StorkInstallClusterStatusCheck"
 	RestoreFromBackupsTakenByStorkLabel                                                     TestCaseLabel = "RestoreFromBackupsTakenByStork"
+	BackupAndRestoreJobWithNodeAffinityLabel                                                TestCaseName  = "BackupAndRestoreJobWithNodeAffinity"
 	AddBackupLocationWhileNfsValidatorPodIsRunningLabel                                     TestCaseLabel = "AddBackupLocationWhileNfsValidatorPodIsRunning"
 )
 
@@ -752,4 +754,5 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	InstallPxBackupKubernetesVersionCheck:                                  {InstallPxBackupKubernetesVersionCheckLabel, FunctionalTest, PxBackupLabel, P2, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
 	UpgradePxBackupKubernetesVersionCheck:                                  {UpgradePxBackupKubernetesVersionCheckLabel, FunctionalTest, PxBackupLabel, P2, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
 	BackupAndRestoreWithParallelBackupScheduleAndLargeVol:                  {BackupAndRestoreWithParallelBackupScheduleAndLargeVolLabel, SystemTest, PxBackupLabel},
+	BackupAndRestoreJobWithNodeAffinity:                                    {BackupAndRestoreJobWithNodeAffinityLabel, SystemTest, PxBackupLabel, P2, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FBDALabel},
 }

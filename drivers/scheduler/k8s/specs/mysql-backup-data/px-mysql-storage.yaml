@@ -7,7 +7,7 @@ metadata:
 spec:
   storageClassName: mysql-sc
   accessModes:
-    - ReadWriteOnce
+    - ReadWriteMany
   resources:
     requests:
       storage: 30Gi
@@ -19,7 +19,7 @@ metadata:
 spec:
   storageClassName: mysql-sc-seq
   accessModes:
-    - ReadWriteOnce
+    - ReadWriteMany
   resources:
     requests:
       storage: 30Gi
@@ -31,7 +31,7 @@ metadata:
 spec:
   storageClassName: mysql-sc-aggr
   accessModes:
-    - ReadWriteOnce
+    - ReadWriteMany
   resources:
     requests:
       storage: 30Gi

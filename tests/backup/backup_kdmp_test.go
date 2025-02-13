@@ -3,6 +3,11 @@ package tests
 import (
 	"context"
 	"fmt"
+	"github.com/pure-px/sched-ops/task"
+	"github.com/pure-px/torpedo/drivers"
+	"github.com/pure-px/torpedo/drivers/node"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"math/rand"
 	"strings"
 	"sync"
 	"time"
@@ -294,8 +299,8 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", Label(TestCaseLabelsMap[Exclude
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
 		})
 
-		Step("Create new storage class on destination cluster with similiar spec as source cluster", func() {
-			log.InfoD("Create new storage class on destination cluster with similiar spec as source cluster")
+		Step("Create new storage class on destination cluster with similar spec as source cluster", func() {
+			log.InfoD("Create new storage class on destination cluster with similar spec as source cluster")
 			defer func() {
 				err := SetSourceKubeConfig()
 				log.FailOnError(err, "Unable to switch context to source cluster [%s]", SourceClusterName)
@@ -977,8 +982,8 @@ var _ = Describe("{ExcludeInvalidDirectoryFileBackup}", Label(TestCaseLabelsMap[
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
 		})
 
-		Step("Create new storage class on destination cluster with similiar spec as source cluster", func() {
-			log.InfoD("Create new storage class on destination cluster with similiar spec as source cluster")
+		Step("Create new storage class on destination cluster with similar spec as source cluster", func() {
+			log.InfoD("Create new storage class on destination cluster with similar spec as source cluster")
 			defer func() {
 				err := SetSourceKubeConfig()
 				log.FailOnError(err, "Unable to switch context to source cluster [%s]", SourceClusterName)
@@ -1634,4 +1639,465 @@ var _ = Describe("{CrashKopiaToolWhenBackUpRestoreInProgress}", Label(TestCaseLa
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 
+})
+
+// this checks whether the backup and restore pods are scheduled on the labelled node during kdmp backup and restore
+var _ = Describe("{BackupAndRestoreJobWithNodeAffinity}", Label(TestCaseLabelsMap[BackupAndRestoreJobWithNodeAffinity]...), func() {
+	/*
+	   Steps:
+	   - Backup:
+	       1. Update the kdmp-config map with the pxb_job_node_affinity_label on source cluster
+	       2. Label one of the worker nodes of the source cluster with label pxb_job_node_affinity_label=True
+	       3. Trigger the KDMP backup
+	       4. Filter out the backup pods from the pods created in the namespace during the backup
+	       5. Check whether these pods are scheduled on the labelled node
+	       6. Verify backup success
+	   - Restore:
+	       1. Update the kdmp-config map with the pxb_job_node_affinity_label on destination cluster
+	       2. Label one of the worker nodes of the destination cluster with label pxb_job_node_affinity_label=True
+	       3. Trigger the restore
+	       4. Filter out the restore pods from the pods created in the namespace during the restore
+	       5. Check whether these pods are scheduled on the labelled node
+	       6. Verify restore success
+	*/
+	var (
+		providers                  []string
+		scheduledAppContexts       []*scheduler.Context
+		cloudCredName              string
+		cloudCredUID               string
+		backupLocationName         string
+		backupLocationUID          string
+		s3BackupLocationName       string
+		s3BackupLocationUID        string
+		nfsBackupLocationName      string
+		nfsBackupLocationUID       string
+		sourceClusterUid           string
+		destClusterUid             string
+		labelSelectors             map[string]string
+		backupLocationMap          map[string]string
+		sourceWorkerNodesList      []node.Node
+		destinationWorkerNodesList []node.Node
+		randomIndexSource          int
+		randomIndexDestination     int
+		wg                         sync.WaitGroup
+		numberOfPVCsMap            map[string]int
+		backupNames                []string
+		restoreNames               []string
+		backupName                 string
+		restoreName                string
+		labelToBeAdded             map[string]string
+		controlChannel             chan string
+		errorGroup                 *errgroup.Group
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("BackupAndRestoreJobWithNodeAffinity", "This checks whether kopia/nfs backup and restore pods are scheduled on the labelled node during kdmp backup and restore", nil, 302442, Bht, Q1FY26)
+		backupLocationMap = make(map[string]string)
+		labelSelectors = make(map[string]string)
+		numberOfPVCsMap = make(map[string]int)
+		providers = GetBackupProviders()
+		labelToBeAdded = map[string]string{"pxb_job_node_affinity_label": "True"}
+	})
+
+	It("Kopia/nfs backup and restore job should have node affinity", func() {
+		Step("Scheduling applications", func() {
+			pipelineAppList := Inst().AppList
+			defer func() {
+				Inst().AppList = pipelineAppList
+			}()
+			Inst().AppList = []string{"mysql-backup-data"}
+			log.InfoD("scheduling applications")
+			scheduledAppContexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
+				appContexts := ScheduleApplications(taskName)
+				for _, appCtx := range appContexts {
+					appCtx.ReadinessTimeout = 20 * time.Minute
+					scheduledAppContexts = append(scheduledAppContexts, appCtx)
+				}
+			}
+		})
+
+		Step("Validating applications", func() {
+			log.InfoD("Validating applications")
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, context.TODO())
+		})
+
+		Step("Getting the number of PVCs created for each application", func() {
+			log.InfoD("getting the number of PVCs created for each application before taking backup")
+			// this is to know the number of backup pods and restore pods that will be created
+			for _, appCtx := range scheduledAppContexts {
+				namespace := appCtx.ScheduleOptions.Namespace
+				pvcList, err := GetPVCListForNamespace(namespace)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("getting pvc list [%s] for namespace [%s] ", pvcList, namespace))
+				numberOfPVCsMap[namespace] = len(pvcList)
+				log.InfoD("Number of PVCs %d", numberOfPVCsMap[namespace])
+			}
+		})
+
+		Step("Adding the pxb_job_node_affinity_label to kdmp-config map on source cluster", func() {
+			log.InfoD("Adding the pxb_job_node_affinity_label to kdmp-config map on source cluster")
+			for k, v := range labelToBeAdded {
+				err := UpdateKDMPConfigMap(k, v)
+				log.FailOnError(err, fmt.Sprintf("failed to update the kdmp-config map with label [%s/%s]", k, v))
+			}
+		})
+
+		Step("Labeling one of the worker nodes on source cluster with label pxb_job_node_affinity_label=True", func() {
+			log.InfoD("Labeling one of the worker nodes with label pxb_job_node_affinity_label=True")
+			//get the worker nodes and the label to be added
+			sourceWorkerNodesList = node.GetWorkerNodes()
+			//generate a random index
+			randomIndexSource = rand.Intn(len(sourceWorkerNodesList))
+			//label the node
+			err := AddLabelsOnNode(sourceWorkerNodesList[randomIndexSource], labelToBeAdded)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Add label on node %s on source cluster", sourceWorkerNodesList[randomIndexSource].Name))
+			log.InfoD("The labelled node on source cluster is %s", sourceWorkerNodesList[randomIndexSource].Name)
+		})
+
+		// For restore part, creating the storage class on destination cluster, setting destination cluster kdmp-config, and labeling node on destination cluster
+		Step("Create new storage class on destination cluster with similar spec as source cluster", func() {
+			log.InfoD("Create new storage class on destination cluster with similar spec as source cluster")
+			log.InfoD("Switching cluster context to destination cluster")
+			err := SetDestinationKubeConfig()
+			log.FailOnError(err, "Failed to set destination kubeconfig")
+
+			for _, appCtx := range scheduledAppContexts {
+				for _, spec := range appCtx.App.SpecList {
+					switch obj := spec.(type) {
+					case *storagev1.StorageClass:
+						obj.ResourceVersion = ""
+						_, err = storage.Instance().CreateStorageClass(obj)
+						if err != nil {
+							if errors.IsAlreadyExists(err) {
+								log.Warnf("storage class [%s] already present on destination cluster", obj.Name)
+							} else {
+								log.FailOnError(err, fmt.Sprintf("Failed to create storage class [%s] on destination cluster", obj.Name))
+							}
+						} else {
+							log.InfoD("Created storage class [%s] on destination cluster", obj.Name)
+						}
+					default:
+						log.InfoD("App [%s] has spec of type [%T]", appCtx.App.Key, spec)
+					}
+				}
+			}
+		})
+
+		Step("Adding the pxb_job_node_affinity_label to kdmp-config map on destination cluster", func() {
+			log.InfoD("Adding the pxb_job_node_affinity_label to kdmp-config map on source cluster")
+			for k, v := range labelToBeAdded {
+				err := UpdateKDMPConfigMap(k, v)
+				log.FailOnError(err, fmt.Sprintf("failed to update the kdmp-config map with label [%s/%s]", k, v))
+			}
+		})
+
+		Step("Labelling one of the worker nodes on destination cluster with label pxb_job_node_affinity_label=True", func() {
+			log.InfoD("Labeling one of the worker nodes on destination cluster with label pxb_job_node_affinity_label=True")
+			defer func() {
+				log.InfoD("Switching context to source cluster")
+				err := SetSourceKubeConfig()
+				dash.VerifyFatal(err, nil, "Setting source kubeconfig")
+			}()
+			destinationWorkerNodesList = node.GetWorkerNodes()
+			//generate a random index
+			randomIndexDestination = rand.Intn(len(destinationWorkerNodesList))
+			err := AddLabelsOnNode(destinationWorkerNodesList[randomIndexDestination], labelToBeAdded)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Add label on node %s on source cluster", destinationWorkerNodesList[randomIndexDestination].Name))
+			log.InfoD("The labelled node on destination cluster is %s", destinationWorkerNodesList[randomIndexDestination].Name)
+		})
+
+		// switched back to source cluster context
+		Step("Creating backup location and cloud setting", func() {
+			log.InfoD("Creating backup location and cloud setting")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, RandomString(6))
+				cloudCredUID = uuid.New()
+				backupLocationName = fmt.Sprintf("%s-%s-bl-%v", provider, getGlobalBucketName(provider), RandomString(6))
+				backupLocationUID = uuid.New()
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, "Creating backup location")
+				backupLocationMap[backupLocationUID] = backupLocationName
+				if provider != drivers.ProviderNfs {
+					nfsBackupLocationName = fmt.Sprintf("%s-%s-%v", "nfs", getGlobalBucketName(provider), RandomString(5))
+					nfsBackupLocationUID = uuid.New()
+					err = CreateNFSBackupLocation(nfsBackupLocationName, nfsBackupLocationUID, BackupOrgID, "", getGlobalBucketName(provider), true)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creating NFS backup location [%s]", nfsBackupLocationName))
+					backupLocationMap[nfsBackupLocationUID] = nfsBackupLocationName
+				} else {
+					// Creating cloud cred again because in case of NFS as provider, cloud cred will not be created above
+					err = CreateCloudCredential("aws", cloudCredName, cloudCredUID, BackupOrgID, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential:[%s] for org [%s] for s3 backup location", cloudCredName, BackupOrgID))
+					s3BackupLocationName = fmt.Sprintf("%s-%s-%v", "s3", getGlobalBucketName(provider), RandomString(5))
+					s3BackupLocationUID = uuid.New()
+					err = CreateS3BackupLocation(s3BackupLocationName, s3BackupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of S3 backup location [%s]", s3BackupLocationName))
+					backupLocationMap[s3BackupLocationUID] = s3BackupLocationName
+				}
+			}
+		})
+
+		Step("Registering cluster for backup", func() {
+			log.InfoD("Registering cluster for backup")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+
+			clusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+
+			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+
+			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
+
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
+		})
+
+		for backupLocationUID, backupLocationName := range backupLocationMap {
+			namespaceMapping := make(map[string]string)
+
+			Step("Taking backup of all applications from source cluster", func() {
+				log.InfoD("Taking backup of applications")
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+
+				backupName = fmt.Sprintf("%s-%s-%v", "autogenerated-backup", "for-all-applications", RandomString(5))
+				log.InfoD("creating backup [%s] in source cluster [%s] (%s), organization [%s], for all applications, in backup location [%s]", backupName, SourceClusterName, sourceClusterUid, BackupOrgID, backupLocationName)
+
+				_, err = CreateBackupWithoutCheck(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Triggered backup creation, with name [%s]", backupName))
+				backupNames = append(backupNames, backupName)
+			})
+
+			Step("Verifying whether the backup pods are scheduled on the labelled node ", func() {
+				log.InfoD("Verifying whether the backup pods are scheduled on the labelled node")
+				// using for loop to iterate through the namespaces in case multiple applications are used
+				for _, appCtx := range scheduledAppContexts {
+					scheduledNamespace := appCtx.ScheduleOptions.Namespace
+					//a hashmap to avoid checking the backup pods already checked
+					backupPodsHashMap := make(map[string]bool)
+					//A map to store the scheduling details of backup pods
+					backupPodsScheduleDetails := make(map[string]map[string]interface{})
+
+					temp := func() (interface{}, bool, error) {
+						backupPodsList, err := core.Instance().GetPods(scheduledNamespace, KopiaBackupExecutorPodLabel)
+						if err != nil {
+							return nil, true, fmt.Errorf("failed to list backup pods with [%v] label in [%s] namespace", KopiaBackupExecutorPodLabel, scheduledNamespace)
+						}
+						if len(backupPodsList.Items) == 0 {
+							return backupPodsList, true, fmt.Errorf("backup pods not created yet")
+						}
+						log.InfoD("The backup pods are :-\n %v", backupPodsList.Items)
+						for _, p := range backupPodsList.Items {
+							if _, ok := backupPodsHashMap[p.Name]; !ok {
+								backupPodsHashMap[p.Name] = true
+								//Check whether the pod p is scheduled on correct node or not
+								log.InfoD("Expecting the backup pod [%s] to be scheduled on node [%s]", p.Name, sourceWorkerNodesList[randomIndexSource].Name)
+								scheduledNodeName := p.Spec.NodeName
+								if scheduledNodeName == sourceWorkerNodesList[randomIndexSource].Name {
+									log.InfoD("The backup pod [%s] scheduled on the correct node", p.Name)
+									backupPodsScheduleDetails[p.Name] = map[string]interface{}{
+										"isScheduledProperly": true,
+										"errorMsg":            nil,
+									}
+								} else {
+									log.InfoD("The backup pod [%s] is NOT scheduled on the correct node", p.Name)
+									backupPodsScheduleDetails[p.Name] = map[string]interface{}{
+										"isScheduledProperly": false,
+										"errorMsg":            fmt.Errorf("the backup pod [%s] NOT scheduled on the correct node, instead scheduled on [%s]", p.Name, scheduledNodeName),
+									}
+								}
+							}
+						}
+						// if the all the backup pods are checked
+						if len(backupPodsHashMap) == numberOfPVCsMap[scheduledNamespace] && len(backupPodsScheduleDetails) == numberOfPVCsMap[scheduledNamespace] {
+							log.InfoD("Details:\n %+v", backupPodsScheduleDetails)
+							// checking if any pods is not scheduled, if not scheduled return the error
+							for _, status := range backupPodsScheduleDetails {
+								if status["isScheduledProperly"].(bool) != true {
+									return nil, false, status["errorMsg"].(error)
+								}
+							}
+							return backupPodsList, false, nil
+						} else {
+							return backupPodsList, true, fmt.Errorf("waiting for more backup pods")
+						}
+					}
+					_, err := task.DoRetryWithTimeout(temp, time.Duration(numberOfPVCsMap[scheduledNamespace])*30*time.Second, 2*time.Second)
+					dash.VerifyFatal(err, nil, "Verifying backup pods are scheduled on correct node")
+				}
+			})
+
+			Step("Check whether the triggered backup was successful or not", func() {
+				log.InfoD("Checking whether the triggered backup was successful")
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+				err = BackupSuccessCheckWithValidation(ctx, backupName, scheduledAppContexts, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of success and Validation of the backup [%s]", backupName))
+			})
+
+			// Restore part
+			Step("Restoring applications to destination cluster", func() {
+				log.InfoD("Restoring the backed up namespaces")
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+
+				restoreName = fmt.Sprintf("%s-%s-%v", "test-restore", "of-all-applications", time.Now().Unix())
+				// creating the namespaceMapping map
+				for _, appCtx := range scheduledAppContexts {
+					scheduledNamespace := appCtx.ScheduleOptions.Namespace
+					namespaceMapping[scheduledNamespace] = fmt.Sprintf("%s-%v", scheduledNamespace, time.Now().Unix())
+				}
+				_, err = CreateRestoreWithoutCheck(restoreName, backupName, namespaceMapping, DestinationClusterName, destClusterUid, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Triggered restore with name [%s] for the backup [%s] with the follwing mapping [%s]", restoreName, backupName, namespaceMapping))
+				restoreNames = append(restoreNames, restoreName)
+			})
+
+			Step("Check whether the restore pods are scheduled on correct node", func() {
+				log.InfoD("Checking whether the restore pods are scheduled on correct node")
+
+				log.InfoD("Switching cluster context to destination cluster")
+				err := SetDestinationKubeConfig()
+				dash.VerifyFatal(err, nil, "Setting destination kubeconfig")
+
+				defer func() {
+					log.InfoD("Switching cluster context to source cluster")
+					err = SetSourceKubeConfig()
+					dash.VerifyFatal(err, nil, "Setting source kubeconfig")
+				}()
+
+				for sourceNamespace, destinationNamespace := range namespaceMapping {
+					// a hashmap to avoid checking the restore pods already checked
+					restorePodHashMap := make(map[string]bool)
+					//A map to store the scheduling details of backup pods
+					restorePodsScheduleDetails := make(map[string]map[string]interface{})
+
+					temp := func() (interface{}, bool, error) {
+						restorePodsList, err := core.Instance().GetPods(destinationNamespace, KopiaRestoreExecutorPodLabel)
+						if err != nil {
+							return nil, true, fmt.Errorf("failed to list restore pods with [%v] label in [%s] namespace", KopiaRestoreExecutorPodLabel, destinationNamespace)
+						}
+						if len(restorePodsList.Items) == 0 {
+							return restorePodsList, true, fmt.Errorf("restore pods not created yet")
+						}
+						log.InfoD("The restore pods are :-\n %v", restorePodsList.Items)
+						for _, p := range restorePodsList.Items {
+							if _, ok := restorePodHashMap[p.Name]; !ok {
+								restorePodHashMap[p.Name] = true
+								//Check whether the pod p is scheduled on correct node or not
+								log.InfoD("Expecting the restore pod [%s] to be scheduled on node [%s]", p.Name, destinationWorkerNodesList[randomIndexDestination].Name)
+								scheduledNodeName := p.Spec.NodeName
+								if scheduledNodeName == destinationWorkerNodesList[randomIndexDestination].Name {
+									log.InfoD("The restore pod [%s] scheduled on the correct node", p.Name)
+									restorePodsScheduleDetails[p.Name] = map[string]interface{}{
+										"isScheduledProperly": true,
+										"errorMsg":            nil,
+									}
+								} else {
+									log.InfoD("The restore pod [%s] is NOT scheduled on the correct node", p.Name)
+									restorePodsScheduleDetails[p.Name] = map[string]interface{}{
+										"isScheduledProperly": false,
+										"errorMsg":            fmt.Errorf("the restore pod [%s] NOT scheduled on the correct node, instead scheduled on [%s]", p.Name, scheduledNodeName),
+									}
+								}
+							}
+						}
+						// if the all the restore pods are checked
+						if len(restorePodHashMap) == numberOfPVCsMap[sourceNamespace] && len(restorePodsScheduleDetails) == numberOfPVCsMap[sourceNamespace] {
+							log.InfoD("Details:\n %+v", restorePodsScheduleDetails)
+							// checking if any pods is not scheduled, if not scheduled return the error
+							for _, status := range restorePodsScheduleDetails {
+								if status["isScheduledProperly"].(bool) != true {
+									return nil, false, status["errorMsg"].(error)
+								}
+							}
+							return restorePodsList, false, nil
+						} else {
+							return restorePodsList, true, fmt.Errorf("waiting for more restore pods")
+						}
+					}
+					_, err = task.DoRetryWithTimeout(temp, time.Duration(numberOfPVCsMap[sourceNamespace])*180*time.Second, 2*time.Second)
+					dash.VerifyFatal(err, nil, "Verifying restore pods are scheduled on correct node")
+				}
+			})
+
+			Step("Check whether the triggered restore was successful or not", func() {
+				log.InfoD("Checking whether the triggered restore was successful or not")
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+				err = RestoreSuccessCheck(restoreName, BackupOrgID, MaxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Inspecting restore success for - [%s]", restoreName))
+			})
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		err := SetDestinationKubeConfig()
+		dash.VerifyFatal(err, nil, "Setting destination kubeconfig")
+
+		log.InfoD("Disabling the pxb_job_node_affinity_label in kdmp-config map on destination cluster")
+		err = UpdateKDMPConfigMap("pxb_job_node_affinity_label", "False")
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Disabling the pxb_job_node_affinity_label KDMP config map"))
+
+		// removing the label on node in destination cluster
+		err = Inst().S.RemoveLabelOnNode(destinationWorkerNodesList[randomIndexDestination], "pxb_job_node_affinity_label")
+		log.FailOnError(err, "Removing the label on destination worker node")
+
+		err = SetSourceKubeConfig()
+		dash.VerifyFatal(err, nil, "Setting source kubeconfig")
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		log.InfoD("Deleting deployed applications")
+		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
+
+		log.InfoD("Disabling the pxb_job_node_affinity_label in kdmp-config map on source cluster")
+		err = UpdateKDMPConfigMap("pxb_job_node_affinity_label", "False")
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Disabling the pxb_job_node_affinity_label KDMP config map"))
+
+		// removing the label on the source node
+		err = Inst().S.RemoveLabelOnNode(sourceWorkerNodesList[randomIndexSource], "pxb_job_node_affinity_label")
+		log.FailOnError(err, "Removing the label on source worker node")
+
+		backupNames, err := GetAllBackupsAdmin()
+		dash.VerifySafely(err, nil, fmt.Sprintf("Fetching all backups for admin"))
+
+		for _, backupName := range backupNames {
+			wg.Add(1)
+			go func(backupName string) {
+				defer GinkgoRecover()
+				defer wg.Done()
+				backupUid, err := Inst().Backup.GetBackupUID(ctx, backupName, BackupOrgID)
+				_, err = DeleteBackup(backupName, backupUid, BackupOrgID, ctx)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Delete the backup %s ", backupName))
+				err = DeleteBackupAndWait(backupName, ctx)
+				dash.VerifySafely(err, nil, fmt.Sprintf("waiting for backup [%s] deletion", backupName))
+			}(backupName)
+		}
+		wg.Wait()
+
+		restoreNames, err := GetAllRestoresAdmin()
+		dash.VerifySafely(err, nil, fmt.Sprintf("Fetching all backups for admin"))
+
+		for _, restoreName := range restoreNames {
+			err = DeleteRestore(restoreName, BackupOrgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
+		}
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
 })

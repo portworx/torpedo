@@ -116,6 +116,7 @@ const (
 	SS             TestcaseAuthor = "ss-px"
 	Kgarg          TestcaseAuthor = "kgarg-px"
 	Avasanthareddy TestcaseAuthor = "avasanthareddy-px"
+	Bht            TestcaseAuthor = "bht-px"
 )
 
 // TestcaseQuarter List
@@ -129,6 +130,7 @@ const (
 	Q2FY25 TestcaseQuarter = "Q2FY25"
 	Q3FY25 TestcaseQuarter = "Q3FY25"
 	Q4FY25 TestcaseQuarter = "Q4FY25"
+	Q1FY26 TestcaseQuarter = "Q1FY26"
 )
 
 const (

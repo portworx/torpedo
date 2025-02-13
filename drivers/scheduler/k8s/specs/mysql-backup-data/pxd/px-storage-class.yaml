@@ -17,7 +17,6 @@ metadata:
 provisioner: pxd.portworx.com
 parameters:
   fs: "ext4"
-  block_size: "512b"
   repl: "1"
   aggregation_level: "1"
   io_profile: "random"
