@@ -565,3 +565,193 @@ var _ = Describe("{UpgradeClusterWithKvdbMemberDown}", Label("p0", "negative", "
 		defer EndTorpedoTest()
 	})
 })
+
+var _ = Describe("{UpgradeClusterWithKvdbMemberDownAndPxRestart}", Label("p1", "negative", "node_ops", "Upgrade", "px_restart"), func() {
+	/*
+		https://purestorage.atlassian.net/browse/HAZEL-2007
+		1. Bring a setup in a state where few nodes are on version “x” and few are on version “y”
+		2. In this state, create new apps
+		3. After creation of apps, kill px on different nodes one time each. Choose few nodes which have version “x” & choose few nodes which have version “y” and kill px one by one on all the chosen nodes
+		4. Resume Upgrade by bringing up the failed kvdb nodes
+		5. Validate upgrade is successful
+		6. Validate apps
+	*/
+	var (
+		nodesNotInKvdbNodes []node.Node
+		kvdbNodeSelected    KvdbNode
+		kvdbFailedNode      node.Node
+		wg                  sync.WaitGroup
+		errChan             chan error
+		contexts            []*scheduler.Context
+		pxVersionMap        map[string]node.Node
+	)
+	JustBeforeEach(func() {
+		StartTorpedoTest("UpgradeClusterWithKvdbMemberDownAndPxRestart", "Have setup in different Px versions (upgrade stuck) , create apps, kill Px on different nodes and validate apps and then resume upgrade ", nil, 0)
+		errChan = make(chan error, 1)
+	})
+
+	itLog := "Perform px upgrades with one of KVDB node down , restart px , bring up failed kvdb node and ensure px upgrade completes successfully "
+	It(itLog, func() {
+		log.InfoD(itLog)
+
+		nodes, err := GetStorageNodes()
+		log.FailOnError(err, "failed to get storage nodes")
+
+		log.InfoD("Get all KVDB nodes")
+		kvdbNodes, err := GetAllKvdbNodes()
+		log.FailOnError(err, "Unable to retrieve KVDB nodes")
+		log.Infof("Initally kvdb node in the cluster: [%v]", kvdbNodes)
+		stepLog = "Getting non KVDB nodes in the cluster"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			kvdbNodeMap := make(map[string]bool)
+			for _, kvdbNode := range kvdbNodes {
+				kvdbNodeMap[kvdbNode.ID] = true
+			}
+			for _, storageNode := range nodes {
+				if _, exists := kvdbNodeMap[storageNode.Id]; !exists {
+					nodesNotInKvdbNodes = append(nodesNotInKvdbNodes, storageNode)
+				}
+			}
+			log.Infof("All storage nodes List which are not part of KVDB members: [%v]", nodesNotInKvdbNodes)
+		})
+
+		kvdbNodeSelected = kvdbNodes[0]
+		kvdbFailedNode, err = node.GetNodeDetailsByNodeID(kvdbNodeSelected.ID)
+		log.FailOnError(err, "Unable to retrieve node details for NodeID [%v]", kvdbNodeSelected.ID)
+
+		currPXVersion, err := Inst().V.GetDriverVersionOnNode(nodes[0])
+		log.FailOnError(err, fmt.Sprintf("error getting driver version on node %s", nodes[0].Name))
+
+		err = os.Setenv("SKIP_PX_UPGRADE_VALIDATION", "true")
+		log.FailOnError(err, "failed to set env var SKIP_PX_UPGRADE_VALIDATION to true")
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer GinkgoRecover()
+			stepLog := "Upgrade portworx driver"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				err := UpgradePortworxDriver(Inst().UpgradeStorageDriverEndpointList)
+				if err != nil {
+					errChan <- err
+					return
+				}
+				log.InfoD("PX upgrade completed successfully")
+			})
+		}()
+
+		stepLog = "Add label px/metadata-node=false to the non-kvdb nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, node := range nodesNotInKvdbNodes {
+				err = Inst().S.AddLabelOnNode(node, "px/metadata-node", "false")
+				log.FailOnError(err, "Failed to add label 'px/metadata-node=false' to node [%s]", node.Name)
+				log.Infof("Successfully added label 'px/metadata-node=false' to node [%s]", node.Name)
+			}
+		})
+		defer func() {
+			for _, node := range nodesNotInKvdbNodes {
+				err = Inst().S.RemoveLabelOnNode(node, "px/metadata-node")
+				log.FailOnError(err, "Failed to remove label 'px/metadata-node' on node [%s]", node.Name)
+				log.Infof("Successfully removed label 'px/metadata-node' from node [%s]", node.Name)
+			}
+		}()
+
+		stepLog = "Bring down one KVDB node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			StopVolDriverAndWait([]node.Node{kvdbFailedNode})
+		})
+
+		wg.Wait()
+		close(errChan)
+		for err := range errChan {
+			log.FailOnError(err, "px upgrade failed")
+		}
+
+		// Deploy apps
+		stepLog = "Schedule application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgrade-test-%d", i))...)
+			}
+		})
+		ValidateApplications(contexts)
+		defer ValidateAndDestroy(contexts, nil) //validate and destroy apps
+
+		stepLog = "Choose 2 nodes to restart PX (with different versions)"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pxVersionMap = make(map[string]node.Node, len(nodes))
+			for _, node := range nodes {
+				if node.Id == kvdbFailedNode.Id {
+					continue
+				}
+				driverNode, err := Inst().V.GetDriverNode(&node)
+				log.FailOnError(err, fmt.Sprintf("error in getting driver node info for the node %s", node.Name))
+				pxVersionMap[driverNode.NodeLabels["PX Version"]] = node
+			}
+			log.Infof("list of px images on the cluster %v", pxVersionMap)
+		})
+		dash.VerifyFatal(len(pxVersionMap) >= 2, true, "Verify atleast two different nodes are present with different px versions")
+
+		stepLog = "Restart PX on selected nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for version, nodeSelected := range pxVersionMap {
+				log.Infof("restart px on node %s with version %s", nodeSelected, version)
+
+				err = Inst().V.RestartDriver(nodeSelected, nil)
+				log.FailOnError(err, fmt.Sprintf("Error occured while Restart PX on node:%v", nodeSelected.Name))
+
+				err = Inst().V.WaitForPxPodsToBeUp(nodeSelected)
+				log.FailOnError(err, fmt.Sprintf("Error occured while Validating PX restart is done on node:%v", nodeSelected.Name))
+			}
+		})
+
+		stepLog = "Bring up the failed KVDB node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			StartVolDriverAndWait([]node.Node{kvdbFailedNode})
+		})
+
+		stepLog = "verify failed node joins kvdb members"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			kvdbNodesAfterPxUpgrade, err := GetAllKvdbNodes()
+			log.FailOnError(err, "Unable to retrieve KVDB nodes")
+			kvdbNodeMapAfterpxUpgrade := make(map[string]bool)
+			for _, kvdbNode := range kvdbNodesAfterPxUpgrade {
+				kvdbNodeMapAfterpxUpgrade[kvdbNode.ID] = true
+			}
+			_, exists := kvdbNodeMapAfterpxUpgrade[kvdbNodeSelected.ID]
+			dash.VerifyFatal(exists, true, "verify failed node joins kvdb members")
+		})
+
+		stepLog = "verify px upgraded successfully"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, upgradeHop := range strings.Split(Inst().UpgradeStorageDriverEndpointList, ",") {
+				upgradeHopSplit := strings.Split(upgradeHop, "/")
+				nextPXVersion := upgradeHopSplit[len(upgradeHopSplit)-1]
+				stc, err := Inst().V.GetDriver()
+				log.FailOnError(err, "error getting storage cluster spec")
+
+				k8sVersion, err := core.Instance().GetVersion()
+				log.FailOnError(err, "error getting k8s version")
+				imageList, err := oputil.GetImagesFromVersionURL(upgradeHop, k8sVersion.String())
+				log.FailOnError(err, "error getting images using URL [%s] and k8s version [%s]", upgradeHop, k8sVersion.String())
+				storageClusterValidateTimeout := time.Duration(len(node.GetStorageDriverNodes())*9) * time.Minute
+				err = oputil.ValidateStorageCluster(imageList, stc, storageClusterValidateTimeout, defaultRetryInterval, true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verify PX upgrade from version [%s] to version [%s]", currPXVersion, nextPXVersion))
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
