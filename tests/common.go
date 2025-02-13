@@ -1061,6 +1061,7 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 				err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
 				if err != nil {
 					PrintDescribeContext(ctx)
+					PrintVolumeInspect(ctx)
 					processError(err, errChan...)
 					return
 				}
@@ -1562,6 +1563,7 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 			}
 			if err != nil {
 				PrintDescribeContext(ctx)
+				PrintVolumeInspect(ctx)
 				processError(err, errChan...)
 			}
 		})
@@ -1588,6 +1590,7 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 				err = Inst().V.ValidateCreateVolume(vol, params)
 				if err != nil {
 					PrintDescribeContext(ctx)
+					PrintVolumeInspect(ctx)
 					processError(err, errChan...)
 				}
 			})
@@ -2274,6 +2277,27 @@ func PrintDescribeContext(ctx *scheduler.Context) {
 		log.Warnf(descOut)
 	}
 
+}
+
+func PrintVolumeInspect(ctx *scheduler.Context) {
+	appVolumes, vErr := Inst().S.GetVolumes(ctx)
+	if vErr != nil {
+		log.Warnf("Failed to get app %s's volumes.Err: %v", ctx.App.Key, vErr)
+	} else {
+		nodes := node.GetStorageDriverNodes()
+		for _, v := range appVolumes {
+			output, runRrr := Inst().N.RunCommand(nodes[0], fmt.Sprintf("pxctl v i %s", v.ID), node.ConnectionOpts{
+				Timeout:         defaultTimeout,
+				TimeBeforeRetry: defaultRetryInterval,
+				Sudo:            true,
+			})
+			if runRrr != nil {
+				log.Warnf("Failed to get volume inspect for volume %s. Err: %v", v.Name, runRrr)
+			} else {
+				log.Infof(output)
+			}
+		}
+	}
 }
 
 // DeleteVolumes deletes volumes of a given context

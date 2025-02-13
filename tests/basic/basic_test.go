@@ -77,6 +77,7 @@ var _ = AfterSuite(func() {
 		}()
 
 		log.SetTorpedoFileOutput(TestLogger)
+		PrintPxctlStatus()
 		if !Inst().SkipSystemChecks {
 			if wantAllAfterSuiteActions || wantAfterSuiteSystemCheck {
 				dash.TestCaseBegin("System Checks", "Perform system checks", "", nil)
