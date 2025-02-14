@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -314,5 +315,226 @@ var _ = Describe("{BackupScheduleEnumerate}", Ordered, Label(TestCaseLabelsMap[B
 		err = DeleteNamespaces(bkpNamespaces)
 		log.FailOnError(err, "failed to delete namespaces")
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, adminContext)
+	})
+})
+
+// Change the schedule policy associated with a generic backup
+var _ = Describe("{ChangeSchedulePolicyAssociatedWithGenericBackup}", Label(TestCaseLabelsMap[ChangeSchedulePolicyAndVerifyBackups]...), func() {
+
+	var (
+		scheduledAppContexts        []*scheduler.Context
+		bkpNamespaces               []string
+		clusterUid                  string
+		clusterStatus               api.ClusterInfo_StatusInfo_Status
+		backupLocationUID           string
+		cloudCredName               string
+		cloudCredUID                string
+		primarySchedulePolicyName   string
+		primarySchedulePolicyUID    string
+		secondarySchedulePolicyName string
+		secondarySchedulePolicyUID  string
+		schedulePolicyMap           map[string]string
+		scheduleName                string
+		bkpLocationName             string
+		backupNames                 []string
+		providers                   []string
+		labelSelectors              = make(map[string]string)
+		adminCtx                    context.Context
+		backupLocationMap           map[string]string
+		schedulePolicyInterval      int64
+		retainCountOne              int64
+		retainCountTwo              int64
+		scheduleNames               []string
+		firstScheduleBackupName     string
+		backupWaitTime              time.Duration
+		backupTypeEnvVar            string
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("VerifyChangeSchedulePolicyAssociatedWithGenericBackup", "Change the schedule policy associated with a generic backup", nil, 300170, ABadgujar, Q1FY25)
+		providers = GetBackupProviders()
+		backupLocationMap = make(map[string]string)
+		bkpNamespaces = make([]string, 0)
+		backupNames = make([]string, 0)
+		scheduleNames = make([]string, 0)
+		schedulePolicyMap = make(map[string]string)
+
+		schedulePolicyInterval = 15
+		retainCountOne = 2
+		retainCountTwo = 1
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		var err error
+		adminCtx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		backupWaitTime = time.Duration(time.Minute) * 16
+
+		//Get Environment variable
+		backupTypeEnvVar = os.Getenv("BACKUP_TYPE")
+
+		err = os.Setenv("BACKUP_TYPE", "direct_kdmp")
+		log.FailOnError(err, "Setting BACKUP_TYPE env variable")
+
+		// Schedule an Application
+		appContexts := ScheduleApplications(TaskNamePrefix)
+		for _, ctx := range appContexts {
+			ctx.ReadinessTimeout = AppReadinessTimeout
+			namespace := GetAppNamespace(ctx, TaskNamePrefix)
+			bkpNamespaces = append(bkpNamespaces, namespace)
+			scheduledAppContexts = append(scheduledAppContexts, ctx)
+		}
+	})
+
+	// Change the schedule policy associated with a generic backup
+	It("Change the schedule policy associated with a generic backup", func() {
+		// 1. Validate application
+		Step("Validate applications", func() {
+			log.InfoD("Validating applications")
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		// 2. Create primary schedule policy
+		Step("Create primary schedule policy", func() {
+			log.InfoD("Create primary schedule policy")
+			primarySchedulePolicyName = fmt.Sprintf("%s-%v", "periodic-schedule-policy", 1)
+			primarySchedulePolicyUID = uuid.New()
+			schedulePolicyMap[primarySchedulePolicyUID] = primarySchedulePolicyName
+			err := CreateBackupScheduleIntervalPolicy(retainCountOne, schedulePolicyInterval, 5, primarySchedulePolicyName, primarySchedulePolicyUID, BackupOrgID, adminCtx, false, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule policy %s", primarySchedulePolicyName))
+		})
+
+		// 3. Create secondary schedule policy
+		Step("Create secondary schedule policy", func() {
+			log.InfoD("Create secondary schedule policy")
+			secondarySchedulePolicyName = fmt.Sprintf("%s-%v", "periodic-schedule-policy", 2)
+			secondarySchedulePolicyUID = uuid.New()
+			schedulePolicyMap[secondarySchedulePolicyUID] = secondarySchedulePolicyName
+			err := CreateBackupScheduleIntervalPolicy(retainCountTwo, schedulePolicyInterval, 5, secondarySchedulePolicyName, secondarySchedulePolicyUID, BackupOrgID, adminCtx, false, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule policy %s", secondarySchedulePolicyName))
+		})
+
+		// 4. Create cloud credentials and backup location
+		Step("Creating cloud credentials and backup location", func() {
+			log.InfoD("Creating cloud credentials and backup location")
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, time.Now().Unix())
+				bkpLocationName = fmt.Sprintf("%s-%s-%v-bl", provider, getGlobalBucketName(provider), time.Now().Unix())
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = bkpLocationName
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, adminCtx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				err = CreateBackupLocation(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", bkpLocationName))
+			}
+		})
+
+		// 5. Create application cluster for backup
+		Step("Register cluster for backup", func() {
+			log.InfoD("Register cluster for backup")
+			err := CreateApplicationClusters(BackupOrgID, "", "", adminCtx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, adminCtx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			clusterUid, err = Inst().Backup.GetClusterUID(adminCtx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			log.InfoD("Uid of [%s] cluster is %s", SourceClusterName, clusterUid)
+		})
+
+		// 5. Take the backup of bkNamespaces setting retain count to 2
+		Step("Take the backup of bkNamespaces setting retain count to 2", func() {
+			log.InfoD("Take the backup of bkNamespaces setting retain count to 2")
+			var err error
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+			scheduleName = fmt.Sprintf("%s-%s-%s", "schedule", "backup", "1")
+			scheduleNames = append(scheduleNames, scheduleName)
+			firstScheduleBackupName, err = CreateScheduleBackupWithValidation(adminCtx, scheduleName, SourceClusterName, clusterUid, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, "", "", "", "", primarySchedulePolicyName, primarySchedulePolicyUID, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", primarySchedulePolicyName))
+			backupNames = append(backupNames, firstScheduleBackupName)
+			_, err = GetNextScheduleBackupName(scheduleName, time.Duration(schedulePolicyInterval), adminCtx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching name of the scheduled backup with schedule after setting retain count to 2 -[%s]", scheduleName))
+
+		})
+
+		//6. Enumerate Backups and check the number of backups retained
+		Step("Enumerate Backups and check the number of backups retained", func() {
+			log.InfoD("Enumerate Backups and check the number of backups retained")
+			backupEnumerateRequest := &api.BackupEnumerateRequest{
+				OrgId: BackupOrgID,
+			}
+			backupList, err := Inst().Backup.EnumerateBackup(adminCtx, backupEnumerateRequest)
+			log.FailOnError(err, "failed to enumerate backups")
+			noOfBackups := GetNumberOfScheduleBackupsFromListOfAllBackups(scheduleName, backupList)
+			dash.VerifyFatal(noOfBackups, 2, fmt.Sprintf("Number of backups retained should be 2 for schedule policy %s and schedule name %s", primarySchedulePolicyName, scheduleName))
+		})
+
+		// 7. Update Backup Schedule and change retain count to 1
+		Step("Update Backup Schedule and change retain count to 1", func() {
+			log.InfoD("Update Backup Schedule and change retain count to 1")
+			scheduleUID, err := GetScheduleUID(scheduleName, BackupOrgID, adminCtx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Gotten schedule UID- %v for schedule Name-%v", scheduleUID, scheduleName))
+			log.InfoD("Schedule Name is - %v", scheduleName)
+			err = UpdateBackupSchedulePolicy(scheduleName, scheduleUID, secondarySchedulePolicyName, secondarySchedulePolicyUID, adminCtx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Updating backup schedule [%s]", scheduleName))
+			time.Sleep(backupWaitTime)
+
+		})
+
+		//8. Enumerate Backups and check the number of backups retained
+		Step("Enumerate Backups and check the number of backups retained", func() {
+			log.InfoD("Enumerate Backups and check the number of backups retained")
+			backupEnumerateRequest := &api.BackupEnumerateRequest{
+				OrgId: BackupOrgID,
+			}
+			backupList, err := Inst().Backup.EnumerateBackup(adminCtx, backupEnumerateRequest)
+			log.FailOnError(err, "failed to enumerate backups")
+			noOfBackups := GetNumberOfScheduleBackupsFromListOfAllBackups(scheduleName, backupList)
+			dash.VerifyFatal(noOfBackups, 1, fmt.Sprintf("Number of backups retained should be 1 for schedule policy %s and schedule name %s", secondarySchedulePolicyName, scheduleName))
+		})
+
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		//unset env for backup type
+		defer func() {
+			log.Infof("Unsetting BACKUP_TYPE env variable")
+			err := os.Unsetenv("BACKUP_TYPE")
+			log.FailOnError(err, "Unsetting BACKUP_TYPE env variable")
+		}()
+
+		//Set env back to original value
+		err := os.Setenv("BACKUP_TYPE", backupTypeEnvVar)
+		log.FailOnError(err, "Setting BACKUP_TYPE env variable")
+
+		//Delete Schedules and Backups
+		for _, scheduleName := range scheduleNames {
+			err := DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, adminCtx, true)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
+		}
+		// Delete the schedule policies
+		for schedulePolicyUID, schedulePolicyName := range schedulePolicyMap {
+			log.InfoD("Deleting schedule policy [%s]", schedulePolicyName)
+			schedulePolicyDeleteRequest := &api.SchedulePolicyDeleteRequest{
+				Name:  schedulePolicyName,
+				Uid:   schedulePolicyUID,
+				OrgId: BackupOrgID,
+			}
+			_, err := Inst().Backup.DeleteSchedulePolicy(adminCtx, schedulePolicyDeleteRequest)
+			log.FailOnError(err, "failed to delete schedule policy [%s]", schedulePolicyName)
+		}
+
+		//Delete apps
+		log.InfoD("Deleting the deployed apps after the testcase")
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		DestroyApps(scheduledAppContexts, opts)
+
+		err = DeleteNamespaces(bkpNamespaces)
+		log.FailOnError(err, "failed to delete namespaces")
+
+		//CleanupCloudSettingsAndClusters
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, adminCtx)
+
 	})
 })

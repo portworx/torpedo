@@ -207,6 +207,7 @@ const (
 	BackupAndRestoreJobWithNodeAffinity                                                TestCaseName = "BackupAndRestoreJobWithNodeAffinity"
 	AddBackupLocationWhileNfsValidatorPodIsRunning                                     TestCaseName = "AddBackupLocationWhileNfsValidatorPodIsRunning"
 	UninstallPxBackupAndRestoreFromTheBackup                                           TestCaseName = "UninstallPxBackupAndRestoreFromTheBackup"
+	ChangeSchedulePolicyAndVerifyBackups                                               TestCaseName = "ChangeSchedulePolicyAndVerifyBackups"
 )
 
 // Test case labels
@@ -408,6 +409,7 @@ const (
 	RestoreFromBackupsTakenByStorkLabel                                                     TestCaseLabel = "RestoreFromBackupsTakenByStork"
 	BackupAndRestoreJobWithNodeAffinityLabel                                                TestCaseName  = "BackupAndRestoreJobWithNodeAffinity"
 	AddBackupLocationWhileNfsValidatorPodIsRunningLabel                                     TestCaseLabel = "AddBackupLocationWhileNfsValidatorPodIsRunning"
+	ChangeSchedulePolicyAndVerifyBackupsLabel                                               TestCaseLabel = "ChangeSchedulePolicyAndVerifyBackups"
 )
 
 // Common Labels
