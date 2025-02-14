@@ -6,8 +6,8 @@ export TORPEDO_IMG="localhost/torpedo:master"
 
 # Change below variables as needed
 ## Tests to run
-export FOCUS_TESTS="SingleVMLiveMigration"
-export APP_LIST=kubevirt-debian-fio-minimal
+export FOCUS_TESTS="SingleVMLiveMigration,MultipleParallelLiveMigration,LiveMigrationsOfVMsInALoop,ColdAddNewDiskToKubevirtVM,LMAfterColdAddDiskToVM,LMBeforeColdAddDiskToVM,PxKillAfterColdAddDiskToVM,KillPxOnSourceNodeDuringMigration,KillPxOnDestNodeDuringMigration,DeleteMigrationObjectDuringMigration,RepeatedDeleteMigrationObjectDuringMigration"
+export APP_LIST="kubevirt-debian-fio-minimal"
 export TEST_DESC="px-ocp-kubevirt-all"
 export PROVISIONER="csi"
 export STORAGE_DRIVER="pxd"

@@ -82,7 +82,7 @@ fi
 FOCUS_ARG=""
 if [ -n "$FOCUS_TESTS" ]; then
     focusRegex="$(echo $FOCUS_TESTS | sed -e 's/,/}|{/g')"
-    FOCUS_ARG="--focus={$focusRegex}"
+    FOCUS_ARG="--focus=\"{$focusRegex}\""
 fi
 
 if [ -n "$LABEL_FILTER" ]; then
@@ -324,7 +324,10 @@ if [ -n "${ORACLE_API_KEY}" ]; then
     ORACLE_API_KEY_MOUNT="{ \"name\": \"oracle-api-key-volume\", \"mountPath\": \"/home/oci/\" }"
 fi
 
-TESTRESULTS_VOLUME="{ \"name\": \"testresults\", \"hostPath\": { \"path\": \"/mnt/testresults/\", \"type\": \"DirectoryOrCreate\" } }"
+#TESTRESULTS_VOLUME="{ \"name\": \"testresults\", \"hostPath\": { \"path\": \"/mnt/testresults/\", \"type\": \"DirectoryOrCreate\" } }"
+#TESTRESULTS_MOUNT="{ \"name\": \"testresults\", \"mountPath\": \"/testresults/\" }"
+TIMESTAMP=$(date +%Y-%m-%d-%H-%M-%S)
+TESTRESULTS_VOLUME="{ \"name\": \"testresults\", \"hostPath\": { \"path\": \"/mnt/testresults/test-${TIMESTAMP}/\", \"type\": \"DirectoryOrCreate\" } }"
 TESTRESULTS_MOUNT="{ \"name\": \"testresults\", \"mountPath\": \"/testresults/\" }"
 
 AWS_VOLUME="{ \"name\": \"aws-volume\", \"configMap\": { \"name\": \"aws-cm\", \"items\": [{\"key\": \"credentials\", \"path\": \"credentials\"}, {\"key\": \"config\", \"path\": \"config\"}]} }"
@@ -983,7 +986,7 @@ if [ "${RUN_GINKGO_COMMAND}" = "true" ]; then
     exit $?
 fi
 
-if [ -z "${ANTHOS_HOST_PATH}" ]; then
+if [ -z "${ANTHOS_HOST_PATH}" ]; then]
   sed -i  '/GOOGLE_APPLICATION_CREDENTIALS/, +1d' torpedo.yaml
 fi
 

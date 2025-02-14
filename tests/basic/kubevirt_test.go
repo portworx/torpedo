@@ -2136,20 +2136,8 @@ var _ = Describe("{SingleVMLiveMigration}", Label("p0", "positive", "kubevirt", 
 		StartTorpedoTest("SingleVMLiveMigration", "Live migrate single kubevirt VM", nil, 0)
 		InitTestErrorChannel()
 
-		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
-		if !present {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		if volType == "pxe-raw" {
-			app = "kubevirt-raw-vol"
-		} else if volType == "fada-raw" {
-			app = "kubevirt-fada-raw-fio"
-		} else if volType == "windows" {
-			app = "kubevirt-windows-mssql"
-		} else {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		log.InfoD("Setting app for this test to be : %s", app)
+		app, volType, present = getAppAndVolType()
+		log.InfoD("Setting app for this test to be : %s, Volume Type: %s, Present: %t", app, volType, present)
 	})
 
 	itLog := "Live migrate single kubevirt VM"
@@ -2270,18 +2258,8 @@ var _ = Describe("{SingleVMLiveMigrationStorkUpgrade}", Label("p0", "positive", 
 	var present bool
 	JustBeforeEach(func() {
 		StartTorpedoTest("SingleVMLiveMigrationStorkUpgrade", "Live migrate single kubevirt VM after stork upgrade", nil, 0)
-		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
-		if !present {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		if volType == "pxe-raw" {
-			app = "kubevirt-raw-vol"
-		} else if volType == "fada-raw" {
-			app = "kubevirt-fada-raw-fio"
-		} else {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		log.InfoD("Setting app for this test to be : %s", app)
+		app, volType, present = getAppAndVolType()
+		log.InfoD("Setting app for this test to be : %s, Volume Type: %s, Present: %t", app, volType, present)
 	})
 	var appCtxs []*scheduler.Context
 	var namespace string
@@ -2423,18 +2401,8 @@ var _ = Describe("{MultipleParallelLiveMigration}", Label("p0", "positive", "kub
 		StartTorpedoTest("MultipleParallelLiveMigration", "Live migrate multiple kubevirt VMs in parallel", nil, 0)
 		InitTestErrorChannel()
 
-		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
-		if !present {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		if volType == "pxe-raw" {
-			app = "kubevirt-raw-vol"
-		} else if volType == "fada-raw" {
-			app = "kubevirt-fada-raw-fio"
-		} else {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		log.InfoD("Setting app for this test to be : %s", app)
+		app, volType, present = getAppAndVolType()
+		log.InfoD("Setting app for this test to be : %s, Volume Type: %s, Present: %t", app, volType, present)
 	})
 	var appCtxs []*scheduler.Context
 	var namespace string
@@ -2583,20 +2551,8 @@ var _ = Describe("{LiveMigrationsOfVMsInALoop}", Label("p0", "positive", "kubevi
 	var present bool
 	JustBeforeEach(func() {
 		StartTorpedoTest("LiveMigrationsOfVMsInALoop", "Live migrate kubevirt VMs multiple times", nil, 0)
-		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
-		if !present {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		if volType == "pxe-raw" {
-			app = "kubevirt-raw-vol"
-		} else if volType == "fada-raw" {
-			app = "kubevirt-fada-raw-fio"
-		} else if volType == "windows" {
-			app = "kubevirt-windows-mssql"
-		} else {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		log.InfoD("Setting app for this test to be : %s", app)
+		app, volType, present = getAppAndVolType()
+		log.InfoD("Setting app for this test to be : %s, Volume Type: %s, Present: %t", app, volType, present)
 	})
 	var appCtxs []*scheduler.Context
 	var namespace string
@@ -2763,20 +2719,8 @@ var _ = Describe("{ColdAddNewDiskToKubevirtVM}", Label("p0", "positive", "kubevi
 	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("ColdAddNewDiskToKubevirtVM", "Cold add a new disk to a kubevirtVM", nil, 0)
-		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
-		if !present {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		if volType == "pxe-raw" {
-			app = "kubevirt-raw-vol"
-		} else if volType == "fada-raw" {
-			app = "kubevirt-fada-raw-fio"
-		} else if volType == "windows" {
-			app = "kubevirt-windows-mssql"
-		} else {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		log.InfoD("Setting app for this test to be : %s", app)
+		app, volType, present = getAppAndVolType()
+		log.InfoD("Setting app for this test to be : %s, Volume Type: %s, Present: %t", app, volType, present)
 	})
 
 	itLog := "Cold add a new disk to a kubevirtVM"
@@ -2849,19 +2793,8 @@ var _ = Describe("{LMAfterColdAddDiskToVM}", Label("p0", "positive", "kubevirt",
 	JustBeforeEach(func() {
 		StartTorpedoTest("LMAfterColdAddDiskToVM", "Cold add a disk to KubeVirt VM and then live migrate it", nil, 0)
 		InitTestErrorChannel()
-
-		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
-		if !present {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		if volType == "pxe-raw" {
-			app = "kubevirt-raw-vol"
-		} else if volType == "fada-raw" {
-			app = "kubevirt-fada-raw-fio"
-		} else {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		log.InfoD("Setting app for this test to be : %s", app)
+		app, volType, present = getAppAndVolType()
+		log.InfoD("Setting app for this test to be : %s, Volume Type: %s, Present: %t", app, volType, present)
 	})
 	var appCtxs []*scheduler.Context
 	var namespace string
@@ -3016,18 +2949,8 @@ var _ = Describe("{LMBeforeColdAddDiskToVM}", Label("p0", "positive", "kubevirt"
 	var present bool
 	JustBeforeEach(func() {
 		StartTorpedoTest("LMBeforeColdAddDiskToVM", "Live migrate KubeVirt VM and then cold add a disk", nil, 0)
-		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
-		if !present {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		if volType == "pxe-raw" {
-			app = "kubevirt-raw-vol"
-		} else if volType == "fada-raw" {
-			app = "kubevirt-fada-raw-fio"
-		} else {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		log.InfoD("Setting app for this test to be : %s", app)
+		app, volType, present = getAppAndVolType()
+		log.InfoD("Setting app for this test to be : %s, Volume Type: %s, Present: %t", app, volType, present)
 	})
 	var appCtxs []*scheduler.Context
 	var namespace string
@@ -3184,18 +3107,8 @@ var _ = Describe("{LMAndColdAddDiskToVMInALoop}", Label("p0", "positive", "kubev
 	var present bool
 	JustBeforeEach(func() {
 		StartTorpedoTest("LMAndColdAddDiskToVMInALoop", "Live migrate and cold add disk to KubeVirt VM multiple times", nil, 0)
-		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
-		if !present {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		if volType == "pxe-raw" {
-			app = "kubevirt-raw-vol"
-		} else if volType == "fada-raw" {
-			app = "kubevirt-fada-raw-fio"
-		} else {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		log.InfoD("Setting app for this test to be : %s", app)
+		app, volType, present = getAppAndVolType()
+		log.InfoD("Setting app for this test to be : %s, Volume Type: %s, Present: %t", app, volType, present)
 	})
 	var appCtxs []*scheduler.Context
 	var namespace string
@@ -3359,20 +3272,8 @@ var _ = Describe("{PxKillAfterColdAddDiskToVM}", Label("p1", "negative", "kubevi
 	var present bool
 	JustBeforeEach(func() {
 		StartTorpedoTest("PxKillAfterColdAddDiskToVM", "Add a disk to KubeVirt VM, kill Px, add another disk and validate the VM", nil, 0)
-		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
-		if !present {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		if volType == "pxe-raw" {
-			app = "kubevirt-raw-vol"
-		} else if volType == "fada-raw" {
-			app = "kubevirt-fada-raw-fio"
-		} else if volType == "windows" {
-			app = "kubevirt-windows-mssql"
-		} else {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		log.InfoD("Setting app for this test to be : %s", app)
+		app, volType, present = getAppAndVolType()
+		log.InfoD("Setting app for this test to be : %s, Volume Type: %s, Present: %t", app, volType, present)
 	})
 
 	var appCtxs []*scheduler.Context
@@ -3539,19 +3440,8 @@ var _ = Describe("{AddDiskKillPxLMAgainAddDisk}", Label("p1", "negative", "kubev
 	JustBeforeEach(func() {
 		StartTorpedoTest("AddDiskKillPxLMAgainAddDisk", "Add a Fada raw disk to KubeVirt VM, live migrate, kill Px, and validate the VM", nil, 0)
 		InitTestErrorChannel()
-
-		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
-		if !present {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		if volType == "pxe-raw" {
-			app = "kubevirt-raw-vol"
-		} else if volType == "fada-raw" {
-			app = "kubevirt-fada-raw-fio"
-		} else {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		log.InfoD("Setting app for this test to be : %s", app)
+		app, volType, present = getAppAndVolType()
+		log.InfoD("Setting app for this test to be : %s, Volume Type: %s, Present: %t", app, volType, present)
 	})
 
 	var appCtxs []*scheduler.Context
@@ -3770,18 +3660,8 @@ var _ = Describe("{KillPxOnSourceNodeDuringMigration}", Label("p1", "negative", 
 	var present bool
 	JustBeforeEach(func() {
 		StartTorpedoTest("KillPxOnSourceNodeDuringMigration", "Live migrate KubeVirt VM and kill Px on source node during migration", nil, 0)
-		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
-		if !present {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		if volType == "pxe-raw" {
-			app = "kubevirt-raw-vol"
-		} else if volType == "fada-raw" {
-			app = "kubevirt-fada-raw-fio"
-		} else {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		log.InfoD("Setting app for this test to be : %s", app)
+		app, volType, present = getAppAndVolType()
+		log.InfoD("Setting app for this test to be : %s, Volume Type: %s, Present: %t", app, volType, present)
 	})
 
 	var appCtxs []*scheduler.Context
@@ -3999,18 +3879,8 @@ var _ = Describe("{KillPxOnDestNodeDuringMigration}", Label("p1", "negative", "k
 	var present bool
 	JustBeforeEach(func() {
 		StartTorpedoTest("KillPxOnDestNodeDuringMigration", "Live migrate KubeVirt VM and kill Px on destination node during migration", nil, 0)
-		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
-		if !present {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		if volType == "pxe-raw" {
-			app = "kubevirt-raw-vol"
-		} else if volType == "fada-raw" {
-			app = "kubevirt-fada-raw-fio"
-		} else {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		log.InfoD("Setting app for this test to be : %s", app)
+		app, volType, present = getAppAndVolType()
+		log.InfoD("Setting app for this test to be : %s, Volume Type: %s, Present: %t", app, volType, present)
 	})
 
 	var appCtxs []*scheduler.Context
@@ -4273,16 +4143,8 @@ var _ = Describe("{KillPxOnSrcAndDestNodesDuringLM}", Label("p1", "negative", "k
 	var present bool
 	JustBeforeEach(func() {
 		StartTorpedoTest("KillPxOnSrcAndDestNodesDuringLM", "Live migrate KubeVirt VM and kill Px on both source and destination nodes during migration", nil, 0)
-		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
-		if !present {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		if volType == "pxe-raw" {
-			app = "kubevirt-raw-vol"
-		} else if volType == "fada-raw" {
-			app = "kubevirt-fada-raw-fio"
-		}
-		log.InfoD("Setting app for this test to be : %s", app)
+		app, volType, present = getAppAndVolType()
+		log.InfoD("Setting app for this test to be : %s, Volume Type: %s, Present: %t", app, volType, present)
 	})
 
 	var appCtxs []*scheduler.Context
@@ -4558,16 +4420,8 @@ var _ = Describe("{DeleteMigrationObjectDuringMigration}", Label("p0", "positive
 	var present bool
 	JustBeforeEach(func() {
 		StartTorpedoTest("DeleteMigrationObjectDuringMigration", "Live migrate multiple KubeVirt VMs in parallel and delete migration objects during migration", nil, 0)
-		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
-		if !present {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		if volType == "pxe-raw" {
-			app = "kubevirt-raw-vol"
-		} else if volType == "fada-raw" {
-			app = "kubevirt-fada-raw-fio"
-		}
-		log.InfoD("Setting app for this test to be : %s", app)
+		app, volType, present = getAppAndVolType()
+		log.InfoD("Setting app for this test to be : %s, Volume Type: %s, Present: %t", app, volType, present)
 	})
 	var appCtxs []*scheduler.Context
 	var namespace string
@@ -4817,16 +4671,8 @@ var _ = Describe("{RepeatedDeleteMigrationObjectDuringMigration}", Label("p0", "
 	var present bool
 	JustBeforeEach(func() {
 		StartTorpedoTest("RepeatedDeleteMigrationObjectDuringMigration", "Repeatedly delete migration objects during migration and finally migrate VMs", nil, 0)
-		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
-		if !present {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		if volType == "pxe-raw" {
-			app = "kubevirt-raw-vol"
-		} else if volType == "fada-raw" {
-			app = "kubevirt-fada-raw-fio"
-		}
-		log.InfoD("Setting app for this test to be : %s", app)
+		app, volType, present = getAppAndVolType()
+		log.InfoD("Setting app for this test to be : %s, Volume Type: %s, Present: %t", app, volType, present)
 	})
 	var appCtxs []*scheduler.Context
 	var namespace string
@@ -5082,18 +4928,8 @@ var _ = Describe("{AddNewMixedDiskToKubevirtVMAndLM}", Label("p0", "positive", "
 	var present bool
 	JustBeforeEach(func() {
 		StartTorpedoTest("AddNewMixedDiskToKubevirtVMAndLM", "Add a new sv4 disk to a raw block kubevirtVM and then do LM", nil, 0)
-		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
-		if !present {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		if volType == "pxe-raw" {
-			app = "kubevirt-raw-vol"
-		} else if volType == "fada-raw" {
-			app = "kubevirt-fada-raw-fio"
-		} else {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		log.InfoD("Setting app for this test to be : %s", app)
+		app, volType, present = getAppAndVolType()
+		log.InfoD("Setting app for this test to be : %s, Volume Type: %s, Present: %t", app, volType, present)
 	})
 	var appCtxs []*scheduler.Context
 	var namespace string
@@ -5294,18 +5130,8 @@ var _ = Describe("{ResizePvcAndLiveMigrateVMs}", Label("p0", "positive", "kubevi
 	var present bool
 	JustBeforeEach(func() {
 		StartTorpedoTest("ResizePvcAndLiveMigrateVMs", "Resize PVCs attached to VMs, live migrate them, and add new disks in a loop", nil, 0)
-		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
-		if !present {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		if volType == "pxe-raw" {
-			app = "kubevirt-raw-vol"
-		} else if volType == "fada-raw" {
-			app = "kubevirt-fada-raw-fio"
-		} else {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		log.InfoD("Setting app for this test to be : %s", app)
+		app, volType, present = getAppAndVolType()
+		log.InfoD("Setting app for this test to be : %s, Volume Type: %s, Present: %t", app, volType, present)
 	})
 
 	var appCtxs []*scheduler.Context
@@ -5555,19 +5381,8 @@ var _ = Describe("{AddNewHotPlugDiskToKubevirtVM}", Label("p0", "positive", "kub
 	JustBeforeEach(func() {
 		StartTorpedoTest("AddNewHotPlugDiskToKubevirtVM", "Add a new raw disk to a running KubeVirt VM via hot-plug", nil, 0)
 		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
-		if !present {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		if volType == "pxe-raw" {
-			app = "kubevirt-raw-vol"
-		} else if volType == "fada-raw" {
-			app = "kubevirt-fada-raw-fio"
-		} else if volType == "windows" {
-			app = "kubevirt-windows-mssql"
-		} else {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		log.InfoD("Setting app for this test to be : %s", app)
+		app, volType, present = getAppAndVolType()
+		log.InfoD("Setting app for this test to be : %s, Volume Type: %s, Present: %t", app, volType, present)
 	})
 
 	It("hot-plug a new disk to a running KubeVirt VM", func() {
@@ -5703,18 +5518,8 @@ var _ = Describe("{RebootNodeAfterAddNewHotPlugDiskToKubevirtVM}", Label("p1", "
 	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("RebootNodeAfterAddNewHotPlugDiskToKubevirtVM", "Add a new raw disk to a running KubeVirt VM via hot-plug", nil, 0)
-		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
-		if !present {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		if volType == "pxe-raw" {
-			app = "kubevirt-raw-vol"
-		} else if volType == "fada-raw" {
-			app = "kubevirt-fada-raw-fio"
-		} else {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		log.InfoD("Setting app for this test to be : %s", app)
+		app, volType, present = getAppAndVolType()
+		log.InfoD("Setting app for this test to be : %s, Volume Type: %s, Present: %t", app, volType, present)
 	})
 
 	It("hot-plug a new disk to a running KubeVirt VM", func() {
@@ -5890,18 +5695,8 @@ var _ = Describe("{PxRestartAfterAddNewHotPlugDiskToKubevirtVM}", Label("p1", "n
 	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("PxRestartAfterAddNewHotPlugDiskToKubevirtVM", "Add a new raw disk to a running KubeVirt VM via hot-plug", nil, 0)
-		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
-		if !present {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		if volType == "pxe-raw" {
-			app = "kubevirt-raw-vol"
-		} else if volType == "fada-raw" {
-			app = "kubevirt-fada-raw-fio"
-		} else {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		log.InfoD("Setting app for this test to be : %s", app)
+		app, volType, present = getAppAndVolType()
+		log.InfoD("Setting app for this test to be : %s, Volume Type: %s, Present: %t", app, volType, present)
 	})
 
 	It("hot-plug a new disk to a running KubeVirt VM", func() {
@@ -6207,20 +6002,8 @@ var _ = Describe("{LMAfterAddNewHotPlugDiskToKubevirtVM}", Label("p0", "positive
 	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("LMAterAddNewHotPlugDiskToKubevirtVM", "Live Migrate after adding a new  disk to a running KubeVirt VM via hot-plug", nil, 0)
-		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
-		if !present {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		if volType == "pxe-raw" {
-			app = "kubevirt-raw-vol"
-		} else if volType == "fada-raw" {
-			app = "kubevirt-fada-raw-fio"
-		} else if volType == "windows" {
-			app = "kubevirt-windows-mssql"
-		} else {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		log.InfoD("Setting app for this test to be : %s", app)
+		app, volType, present = getAppAndVolType()
+		log.InfoD("Setting app for this test to be : %s, Volume Type: %s, Present: %t", app, volType, present)
 	})
 
 	It("hot-plug a new disk to a running KubeVirt VM", func() {
@@ -6358,18 +6141,8 @@ var _ = Describe("{Add26NewHotPlugDiskToKubevirtVM}", Label("p0", "positive", "k
 	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("Add26NewHotPlugDiskToKubevirtVM", " Add a new disk to a running KubeVirt VM via hot-plug", nil, 0)
-		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
-		if !present {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		if volType == "pxe-raw" {
-			app = "kubevirt-raw-vol"
-		} else if volType == "fada-raw" {
-			app = "kubevirt-fada-raw-fio"
-		} else {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		log.InfoD("Setting app for this test to be : %s", app)
+		app, volType, present = getAppAndVolType()
+		log.InfoD("Setting app for this test to be : %s, Volume Type: %s, Present: %t", app, volType, present)
 	})
 
 	It("hot-plug a new disk to a running KubeVirt VM", func() {
@@ -6494,18 +6267,8 @@ var _ = Describe("{PxRestartDuringAddNewHotPlugDiskToKubevirtVM}", Label("p1", "
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("PxRestartDuringAddNewHotPlugDiskToKubevirtVM", "Restart Portworx during adding a new raw disk to a running KubeVirt VM via hot-plug", nil, 0)
-		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
-		if !present {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		if volType == "pxe-raw" {
-			app = "kubevirt-raw-vol"
-		} else if volType == "fada-raw" {
-			app = "kubevirt-fada-raw-fio"
-		} else {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		log.InfoD("Setting app for this test to be : %s", app)
+		app, volType, present = getAppAndVolType()
+		log.InfoD("Setting app for this test to be : %s, Volume Type: %s, Present: %t", app, volType, present)
 	})
 
 	It("Px restart during hot-plug of a new disk to a running KubeVirt VM", func() {
@@ -6702,18 +6465,8 @@ var _ = Describe("{RebootNodeDuringAddNewHotPlugDiskToKubevirtVM}", Label("p1", 
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("RebootNodeDuringAddNewHotPlugDiskToKubevirtVM", "Reboot source node during adding a new raw disk to a running KubeVirt VM via hot-plug", nil, 0)
-		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
-		if !present {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		if volType == "pxe-raw" {
-			app = "kubevirt-raw-vol"
-		} else if volType == "fada-raw" {
-			app = "kubevirt-fada-raw-fio"
-		} else {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		log.InfoD("Setting app for this test to be : %s", app)
+		app, volType, present = getAppAndVolType()
+		log.InfoD("Setting app for this test to be : %s, Volume Type: %s, Present: %t", app, volType, present)
 	})
 
 	It("Node reboot during hot-plug of a new disk to a running KubeVirt VM", func() {
@@ -6896,18 +6649,8 @@ var _ = Describe("{RebootSourceNodeDuringMigration}", Label("p1", "negative", "k
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("RebootSourceNodeDuringMigration", "Live migrate KubeVirt VM and reboot node on source node during migration", nil, 0)
-		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
-		if !present {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		if volType == "pxe-raw" {
-			app = "kubevirt-raw-vol"
-		} else if volType == "fada-raw" {
-			app = "kubevirt-fada-raw-fio"
-		} else {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		log.InfoD("Setting app for this test to be : %s", app)
+		app, volType, present = getAppAndVolType()
+		log.InfoD("Setting app for this test to be : %s, Volume Type: %s, Present: %t", app, volType, present)
 	})
 
 	itLog := "Live migrate KubeVirt VM and reboot node on source node during migration"
@@ -7257,18 +7000,8 @@ var _ = Describe("{AddAndRemoveNewHotPlugDiskToKubevirtVM}", Label("p0", "positi
 	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("AddAndRemoveNewHotPlugDiskToKubevirtVM", "Add and remove Hot Pluggable disk to Kubevirt VM", nil, 0)
-		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
-		if !present {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		if volType == "pxe-raw" {
-			app = "kubevirt-raw-vol"
-		} else if volType == "fada-raw" {
-			app = "kubevirt-fada-raw-fio"
-		} else {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		log.InfoD("Setting app for this test to be : %s", app)
+		app, volType, present = getAppAndVolType()
+		log.InfoD("Setting app for this test to be : %s, Volume Type: %s, Present: %t", app, volType, present)
 	})
 
 	It("hot-plug a new disk to a running KubeVirt VM", func() {
@@ -7701,18 +7434,8 @@ var _ = Describe("{UpgradePXWhileAddingColdDiskHotDiskAndLiveMigrationInProgress
 		pxUpgradeDone = make(chan struct{})
 		closeOnce = sync.Once{}
 		StartTorpedoTest("Upgrade PX While Adding Cold Disk Hot Disk And Live Migration In Progress", "Upgrading PX while kubevirt operations such as cold add disk, hot add disk and VM Live migration in progress", nil, 0)
-		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
-		if !present {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		if volType == "pxe-raw" {
-			app = "kubevirt-raw-vol"
-		} else if volType == "fada-raw" {
-			app = "kubevirt-fada-raw-fio"
-		} else {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		log.InfoD("Setting app for this test to be : %s", app)
+		app, volType, present = getAppAndVolType()
+		log.InfoD("Setting app for this test to be : %s, Volume Type: %s, Present: %t", app, volType, present)
 	})
 
 	It("hot-plug a new disk to a running KubeVirt VM", func() {
@@ -7946,6 +7669,25 @@ func liveMigrateVM(appCtxs []*scheduler.Context) {
 	}
 }
 
+func getAppAndVolType() (string, string, bool) {
+
+	volType, present := os.LookupEnv("KUBEVIRT_VOL_TYPE")
+	if !present {
+		return "kubevirt-debian-fio-minimal", volType, present
+	}
+
+	switch volType {
+	case "pxe-raw":
+		return "kubevirt-raw-vol", volType, present
+	case "fada-raw":
+		return "kubevirt-fada-raw-fio", volType, present
+	case "windows":
+		return "kubevirt-windows-mssql", volType, present
+	default:
+		return "kubevirt-debian-fio-minimal", volType, present
+	}
+}
+
 var _ = Describe("{SingleVMLiveMigrationPostCopy}", Label("p1", "positive", "kubevirt", "MiniScale", "LiveMigration"), func() {
 	var (
 		app, volType  string
@@ -8103,18 +7845,8 @@ var _ = Describe("{LMAfterAddingHotAndColdDiskToKubevirtVMMultipleTimes}", Label
 	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("LMAfterAddingHotAndColdDiskToKubevirtVM", "Live migrate VM after adding hot pluggable disk and cold add disk", nil, 0)
-		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
-		if !present {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		if volType == "pxe-raw" {
-			app = "kubevirt-raw-vol"
-		} else if volType == "fada-raw" {
-			app = "kubevirt-fada-raw-fio"
-		} else {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		log.InfoD("Setting app for this test to be : %s", app)
+		app, volType, present = getAppAndVolType()
+		log.InfoD("Setting app for this test to be : %s, Volume Type: %s, Present: %t", app, volType, present)
 	})
 
 	It("LM after adding hot and cold add disk to kubevirt VM", func() {
@@ -8266,18 +7998,8 @@ var _ = Describe("{FAFailoverWithLiveMigrationOfKubevirtVM}", Label("p1", "negat
 	JustBeforeEach(func() {
 		log.Infof("Starting Torpedo tests ")
 		StartTorpedoTest("FAFailoverWithLiveMigrationOfKubevirtVM", "Live migration of kubevirt VM when all iscsi ports are down in FA", nil, 0)
-		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
-		if !present {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		if volType == "pxe-raw" {
-			app = "kubevirt-raw-vol"
-		} else if volType == "fada-raw" {
-			app = "kubevirt-fada-raw-fio"
-		} else {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		log.InfoD("Setting app for this test to be : %s", app)
+		app, volType, present = getAppAndVolType()
+		log.InfoD("Setting app for this test to be : %s, Volume Type: %s, Present: %t", app, volType, present)
 	})
 
 	itLog := "Live migration of kubevirt VM when all iscsi ports are down in FA"
@@ -8437,18 +8159,8 @@ var _ = Describe("{FAFailoverWithHotPlugDiskToKubevirtVM}", Label("p1", "negativ
 	JustBeforeEach(func() {
 		log.Infof("Starting Torpedo tests ")
 		StartTorpedoTest("FAFailoverWithHotPlugDiskToKubevirtVM", "Hot plug disk to kubevirt VM when all iscsi ports are down in FA", nil, 0)
-		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
-		if !present {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		if volType == "pxe-raw" {
-			app = "kubevirt-raw-vol"
-		} else if volType == "fada-raw" {
-			app = "kubevirt-fada-raw-fio"
-		} else {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		log.InfoD("Setting app for this test to be : %s", app)
+		app, volType, present = getAppAndVolType()
+		log.InfoD("Setting app for this test to be : %s, Volume Type: %s, Present: %t", app, volType, present)
 	})
 
 	itLog := "Hot plug disk to kubevirt VM when all iscsi ports are down in FA"
@@ -8608,18 +8320,8 @@ var _ = Describe("{FAFailoverWithColdAddDiskToKubevirtVM}", Label("p1", "negativ
 	JustBeforeEach(func() {
 		log.Infof("Starting Torpedo tests ")
 		StartTorpedoTest("FAFailoverWithColdAddDiskToKubevirtVM", "Cold add disk to kubevirt VM when all iscsi ports are down in FA", nil, 0)
-		volType, present = os.LookupEnv("KUBEVIRT_VOL_TYPE")
-		if !present {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		if volType == "pxe-raw" {
-			app = "kubevirt-raw-vol"
-		} else if volType == "fada-raw" {
-			app = "kubevirt-fada-raw-fio"
-		} else {
-			app = "kubevirt-debian-fio-minimal"
-		}
-		log.InfoD("Setting app for this test to be : %s", app)
+		app, volType, present = getAppAndVolType()
+		log.InfoD("Setting app for this test to be : %s, Volume Type: %s, Present: %t", app, volType, present)
 	})
 
 	itLog := "Cold add disk to kubevirt VM when all iscsi ports are down in FA"
