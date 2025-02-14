@@ -143,6 +143,8 @@ type InitOptions struct {
 	UpgradeHops string
 	// CollectEvents is needed to identify if we want to collect namespace events or skip it
 	CollectEvents bool
+	// AutoFSTrimEnable is needed to enable autofs trim
+	AutoFSTrimEnable bool
 }
 
 // ScheduleOptions are options that callers to pass to influence the apps that get schduled

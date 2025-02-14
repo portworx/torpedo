@@ -362,6 +362,9 @@ const (
 	pxSpecGenURLFlag                 = "px-specgen-url"
 	pureSecretFlag                   = "pure-secret"
 
+	// AutoFSTrim
+	autoFSTrimEnableFlag = "auto-fs-trim-enable"
+
 	// PSA Specific
 	kubeApiServerConfigFilePath     = "/etc/kubernetes/manifests/kube-apiserver.yaml"
 	kubeApiServerConfigFilePathBkp  = "/etc/kubernetes/kube-apiserver.yaml.bkp"
@@ -789,6 +792,7 @@ func InitInstanceWithParams(params InitParams) {
 		AnthosInstancePath:               Inst().AnthosInstPath,
 		UpgradeHops:                      Inst().SchedUpgradeHops,
 		CollectEvents:                    params.CollectEvents,
+		AutoFSTrimEnable:                 Inst().AutoFSTrimEnabled,
 	})
 
 	log.FailOnError(err, "Error occured while Scheduler Driver Initialization")
@@ -7975,6 +7979,7 @@ type Torpedo struct {
 	FaSecret                            string
 	PxSpecGenURL                        string
 	PureSecret                          string
+	AutoFSTrimEnabled                   bool
 }
 
 // ParseFlags parses command line flags
@@ -8037,6 +8042,7 @@ func ParseFlags() {
 	var anthosWsNodeIp string
 	var anthosInstPath string
 	var faSecret string
+	var autoFsTrimEnabled bool
 
 	log.Infof("The default scheduler is %v", defaultScheduler)
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to use")
@@ -8120,6 +8126,7 @@ func ParseFlags() {
 	// should be skipped from AfterSuite() if this flag is set to true. This is to avoid distracting test failures due to
 	// unstable testing environments.
 	flag.BoolVar(&skipSystemChecks, skipSystemCheckCliFlag, false, "Skip system checks during after suite")
+	flag.BoolVar(&autoFsTrimEnabled, autoFSTrimEnableFlag, false, "To enable autofstrim cluster wide")
 	flag.Parse()
 
 	log.SetLoglevel(logLevel)
@@ -8355,6 +8362,7 @@ func ParseFlags() {
 				SkipSystemChecks:                    skipSystemChecks,
 				FaSecret:                            faSecret,
 				PxSpecGenURL:                        pxSpecGenURL,
+				AutoFSTrimEnabled:                   autoFsTrimEnabled,
 			}
 		})
 	}

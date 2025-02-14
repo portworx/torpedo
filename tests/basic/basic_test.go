@@ -51,7 +51,7 @@ var _ = BeforeSuite(func() {
 	if !exists {
 		InitInstance()
 		dash.TestSetBegin(dash.TestSet)
-		if !Inst().V.IsPxLiteCluster() {
+		if !Inst().V.IsPxLiteCluster() && Inst().AutoFSTrimEnabled {
 			EnableAutoFSTrim()
 		}
 	} else {

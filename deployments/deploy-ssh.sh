@@ -254,6 +254,10 @@ if [ -n "$ANTHOS_HOST_PATH" ]; then
     ANTHOS_HOST_PATH="${ANTHOS_HOST_PATH}"
 fi
 
+if [ -z "${IS_AUTO_FS_TRIM_ENABLED}" ]; then
+    IS_AUTO_FS_TRIM_ENABLED=false
+fi
+
 for i in $@
 do
 case $i in
@@ -606,6 +610,7 @@ spec:
             "--torpedo-job-type=$TORPEDO_JOB_TYPE",
             "--torpedo-skip-system-checks=$TORPEDO_SKIP_SYSTEM_CHECKS",
             "--fa-secret=${FA_SECRET}",
+            "--auto-fs-trim-enable=$IS_AUTO_FS_TRIM_ENABLED",
             "$APP_DESTROY_TIMEOUT_ARG",
             "$SCALE_APP_TIMEOUT_ARG",
     ]
