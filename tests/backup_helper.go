@@ -186,8 +186,8 @@ const (
 	IptablesCommandRetryTime              = 1 * time.Minute
 	RebootNodeTimeout                     = 1 * time.Minute
 	RebootNodeTimeBeforeRetry             = 5 * time.Second
-	LatestPxBackupVersion                 = "2.8.3"
-	DefaultPxBackupHelmBranch             = "2.8.3"
+	LatestPxBackupVersion                 = "2.9.0"
+	DefaultPxBackupHelmBranch             = "2.9.0"
 	pxCentralPostInstallHookJobName       = "pxcentral-post-install-hook"
 	quickMaintenancePod                   = "quick-maintenance-repo"
 	fullMaintenancePod                    = "full-maintenance-repo"
