@@ -9769,6 +9769,7 @@ var _ = Describe("{ExpandMultiplePoolWithIOsInClusterAtOnce}", Label("p0", "posi
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("expandmultiplepoolparallel-%d", i))...)
 		}
+		time.Sleep(60 * time.Second)
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
