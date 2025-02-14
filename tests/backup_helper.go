@@ -15312,6 +15312,7 @@ func GetNthPxBackupVersion(latestVersion string, difference int, latestFlag bool
 		log.Errorf("failed to get %s versions: %w", PxCentralReleaseName, err)
 		return semver.Version{}, err
 	}
+	log.Infof("Fetched versions: %v", versions)
 	found := false
 
 	for _, v := range versions {
@@ -15347,5 +15348,12 @@ func GetNthPxBackupVersion(latestVersion string, difference int, latestFlag bool
 			}
 		}
 	}
+	if difference == 0 && !found {
+        log.Warnf("n-0 version not found in Helm repo, returning latest version %s", latestVersion)
+        return latest, nil
+    }
+	if !found {
+		return semver.Version{}, fmt.Errorf("no valid version found for n-%d (latest: %s)", difference, latestVersion)
+	}	
 	return candidate, nil
 }
