@@ -590,7 +590,7 @@ var _ = Describe("{UpgradePxBackupStorageClassAndImagesCheck}", Label(TestCaseLa
 		valuesMap, err := ParseValuesFromFile("values1")
 		log.FailOnError(err, "Failed to parse values file")
 		installVersion, err := GetNthPxBackupVersion(LatestPxBackupVersion, 2, false)
-		_, err = InstallPxBackup(installVersion.String(), "master", namespace, valuesMap)
+		_, err = InstallPxBackup(installVersion.String(), DefaultPxBackupHelmBranch, namespace, valuesMap)
 		log.FailOnError(err, "Failed to install px-backup")
 	})
 	It("Should check px-backup upgrade failure due to incorrect storage class and images", func() {
@@ -926,7 +926,7 @@ var _ = Describe("{UpgradePxBackupPortInfoCheck}", Label(TestCaseLabelsMap[Upgra
 		valuesMap, err := ParseValuesFromFile("values1")
 		log.FailOnError(err, "Failed to parse values file")
 		installVersion, err := GetNthPxBackupVersion(LatestPxBackupVersion, 0, false)
-		rel, err = InstallPxBackup(installVersion.String(), "master", namespace, valuesMap)
+		rel, err = InstallPxBackup(installVersion.String(), DefaultPxBackupHelmBranch, namespace, valuesMap)
 		log.FailOnError(err, "Failed to install px-backup")
 	})
 	It("Should check port info in the release notes for upgrade", func() {
@@ -1065,7 +1065,7 @@ var _ = Describe("{UpgradePxBackupWithSkipValidationsFlagTrue}", Label(TestCaseL
 		valuesMap, err := ParseValuesFromFile("values1")
 		log.FailOnError(err, "Failed to parse values file")
 		installVersion, err := GetNthPxBackupVersion(LatestPxBackupVersion, 3, false)
-		_, err = InstallPxBackup(installVersion.String(), "master", namespace, valuesMap)
+		_, err = InstallPxBackup(installVersion.String(), DefaultPxBackupHelmBranch, namespace, valuesMap)
 		log.FailOnError(err, "Failed to install px-backup")
 	})
 	// Upgrade with skipValidations flag set to false and verify that the report has the string "Issues detected during validations."
@@ -1192,7 +1192,7 @@ var _ = Describe("{UpgradePxBackupWhenInstallVersionIsInvalid}", Label(TestCaseL
 		valuesMap, err := ParseValuesFromFile("values1")
 		log.FailOnError(err, "Failed to parse values file")
 		installVersion, err := GetNthPxBackupVersion(LatestPxBackupVersion, 3, false)
-		_, err = InstallPxBackup(installVersion.String(), "master", namespace, valuesMap)
+		_, err = InstallPxBackup(installVersion.String(), DefaultPxBackupHelmBranch, namespace, valuesMap)
 		log.FailOnError(err, "Failed to install px-backup")
 	})
 
@@ -1261,7 +1261,7 @@ var _ = Describe("{UpgradePxBackupPodReadinessCheck}", Label(TestCaseLabelsMap[U
 		valuesMap, err := ParseValuesFromFile("values1")
 		log.FailOnError(err, "Failed to parse values file")
 		installVersion, err := GetNthPxBackupVersion(LatestPxBackupVersion, 0, false)
-		_, err = InstallPxBackup(installVersion.String(), "master", namespace, valuesMap)
+		_, err = InstallPxBackup(installVersion.String(), DefaultPxBackupHelmBranch, namespace, valuesMap)
 		log.FailOnError(err, "Failed to install px-backup")
 		timeout = 5 * time.Minute
 		retryInterval = 10 * time.Second
@@ -1416,7 +1416,7 @@ var _ = Describe("{UpgradePxBackupKubernetesVersionCheck}", Label(TestCaseLabels
 		valuesMap, err := ParseValuesFromFile("values1")
 		log.FailOnError(err, "Failed to parse values file")
 		installVersion, err := GetNthPxBackupVersion(LatestPxBackupVersion, 1, false)
-		_, err = InstallPxBackup(installVersion.String(), "master", namespace, valuesMap)
+		_, err = InstallPxBackup(installVersion.String(), DefaultPxBackupHelmBranch, namespace, valuesMap)
 		log.FailOnError(err, "Failed to install px-backup")
 	})
 	It("Should check if a warning is logged in a config map if the kubernetes version is less than the minimum required version", func() {
@@ -1491,7 +1491,7 @@ var _ = Describe("{UpgradePxBackupPostInstallJobCheck}", Label(TestCaseLabelsMap
 			log.FailOnError(err, "Failed to parse values file")
 			log.InfoD("Attempting to fail the post-install job")
 			installVersion, err := GetNthPxBackupVersion(LatestPxBackupVersion, 0, false)
-			_, err = InstallPxBackup(installVersion.String(), "master", namespace, valuesMap)
+			_, err = InstallPxBackup(installVersion.String(), DefaultPxBackupHelmBranch, namespace, valuesMap)
 			log.FailOnError(err, "Failed to install px-backup")
 		})
 
