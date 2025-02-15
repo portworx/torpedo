@@ -29,6 +29,7 @@ import (
 	"github.com/pure-px/torpedo/pkg/log"
 	"github.com/pure-px/torpedo/pkg/osutils"
 	"github.com/pure-px/torpedo/pkg/pureutils"
+	"github.com/pure-px/torpedo/pkg/units"
 
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/pure-px/sched-ops/k8s/apps"
@@ -5429,5 +5430,150 @@ var _ = Describe("{StorageLessToStorageByShutDownNode}", Label("staging", "p0", 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{VerifyFstrimWithPVCRresize}", Label("staging", "p0", "positive", "px_vol_ops"), func() {
+	/*
+	   https://purestorage.atlassian.net/browse/HAZEL-1069
+
+	   1. Enabel scheduled FSTrim on the cluster
+	   2. Resize pvc / volume
+	   3. Verify scheduled FSTrim continue to happen
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("VerifyFstrimWithPVCRresize", "Verify Fstrim schedule with Volume / pvc resize", nil, 0)
+	})
+
+	stepLog := "Verify FS trim continues after volume / pvc resize"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+
+		var (
+			contexts            []*scheduler.Context
+			storageNodes        []node.Node
+			selectedStorageNode node.Node
+			appList             = Inst().AppList
+			fsTrimTimeout       = 60 * time.Minute
+			fsTrimRetryInterval = 2 * time.Minute
+			fsTrimStatuses      map[string]opsapi.FilesystemTrim_FilesystemTrimStatus
+		)
+
+		stepLog = "Enable Fstrim schedule on the cluster"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			storageNodes = node.GetStorageNodes()
+			if len(storageNodes) == 0 {
+				log.FailOnError(fmt.Errorf("Storage nodes list empty"), "failed to get storage nodes")
+			}
+			selectedStorageNode = storageNodes[0]
+
+			// Daily: daily=HH:MM, Weekly: weekly=day@hh:mm
+			log.Infof("Enable scheduled fs trim on the cluster")
+			formattedTime := time.Now().UTC().Add(1 * time.Minute).Format("15:04")
+			scheduleStartTime := fmt.Sprintf("daily=%s", formattedTime)
+			err := EnableScheduledFSTrim(storageNodes, 10, scheduleStartTime)
+			log.FailOnError(err, "failed to enable scheduled fs trim")
+
+			Inst().AppList = []string{"fio-fstrim"}
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("fspxrestart-%d", i))...)
+			}
+		})
+		ValidateApplications(contexts)
+
+		defer func() {
+			DestroyApps(contexts, nil)
+			_ = Inst().V.SetClusterOpts(selectedStorageNode, map[string]string{
+				"--fstrim-schedule-start": ""})
+			Inst().AppList = appList
+		}()
+
+		stepLog = "select a node where fs trim running and get the fs trim status"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				appVolumes, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "Failed to get volumes list for the application: %v", ctx.App.Key)
+
+				for _, v := range appVolumes {
+					selectedVol, err := Inst().V.InspectVolume(v.ID)
+					log.FailOnError(err, "Failed to get volumes details using volume ID: %v", v.ID)
+
+					attachedNode := selectedVol.AttachedOn
+					log.Infof("Volume attached on node: %v", attachedNode)
+					selectedStorageNode, err = node.GetNodeByIP(attachedNode)
+					log.FailOnError(err, "Failed to get the node details by nodeIP: %v", attachedNode)
+
+					fsTrimStatuses, err = CheckFSTrimRunningOnNode(selectedStorageNode, selectedVol, fsTrimTimeout, fsTrimRetryInterval)
+					log.FailOnError(err, "Failed to get the fstrim status for the node: %v", selectedStorageNode.DataIp)
+					break
+				}
+			}
+		})
+
+		stepLog = "Resize pvc for all volumes in the application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				if !strings.Contains(ctx.App.Key, "fio-fstrim") {
+					continue
+				}
+				appVols, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, fmt.Sprintf("error getting volumes list for the app [%s]", ctx.App.Key))
+
+				for _, vol := range appVols {
+					apiVol, err := Inst().V.InspectVolume(vol.ID)
+					log.FailOnError(err, fmt.Sprintf("error getting volume details using volume id: [%s]", vol.ID))
+
+					curSize := apiVol.Spec.Size
+					newSize := curSize + (uint64(1) * units.GiB)
+					log.Infof("Initiating volume size increase on volume [%s/%v] by size [%v]GiB to [%v]GiB", ctx.App.Key,
+						vol.ID, curSize/units.GiB, newSize/units.GiB)
+
+					pvcs, err := GetAllPVCFromNs(ctx.App.NameSpace, nil)
+					log.FailOnError(err, fmt.Sprintf("error getting pvc list for the app [%v], in the namespace [%v]", ctx.App.Key, ctx.App.NameSpace))
+
+					for _, pvc := range pvcs {
+						log.Debugf("checking pvc:[%s], with vol name [%s]", pvc.Name, vol.Name)
+						if pvc.Name == vol.Name {
+							log.InfoD("increasing pvc [%s/%s] size to %dGiB", pvc.Namespace, pvc.Name, newSize/units.GiB)
+							_, err = Inst().S.ResizePVC(ctx, &pvc, uint64(1))
+							log.FailOnError(err, fmt.Sprintf("error getting while resize pvc [%s]", pvc.Name))
+						}
+
+					}
+
+					// Wait for 2 seconds for Volume to update stats
+					time.Sleep(2 * time.Second)
+					volumeInspect, err := Inst().V.InspectVolume(vol.ID)
+					log.FailOnError(err, fmt.Sprintf("error getting volume details using volume id: [%s]", vol.ID))
+
+					updatedSize := volumeInspect.Spec.Size
+					dash.VerifyFatal(updatedSize > curSize, true, fmt.Sprintf("verify pvc size increased. current size: %vGiB, updated size: %vGiB", curSize, updatedSize))
+				}
+				log.Infof("Volumes [%v] for the app [%v] successfully resized", appVols, ctx.App.Key)
+			}
+		})
+
+		stepLog = "verifiy that FSTrim schedule running after volume / pvc resize"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			newFsTrimStatusesAftrRestart, err := Inst().V.GetAutoFsTrimStatus(selectedStorageNode.DataIp)
+			log.FailOnError(err, "error getting autofs status")
+			for k := range fsTrimStatuses {
+				val, ok := newFsTrimStatusesAftrRestart[k]
+				dash.VerifySafely(ok, true, fmt.Sprintf("verify autofstrim started for volume %s", k))
+				dash.VerifySafely(val != opsapi.FilesystemTrim_FS_TRIM_FAILED, true, fmt.Sprintf("verify fstrim status for volume %s, current status %v", k, val))
+			}
+		})
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
 	})
 })
