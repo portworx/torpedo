@@ -5,7 +5,7 @@ metadata:
   name: fio-repl1-vps-sc
 provisioner: kubernetes.io/portworx-volume
 parameters:
-  placement_strategy: "fastpath-repl1-vps"
+  placement_strategy: "repl-affinity-vps"
   repl: "1"
   priority_io: "high"
 allowVolumeExpansion: true
@@ -17,8 +17,7 @@ metadata:
   name: fio-repl1-vps-log
 provisioner: kubernetes.io/portworx-volume
 parameters:
-  placement_strategy: "fastpath-repl1-vps"
+  placement_strategy: "repl-affinity-vps"
   repl: "1"
-
   priority_io: "high"
 allowVolumeExpansion: true

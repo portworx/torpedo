@@ -2868,8 +2868,6 @@ var _ = Describe("{MulPoolsAddDisk}", Label("p0", "positive", "pool_ops", "AddDr
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
-		var poolsToBeResized []*api.StoragePool
-
 		stNodes := node.GetStorageNodes()
 
 		elMap := make(map[string]bool, 0)
@@ -2884,35 +2882,50 @@ var _ = Describe("{MulPoolsAddDisk}", Label("p0", "positive", "pool_ops", "AddDr
 		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 		log.FailOnError(err, "Failed to list storage pools")
 		numPoolsToResize := len(pools) / 3
-		i := 1
-		for _, v := range pools {
-			if i > numPoolsToResize {
-				break
-			}
-			//checking if pool can be expanded using add-disk
-			if elMap[v.Uuid] {
-				poolsToBeResized = append(poolsToBeResized, v)
-				i += 1
+
+		nodePoolsMap, err := GetNodePoolsMap()
+		log.FailOnError(err, "Failed to get node pools map")
+		// Create a reverse mapping: pool -> node
+		poolToNode := make(map[string]string)
+		for node, pools := range nodePoolsMap {
+			for _, pool := range pools {
+				poolToNode[pool] = node
 			}
 		}
+		// Map to track if a pool has been chosen for a node
+		selectedNodes := make(map[string]bool)
+		var selectedPools []string
+
+		// Iterate over the list of pools
+		for _, pool := range pools {
+			// Find the node for the pool
+			node, _ := poolToNode[pool.Uuid]
+
+			// If no pool from this node has been selected yet, select this one
+			if !selectedNodes[node] && elMap[pool.Uuid] {
+				selectedPools = append(selectedPools, pool.Uuid)
+				selectedNodes[node] = true
+			}
+			if len(selectedPools) >= numPoolsToResize {
+				break
+			}
+		}
+
 		stepLog = fmt.Sprintf("Expanding multiple pools on node and pool using add-disk")
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			resizedPoolsMap := make(map[string]uint64)
-			for _, selPool := range poolsToBeResized {
-				poolToBeResized, err := GetStoragePoolByUUID(selPool.Uuid)
-				log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", selPool.Uuid))
+			for _, selPool := range selectedPools {
+				poolToBeResized, err := GetStoragePoolByUUID(selPool)
+				log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", selPool))
 				drvSize, err := getPoolDiskSize(poolToBeResized)
 				log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
 				expectedSize := (poolToBeResized.TotalSize / units.GiB) + drvSize
 				resizedPoolsMap[poolToBeResized.Uuid] = expectedSize
-
-				log.FailOnError(err, "Failed to check if Journal enabled")
-
-				log.InfoD("Current Size of the pool %s is %d", selPool.Uuid, poolToBeResized.TotalSize/units.GiB)
-				err = Inst().V.ExpandPool(selPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Pool expansion init successful for %s?", selPool.Uuid))
-				//https://purestorage.atlassian.net/browse/PTX-29004
+				log.InfoD("Current Size of the pool %s is %d", selPool, poolToBeResized.TotalSize/units.GiB)
+				err = Inst().V.ExpandPool(selPool, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Pool expansion init successful for %s?", selPool))
+				//https://purestorage.atlassian.net/browse/PTX-29820
 				time.Sleep(5 * time.Second)
 			}
 
@@ -2922,7 +2935,6 @@ var _ = Describe("{MulPoolsAddDisk}", Label("p0", "positive", "pool_ops", "AddDr
 				resizeErr := waitForPoolToBeResized(expectedPoolSize, selPoolID, isjournal)
 				dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on expansion using add-disk", selPoolID))
 			}
-
 		})
 
 	})
@@ -12096,17 +12108,23 @@ var _ = Describe("{PoolResizeWhenReplOneVolinPool}", Label("p0", "positive", "po
 	It(itLog, func() {
 		var contexts []*scheduler.Context
 		// Create px volumes with repl factor 1
+
+		applist := Inst().AppList
+		Inst().AppList = []string{"fio-repl1-repl-vps"}
+		storageNodes := node.GetStorageNodes()
+		selectedNode := storageNodes[rand.Intn(len(storageNodes))]
+
+		defer func() {
+			Inst().AppList = applist
+			err = Inst().S.RemoveLabelOnNode(selectedNode, k8s.NodeType)
+			log.FailOnError(err, "error removing label on node [%s]", selectedNode.Name)
+		}()
+		err = Inst().S.AddLabelOnNode(selectedNode, k8s.NodeType, k8s.ReplVPS)
+		log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedNode.Name))
+
 		stepLog := "Create px volumes with repl factor 1"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-
-			AppList := Inst().AppList
-			Inst().AppList = []string{"fio-repl1"}
-
-			defer func() {
-				Inst().AppList = AppList
-			}()
-
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pool-vol-r1-%d", i))...)
 			}

@@ -17049,3 +17049,18 @@ func CreateNFSBackupLocationCustomAddress(name string, uid string, orgID string,
 	}
 	return nil
 }
+
+func GetNodePoolsMap() (map[string][]string, error) {
+	stNodes := node.GetStorageNodes()
+	nodePoolsMap := make(map[string][]string)
+	for _, stNode := range stNodes {
+
+		pools, err := GetAllPoolsOnNode(stNode.VolDriverNodeID)
+		if err != nil {
+			return nodePoolsMap, err
+		}
+		nodePoolsMap[stNode.VolDriverNodeID] = pools
+
+	}
+	return nodePoolsMap, nil
+}
