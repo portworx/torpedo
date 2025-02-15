@@ -5281,3 +5281,153 @@ var _ = Describe("{VerifyFstrimWithPoolOffline}", Label("staging", "p0", "positi
 	})
   
 })
+
+var _ = Describe("{StorageLessToStorageByShutDownNode}", Label("staging", "p0", "negative", "error_injection", "node_ops"), func() {
+
+	/*
+	   https://purestorage.atlassian.net/browse/HAZEL-1065
+	   1. Bring down one storage node
+	   2. Validate one of the storageless nodes has become storage node by picking up the cloud drives that were attached to the down storage node
+	*/
+
+	var (
+		testrailID          = 0
+		runID               int
+		contexts            []*scheduler.Context
+		storageNodes        []node.Node
+		storageLessNodesIds []string
+		selectedNode        node.Node
+		isStorageNode       = false
+	)
+	JustBeforeEach(func() {
+		StartTorpedoTest("StorageLessToStorageByShutDownNode", "Transition storage-less to Storage node by stopping one of the storage nodes", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	stepLog := "Transition storage-less to Storage node by stopping one of the storage nodes"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+
+		cleanup := func() {
+			log.Info("Executing cleanup tasks")
+			allNodes := node.GetStorageDriverNodes()
+			for _, n := range allNodes {
+				err = Inst().S.IsNodeReady(n)
+				if err != nil {
+					log.InfoD("Powering on node [%s]", n.Name)
+					err := Inst().N.PowerOnVM(n)
+					log.FailOnError(err, "error powering on node [%s]", n.Name)
+				}
+				err = Inst().V.WaitDriverUpOnNode(n, 15*time.Minute)
+				log.FailOnError(err, "error while waiting for driver up on node %s", n.Name)
+			}
+			DestroyApps(contexts, nil)
+		}
+		defer cleanup()
+
+		stepLog = "Validate cluster has at least one storage-less node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			storageNodes = node.GetStorageNodes()
+			selectedNode = GetRandomNode(storageNodes)
+			log.InfoD("Check if the cluster has at least one storage-less node before proceeding")
+			storageLessNodes := node.GetStorageLessNodes()
+			if len(storageLessNodes) == 0 {
+				log.InfoD("Skipping the test as it required atleast one storage less node")
+				Skip("Skipping the test as it required atleast one storage less node")
+			}
+			for _, n := range storageLessNodes {
+				storageLessNodesIds = append(storageLessNodesIds, n.Name)
+			}
+		})
+
+		stepLog = "Powering off the storage node in cluster"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			namespace, err := Inst().S.GetPortworxNamespace()
+			log.FailOnError(err, "error getting the portworx namespace")
+
+			pxOperator := operator.Instance()
+			stcList, err := pxOperator.ListStorageClusters(namespace)
+			log.FailOnError(err, "error listing the storage clusters for the namespace %s", namespace)
+
+			stc, err := pxOperator.GetStorageCluster(stcList.Items[0].Name, stcList.Items[0].Namespace)
+			log.FailOnError(err, "error getting the storage cluster %s", stcList.Items[0].Name)
+			pxCloudDriveConfigMap, err := Inst().S.GetPXCloudDriveConfigMap(stc)
+			log.FailOnError(err, "error getting the PX cloud drive config map")
+
+			err = Inst().N.DetachDrivesFromVM(selectedNode.Name, pxCloudDriveConfigMap)
+			log.FailOnError(err, "error detaching the drives from the node %s", selectedNode.Name)
+			time.Sleep(1 * time.Minute)
+			err = Inst().V.RefreshDriverEndpoints()
+			log.FailOnError(err, "error refreshing the driver endpoints")
+
+			log.InfoD("Powering off the node [%s]", selectedNode.Name)
+			err = Inst().N.PowerOffVM(selectedNode)
+			log.FailOnError(err, "error powering off node [%s]", selectedNode.Name)
+
+			time.Sleep(20 * time.Minute)
+		})
+
+		stepLog = "Validate if the storageless become storage node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			checkStorageNodeAvailable := func() (interface{}, bool, error) {
+				for _, eachId := range storageLessNodesIds {
+					stNode, err := node.GetNodeByName(eachId)
+					if err != nil {
+						return nil, true, err
+					}
+
+					output, err := RunCmdGetOutput("pxctl sv pool show", stNode)
+					if err != nil {
+						return nil, true, err
+					}
+					log.Infof("Pool status: %v", output)
+					if strings.Contains(output, "Pool ID:") && stNode.Status == api.Status_STATUS_OK {
+						isStorageNode = true
+						break
+					}
+				}
+				if isStorageNode {
+					return nil, false, nil
+				}
+				log.Infof("Storageless node has not transitioned yet, retrying...")
+				return nil, true, fmt.Errorf("storageless node transition not completed")
+			}
+			_, err := task.DoRetryWithTimeout(checkStorageNodeAvailable, 30*time.Minute, 2*time.Minute)
+			log.FailOnError(err, "error waiting for storageless node to transition to storage node")
+			dash.VerifyFatal(isStorageNode, true, "Verify storageless become storage node")
+		})
+
+		stepLog = "Powering on the shout down node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.InfoD("Powering on node [%s]", selectedNode.Name)
+			err := Inst().N.PowerOnVM(selectedNode)
+			log.FailOnError(err, "error powering on node [%s]", selectedNode.Name)
+
+			log.Infof("Waiting 5 mins to power on the VM [%s]", selectedNode.Name)
+			time.Sleep(5 * time.Minute)
+			stNode, err := node.GetNodeByName(selectedNode.Name)
+			log.FailOnError(err, "error getting the node [%s]", selectedNode.Name)
+			err = Inst().V.WaitDriverUpOnNode(stNode, 10*time.Minute)
+			log.FailOnError(err, "error while waiting for driver up on node %s", selectedNode.Name)
+			log.Infof("Node powered on successfully after storage less to storage node transition")
+
+			err = Inst().S.RefreshNodeRegistry()
+			log.FailOnError(err, "error refreshing the node registry")
+			log.Infof("Refreshed the node registry Successfully")
+
+			err = Inst().V.RefreshDriverEndpoints()
+			log.FailOnError(err, "error refreshing the driver endpoints")
+			log.Infof("Refreshed the driver endpoints Successfully")
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
