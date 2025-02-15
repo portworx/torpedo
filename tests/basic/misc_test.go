@@ -5577,3 +5577,176 @@ var _ = Describe("{VerifyFstrimWithPVCRresize}", Label("staging", "p0", "positiv
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{VerifyFstrimWithPXRestartAndHAIncrease}", Label("staging", "p0", "positive", "px_vol_ops", "MiniScale", "HA_Increase_Decrease"), func() {
+	/*
+	   https://purestorage.atlassian.net/browse/HAZEL-1075
+
+	   1. Enable scheduled FSTrim on the cluster
+	   2. Restart PX and Increase HA on some nodes
+	   3. Verify scheduled FSTrim continue to happen
+	*/
+
+	var (
+		contexts                    []*scheduler.Context
+		storageNodes                []node.Node
+		selectedStorageNode         node.Node
+		selectedNodeForRestart      node.Node
+		selectedVol                 *opsapi.Volume
+		volAttachedNodeAfterRestart string
+		fsTrimStatusesBfrRestart    map[string]opsapi.FilesystemTrim_FilesystemTrimStatus
+		appList                     = Inst().AppList
+		fsTrimTimeout               = 60 * time.Minute
+		fsTrimRetryInterval         = 2 * time.Minute
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("VerifyFstrimWithPXRestartAndHAIncrease", "Restart PX while Trim is in progress and HA increase is in progress on some of the nodes", nil, 0)
+	})
+
+	stepLog := "Restart PX while Trim is in progress and HA increase is in progress on some of the nodes"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+
+		defer func() {
+			DestroyApps(contexts, nil)
+			_ = Inst().V.SetClusterOpts(selectedStorageNode, map[string]string{
+				"--fstrim-schedule-start": ""})
+			Inst().AppList = appList
+		}()
+
+		stepLog = "Enable Fstrim schedule on the cluster and schedule application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			storageNodes = node.GetStorageNodes()
+			if len(storageNodes) == 0 {
+				log.FailOnError(fmt.Errorf("Storage nodes list empty"), "failed to get storage nodes")
+			}
+			selectedStorageNode = storageNodes[0]
+
+			// Daily: daily=HH:MM, Weekly: weekly=day@hh:mm
+			log.Infof("Enable scheduled fs trim on the cluster")
+			formattedTime := time.Now().UTC().Add(1 * time.Minute).Format("15:04")
+			scheduleStartTime := fmt.Sprintf("daily=%s", formattedTime)
+			log.Infof("Scheduled fstrom start time: %v", scheduleStartTime)
+			err := EnableScheduledFSTrim(storageNodes, 10, scheduleStartTime)
+			log.FailOnError(err, "failed to enable scheduled fs trim")
+
+			Inst().AppList = []string{"fio-fstrim"}
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("fspxrestart-%d", i))...)
+			}
+		})
+		ValidateApplications(contexts)
+
+		stepLog = "select a node where fs trim running and get the fs trim status"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				appVolumes, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "Failed to get volumes list for the application: %v", ctx.App.Key)
+
+				for _, v := range appVolumes {
+					selectedVol, err = Inst().V.InspectVolume(v.ID)
+					log.FailOnError(err, "Failed to get volumes details using volume ID: %v", v.ID)
+
+					attachedNode := selectedVol.AttachedOn
+					log.Infof("Volume attached on node: %v", attachedNode)
+					selectedNodeForRestart, err = node.GetNodeByIP(attachedNode)
+					log.FailOnError(err, "Failed to get the node details by nodeIP: %v", attachedNode)
+
+					checkFSTrimRunning := func() (interface{}, bool, error) {
+						fsTrimStatusesBfrRestart, err = Inst().V.GetAutoFsTrimStatus(selectedNodeForRestart.DataIp)
+						if err != nil {
+							return nil, true, fmt.Errorf("failed to get AutoFstrim status for node [%v]: %v", selectedNodeForRestart, err)
+						}
+						if status, exists := fsTrimStatusesBfrRestart[selectedVol.Id]; exists {
+							if status != opsapi.FilesystemTrim_FS_TRIM_FAILED {
+								return true, false, nil
+							}
+							return false, true, fmt.Errorf("FSTrim status failed for the volume %v", selectedVol.Id)
+						}
+						return false, true, fmt.Errorf("FSTrim status not available for the volume %v, Retrying...", selectedVol.Id)
+					}
+					_, err = task.DoRetryWithTimeout(checkFSTrimRunning, fsTrimTimeout, fsTrimRetryInterval)
+					log.FailOnError(err, "Failed to get the fstrim status for the node: %v", selectedNodeForRestart.DataIp)
+					break
+				}
+			}
+		})
+
+		stepLog = "Update replication factor on volumes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				appVolumes, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "Failed to get volumes list for the application: %v", ctx.App.Key)
+
+				for _, v := range appVolumes {
+					currRep, err := Inst().V.GetReplicationFactor(v)
+					log.FailOnError(err, "Failed to get Repl factor for volume %s", v.Name)
+
+					appVol, err := Inst().V.InspectVolume(v.ID)
+					log.FailOnError(err, fmt.Sprintf("error inspecting volume [%s]", v.ID))
+
+					if _, ok := fsTrimStatusesBfrRestart[appVol.Id]; ok {
+						opts := volume.Options{
+							ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
+						}
+						if currRep == 3 {
+							log.Infof("Current replica is %v, reducing the replica value to %v", currRep, currRep-1)
+							err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true, opts)
+							log.FailOnError(err, "Failed to set replication factor for volume: %v", v.Name)
+
+							newRep, err := Inst().V.GetReplicationFactor(v)
+							log.FailOnError(err, "Failed to get replication factor for volume: %v", v.Name)
+							dash.VerifyFatal(newRep < currRep, true, fmt.Sprintf("Validate set repl factor to %d", currRep-1))
+						} else {
+							log.Infof("Current replication is %v, increasing the replica value to %v", currRep, currRep+1)
+							err = Inst().V.SetReplicationFactor(v, currRep+1, nil, nil, true, opts)
+							log.FailOnError(err, "Failed to set replication factor for volume: %v", v.Name)
+
+							newRep, err := Inst().V.GetReplicationFactor(v)
+							log.FailOnError(err, "Failed to get replication factor for volume: %v", v.Name)
+							dash.VerifyFatal(newRep > currRep, true, fmt.Sprintf("Validate set repl factor to %d", currRep+1))
+						}
+					}
+				}
+			}
+		})
+
+		stepLog = "Restart PX on the selected node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().V.RestartDriver(selectedNodeForRestart, nil)
+			log.FailOnError(err, "Error occured while Restart PX on node: %v", selectedNodeForRestart.Name)
+			log.Infof("PX restarted successfully on node %v", selectedNodeForRestart.Name)
+
+			selectedVolafterRestart, err := Inst().V.InspectVolume(selectedVol.Id)
+			log.FailOnError(err, "Failed to get the volume details for: %v", selectedVol.Id)
+
+			volAttachedNodeAfterRestart = selectedVolafterRestart.AttachedOn
+			log.Infof("Volume attcahed node after node restart: %v", volAttachedNodeAfterRestart)
+			log.Infof("Waiting for five minutes to scheduled fs trim to start after node restart")
+			time.Sleep(5 * time.Minute)
+		})
+
+		stepLog = "Verify FSTrim schedule continues after PX restart"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			newFsTrimStatusesAftrRestart, err := Inst().V.GetAutoFsTrimStatus(volAttachedNodeAfterRestart)
+			log.FailOnError(err, "error getting autofs status")
+			for k := range fsTrimStatusesBfrRestart {
+				val, ok := newFsTrimStatusesAftrRestart[k]
+				dash.VerifySafely(ok, true, fmt.Sprintf("verify autofstrim started for volume %s", k))
+				dash.VerifySafely(val != opsapi.FilesystemTrim_FS_TRIM_FAILED, true, fmt.Sprintf("verify fstrim status for volume %s, current status %v", k, val))
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
