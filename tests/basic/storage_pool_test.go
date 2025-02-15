@@ -12268,17 +12268,17 @@ var _ = Describe("{AddingDrivesBeyondSupportedLimit}", Label("p1", "pool_ops", "
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 
+		isDmthinSetup, _ := IsDMthin()
+		if isDmthinSetup {
+			Skip(fmt.Sprintf("skipping test %s as this is Dmthin setup", "AddingDrivesBeyondSupportedLimit"))
+		}
+
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pooldrivemax-%d", i))...)
 		}
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
-
-		isDmthinSetup, _ := IsDMthin()
-		if isDmthinSetup {
-			log.FailOnError(fmt.Errorf("DMthin not supporting for add drive"), "Pool expansion request of add-drive for dmthin failed")
-		}
 
 		var selectedNode node.Node
 		stepStr := "Get random storage nodes"
@@ -12356,10 +12356,13 @@ var _ = Describe("{AddingDrivesBeyondSupportedLimit}", Label("p1", "pool_ops", "
 							err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
 							log.FailOnError(err, "Error while expanding pool")
 
+							errMsg1 := fmt.Sprintf("could not find a suitable storage distribution candidate: node has reached it's maximum supported drive count: %v", VSPHERE_MAX_CLOUD_DRIVES)
+							errMsg2 := "it would exceed maximum supported drives"
 							resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
 							if resizeErr != nil {
 								errorMsg := resizeErr.Error()
-								strContMsg := strings.Contains(errorMsg, fmt.Sprintf("could not find a suitable storage distribution candidate: node has reached it's maximum supported drive count: %v", VSPHERE_MAX_CLOUD_DRIVES))
+
+								strContMsg := strings.Contains(errorMsg, errMsg1) || strings.Contains(errorMsg, errMsg2)
 								dash.VerifyFatal(strContMsg, true, "Pool reached maximum drive limit")
 							}
 
@@ -12370,7 +12373,7 @@ var _ = Describe("{AddingDrivesBeyondSupportedLimit}", Label("p1", "pool_ops", "
 								log.Infof("Pool status: %v", poolStatus)
 
 								if poolStatus != nil {
-									strContMsg := strings.Contains(poolStatus.Msg, fmt.Sprintf("could not find a suitable storage distribution candidate: node has reached it's maximum supported drive count: %v", VSPHERE_MAX_CLOUD_DRIVES))
+									strContMsg := strings.Contains(poolStatus.Msg, errMsg1) || strings.Contains(poolStatus.Msg, errMsg2)
 									dash.VerifyFatal(strContMsg, true, "Error expected as drive added more than allowed per pool")
 								}
 
@@ -14560,6 +14563,7 @@ var _ = Describe("{RebootKVDBLeaderDuringPoolResize}", Label("p0", "positive", "
 			}
 
 		})
+		defer appsValidateAndDestroy(contexts)
 		stepLog = "Identify the KVDB leader node & get the pool to be resized"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -14634,8 +14638,6 @@ var _ = Describe("{RebootKVDBLeaderDuringPoolResize}", Label("p0", "positive", "
 		stepLog = "Ensure that pool has been expanded to the expected size"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			ValidateApplications(contexts)
-
 			resizedPool, err := GetStoragePoolByUUID(poolIDToBeResized)
 			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDToBeResized))
 			newPoolSize := resizedPool.TotalSize / units.GiB
