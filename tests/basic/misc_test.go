@@ -5136,3 +5136,148 @@ var _ = Describe("{HaUpdateWhenClusterInRunFlatState}", Label("staging", "kvdb_o
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{VerifyFstrimWithPoolOffline}", Label("staging", "p0", "positive", "px_ops", "pool_ops"), func() {
+
+	/*
+	   https://purestorage.atlassian.net/browse/HAZEL-1071
+	   1. Enabel scheduled FSTrim on the cluster
+	   2. Verify scheduled FSTrim with pool full / offline
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("VerifyFstrimWithPoolOffline", "Verify Fstrim Schedule with pool full / offline", nil, 0)
+	})
+
+	stepLog := "Create volumes, make pool full / offline with scheduled fs trim"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+
+		var (
+			contexts          []*scheduler.Context
+			selectedNode      *node.Node
+			secondReplNode    node.Node
+			fsTrimRunningNode node.Node
+			fsTrimStatuses    map[string]opsapi.FilesystemTrim_FilesystemTrimStatus
+			applist           = Inst().AppList
+			stNodes           []node.Node
+		)
+
+		cleanup := func() {
+			log.Info("Executing cleanup tasks")
+			DestroyApps(contexts, nil)
+			Inst().AppList = applist
+			_ = Inst().V.SetClusterOpts(*selectedNode, map[string]string{"--fstrim-schedule-start": ""})
+			err = Inst().S.RemoveLabelOnNode(*selectedNode, k8s.NodeType)
+			log.FailOnError(err, "error removing label on node [%s]", selectedNode.Name)
+			err = Inst().S.RemoveLabelOnNode(secondReplNode, k8s.NodeType)
+			log.FailOnError(err, "error removing label on node [%s]", secondReplNode.Name)
+		}
+		defer cleanup()
+
+		stepLog = fmt.Sprintf("Select nodes and schedule application for FSTrim validation")
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			selectedNode = GetNodeWithLeastSize()
+			stNodes = node.GetStorageNodes()
+			for _, stNode := range stNodes {
+				if stNode.Name != selectedNode.Name {
+					secondReplNode = stNode
+				}
+			}
+
+			err = Inst().S.AddLabelOnNode(*selectedNode, k8s.NodeType, k8s.FastpathNodeType)
+			log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedNode.Name))
+			err = Inst().S.AddLabelOnNode(secondReplNode, k8s.NodeType, k8s.FastpathNodeType)
+			log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", secondReplNode.Name))
+
+			Inst().AppList = []string{"fio-fastpath"}
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("poolfulfs-%d", i))...)
+			}
+		})
+		ValidateApplications(contexts)
+
+		stepLog = fmt.Sprintf("Enabel nodiscard and scheduled fstrim on volumes")
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			stepLog = fmt.Sprintf("Enabel nodiscard on the volumes")
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, ctx := range contexts {
+					appVolumes, err := Inst().S.GetVolumes(ctx)
+					log.FailOnError(err, "Failed to get volumes for app %s", ctx.App.Key)
+
+					for _, appvolume := range appVolumes {
+						apivol, err := Inst().V.InspectVolume(appvolume.ID)
+						log.FailOnError(err, "Failed to get the volume details for the ID: %v", appvolume.ID)
+						attachedNode := apivol.AttachedOn
+						fsTrimRunningNode, err = node.GetNodeByIP(attachedNode)
+						log.FailOnError(err, "Failed to get the details for the node ID: %v", attachedNode)
+						log.Infof("Volume [%v] is attached on the node: %v", appvolume.ID, fsTrimRunningNode.Name)
+
+						EnableNodiscardOnVolume(fsTrimRunningNode, appvolume)
+						log.Infof("Enabled nodiscard on the volume [%v]", appvolume.ID)
+					}
+				}
+
+			})
+
+			stepLog = fmt.Sprintf("Enabel scheduled fs trim on the cluster")
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				// Daily: daily=HH:MM, Weekly: weekly=day@hh:mm
+				log.Infof("Enable scheduled fs trim on the cluster")
+				formattedTime := time.Now().UTC().Add(1 * time.Minute).Format("15:04")
+				scheduleStartTime := fmt.Sprintf("daily=%s", formattedTime)
+				err := EnableScheduledFSTrim(stNodes, 10, scheduleStartTime)
+				log.FailOnError(err, "failed to enable scheduled fs trim")
+
+				fsTrimStatuses, err = Inst().V.GetAutoFsTrimStatus(selectedNode.DataIp)
+				log.FailOnError(err, "Failed to get the fstrim status for the node: %v", selectedNode.Name)
+			})
+		})
+
+		stepLog = fmt.Sprintf("verify the pool to become full and go offline status")
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			err = WaitForPoolOffline(*selectedNode)
+			log.FailOnError(err, fmt.Sprintf("Failed to make node %s storage down", selectedNode.Name))
+
+			poolsStatus, err := Inst().V.GetNodePoolsStatus(*selectedNode)
+			log.FailOnError(err, "error getting pool status on node %s", selectedNode.Name)
+
+			var offlinePoolUUID string
+			for i, s := range poolsStatus {
+				if s == "Offline" {
+					offlinePoolUUID = i
+					break
+				}
+			}
+			dash.VerifyFatal(poolsStatus[offlinePoolUUID], "Offline", fmt.Sprintf("verify status for the pool %s, current status %v", offlinePoolUUID, poolsStatus[offlinePoolUUID]))
+		})
+
+		stepLog = fmt.Sprintf("verify FSTrim is running after pool status offline")
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			newFsTrimStatusesAftrRestart, err := Inst().V.GetAutoFsTrimStatus(selectedNode.DataIp)
+			log.FailOnError(err, "error getting fstrim status for the node %v", selectedNode.DataIp)
+			for k := range fsTrimStatuses {
+				val, ok := newFsTrimStatusesAftrRestart[k]
+				dash.VerifySafely(ok, true, fmt.Sprintf("verify fstrim started for volume %s", k))
+				dash.VerifySafely(val != opsapi.FilesystemTrim_FS_TRIM_FAILED, true, fmt.Sprintf("verify fstrim for the volume %s, current status is %v", k, val))
+			}
+		})
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+  
+})
