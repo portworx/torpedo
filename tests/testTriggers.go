@@ -750,6 +750,9 @@ const (
 
 	//Generic Kubevirt VM live migration event handles already existing VMs as well
 	GenericKubevirtVMLiveMigration = "genericKubevirtVMLiveMigration"
+
+  // AsyncDR node restart on source runs Async DR migration between two clusters with px restart
+	AsyncDRKVDBFailoverSource = "asyncdrkvdbfailoversource"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -15934,6 +15937,154 @@ func TriggerAsyncDRNodeRestartDestination(contexts *[]*scheduler.Context, record
 					UpdateOutcome(event, err)
 					return
 				}
+			})
+		}
+
+		for _, mig := range allMigrations {
+			err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
+			if err != nil {
+				UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
+				return
+			}
+			log.InfoD("Migration [%s] in namespace [%s] has status: [%s]", mig.Name, mig.Namespace, mig.Status.Status)
+			dashStats := stats.GetStorkMigrationStats(mig)
+			updateLongevityStats(AsyncDRNodeRestartSource, stats.AsyncDREventName, dashStats)
+		}
+	})
+	updateMetrics(*event)
+}
+
+// TriggerAsyncDRKVDBFailoverSource triggers Async DR with kvdb runfat on source
+func TriggerAsyncDRKVDBFailoverSource(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(AsyncDRKVDBFailoverSource)
+	defer ginkgo.GinkgoRecover()
+	log.Infof("Async DR KVDB run flat trigger triggered at: %v", time.Now())
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: AsyncDRKVDBFailoverSource,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	chaosLevel := ChaosMap[AsyncDRKVDBFailoverSource]
+	var (
+		migrationNamespaces   []string
+		clusterPairName       string
+		defaultBackupLocation = "s3"
+		defaultNs             = "kube-system"
+		defaultSecret         = "s3secret"
+		allMigrations         []*storkv1.Migration
+		selectedKvdbNode      KvdbNode
+	)
+
+	stepLog := fmt.Sprintf("Get migration namespaces, with frequency: %v", chaosLevel)
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+		err := asyncdr.WriteKubeconfigToFiles()
+		if err != nil {
+			log.Errorf("Failed to write kubeconfig: %v", err)
+			UpdateOutcome(event, err)
+			return
+		}
+
+		err = SetSourceKubeConfig()
+		if err != nil {
+			log.Errorf("Failed to Set source kubeconfig: %v", err)
+			UpdateOutcome(event, err)
+			return
+		}
+
+		stepLog := "Get migration namespace from application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range *contexts {
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, "")
+				migrationNamespaces = append(migrationNamespaces, namespace)
+			}
+			ValidateApplications(*contexts)
+			log.Infof("Migration Namespaces: %v", migrationNamespaces)
+		})
+
+		stepLog = "Creating cluster pair and starting migration schedule"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			clusterPairName = asyncdr.DefaultClusterPairName + strconv.Itoa(int(time.Now().Unix()))
+			err = ScheduleBidirectionalClusterPair(clusterPairName, defaultNs, "", storkapi.BackupLocationType(defaultBackupLocation), defaultSecret, "async-dr", asyncdr.FirstCluster, asyncdr.SecondCluster, nil)
+			if err != nil {
+				log.Errorf("failed to create clusterpair: %v", err)
+				UpdateOutcome(event, err)
+				return
+			}
+			log.InfoD("Clusterpair [%v] created and validated successfuly on namespace [%v]", clusterPairName, defaultNs)
+		})
+	})
+
+	stepLog = "Kill px on kvdb node while migration is in progress"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+
+		for i, currMigNamespace := range migrationNamespaces {
+			migrationName := migrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
+			currMig, err := asyncdr.CreateMigration(migrationName, defaultNs, clusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag, nil)
+			if err != nil {
+				UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
+				return
+			}
+			allMigrations = append(allMigrations, currMig)
+
+			stepLog = "Kill px on kvdb node"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+
+				kvdbNodes, err := GetAllKvdbNodes()
+				log.FailOnError(err, "Failed to retrieve KVDB nodes")
+
+				selectedKvdbNode = kvdbNodes[0]
+				log.InfoD("Selected KVDB nodes for PX service stop: %v", selectedKvdbNode)
+				nodeDetails, err := node.GetNodeDetailsByNodeID(selectedKvdbNode.ID)
+				log.FailOnError(err, "Unable to retrieve node details for NodeID [%v]", selectedKvdbNode.ID)
+
+				StopVolDriverAndWait([]node.Node{nodeDetails})
+				log.InfoD("PX service successfully stopped on node: %v", nodeDetails)
+
+				// Verify cluster is in run flat state
+				kvdbMembers, err := GetAllKvdbNodes()
+				log.FailOnError(err, "Failed to retrieve KVDB members list")
+				healthyCount := 0
+				for _, each := range kvdbMembers {
+					if each.IsHealthy {
+						healthyCount++
+					}
+				}
+				dash.VerifyFatal(healthyCount < 3, true, fmt.Sprintf("Validate KVDB not in quorum. Actual members: [%v]", len(kvdbMembers)))
+
+				err = Inst().V.StartDriver(nodeDetails)
+				log.FailOnError(err, "Failed to start Portworx driver on node %s", nodeDetails.Name)
+
+				err = Inst().V.WaitDriverUpOnNode(nodeDetails, 15*time.Minute)
+				log.FailOnError(err, "Failed to waiting for Portworx driver to start on node %s", nodeDetails.Name)
+				log.InfoD("Successfully started Portworx on KVDB node: %v", nodeDetails.Name)
+
+				nodeStatus, err := Inst().V.GetNodeStatus(nodeDetails)
+				log.FailOnError(err, fmt.Sprintf("failed to get px status on node [%s]", nodeDetails.Name))
+				dash.VerifyFatal(*nodeStatus, opsapi.Status_STATUS_OK, fmt.Sprintf("validate PX status on node %s", nodeDetails.Name))
+
+				kvdbMembers, err = GetAllKvdbNodes()
+				log.FailOnError(err, "Failed to retrieve KVDB members list")
+				dash.VerifyFatal(len(kvdbMembers) == 3, true, fmt.Sprintf("Is KVDB quorum restored?. Actual members: [%v]", len(kvdbMembers)))
 			})
 		}
 

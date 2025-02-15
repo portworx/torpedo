@@ -302,6 +302,7 @@ func populateBackupIntervals() {
 func populateTriggerFuncs() {
 
 	triggerFunctions = map[string]func(*[]*scheduler.Context, *chan *EventRecord){
+
 		DeployApps:                          TriggerDeployNewApps,
 		RebootNode:                          TriggerRebootNodes,
 		ValidatePdsApps:                     TriggerValidatePdsApps,
@@ -408,6 +409,7 @@ func populateTriggerFuncs() {
 		AddHotPlugDiskToAllVMAndLiveMigrate: TriggerAddHotPlugDiskToAllVMAndLiveMigrate,
 		AsyncDRNodeRestartDestination:       TriggerAsyncDRNodeRestartDestination,
 		GenericKubevirtVMLiveMigration:      TriggerGenericKubevirtVMLiveMigration,
+    AsyncDRKVDBFailoverSource:           TriggerAsyncDRKVDBFailoverSource,
 	}
 
 	//Creating a distinct trigger to make sure email triggers at regular intervals
@@ -948,6 +950,7 @@ func populateIntervals() {
 	triggerInterval[AsyncDRNodeRestartDestination] = make(map[int]time.Duration)
 	triggerInterval[AddHotPlugDiskToAllVMAndLiveMigrate] = make(map[int]time.Duration)
 	triggerInterval[GenericKubevirtVMLiveMigration] = make(map[int]time.Duration)
+  triggerInterval[AsyncDRKVDBFailoverSource] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -2278,6 +2281,17 @@ func populateIntervals() {
 	triggerInterval[GenericKubevirtVMLiveMigration][2] = 24 * baseInterval
 	triggerInterval[GenericKubevirtVMLiveMigration][1] = 27 * baseInterval
 
+  triggerInterval[AsyncDRKVDBFailoverSource][10] = 1 * baseInterval
+	triggerInterval[AsyncDRKVDBFailoverSource][9] = 3 * baseInterval
+	triggerInterval[AsyncDRKVDBFailoverSource][8] = 6 * baseInterval
+	triggerInterval[AsyncDRKVDBFailoverSource][7] = 9 * baseInterval
+	triggerInterval[AsyncDRKVDBFailoverSource][6] = 12 * baseInterval
+	triggerInterval[AsyncDRKVDBFailoverSource][5] = 15 * baseInterval
+	triggerInterval[AsyncDRKVDBFailoverSource][4] = 18 * baseInterval
+	triggerInterval[AsyncDRKVDBFailoverSource][3] = 21 * baseInterval
+	triggerInterval[AsyncDRKVDBFailoverSource][2] = 24 * baseInterval
+	triggerInterval[AsyncDRKVDBFailoverSource][1] = 27 * baseInterval
+
 	// Chaos Level of 0 means disable test trigger
 	triggerInterval[DeployApps][0] = 0
 	triggerInterval[RebootNode][0] = 0
@@ -2394,6 +2408,7 @@ func populateIntervals() {
 	triggerInterval[AddHotPlugDiskToAllVMAndLiveMigrate][0] = 0
 	triggerInterval[AsyncDRNodeRestartDestination][0] = 0
 	triggerInterval[GenericKubevirtVMLiveMigration][0] = 0
+	triggerInterval[AsyncDRKVDBFailoverSource][0] = 0
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {

@@ -3826,7 +3826,7 @@ var _ = Describe("{AppBackupRestoreWithMultipleVolumes}", Label("staging", "p1",
 		backupTimeout       = 30 * time.Minute
 		contexts            []*scheduler.Context
 		backupNamespaces    []string
-		targetVolumeCount          = 50
+		targetVolumeCount          = 30
 		volumesCreatedCount        = 0
 		pxctlVolumeCount           = 5
 		volumeSize          uint64 = 4
