@@ -15314,4 +15314,140 @@ var _ = Describe("{StorageFullPoolResizeWithPxkill}", Label("p0", "staging", "po
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
 	})
+
 })
+
+var _ = Describe("{AddDataNodeRebootVerifyPoolStatus}", Label("staging", "p0", "postive", "AddDrive"), func() {
+	/*
+		ticket id : https://purestorage.atlassian.net/browse/HAZEL-1549
+		Prerequsites:
+
+		step1 : Add metadrive on the storageless node
+		step2:  Add data dribve on storage node
+		step3:  verify storage less node should convert to storage node
+		step4:  create volumes on the node
+		step5:  reboot the node
+		step6:  verify the pool status
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("AddDataNodeRebootVerifyPoolStatus", "Added metadrive on storageless node, added data drive on storage node, verified conversion to storage node, created volumes, rebooted the node, and verified pool status.", nil, 0)
+	})
+
+	itLog := "Added metadrive on storageless node, added data drive on storage node, verified conversion to storage node, created volumes, rebooted the node, and verified pool status"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		var (
+			nodeSelected          node.Node
+			storageLessNodeLabels = map[string]string{"node-type": "fastpath"}
+		)
+		storagelessNode := node.GetStorageLessNodes()
+		log.InfoD("Checking number of storageless nodes: %d", len(storagelessNode))
+		if len(storagelessNode) < 1 {
+			Skip("At least one storageless nodes are required to run this test!...")
+		}
+		stepLog := "Check cluster type and attempt to add drive with metadata"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.InfoD("Check if the cluster is DMTHIN")
+			isDmthin, _ := IsDMthin()
+			if !isDmthin {
+				Skip("Cluster is not DMTHIN, skipping metadata disk addition.")
+			}
+			nodeSelected = storagelessNode[0]
+			log.InfoD("Selected a node to add a regular data drive to node [%s]", nodeSelected.Name)
+			driveSpecs, err := GetCloudDriveDeviceSpecs()
+			log.FailOnError(err, "Error getting cloud drive specs")
+			deviceSpec := driveSpecs[0]
+			err = AddMetadataDisk(nodeSelected)
+			log.FailOnError(err, "error while adding metadata disk")
+			log.InfoD("Add regular data drive")
+			deviceSpecParams := strings.Split(deviceSpec, ",")
+			paramsArr := make([]string, 0)
+			for _, param := range deviceSpecParams {
+				if strings.Contains(param, "size") {
+					paramsArr = append(paramsArr, fmt.Sprintf("size=%d,", 500))
+				} else {
+					paramsArr = append(paramsArr, param)
+				}
+			}
+			newSpec := strings.Join(paramsArr, ",")
+			log.InfoD("Attempting to add a regular data drive of size  to node [%s]", nodeSelected.Name)
+			err = Inst().V.AddCloudDrive(&nodeSelected, newSpec, -1)
+			dash.VerifyFatal(err, nil, "Drive was not added successfully")
+			log.InfoD("Successfully added a new data drive of size to node [%s]", nodeSelected.Name)
+
+		})
+		stepLog = "Verify storageless node is converted to a storage node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Info("Refresh the driver endpoints")
+			err = Inst().S.RefreshNodeRegistry()
+			log.FailOnError(err, "error refreshing node registry")
+			err = Inst().V.RefreshDriverEndpoints()
+			log.FailOnError(err, "error refreshing storage drive endpoints")
+			storageNodesAfterstoragelessnodejoin := node.GetStorageNodes()
+			log.InfoD("Current storage nodes: %+v", storageNodesAfterstoragelessnodejoin)
+			found := false
+			for _, nodeID := range storageNodesAfterstoragelessnodejoin {
+				if nodeID.Id == nodeSelected.Id {
+					found = true
+					break
+				}
+			}
+			dash.VerifyFatal(found, true, fmt.Sprintf("Storageless node with ID %s should be converted to a storage node.", nodeSelected.Id))
+			log.InfoD("Storageless node with ID %s is successfully converted to a storage node.", nodeSelected.Id)
+		})
+		stepLog = "Deploy an app and validate"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for key, value := range storageLessNodeLabels {
+				err = Inst().S.AddLabelOnNode(nodeSelected, key, value)
+				log.FailOnError(err, "error adding label on node [%s]", nodeSelected.Name)
+			}
+			log.Infof("Added label %v for the node %v", nodeSelected.GetNodeLabels(), nodeSelected.Name)
+			taskName := "volume"
+			namespace := fmt.Sprintf("fio-%v", taskName)
+			context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+				AppKeys:            []string{"fio-fastpath-repl1"},
+				CsiAppKeys:         []string{"fio-fastpath-repl1"},
+				StorageProvisioner: fmt.Sprintf("%v", portworx.PortworxCsi),
+				Labels:             storageLessNodeLabels,
+				Nodes:              []node.Node{nodeSelected},
+				Namespace:          namespace,
+			})
+			log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+			contexts = append(contexts, context...)
+
+		})
+		ValidateApplications(contexts)
+		defer DestroyApps(contexts, nil)
+		stepLog = "Reboot the selected node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Infof("Rebooting node %s after scaling", nodeSelected)
+			err = Inst().N.RebootNode(nodeSelected, node.RebootNodeOpts{
+				Force: true,
+				ConnectionOpts: node.ConnectionOpts{
+					Timeout:         1 * time.Minute,
+					TimeBeforeRetry: 5 * time.Second,
+				},
+			})
+			log.FailOnError(err, "Failed to reboot on node: %v", nodeSelected)
+		})
+		stepLog = "Verify the pool status of the node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			poolsStatus, err := Inst().V.GetNodePoolsStatus(nodeSelected)
+			log.FailOnError(err, "error getting pool status on node %s", nodeSelected.Name)
+			for _, s := range poolsStatus {
+				dash.VerifyFatal(s == "Online", true, "Is Pool status in online?")
+			}
+		})
+		ValidateApplications(contexts)
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
