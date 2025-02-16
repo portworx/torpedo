@@ -9750,9 +9750,21 @@ func GetPoolExpansionEligibility(stNode *node.Node, expandType opsapi.SdkStorage
 		return nil, fmt.Errorf("error getting block drives from node %s, Err :%v", stNode.Name, err)
 	}
 
-	for _, devices := range drvM {
-		currentNodeDrives += len(devices)
+	systemOpts := node.SystemctlOpts{
+		ConnectionOpts: node.ConnectionOpts{
+			Timeout:         2 * time.Minute,
+			TimeBeforeRetry: defaultRetryInterval,
+		},
+		Action: "start",
 	}
+
+	drivesMap, err := Inst().N.GetBlockDrives(*stNode, systemOpts)
+	if err != nil {
+		return nil, fmt.Errorf("error getting block drives from node %s, Err :%v", stNode.Name, err)
+	}
+
+	currentNodeDrives = GetNodeDrivesCount(drivesMap)
+	
 	eligibilityMap := make(map[string]bool)
 
 	log.Infof("Node %s has total drives %d", stNode.Name, currentNodeDrives)

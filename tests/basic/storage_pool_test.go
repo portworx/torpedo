@@ -10040,6 +10040,25 @@ func scheduleApps() []*scheduler.Context {
 	return contexts
 }
 
+func isPoolLastOperationValid(poolID string) bool {
+	log.Infof(fmt.Sprintf("validating pool last operation status for %s", poolID))
+
+	pool, err := GetStoragePoolByUUID(poolID)
+	if err != nil {
+		log.Errorf("failed to get pool using UUID %s, Err: %v", poolID, err)
+		return false
+	}
+	if pool.LastOperation != nil {
+		if pool.LastOperation.Status == api.SdkStoragePool_OPERATION_SUCCESSFUL {
+			return true
+		}
+		log.Warnf("Pool %s last operation status is not successful, status: %s", poolID, pool.LastOperation.Status)
+		return false
+	}
+
+	return true
+}
+
 func pickPoolToResize(contexts []*scheduler.Context, expandType api.SdkStoragePool_ResizeOperationType, targetIncrementInGiB uint64, excludeNodeIDs ...string) string {
 	poolsWithIO, err := GetPoolIDWithIOs(contexts)
 
@@ -10057,7 +10076,10 @@ func pickPoolToResize(contexts []*scheduler.Context, expandType api.SdkStoragePo
 		if err != nil {
 			continue
 		}
-		if eligibilityMap[n.Id] && eligibilityMap[poolID] {
+
+		isValid := isPoolLastOperationValid(poolID)
+
+		if eligibilityMap[n.Id] && eligibilityMap[poolID] && isValid {
 			return poolID
 		}
 
@@ -12348,7 +12370,7 @@ var _ = Describe("{AddingDrivesBeyondSupportedLimit}", Label("p1", "pool_ops", "
 
 				if drvs, ok := drvMap[fmt.Sprintf("%d", selectedPool.ID)]; ok {
 					maxDrivesAllowed := POOL_MAX_CLOUD_DRIVES - len(drvs)
-					log.Infof("Max drives allowed for the pool: %v", maxDrivesAllowed)
+					log.Infof("Max drives allowed for the pool [%s]: %v", selectedPool.Uuid, maxDrivesAllowed)
 
 					if maxDrivesAllowed > remainingDrivesForNode {
 						log.Infof("Max drives allowed (%d) exceeds remaining drives for node (%d). Adjusting maxDrivesAllowed.", maxDrivesAllowed, remainingDrivesForNode)
@@ -12377,11 +12399,9 @@ var _ = Describe("{AddingDrivesBeyondSupportedLimit}", Label("p1", "pool_ops", "
 							errMsg1 := fmt.Sprintf("could not find a suitable storage distribution candidate: node has reached it's maximum supported drive count: %v", VSPHERE_MAX_CLOUD_DRIVES)
 							errMsg2 := "it would exceed maximum supported drives"
 							resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
-							if resizeErr != nil {
-								errorMsg := resizeErr.Error()
 
-								strContMsg := strings.Contains(errorMsg, errMsg1) || strings.Contains(errorMsg, errMsg2)
-								dash.VerifyFatal(strContMsg, true, "Pool reached maximum drive limit")
+							if j <= maxDrivesAllowed {
+								dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("verify pool %s expansion is successfor for drive %d", selectedPool.Uuid, j))
 							}
 
 							if j == maxDrivesAllowed+1 {
@@ -12408,6 +12428,7 @@ var _ = Describe("{AddingDrivesBeyondSupportedLimit}", Label("p1", "pool_ops", "
 								dash.VerifyFatal(driveCount == int(maxDriveLimit), true, "Expected number of drives added in node")
 							}
 						}
+						break
 					} else {
 						log.Infof("No drives can be added to the node, maxDrivesAllowed: %v", maxDrivesAllowed)
 					}
@@ -15450,4 +15471,3 @@ var _ = Describe("{AddDataNodeRebootVerifyPoolStatus}", Label("staging", "p0", "
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
-
