@@ -2,6 +2,7 @@ package ibm
 
 import (
 	"fmt"
+	"time"
 
 	ibmcore "github.com/IBM/go-sdk-core/v5/core"
 	"github.com/IBM/vpc-go-sdk/vpcv1"
@@ -181,6 +182,11 @@ func (i *ibm) DeleteSnapshotsForVolumes(volumeNames []string, apiKey string) err
 func (i *ibm) IsPxLiteCluster() bool {
 	log.Warnf("IsPxLiteCluster not implemented for volume driver - %s", i.String())
 	return false
+}
+
+// WaitForKVDBToBeHealthy waits for all KVDB members to be healthy
+func (i *ibm) WaitForKVDBToBeHealthy(n node.Node, retryInterval time.Duration) error {
+	return nil
 }
 
 func init() {

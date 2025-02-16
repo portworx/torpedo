@@ -2,6 +2,7 @@ package azure
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/libopenstorage/openstorage/api"
 
@@ -132,6 +133,11 @@ func (d *azure) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDri
 func (d *azure) IsPxLiteCluster() bool {
 	log.Warnf("IsPxLiteCluster not implemented for volume driver - %s", d.String())
 	return false
+}
+
+// WaitForKVDBToBeHealthy waits for all KVDB members to be healthy
+func (d *azure) WaitForKVDBToBeHealthy(n node.Node, retryInterval time.Duration) error {
+	return nil
 }
 
 func init() {

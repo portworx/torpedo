@@ -2925,7 +2925,46 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 		return fmt.Errorf("PX pod failed to come up on node [%s/%s], Err: %v", n.Name, n.VolDriverNodeID, err)
 	}
 
+	if err := d.WaitForKVDBToBeHealthy(n, 5*time.Minute); err != nil {
+		return fmt.Errorf("failed to wait for kvdb to be healthy on node [%s/%s]. Err: [%v]", n.Name, n.VolDriverNodeID, err)
+	}
+
 	log.Debugf("PX is fully operational on node [%s/%s]", n.Name, n.VolDriverNodeID)
+	return nil
+}
+
+func (d *portworx) WaitForKVDBToBeHealthy(n node.Node, retryInterval time.Duration) error {
+	t := func() (interface{}, bool, error) {
+		kvdbMembers, err := d.GetKvdbMembers(n)
+		if err != nil {
+			return "", true, fmt.Errorf("failed to get kvdb members on node [%s/%s]. Err: [%v]", n.Name, n.VolDriverNodeID, err)
+		}
+		if len(kvdbMembers) != 3 {
+			var onlineKVDB []string
+			for _, kvdb := range kvdbMembers {
+				onlineKVDB = append(onlineKVDB, kvdb.Name)
+			}
+			return "", true, fmt.Errorf("kvdb members count is not 3. Online: [%v]", onlineKVDB)
+		}
+
+		var healthyKVDB, unHealthyKVDB []string
+		for _, kvdb := range kvdbMembers {
+			if kvdb.IsHealthy {
+				healthyKVDB = append(healthyKVDB, kvdb.Name)
+			} else {
+				unHealthyKVDB = append(unHealthyKVDB, kvdb.Name)
+			}
+		}
+		if len(unHealthyKVDB) > 0 {
+			return "", true, fmt.Errorf("not all kvdb members are healthy. Healthy: [%v], Unhealthy: [%v]", healthyKVDB, unHealthyKVDB)
+		}
+		log.Infof("All kvdb nodes [%v] are healthy", healthyKVDB)
+		return "", false, nil
+	}
+	_, err := task.DoRetryWithTimeout(t, retryInterval, 20*time.Second)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 

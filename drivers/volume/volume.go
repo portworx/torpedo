@@ -219,6 +219,9 @@ type Driver interface {
 	// WaitDriverDownOnNode must wait till the volume driver becomes unusable on a given node
 	WaitDriverDownOnNode(n node.Node) error
 
+	// WaitForKVDBToBeHealthy waits for all KVDB members to be healthy
+	WaitForKVDBToBeHealthy(n node.Node, retryInterval time.Duration) error
+
 	// GetNodeForVolume returns the node on which the volume is attached
 	GetNodeForVolume(vol *Volume, timeout time.Duration, retryInterval time.Duration) (*node.Node, error)
 

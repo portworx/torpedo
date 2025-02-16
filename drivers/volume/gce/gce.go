@@ -2,6 +2,7 @@ package gce
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/libopenstorage/openstorage/api"
 
@@ -131,6 +132,11 @@ func (d *gce) ValidatePureFBDAMountSource(nodes []node.Node, vols []*volume.Volu
 func (d *gce) IsPxLiteCluster() bool {
 	log.Warnf("IsPxLiteCluster not implemented for volume driver - %s", d.String())
 	return false
+}
+
+// WaitForKVDBToBeHealthy waits for all KVDB members to be healthy
+func (d *gce) WaitForKVDBToBeHealthy(n node.Node, retryInterval time.Duration) error {
+	return nil
 }
 
 func init() {

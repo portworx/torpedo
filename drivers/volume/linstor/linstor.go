@@ -171,6 +171,11 @@ func (d *linstor) IsPxLiteCluster() bool {
 	return false
 }
 
+// WaitForKVDBToBeHealthy waits for all KVDB members to be healthy
+func (d *linstor) WaitForKVDBToBeHealthy(n node.Node, retryInterval time.Duration) error {
+	return nil
+}
+
 func init() {
 	torpedovolume.Register(DriverName, provisioners, &linstor{})
 }

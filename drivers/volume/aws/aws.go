@@ -2,6 +2,7 @@ package aws
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/libopenstorage/openstorage/api"
 
@@ -96,6 +97,11 @@ func (d *aws) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDrive
 func (d *aws) IsPxLiteCluster() bool {
 	log.Warnf("IsPxLiteCluster not implemented for volume driver - %s", d.String())
 	return false
+}
+
+// WaitForKVDBToBeHealthy waits for all KVDB members to be healthy
+func (d *aws) WaitForKVDBToBeHealthy(n node.Node, retryInterval time.Duration) error {
+	return nil
 }
 
 func init() {

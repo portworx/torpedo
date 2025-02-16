@@ -2,6 +2,7 @@ package csi
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/libopenstorage/openstorage/api"
 
@@ -102,6 +103,11 @@ func (d *genericCsi) ValidatePureFBDAMountSource(nodes []node.Node, vols []*volu
 func (d *genericCsi) IsPxLiteCluster() bool {
 	log.Warnf("IsPxLiteCluster not implemented for volume driver - %s", d.String())
 	return false
+}
+
+// WaitForKVDBToBeHealthy waits for all KVDB members to be healthy
+func (d *genericCsi) WaitForKVDBToBeHealthy(n node.Node, retryInterval time.Duration) error {
+	return nil
 }
 
 func init() {

@@ -3,6 +3,7 @@ package pso
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/libopenstorage/openstorage/api"
 
@@ -151,6 +152,11 @@ func GetPsoNamespace() (string, error) {
 		}
 	}
 	return "", fmt.Errorf("can't find PSO service [%s] from list of services", PsoServiceName)
+}
+
+// WaitForKVDBToBeHealthy waits for all KVDB members to be healthy
+func (i *pso) WaitForKVDBToBeHealthy(n node.Node, retryInterval time.Duration) error {
+	return nil
 }
 
 func init() {
