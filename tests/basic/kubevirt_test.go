@@ -1069,6 +1069,7 @@ var _ = Describe("{RebootRootDiskAttachedNode}", Label("p1", "negative", "error_
 var _ = Describe("{ParallelAddDiskToVM}", Label("p1", "postive", "kubevirt", "shared_v4", "MiniScale"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("ParallelAddDiskToVM", "Add a new disk to multiple kubevirtVM parallely", nil, 0)
+		InitTestErrorChannel()
 	})
 	var appCtxs []*scheduler.Context
 	var namespace string
@@ -1116,12 +1117,18 @@ var _ = Describe("{ParallelAddDiskToVM}", Label("p1", "postive", "kubevirt", "sh
 					defer GinkgoRecover()
 					defer wg.Done()
 					_, err := ColdPlugDataVolumesToKubevirtVM([]*scheduler.Context{appCtx}, numberOfVolumes, "10Gi")
-					log.FailOnError(err, "Failed to add disks to kubevirt VM")
+					if err != nil {
+						LogErrorInTest(fmt.Errorf("Failed to add disks to kubevirt VM: %v", err))
+						return
+					}
 					dash.VerifyFatal(true, true, "Failed to add disks to kubevirt VM?")
 				}(appCtx)
 			}
 		})
 		wg.Wait()
+		if aggregatedErr := ValidateForErrors(); aggregatedErr != nil {
+			log.FailOnError(aggregatedErr, "Failed to add disks to kubevirt VM")
+		}
 
 		stepLog = "Verify the new disk added is also bind mounted"
 		Step(stepLog, func() {
@@ -1141,6 +1148,7 @@ var _ = Describe("{ParallelAddDiskToVM}", Label("p1", "postive", "kubevirt", "sh
 		})
 	})
 	JustAfterEach(func() {
+		ResetErrorChannel()
 		defer EndTorpedoTest()
 		AfterEachTest(appCtxs)
 	})
@@ -1149,6 +1157,7 @@ var _ = Describe("{ParallelAddDiskToVM}", Label("p1", "postive", "kubevirt", "sh
 var _ = Describe("{MultipleKubeVirtLiveMigration}", Label("p0", "postive", "kubevirt", "MiniScale", "LiveMigration"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("MultipleKubeVirtLiveMigration", "Live migrate multiple kubevirtVM's parallely", nil, 0)
+		InitTestErrorChannel()
 	})
 	var appCtxs []*scheduler.Context
 	var namespace string
@@ -1202,18 +1211,28 @@ var _ = Describe("{MultipleKubeVirtLiveMigration}", Label("p0", "postive", "kube
 					go func(appCtx *scheduler.Context) {
 						// Get the VMs from the appCtx
 						vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
-						log.FailOnError(err, "Failed to get VMs from appCtx")
+						if err != nil {
+							LogErrorInTest(fmt.Errorf("Failed to get VMs from appCtx: %v", err))
+							return
+						}
 						defer GinkgoRecover()
 						defer wg.Done()
 						for _, vm := range vms {
 							err = CheckFioIsRunningInVM(vm)
-							log.FailOnError(err, "Failed to validate fio in VM %s", vm.Name)
+							if err != nil {
+								LogErrorInTest(fmt.Errorf("Failed to validate fio in VM %s: %v", vm.Name, err))
+								return
+							}
 						}
 					}(appCtx)
 				}
 			})
 		}
 		wg.Wait()
+		if aggregatedErr := ValidateForErrors(); aggregatedErr != nil {
+			log.FailOnError(aggregatedErr, "Failed to get and validate VMs")
+		}
+
 		stepLog = "Live migrate the kubevirt VM"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -1223,11 +1242,18 @@ var _ = Describe("{MultipleKubeVirtLiveMigration}", Label("p0", "postive", "kube
 					defer GinkgoRecover()
 					defer wg.Done()
 					err := StartAndWaitForVMIMigration(appCtx, context1.TODO())
-					log.FailOnError(err, "Failed to live migrate kubevirt VM")
+					if err != nil {
+						LogErrorInTest(fmt.Errorf("Failed to live migrate kubevirt VM: %v", err))
+						return
+					}
 				}(appCtx)
 			}
 		})
 		wg.Wait()
+		if aggregatedErr := ValidateForErrors(); aggregatedErr != nil {
+			log.FailOnError(aggregatedErr, "Failed to live migrate kubevirt VM")
+		}
+
 		if canSsh {
 			stepLog = "Validate fio is running in the VM or not"
 			Step(stepLog, func() {
@@ -1237,18 +1263,28 @@ var _ = Describe("{MultipleKubeVirtLiveMigration}", Label("p0", "postive", "kube
 					go func(appCtx *scheduler.Context) {
 						// Get the VMs from the appCtx
 						vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
-						log.FailOnError(err, "Failed to get VMs from appCtx")
+						if err != nil {
+							LogErrorInTest(fmt.Errorf("Failed to get VMs from appCtx: %v", err))
+							return
+						}
 						defer GinkgoRecover()
 						defer wg.Done()
 						for _, vm := range vms {
 							err = CheckFioIsRunningInVM(vm)
-							log.FailOnError(err, "Failed to validate fio in VM %s", vm.Name)
+							if err != nil {
+								LogErrorInTest(fmt.Errorf("Failed to validate fio in VM %s: %v", vm.Name, err))
+								return
+							}
 						}
 					}(appCtx)
 				}
 			})
 		}
 		wg.Wait()
+		if aggregatedErr := ValidateForErrors(); aggregatedErr != nil {
+			log.FailOnError(aggregatedErr, "Failed to get and validate VMs")
+		}
+
 		stepLog = "Destroy Applications"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -1256,6 +1292,7 @@ var _ = Describe("{MultipleKubeVirtLiveMigration}", Label("p0", "postive", "kube
 		})
 	})
 	JustAfterEach(func() {
+		ResetErrorChannel()
 		defer EndTorpedoTest()
 		AfterEachTest(appCtxs)
 	})
@@ -1264,6 +1301,7 @@ var _ = Describe("{MultipleKubeVirtLiveMigration}", Label("p0", "postive", "kube
 var _ = Describe("{AddDiskAndLiveMigrateMultipleVm}", Label("p1", "postive", "kubevirt", "MiniScale", "LiveMigration"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("AddDiskAndLiveMigrateMultipleVm", "Live Migrate multiple VM's After Adding a new disk to a kubevirtVM", nil, 0)
+		InitTestErrorChannel()
 	})
 	var appCtxs []*scheduler.Context
 	var namespace string
@@ -1305,20 +1343,33 @@ var _ = Describe("{AddDiskAndLiveMigrateMultipleVm}", Label("p1", "postive", "ku
 					defer wg.Done()
 
 					success, err := ColdPlugDataVolumesToKubevirtVM([]*scheduler.Context{appCtx}, numberOfVolumes, "10Gi")
-					log.FailOnError(err, "Failed to add disks to kubevirt VM")
+					if err != nil {
+						LogErrorInTest(fmt.Errorf("Failed to add disks to kubevirt VM: %v", err))
+						return
+					}
 					dash.VerifyFatal(success, true, "Failed to add disks to kubevirt VM?")
 
 					isVmBindMounted, err := IsVMBindMounted(appCtx, true)
-					log.FailOnError(err, "Failed to verify disks in kubevirt VM")
+					if err != nil {
+						LogErrorInTest(fmt.Errorf("Failed to verify disks in kubevirt VM: %v", err))
+						return
+					}
 					if !isVmBindMounted {
-						log.Errorf("The newly added disk to vm %s is not bind mounted", appCtx.App.Key)
+						LogErrorInTest(fmt.Errorf("The newly added disk to vm %s is not bind mounted: %v", appCtx.App.Key, err))
+						return
 					}
 					err = StartAndWaitForVMIMigration(appCtx, context1.TODO())
-					log.FailOnError(err, "Failed to live migrate kubevirt VM")
+					if err != nil {
+						LogErrorInTest(fmt.Errorf("Failed to live migrate kubevirt VM: %v", err))
+						return
+					}
 				}(appCtx)
 			}
 		})
 		wg.Wait()
+		if aggregatedErr := ValidateForErrors(); aggregatedErr != nil {
+			log.FailOnError(aggregatedErr, "Failed to add disk and live migrate kubevirt VM")
+		}
 
 		stepLog = "Destroy Applications"
 		Step(stepLog, func() {
@@ -1327,6 +1378,7 @@ var _ = Describe("{AddDiskAndLiveMigrateMultipleVm}", Label("p1", "postive", "ku
 		})
 	})
 	JustAfterEach(func() {
+		ResetErrorChannel()
 		defer EndTorpedoTest()
 		AfterEachTest(appCtxs)
 	})
@@ -1335,6 +1387,7 @@ var _ = Describe("{AddDiskAndLiveMigrateMultipleVm}", Label("p1", "postive", "ku
 var _ = Describe("{LiveMigrationBeforeAddDiskMultipleVm}", Label("p1", "postive", "kubevirt", "LiveMigration"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("LiveMigrationBeforeAddDiskMultipleVm", "Live Migrate multiple VM's Before Adding a new disk to a kubevirtVM parallely", nil, 0)
+		InitTestErrorChannel()
 	})
 	var appCtxs []*scheduler.Context
 	var namespace string
@@ -1375,20 +1428,35 @@ var _ = Describe("{LiveMigrationBeforeAddDiskMultipleVm}", Label("p1", "postive"
 					defer GinkgoRecover()
 					defer wg.Done()
 					err := StartAndWaitForVMIMigration(appCtx, context1.TODO())
-					log.FailOnError(err, "Failed to live migrate kubevirt VM")
+					if err != nil {
+						LogErrorInTest(fmt.Errorf("Failed to live migrate kubevirt VM: %v", err))
+						return
+					}
 
 					success, err := ColdPlugDataVolumesToKubevirtVM([]*scheduler.Context{appCtx}, numberOfVolumes, "10Gi")
-					log.FailOnError(err, "Failed to add disks to kubevirt VM")
+					if err != nil {
+						LogErrorInTest(fmt.Errorf("Failed to add disks to kubevirt VM: %v", err))
+						return
+					}
 					dash.VerifyFatal(success, true, "Failed to add disks to kubevirt VM?")
 
 					isVmBindMounted, err := IsVMBindMounted(appCtx, true)
-					log.FailOnError(err, "Failed to verify disks in kubevirt VM")
+					if err != nil {
+						LogErrorInTest(fmt.Errorf("Failed to verify disks in kubevirt VM: %v", err))
+						return
+					}
 					if !isVmBindMounted {
-						log.Errorf("The newly added disk to vm %s is not bind mounted", appCtx.App.Key)
+						LogErrorInTest(fmt.Errorf("The newly added disk to vm %s is not bind mounted: %v", appCtx.App.Key, err))
+						return
 					}
 				}(appCtx)
 			}
 		})
+		wg.Wait()
+		if aggregatedErr := ValidateForErrors(); aggregatedErr != nil {
+			log.FailOnError(aggregatedErr, "Failed to live migrate and add disk to kubevirt VM")
+		}
+
 		stepLog = "Destroy Applications"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -1396,6 +1464,7 @@ var _ = Describe("{LiveMigrationBeforeAddDiskMultipleVm}", Label("p1", "postive"
 		})
 	})
 	JustAfterEach(func() {
+		ResetErrorChannel()
 		defer EndTorpedoTest()
 		AfterEachTest(appCtxs)
 	})
@@ -1404,6 +1473,7 @@ var _ = Describe("{LiveMigrationBeforeAddDiskMultipleVm}", Label("p1", "postive"
 var _ = Describe("{MultipleVMVolHaIncrease}", Label("p1", "postive", "kubevirt", "HA_Increase_Decrease", "MiniScale"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("MultipleVMVolHaIncrease", "Increase the volume HA of multiple kubevirt VM parallely", nil, 0)
+		InitTestErrorChannel()
 	})
 	var appCtxs []*scheduler.Context
 	var namespace string
@@ -1445,28 +1515,43 @@ var _ = Describe("{MultipleVMVolHaIncrease}", Label("p1", "postive", "kubevirt",
 					log.FailOnError(err, "Failed to get volumes of kubevirt VM")
 					for _, vol := range vols {
 						currRep, err := Inst().V.GetReplicationFactor(vol)
-						log.FailOnError(err, "Failed to get Repl factor for vil %s", vol.Name)
+						if err != nil {
+							LogErrorInTest(fmt.Errorf("Failed to get Repl factor for vol %s: %v", vol.Name, err))
+							return
+						}
 
 						if currRep < 3 {
 							opts := volume.Options{
 								ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
 							}
 							err = Inst().V.SetReplicationFactor(vol, currRep+1, nil, nil, true, opts)
+							if err != nil {
+								LogErrorInTest(fmt.Errorf("Failed to Set Repl factor for vol %s: %v", vol.Name, err))
+								return
+							}
 							dash.VerifyFatal(err, nil, fmt.Sprintf("Validate set repl factor to %d", currRep+1))
 						} else {
 							log.Warnf("Volume %s has reached maximum replication factor", vol.Name)
 						}
 					}
 					isVmBindMounted, err := IsVMBindMounted(appCtx, true)
-					log.FailOnError(err, "Failed to run vm bind mount check")
+					if err != nil {
+						LogErrorInTest(fmt.Errorf("Failed to run vm bind mount check: %v", err))
+						return
+					}
 					if !isVmBindMounted {
-						log.Errorf("The newly added replication to vm %s is not bind mounted", appCtx.App.Key)
+						LogErrorInTest(fmt.Errorf("The newly added disk to vm %s is not bind mounted: %v", appCtx.App.Key, err))
+						return
 					}
 				}(appCtx)
 			}
 		})
 
 		wg.Wait()
+		if aggregatedErr := ValidateForErrors(); aggregatedErr != nil {
+			log.FailOnError(aggregatedErr, "Failed to increase volume HA of kubevirt VM")
+		}
+
 		stepLog = "Destroy Applications"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -1474,6 +1559,7 @@ var _ = Describe("{MultipleVMVolHaIncrease}", Label("p1", "postive", "kubevirt",
 		})
 	})
 	JustAfterEach(func() {
+		ResetErrorChannel()
 		defer EndTorpedoTest()
 		AfterEachTest(appCtxs)
 	})
@@ -1482,6 +1568,7 @@ var _ = Describe("{MultipleVMVolHaIncrease}", Label("p1", "postive", "kubevirt",
 var _ = Describe("{MultipleVMVolHaDecrease}", Label("p1", "postive", "kubevirt", "HA_Increase_Decrease", "MiniScale"), func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("MultipleVMVolHaDecrease", "Decrease the replication factor of multiple kubevirt Vms paralley", nil, 0)
+		InitTestErrorChannel()
 	})
 	var appCtxs []*scheduler.Context
 	var namespace string
@@ -1528,26 +1615,40 @@ var _ = Describe("{MultipleVMVolHaDecrease}", Label("p1", "postive", "kubevirt",
 					log.FailOnError(err, "Failed to get volumes of kubevirt VM")
 					for _, vol := range vols {
 						currRep, err := Inst().V.GetReplicationFactor(vol)
-						log.FailOnError(err, "Failed to get Repl factor for vil %s", vol.Name)
+						if err != nil {
+							LogErrorInTest(fmt.Errorf("Failed to get Repl factor for vol %s: %v", vol.Name, err))
+							return
+						}
 
 						if currRep > 1 {
 							opts := volume.Options{
 								ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
 							}
 							err = Inst().V.SetReplicationFactor(vol, currRep-1, nil, nil, true, opts)
+							if err != nil {
+								LogErrorInTest(fmt.Errorf("Failed to Set Repl factor for vol %s: %v", vol.Name, err))
+								return
+							}
 							dash.VerifyFatal(err, nil, fmt.Sprintf("Validate set repl factor to %d", currRep-1))
 						} else {
 							log.Warnf("Volume %s has reached maximum replication factor", vol.Name)
 						}
 					}
 					isVmBindMounted, err := IsVMBindMounted(appCtx, true)
-					log.FailOnError(err, "Failed to run vm bind mount check")
+					if err != nil {
+						LogErrorInTest(fmt.Errorf("Failed to run vm bind mount check: %v", err))
+						return
+					}
 					if !isVmBindMounted {
-						log.Errorf("The newly added disk to vm %s is not bind mounted", appCtx.App.Key)
+						LogErrorInTest(fmt.Errorf("The newly added disk to vm %s is not bind mounted: %v", appCtx.App.Key, err))
+						return
 					}
 				}(appCtx)
 			}
 			wg.Wait()
+			if aggregatedErr := ValidateForErrors(); aggregatedErr != nil {
+				log.FailOnError(aggregatedErr, "Failed to decrease volume HA of kubevirt VM")
+			}
 		})
 
 		stepLog = "Destroy Applications"
@@ -1557,6 +1658,7 @@ var _ = Describe("{MultipleVMVolHaDecrease}", Label("p1", "postive", "kubevirt",
 		})
 	})
 	JustAfterEach(func() {
+		ResetErrorChannel()
 		defer EndTorpedoTest()
 		AfterEachTest(appCtxs)
 	})
@@ -1573,7 +1675,7 @@ var _ = Describe("{LiveMigrateWhileNodeInMaintenance}", Label("p2", "negative", 
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("LiveMigrateWhileNodeInMaintenance", "Live Migrate VM while node is in maintenance mode", nil, 0)
-
+		InitTestErrorChannel()
 	})
 
 	var appCtxs []*scheduler.Context
@@ -1628,12 +1730,18 @@ var _ = Describe("{LiveMigrateWhileNodeInMaintenance}", Label("p2", "negative", 
 									defer wg.Done()
 									n, err := node.GetNodeByName(nonReplicaNode)
 									err = Inst().V.ExitMaintenance(n)
-									log.FailOnError(err, "Failed to exit node: %s from maintenance mode", nonReplicaNode)
+									if err != nil {
+										LogErrorInTest(fmt.Errorf("Failed to exit node: %s from maintenance mode: %v", nonReplicaNode, err))
+										return
+									}
 									log.Infof("Succesfully exited node: %s from maintenance mode", nonReplicaNode)
 								}(ReplicaNode)
 							}
 						}
 						wg.Wait()
+						if aggregatedErr := ValidateForErrors(); aggregatedErr != nil {
+							log.FailOnError(aggregatedErr, "Failed to exit node from maintenance mode")
+						}
 					}()
 
 					for _, ReplicaNode := range ReplicaNodes {
@@ -1643,12 +1751,19 @@ var _ = Describe("{LiveMigrateWhileNodeInMaintenance}", Label("p2", "negative", 
 								defer wg.Done()
 								n, err := node.GetNodeByName(nonReplicaNode)
 								err = Inst().V.EnterMaintenance(n)
-								log.FailOnError(err, "Failed to put node: %s in maintenance mode", nonReplicaNode)
+								if err != nil {
+									LogErrorInTest(fmt.Errorf("Failed to put node: %s in maintenance mode: %v", nonReplicaNode, err))
+									return
+								}
 								log.Infof("Succesfully put node: %s in maintenance mode", nonReplicaNode)
 							}(ReplicaNode)
 						}
 					}
 					wg.Wait()
+					if aggregatedErr := ValidateForErrors(); aggregatedErr != nil {
+						log.FailOnError(aggregatedErr, "Failed to put node in maintenance mode")
+					}
+
 					err = StartAndWaitForVMIMigration(appCtx, context1.TODO())
 					log.FailOnError(err, "Failed to live migrate kubevirt VM")
 				}
@@ -1663,6 +1778,7 @@ var _ = Describe("{LiveMigrateWhileNodeInMaintenance}", Label("p2", "negative", 
 	})
 
 	JustAfterEach(func() {
+		ResetErrorChannel()
 		defer EndTorpedoTest()
 		AfterEachTest(appCtxs)
 	})
@@ -1685,6 +1801,7 @@ var _ = Describe("{LiveMigrateCordonNonReplicaNode}", Label("p2", "negative", "k
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("LiveMigrateCordonNonReplicaNode", "Live Migrate VM while node is in maintenance mode", nil, 0)
+		InitTestErrorChannel()
 	})
 
 	var appCtxs []*scheduler.Context
@@ -1754,12 +1871,18 @@ var _ = Describe("{LiveMigrateCordonNonReplicaNode}", Label("p2", "negative", "k
 									defer wg.Done()
 									n, err := node.GetNodeByName(nonReplicaNode)
 									err = Inst().V.ExitMaintenance(n)
-									log.FailOnError(err, "Failed to exit node: %s from maintenance mode", nonReplicaNode)
+									if err != nil {
+										LogErrorInTest(fmt.Errorf("Failed to exit node: %s from maintenance mode: %v", nonReplicaNode, err))
+										return
+									}
 									log.Infof("Succesfully exited node: %s from maintenance mode", nonReplicaNode)
 								}(nonReplicaNode)
 							}
 						}
 						wg.Wait()
+						if aggregatedErr := ValidateForErrors(); aggregatedErr != nil {
+							log.FailOnError(aggregatedErr, "Failed to exit node from maintenance mode")
+						}
 					}()
 
 					for _, nonReplicaNode := range nonReplicaNodes {
@@ -1769,12 +1892,19 @@ var _ = Describe("{LiveMigrateCordonNonReplicaNode}", Label("p2", "negative", "k
 								defer wg.Done()
 								n, err := node.GetNodeByName(nonReplicaNode)
 								err = Inst().V.EnterMaintenance(n)
-								log.FailOnError(err, "Failed to put node: %s in maintenance mode", nonReplicaNode)
+								if err != nil {
+									LogErrorInTest(fmt.Errorf("Failed to put node: %s in maintenance mode: %v", nonReplicaNode, err))
+									return
+								}
 								log.Infof("Succesfully put node: %s in maintenance mode", nonReplicaNode)
 							}(nonReplicaNode)
 						}
 					}
 					wg.Wait()
+					if aggregatedErr := ValidateForErrors(); aggregatedErr != nil {
+						log.FailOnError(aggregatedErr, "Failed to put node in maintenance mode")
+					}
+
 					err = StartAndWaitForVMIMigration(appCtx, context1.TODO())
 					log.FailOnError(err, "Failed to live migrate kubevirt VM")
 				})
@@ -1794,12 +1924,18 @@ var _ = Describe("{LiveMigrateCordonNonReplicaNode}", Label("p2", "negative", "k
 									defer wg.Done()
 									n, err := node.GetNodeByName(nonReplicaNode)
 									err = Inst().V.ExitMaintenance(n)
-									log.FailOnError(err, "Failed to exit node: %s from maintenance mode", nonReplicaNode)
+									if err != nil {
+										LogErrorInTest(fmt.Errorf("Failed to exit node: %s from maintenance mode: %v", nonReplicaNode, err))
+										return
+									}
 									log.Infof("Succesfully exited node: %s from maintenance mode", nonReplicaNode)
 								}(nonReplicaNode)
 							}
 						}
 						wg.Wait()
+						if aggregatedErr := ValidateForErrors(); aggregatedErr != nil {
+							log.FailOnError(aggregatedErr, "Failed to exit node from maintenance mode")
+						}
 					}()
 
 					for _, nonReplicaNode := range nonReplicaNodes {
@@ -1809,12 +1945,19 @@ var _ = Describe("{LiveMigrateCordonNonReplicaNode}", Label("p2", "negative", "k
 								defer wg.Done()
 								n, err := node.GetNodeByName(nonReplicaNode)
 								err = Inst().V.EnterMaintenance(n)
-								log.FailOnError(err, "Failed to put node: %s in maintenance mode", nonReplicaNode)
+								if err != nil {
+									LogErrorInTest(fmt.Errorf("Failed to put node: %s in maintenance mode: %v", nonReplicaNode, err))
+									return
+								}
 								log.Infof("Succesfully put node: %s in maintenance mode", nonReplicaNode)
 							}(nonReplicaNode)
 						}
 					}
 					wg.Wait()
+					if aggregatedErr := ValidateForErrors(); aggregatedErr != nil {
+						log.FailOnError(aggregatedErr, "Failed to put node in maintenance mode")
+					}
+
 					err = StartAndWaitForVMIMigration(appCtx, context1.TODO())
 					log.FailOnError(err, "Failed to live migrate kubevirt VM")
 				})
@@ -1823,6 +1966,7 @@ var _ = Describe("{LiveMigrateCordonNonReplicaNode}", Label("p2", "negative", "k
 	})
 
 	JustAfterEach(func() {
+		ResetErrorChannel()
 		defer EndTorpedoTest()
 		AfterEachTest(appCtxs)
 	})
@@ -2551,6 +2695,7 @@ var _ = Describe("{LiveMigrationsOfVMsInALoop}", Label("p0", "positive", "kubevi
 	var present bool
 	JustBeforeEach(func() {
 		StartTorpedoTest("LiveMigrationsOfVMsInALoop", "Live migrate kubevirt VMs multiple times", nil, 0)
+		InitTestErrorChannel()
 		app, volType, present = getAppAndVolType()
 		log.InfoD("Setting app for this test to be : %s, Volume Type: %s, Present: %t", app, volType, present)
 	})
@@ -2609,32 +2754,9 @@ var _ = Describe("{LiveMigrationsOfVMsInALoop}", Label("p0", "positive", "kubevi
 				log.InfoD("Skipping initial uptime calculation as volType is windows")
 				return
 			}
-			var wg sync.WaitGroup
-			for _, appCtx := range appCtxs {
-				wg.Add(1)
-				go func(appCtx *scheduler.Context) {
-					defer GinkgoRecover()
-					defer wg.Done()
-					vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
-					log.FailOnError(err, "Failed to get VMs from appCtx")
-					for _, vm := range vms {
-						vmKey := fmt.Sprintf("%s/%s", vm.Namespace, vm.Name)
-						uptime, err := GetVMUptime(vm, canSsh)
-						log.FailOnError(err, "Failed to get uptime from VM %s", vm.Name)
-						log.Infof("Initial uptime for VM %s is %v", vmKey, uptime)
-
-						nodeName, err := GetNodeOfVM(vm)
-						log.FailOnError(err, "Failed to get node of VM %v", vm.Name)
-						log.Infof("VM %s is currently running on node %s", vm.Name, nodeName)
-
-						mu.Lock()
-						initialUptime[vmKey] = uptime
-						initialNodeName[vmKey] = nodeName
-						mu.Unlock()
-					}
-				}(appCtx)
-			}
-			wg.Wait()
+			var err error
+			initialUptime, initialNodeName, err = GatherInitialUptimeAndNode(appCtxs)
+			log.FailOnError(err, "Failed to get initial node names and initial uptimes")
 		})
 
 		for migrationCount := 1; migrationCount <= numMigrations; migrationCount++ {
@@ -2648,10 +2770,16 @@ var _ = Describe("{LiveMigrationsOfVMsInALoop}", Label("p0", "positive", "kubevi
 						defer GinkgoRecover()
 						defer wg.Done()
 						err := StartAndWaitForVMIMigration(appCtx, context1.TODO())
-						log.FailOnError(err, "Failed to live migrate kubevirt VM")
+						if err != nil {
+							LogErrorInTest(fmt.Errorf("Failed to live migrate kubevirt VM: %v", err))
+							return
+						}
 					}(appCtx)
 				}
 				wg.Wait()
+				if aggregatedErr := ValidateForErrors(); aggregatedErr != nil {
+					log.FailOnError(aggregatedErr, "Failed to live migrate kubevirt VM")
+				}
 
 				stepLog := fmt.Sprintf("Validate VMs after migration - iteration %d", migrationCount)
 				Step(stepLog, func() {
@@ -2667,13 +2795,17 @@ var _ = Describe("{LiveMigrationsOfVMsInALoop}", Label("p0", "positive", "kubevi
 							for _, vm := range vms {
 								vmKey := fmt.Sprintf("%s/%s", vm.Namespace, vm.Name)
 								newNodeName, err := GetNodeOfVM(vm)
-								log.FailOnError(err, "Failed to get node of VM %s after migration", vm.Name)
+								if err != nil {
+									LogErrorInTest(fmt.Errorf("Failed to get node of VM %s after migration: %v", vm.Name, err))
+									return
+								}
 								log.Infof("VM %s is now running on node %s after migration", vm.Name, newNodeName)
 								mu.Lock()
 								initialNode := initialNodeName[vmKey]
 								mu.Unlock()
 								if newNodeName == initialNode {
-									log.FailOnError(fmt.Errorf("VM %s did not migrate to a different node", vm.Name), "VM is still on node %s after migration", initialNode)
+									LogErrorInTest(fmt.Errorf("VM %s did not migrate to a different node (still on %s)", vm.Name, initialNode))
+									return
 								} else {
 									log.Infof("VM %s successfully migrated from node %s to node %s", vm.Name, initialNode, newNodeName)
 									mu.Lock()
@@ -2682,11 +2814,18 @@ var _ = Describe("{LiveMigrationsOfVMsInALoop}", Label("p0", "positive", "kubevi
 								}
 
 								err = CheckVMUptime(vm, initialUptime)
-								log.FailOnError(err, "Failed to validate uptime in VM %s", vm.Name)
+								if err != nil {
+									LogErrorInTest(fmt.Errorf("Failed to validate uptime in VM %s: %v", vm.Name, err))
+									return
+								}
 							}
 						}(appCtx)
 					}
 					wg.Wait()
+					if aggregatedErr := ValidateForErrors(); aggregatedErr != nil {
+						log.FailOnError(aggregatedErr, "Validate VMs after migration")
+					}
+
 				})
 				if canSsh {
 					ValidateFioInVMs(appCtxs, canSsh)
@@ -2703,6 +2842,7 @@ var _ = Describe("{LiveMigrationsOfVMsInALoop}", Label("p0", "positive", "kubevi
 		})
 	})
 	JustAfterEach(func() {
+		ResetErrorChannel()
 		defer EndTorpedoTest()
 		AfterEachTest(appCtxs)
 	})
@@ -2949,6 +3089,7 @@ var _ = Describe("{LMBeforeColdAddDiskToVM}", Label("p0", "positive", "kubevirt"
 	var present bool
 	JustBeforeEach(func() {
 		StartTorpedoTest("LMBeforeColdAddDiskToVM", "Live migrate KubeVirt VM and then cold add a disk", nil, 0)
+		InitTestErrorChannel()
 		app, volType, present = getAppAndVolType()
 		log.InfoD("Setting app for this test to be : %s, Volume Type: %s, Present: %t", app, volType, present)
 	})
@@ -3000,32 +3141,9 @@ var _ = Describe("{LMBeforeColdAddDiskToVM}", Label("p0", "positive", "kubevirt"
 		stepLog = "Get initial uptime of VMs and current nodes"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			var wg sync.WaitGroup
-			for _, appCtx := range appCtxs {
-				wg.Add(1)
-				go func(appCtx *scheduler.Context) {
-					defer GinkgoRecover()
-					defer wg.Done()
-					vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
-					log.FailOnError(err, "Failed to get VMs from appCtx")
-					for _, vm := range vms {
-						vmKey := fmt.Sprintf("%s/%s", vm.Namespace, vm.Name)
-						uptime, err := GetVMUptime(vm)
-						log.FailOnError(err, "Failed to get uptime from VM %s", vm.Name)
-						log.Infof("Initial uptime for VM %s is %v", vmKey, uptime)
-
-						nodeName, err := GetNodeOfVM(vm)
-						log.FailOnError(err, "Failed to get node of VM %v", vm.Name)
-						log.Infof("VM %s is currently running on node %s", vm.Name, nodeName)
-
-						mu.Lock()
-						initialUptime[vmKey] = uptime
-						initialNodeName[vmKey] = nodeName
-						mu.Unlock()
-					}
-				}(appCtx)
-			}
-			wg.Wait()
+			var err error
+			initialUptime, initialNodeName, err = GatherInitialUptimeAndNode(appCtxs)
+			log.FailOnError(err, "Failed to get initial node names and initial uptimes")
 		})
 
 		stepLog = "Live migrate the KubeVirt VM"
@@ -3038,10 +3156,16 @@ var _ = Describe("{LMBeforeColdAddDiskToVM}", Label("p0", "positive", "kubevirt"
 					defer GinkgoRecover()
 					defer wg.Done()
 					err := StartAndWaitForVMIMigration(appCtx, context1.TODO())
-					log.FailOnError(err, "Failed to live migrate KubeVirt VM")
+					if err != nil {
+						LogErrorInTest(fmt.Errorf("Failed to live migrate KubeVirt VM: %v", err))
+						return
+					}
 				}(appCtx)
 			}
 			wg.Wait()
+			if aggregatedErr := ValidateForErrors(); aggregatedErr != nil {
+				log.FailOnError(aggregatedErr, "Failed to live migrate KubeVirt VM")
+			}
 		})
 
 		stepLog = "Validate VMs after migration"
@@ -3054,17 +3178,24 @@ var _ = Describe("{LMBeforeColdAddDiskToVM}", Label("p0", "positive", "kubevirt"
 					defer GinkgoRecover()
 					defer wg.Done()
 					vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
-					log.FailOnError(err, "Failed to get VMs from appCtx")
+					if err != nil {
+						LogErrorInTest(fmt.Errorf("Failed to get VMs from appCtx: %v", err))
+						return
+					}
 					for _, vm := range vms {
 						vmKey := fmt.Sprintf("%s/%s", vm.Namespace, vm.Name)
 						newNodeName, err := GetNodeOfVM(vm)
-						log.FailOnError(err, "Failed to get node of VM %s after migration", vm.Name)
+						if err != nil {
+							LogErrorInTest(fmt.Errorf("Failed to get node of VM %s after migration: %v", vm.Name, err))
+							return
+						}
 						log.Infof("VM %s is now running on node %s after migration", vm.Name, newNodeName)
 						mu.Lock()
 						initialNode := initialNodeName[vmKey]
 						mu.Unlock()
 						if newNodeName == initialNode {
-							log.FailOnError(fmt.Errorf("VM %s did not migrate to a different node", vm.Name), "VM is still on node %s after migration", initialNode)
+							LogErrorInTest(fmt.Errorf("VM %s did not migrate to a different node (still on %s)", vm.Name, initialNode))
+							return
 						} else {
 							log.Infof("VM %s successfully migrated from node %s to node %s", vm.Name, initialNode, newNodeName)
 							mu.Lock()
@@ -3073,11 +3204,17 @@ var _ = Describe("{LMBeforeColdAddDiskToVM}", Label("p0", "positive", "kubevirt"
 						}
 
 						err = CheckVMUptime(vm, initialUptime)
-						log.FailOnError(err, "Failed to validate uptime in VM %s", vm.Name)
+						if err != nil {
+							LogErrorInTest(fmt.Errorf("Failed to validate uptime in VM %s: %v", vm.Name, err))
+							return
+						}
 					}
 				}(appCtx)
 			}
 			wg.Wait()
+			if aggregatedErr := ValidateForErrors(); aggregatedErr != nil {
+				log.FailOnError(aggregatedErr, "Validation after migration failed")
+			}
 		})
 
 		stepLog = "Add one disk to the KubeVirt VM"
@@ -3097,6 +3234,7 @@ var _ = Describe("{LMBeforeColdAddDiskToVM}", Label("p0", "positive", "kubevirt"
 		})
 	})
 	JustAfterEach(func() {
+		ResetErrorChannel()
 		defer EndTorpedoTest()
 		AfterEachTest(appCtxs)
 	})
@@ -3107,6 +3245,7 @@ var _ = Describe("{LMAndColdAddDiskToVMInALoop}", Label("p0", "positive", "kubev
 	var present bool
 	JustBeforeEach(func() {
 		StartTorpedoTest("LMAndColdAddDiskToVMInALoop", "Live migrate and cold add disk to KubeVirt VM multiple times", nil, 0)
+		InitTestErrorChannel()
 		app, volType, present = getAppAndVolType()
 		log.InfoD("Setting app for this test to be : %s, Volume Type: %s, Present: %t", app, volType, present)
 	})
@@ -3158,32 +3297,9 @@ var _ = Describe("{LMAndColdAddDiskToVMInALoop}", Label("p0", "positive", "kubev
 		stepLog = "Get initial uptime of VMs and current nodes"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			var wg sync.WaitGroup
-			for _, appCtx := range appCtxs {
-				wg.Add(1)
-				go func(appCtx *scheduler.Context) {
-					defer GinkgoRecover()
-					defer wg.Done()
-					vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
-					log.FailOnError(err, "Failed to get VMs from appCtx")
-					for _, vm := range vms {
-						vmKey := fmt.Sprintf("%s/%s", vm.Namespace, vm.Name)
-						uptime, err := GetVMUptime(vm)
-						log.FailOnError(err, "Failed to get uptime from VM %s", vm.Name)
-						log.Infof("Initial uptime for VM %s is %v", vmKey, uptime)
-
-						nodeName, err := GetNodeOfVM(vm)
-						log.FailOnError(err, "Failed to get node of VM %v", vm.Name)
-						log.Infof("VM %s is currently running on node %s", vm.Name, nodeName)
-
-						mu.Lock()
-						initialUptime[vmKey] = uptime
-						initialNodeName[vmKey] = nodeName
-						mu.Unlock()
-					}
-				}(appCtx)
-			}
-			wg.Wait()
+			var err error
+			initialUptime, initialNodeName, err = GatherInitialUptimeAndNode(appCtxs)
+			log.FailOnError(err, "Failed to get initial node names and initial uptimes")
 		})
 
 		for i := 1; i <= iterations; i++ {
@@ -3197,10 +3313,16 @@ var _ = Describe("{LMAndColdAddDiskToVMInALoop}", Label("p0", "positive", "kubev
 						defer GinkgoRecover()
 						defer wg.Done()
 						err := StartAndWaitForVMIMigration(appCtx, context1.TODO())
-						log.FailOnError(err, "Failed to live migrate KubeVirt VM")
+						if err != nil {
+							LogErrorInTest(fmt.Errorf("Failed to live migrate KubeVirt VM: %v", err))
+							return
+						}
 					}(appCtx)
 				}
 				wg.Wait()
+				if aggregatedErr := ValidateForErrors(); aggregatedErr != nil {
+					log.FailOnError(aggregatedErr, "Failed to live migrate KubeVirt VM")
+				}
 			})
 
 			stepLog = fmt.Sprintf("Iteration %d: Validate VMs after migration", i)
@@ -3213,18 +3335,25 @@ var _ = Describe("{LMAndColdAddDiskToVMInALoop}", Label("p0", "positive", "kubev
 						defer GinkgoRecover()
 						defer wg.Done()
 						vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
-						log.FailOnError(err, "Failed to get VMs from appCtx")
+						if err != nil {
+							LogErrorInTest(fmt.Errorf("Failed to get VMs from appCtx: %v", err))
+							return
+						}
 						for _, vm := range vms {
 							vmKey := fmt.Sprintf("%s/%s", vm.Namespace, vm.Name)
 							newNodeName, err := GetNodeOfVM(vm)
-							log.FailOnError(err, "Failed to get node of VM %s after migration", vm.Name)
+							if err != nil {
+								LogErrorInTest(fmt.Errorf("Failed to get node of VM %s after migration: %v", vm.Name, err))
+								return
+							}
 							log.Infof("VM %s is now running on node %s after migration", vm.Name, newNodeName)
 							mu.Lock()
 							initialNode := initialNodeName[vmKey]
 							mu.Unlock()
 							if newNodeName == initialNode {
 								failure = true
-								log.FailOnError(fmt.Errorf("VM %s did not migrate to a different node", vm.Name), "VM is still on node %s after migration", initialNode)
+								LogErrorInTest(fmt.Errorf("VM %s did not migrate to a different node (still on %s)", vm.Name, initialNode))
+								return
 							} else {
 								log.Infof("VM %s successfully migrated from node %s to node %s", vm.Name, initialNode, newNodeName)
 								mu.Lock()
@@ -3233,11 +3362,17 @@ var _ = Describe("{LMAndColdAddDiskToVMInALoop}", Label("p0", "positive", "kubev
 							}
 
 							err = CheckVMUptime(vm, initialUptime)
-							log.FailOnError(err, "Failed to validate uptime in VM %s", vm.Name)
+							if err != nil {
+								LogErrorInTest(fmt.Errorf("Failed to validate uptime in VM %s: %v", vm.Name, err))
+								return
+							}
 						}
 					}(appCtx)
 				}
 				wg.Wait()
+				if aggregatedErr := ValidateForErrors(); aggregatedErr != nil {
+					log.FailOnError(aggregatedErr, "Validation after migration failed")
+				}
 			})
 
 			ValidateFioInVMs(appCtxs, canSsh)
@@ -3262,6 +3397,7 @@ var _ = Describe("{LMAndColdAddDiskToVMInALoop}", Label("p0", "positive", "kubev
 		})
 	})
 	JustAfterEach(func() {
+		ResetErrorChannel()
 		defer EndTorpedoTest()
 		AfterEachTest(appCtxs)
 	})
@@ -3281,8 +3417,6 @@ var _ = Describe("{PxKillAfterColdAddDiskToVM}", Label("p1", "negative", "kubevi
 	var namespace string
 	var canSsh bool
 	var initialUptime map[string]time.Duration
-	var initialNodeName map[string]string
-	var mu sync.Mutex
 
 	itLog := "Add Fada Raw disk to KubeVirt VM, Kill Px and then add another disk"
 	It(itLog, func() {
@@ -3330,39 +3464,15 @@ var _ = Describe("{PxKillAfterColdAddDiskToVM}", Label("p1", "negative", "kubevi
 		})
 
 		initialUptime = make(map[string]time.Duration)
-		initialNodeName = make(map[string]string)
 		Step("Get initial uptime of VMs and current nodes", func() {
 			log.InfoD("Get initial uptime of VMs and current nodes")
 			if volType == "windows" {
 				log.InfoD("Skipping initial uptime calculation as volType is windows")
 				return
 			}
-			var wg sync.WaitGroup
-			for _, appCtx := range appCtxs {
-				wg.Add(1)
-				go func(appCtx *scheduler.Context) {
-					defer GinkgoRecover()
-					defer wg.Done()
-					vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
-					log.FailOnError(err, "Failed to get VMs from appCtx")
-					for _, vm := range vms {
-						vmKey := fmt.Sprintf("%s/%s", vm.Namespace, vm.Name)
-						uptime, err := GetVMUptime(vm, canSsh)
-						log.FailOnError(err, "Failed to get uptime from VM %s", vm.Name)
-						log.Infof("Initial uptime for VM %s is %v", vmKey, uptime)
-
-						nodeName, err := GetNodeOfVM(vm)
-						log.FailOnError(err, "Failed to get node of VM %v", vm.Name)
-						log.Infof("VM %s is currently running on node %s", vm.Name, nodeName)
-
-						mu.Lock()
-						initialUptime[vmKey] = uptime
-						initialNodeName[vmKey] = nodeName
-						mu.Unlock()
-					}
-				}(appCtx)
-			}
-			wg.Wait()
+			var err error
+			initialUptime, _, err = GatherInitialUptimeAndNode(appCtxs)
+			log.FailOnError(err, "Failed to get initial node names and initial uptimes")
 		})
 
 		stepLog = "Kill Px on node hosting VM"

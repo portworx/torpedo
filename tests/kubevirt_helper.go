@@ -2222,6 +2222,11 @@ func ColdPlugDataVolumesToKubevirtVM(virtualMachines []*scheduler.Context, numbe
 	var pvcs []*corev1.PersistentVolumeClaim
 	var rawDisk bool
 
+	canSsh := CreateSSHPodAndSetCanSsh() // Ensure SSH pod is created
+	if !canSsh {
+		return false, fmt.Errorf("failed to create ssh pod")
+	}
+
 	for _, appCtx := range virtualMachines {
 		vms, err := GetAllVMsFromScheduledContexts([]*scheduler.Context{appCtx})
 		if err != nil {
