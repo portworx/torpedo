@@ -15337,6 +15337,106 @@ var _ = Describe("{StorageFullPoolResizeWithPxkill}", Label("p0", "staging", "po
 	})
 })
 
+var _ = Describe("{CheckKvdbFailOverAlert}", Label("p0", "staging", "negative", "node_ops"), func() {
+
+	/*
+		    https://purestorage.atlassian.net/browse/HAZEL-1017
+			1. Trigger KVDB Failover
+			2. Validate alerts are coming in for kvdb failover
+	*/
+
+	var nodesNotInKvdbNodes []node.Node
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("CheckKvdbFailOverAlert", "Check proper alerts are raised for etcd failover", nil, 0)
+	})
+
+	itLog := "Create vols and make pool full and kill the px on the node "
+	It(stepLog, func() {
+		log.InfoD(itLog)
+
+		startTime := time.Now()
+		nodes, err := GetStorageNodes()
+		log.FailOnError(err, "failed to get storage nodes")
+
+		log.InfoD("Get all KVDB nodes")
+		kvdbNodes, err := GetAllKvdbNodes()
+		log.FailOnError(err, "Unable to retrieve KVDB nodes")
+		log.Infof("Initally kvdb node in the cluster: [%v]", kvdbNodes)
+		stepLog = "Getting non KVDB nodes in the cluster"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			kvdbNodeMap := make(map[string]bool)
+			for _, kvdbNode := range kvdbNodes {
+				kvdbNodeMap[kvdbNode.ID] = true
+			}
+			for _, storageNode := range nodes {
+				if _, exists := kvdbNodeMap[storageNode.Id]; !exists {
+					nodesNotInKvdbNodes = append(nodesNotInKvdbNodes, storageNode)
+				}
+			}
+			log.Infof("All storage nodes List which are not part of KVDB members: [%v]", nodesNotInKvdbNodes)
+		})
+
+		stepLog = "Add label px/metadata-node=false to the non-kvdb nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, node := range nodesNotInKvdbNodes {
+				err = Inst().S.AddLabelOnNode(node, "px/metadata-node", "false")
+				log.FailOnError(err, "Failed to add label 'px/metadata-node=false' to node [%s]", node.Name)
+				log.Infof("Successfully added label 'px/metadata-node=false' to node [%s]", node.Name)
+			}
+		})
+		defer func() {
+			for _, node := range nodesNotInKvdbNodes {
+				err = Inst().S.RemoveLabelOnNode(node, "px/metadata-node")
+				log.FailOnError(err, "Failed to remove label 'px/metadata-node' on node [%s]", node.Name)
+				log.Infof("Successfully removed label 'px/metadata-node' from node [%s]", node.Name)
+			}
+		}()
+
+		kvdbNodeSelected := kvdbNodes[0]
+		kvdbFailedNode, err := node.GetNodeDetailsByNodeID(kvdbNodeSelected.ID)
+		log.FailOnError(err, "Unable to retrieve node details for NodeID [%v]", kvdbNodeSelected.ID)
+
+		stepLog = "Bring down one KVDB node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			StopVolDriverAndWait([]node.Node{kvdbFailedNode})
+		})
+		defer func() {
+			stepLog = "Bring up the failed KVDB node"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				StartVolDriverAndWait([]node.Node{kvdbFailedNode})
+			})
+		}()
+
+		time.Sleep(1 * time.Minute) //wait some time for alerts to be generated
+
+		stepLog = "Verify alerts for kvdb failover"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			endTime := time.Now()
+			alerts, err := Inst().V.GetAlertsUsingResourceTypeByTime(api.ResourceType_RESOURCE_TYPE_NODE, startTime, endTime)
+			log.FailOnError(err, fmt.Sprintf("failed to get alerts for node resource type from %v till %v", startTime, endTime))
+
+			isAlertFound := false
+			for _, alert := range alerts.GetAlerts() {
+				if alert.ResourceId == kvdbFailedNode.Id {
+					isAlertFound = true
+					break
+				}
+			}
+			dash.VerifyFatal(isAlertFound, true, "verify alert contains the kvdb failed node id")
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
 var _ = Describe("{HAIncreasePoolExpandAddDisk}", Label("p0", "positive", "px_vol_ops", "pool_ops", "PoolExpand", "HA_Increase_Decrease"), func() {
 	/*
 		https://purestorage.atlassian.net/browse/HAZEL-1024
