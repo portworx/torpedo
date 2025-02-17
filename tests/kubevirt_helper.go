@@ -2410,3 +2410,197 @@ func GenericStartAndWaitForVMMigration(vm kubevirtv1.VirtualMachine, ctx context
 	}
 	return nil
 }
+
+func GenericHotPlugDataVolumesToKubevirtVM(vm kubevirtv1.VirtualMachine, numberOfDVs int, size string, volumeMode string, persist bool) (bool, error) {
+	var (
+		newDiskCount     int
+		initialDiskCount int
+	)
+	log.InfoD("Beginning hot-plug of [%d] DataVolume(s) to each VM (size=%s, volumeMode=%s)",
+		numberOfDVs, size, volumeMode)
+
+	storageClass, err := GetGenericStorageClassOfVm(vm)
+	if err != nil {
+		return false, fmt.Errorf("failed to get storage class for VM [%s/%s]: %v", vm.Namespace, vm.Name, err)
+	}
+	log.Infof("Using storageClass=[%s] for new DataVolumes for VM [%s/%s]", storageClass, vm.Namespace, vm.Name)
+
+	//Determine if the VM is a Windows VM
+	isWindows, err := IsWindowsVM(vm)
+	if err != nil {
+		return false, fmt.Errorf("failed to check if VM [%s] is windows: %v", vm.Name, err)
+	}
+	log.Infof("Is selected VM [%v] windows VM ? [%v]", vm.Name, isWindows)
+
+	if !isWindows {
+		err = WaitForVMToBeReady(vm.Name, vm.Namespace)
+		if err != nil {
+			return false, fmt.Errorf("VM [%s/%s] not ready: %v", vm.Namespace, vm.Name, err)
+		}
+	}
+
+	if !isWindows {
+		initialDiskCount, err = GetNumberOfDrivesInVM(vm)
+		if err != nil {
+			return false, fmt.Errorf("failed to get initial number of disks in VM [%s]: %v", vm.Name, err)
+		}
+		log.Infof("Initial number of disks in VM [%s]: %d", vm.Name, initialDiskCount)
+	}
+
+	for i := 0; i < numberOfDVs; i++ {
+		dvName := fmt.Sprintf("hotplug-dv-%s-%v-%d", vm.Name, time.Now().Unix(), i)
+		log.Infof("Creating blank DataVolume [%s/%s] with size=[%s]", vm.Namespace, dvName, size)
+
+		dv, err := CreateBlankDataVolume(vm.Namespace, dvName, storageClass, size, volumeMode)
+		if err != nil {
+			return false, fmt.Errorf("failed to create DV [%s/%s]: %v", vm.Namespace, dvName, err)
+		}
+		log.Infof("Data Volume Created. Hard Sleep for 30 seconds for DV to settle down")
+		time.Sleep(30 * time.Second)
+		// send signal to start the reboot operation of PX or Node reboot during hot-plug disk
+		if RebootFlag != nil && !SignalSent {
+			log.Infof("Reboot flag initiated during hot-plug")
+			RebootFlag <- struct{}{}
+			SignalSent = true
+		}
+		err = HotPlugDVToVM(vm.Name, vm.Namespace, dv.Name, persist)
+		if err != nil {
+			return false, fmt.Errorf("failed to hotplug DV [%s/%s] into VM [%s/%s]: %v",
+				dv.Namespace, dv.Name, vm.Namespace, vm.Name, err)
+		}
+		err = WaitForHotplugVolumeReady(vm.Namespace, vm.Name, dv.Name, 5*time.Minute, 10*time.Second)
+		if err != nil {
+			return false, fmt.Errorf(
+				"failed waiting for DV [%s/%s] to become Ready in VM [%s/%s]: %v",
+				vm.Namespace, dv.Name, vm.Namespace, vm.Name, err,
+			)
+		}
+		log.Infof("Successfully hot-plugged DV [%s/%s] into VM [%s/%s]", dv.Namespace, dv.Name, vm.Namespace, vm.Name)
+	}
+
+	if !isWindows {
+		t := func() (interface{}, bool, error) {
+			newDiskCount, err = GetNumberOfDrivesInVM(vm)
+			if err != nil {
+				return nil, true, err
+			}
+			if newDiskCount < initialDiskCount+numberOfDVs {
+				return nil, true, fmt.Errorf(
+					"Expected at least [%d] disks, found only [%d]",
+					initialDiskCount+numberOfDVs, newDiskCount)
+			}
+			return newDiskCount, false, nil
+		}
+		log.Infof("Number of disks after adding Hot Pluggable disk [%v] vs initial disks before adding disk [%v]", newDiskCount, initialDiskCount)
+		_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 20*time.Second)
+		if err != nil {
+			return false, fmt.Errorf("failed to confirm new disks in VM [%s/%s]: %v", vm.Namespace, vm.Name, err)
+		}
+	}
+	log.Infof("Total number of disks after adding Hot Pluggable disk [%v] and total number of disks before adding Hot pluggable disk [%v] ", newDiskCount, initialDiskCount)
+	return true, nil
+}
+
+func GetGenericStorageClassOfVm(vm kubevirtv1.VirtualMachine) (string, error) {
+	// Get all PVCs in the VM namespace
+	pvcs, err := core.Instance().GetPersistentVolumeClaims(vm.Namespace, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch PVCs in namespace [%s]: [%v]", vm.Namespace, err)
+	}
+
+	// Iterate through PVCs to find the storage class
+	for _, pvc := range pvcs.Items {
+		scName, err := core.Instance().GetStorageClassForPVC(&pvc)
+		if err != nil {
+			log.Warnf("Failed to get storage class for PVC [%s] in namespace [%s]: %v", pvc.Name, vm.Namespace, err)
+			continue
+		}
+		if scName.Name != "" {
+			return scName.Name, nil // Return first valid storage class found
+		}
+	}
+
+	return "", fmt.Errorf("Failed to get storage class attached to VM [%v] in namespace [%s]", vm, vm.Namespace)
+}
+
+func IsWindowsVM(vm kubevirtv1.VirtualMachine) (bool, error) {
+	// Check if VM has a valid spec
+	if vm.Spec.Template.Spec.Volumes == nil {
+		return false, fmt.Errorf("Invalid VM spec: volumes list is nil for VM [%s]", vm.Name)
+	}
+
+	// Check if the VM name suggests it's Windows
+	if strings.Contains(strings.ToLower(vm.Name), "win") {
+		log.Infof("Identified Windows VM by name: %s", vm.Name)
+		return true, nil
+	}
+
+	// Check labels safely
+	if vm.Labels == nil {
+		return false, fmt.Errorf("Invalid VM metadata: labels are nil for VM [%s]", vm.Name)
+	}
+	if val, ok := vm.Labels["kubevirt.io/domain"]; ok {
+		if strings.Contains(strings.ToLower(val), "win") {
+			log.Infof("Identified Windows VM by label: %s", val)
+			return true, nil
+		}
+	}
+
+	// Check volume names for Windows indicators
+	for _, volume := range vm.Spec.Template.Spec.Volumes {
+		if strings.Contains(strings.ToLower(volume.Name), "win") {
+			log.Infof("Identified Windows VM by volume name: %s", volume.Name)
+			return true, nil
+		}
+	}
+
+	// Default: Not a Windows VM
+	return false, nil
+}
+
+func GetGenericVolumeModeOfVmPVC(vm kubevirtv1.VirtualMachine) (corev1.PersistentVolumeMode, error) {
+	namespace := vm.Namespace
+
+	pvcs, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
+	if err != nil {
+		return "", err
+	}
+
+	for _, pvc := range pvcs.Items {
+		volumeMode := corev1.PersistentVolumeFilesystem
+		if pvc.Spec.VolumeMode != nil {
+			volumeMode = *pvc.Spec.VolumeMode
+		}
+		log.Infof("VolumeMode [%v] for PVC[%v] in namespace [%v]", volumeMode, pvc.Name, vm.Namespace)
+		return volumeMode, nil
+	}
+
+	return "", fmt.Errorf("Failed to find volume mode for VM [%v] in namespace [%v]", vm.Name, namespace)
+}
+
+func GenericValidateFioInVM(vm kubevirtv1.VirtualMachine, canSsh bool) {
+	if canSsh {
+		stepLog := "Validate fio is running in the VM"
+		Step(stepLog, func() {
+			log.InfoD(stepLog) // Log step execution
+			err := CheckFioIsRunningInVM(vm)
+			if LogAndReturnIfErr(err, "Failed to validate fio in VM [%s], Error: [%v]", vm.Name, err) {
+				return
+			}
+		})
+	}
+}
+
+func GenericValidateVMUptime(vm kubevirtv1.VirtualMachine,canSsh bool, initialUptime map[string]time.Duration){
+	if canSsh{
+		stepLog := "Validate VMs have not restarted"
+		Step(stepLog,func() {
+			log.InfoD(stepLog)
+			err := CheckVMUptime(vm, initialUptime)
+			if LogAndReturnIfErr(err,"Failed to validate uptimein VM [%v]: [%v]",vm.Name,err){
+				return
+			}
+		})
+	}
+}
+

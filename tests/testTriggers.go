@@ -312,6 +312,9 @@ var defragScheduleID string
 var logMap = make(map[string]*lumberjack.Logger)
 var mutex sync.Mutex
 
+// to track number of Hot pluggable disks added to Kubevirt VM
+var vmHotAddDiskCount = make(map[string]int)
+
 // Event describes type of test trigger
 type Event struct {
 	ID   string
@@ -756,6 +759,9 @@ const (
 
 	// Cold add disk to kubevirt VM
 	ColdAddDiskToKubevirtVM = "coldAddDiskToKubevirtVM"
+
+	//Adds Hot pluggable disk to Kubevirt VM including existing VMs
+	GenericHotPluggableDiskToKubevirtVM = "genericHotPluggableDiskToKubevirtVM"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -16212,4 +16218,113 @@ func TriggerColdAddDiskToKubevirtVM(contexts *[]*scheduler.Context, recordChan *
 	if isSSIERun() {
 		validateContexts(event, contexts)
 	}
+}
+
+// TriggerGenericColdAddDiskToKubevirtVM adds cold add disk to a KubeVirt VM including the existing VMs
+func TriggerGenericHotPluggableDiskToKubevirtVM(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(GenericHotPluggableDiskToKubevirtVM)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: GenericHotPluggableDiskToKubevirtVM,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+	initialUptime := make(map[string]time.Duration)
+
+	var (
+		app        string
+		canSsh     bool
+		selectedVM kubevirtv1.VirtualMachine
+	)
+
+	stepLog := "Add Hot pluggable disk to a KubeVirt VM"
+	Step(stepLog, func() {
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		if err != nil {
+			UpdateOutcome(event, err)
+			log.FailOnError(err, "Failed to get volume driver namespace")
+		}
+		defer ListEvents(pxNs)
+
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+
+		numberOfVolumes := 1
+		Inst().AppList = []string{app}
+		Inst().CsiAppList = []string{app}
+
+		stepLog := "Fetching KubeVirt VMs and selecting random VM for adding Hot pluggabble dsik kubevirt VM"
+		Step(stepLog, func() {
+			vms, err := GetAllVMsFromAllNamespaces()
+			if err != nil {
+				UpdateOutcome(event, err)
+				log.FailOnError(err, "Failed to get VMs")
+				return
+			}
+			if len(vms) == 0 {
+				err = fmt.Errorf("No VMs found")
+				UpdateOutcome(event, err)
+				log.FailOnError(err, "No VMs found")
+				return
+			}
+			log.Infof("Total number of VMs : [%v]", len(vms))
+			randomIndex := rand.Intn(len(vms))
+			selectedVM = vms[randomIndex]
+			log.Infof("Selected VM [%v] in namespace [%v] for Hot pluggable disk", selectedVM.Name, selectedVM.Namespace)
+		})
+
+		//Performing VM uptime and Fio validations for other than windows app
+		if !strings.Contains(app, "windows") {
+			canSsh = CreateSSHPodAndSetCanSsh()
+			uptime, err := GetVMUptime(selectedVM, canSsh)
+			log.FailOnError(err, "Failed to get uptime from VM %s", selectedVM.Name)
+			vmKey := fmt.Sprintf("%s/%s", selectedVM.Namespace, selectedVM.Name)
+			initialUptime[vmKey] = uptime
+			log.Infof("Initial uptime for VM [%s] is [%v]", vmKey, uptime)
+			GenericValidateFioInVM(selectedVM, canSsh)
+		}
+
+		//Adding Hot pluggable disk of max 3 disks to a Kubevirt VM
+		stepLog = "Add Hot pluggable disk to KubeVirt VM"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			if vmHotAddDiskCount[selectedVM.Name] < 3 { //Max of 3 Hot disk check
+				numberOfVolumes = 1
+				// Get VolumeMode based on the VM
+				volumeMode, err := GetGenericVolumeModeOfVmPVC(selectedVM)
+				if err != nil {
+					log.FailOnError(err, "Failed to get volumeMode for VM [%v]", selectedVM)
+				}
+				log.Infof(" For VM [%v] Volume mode is [%v]", selectedVM.Name, volumeMode)
+				
+				isHotPlugged, err := GenericHotPlugDataVolumesToKubevirtVM(selectedVM, numberOfVolumes, "50Gi", string(volumeMode), false)
+				vmHotAddDiskCount[selectedVM.Name]++ 
+				
+				log.Infof("For selected VM [%v], the number of Hot pluggable disks count is [%v]", selectedVM.Name, vmHotAddDiskCount[selectedVM.Name])
+				log.FailOnError(err, "Failed to add Hot pluggable disk to KubeVirt VM")
+				dash.VerifyFatal(isHotPlugged, true, "Successfully added Hot pluggable disk to KubeVirt VM ?")
+			} else {
+				log.Infof("For selected VM [%v], Number of Hot Pluggable disks has recahed its maximum capacity [%v]",
+				selectedVM.Name, vmHotAddDiskCount[selectedVM.Name])
+			}
+
+		})
+
+		if !strings.Contains(app, "windows") {
+			GenericValidateFioInVM(selectedVM, canSsh)
+			GenericValidateVMUptime(selectedVM, canSsh, initialUptime)
+		}
+		updateMetrics(*event)
+	})
 }
