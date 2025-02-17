@@ -15422,6 +15422,265 @@ var _ = Describe("{StorageFullPoolResizeWithPxkill}", Label("p0", "staging", "po
 	})
 })
 
+var _ = Describe("{HAIncreaseMetadataPoolExpandAddDisk}", Label("p0", "positive", "px_vol_ops", "pool_ops", "PoolExpand", "HA_Increase_Decrease"), func() {
+	/*
+		https://purestorage.atlassian.net/browse/HAZEL-1025
+		1. Create Apps
+		2. Trigger HA increase on 20 volumes in parallel
+		3. While HA increase is happening, add a drive to metadata pool on atleast 3 nodes
+		4. Validate apps
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("HAIncreaseMetadataPoolExpandAddDisk", "Add drive to metadata pool while HA increase is in progress on the metadata pool", nil, 0)
+	})
+	type volHAIncreaseInfo struct {
+		volID  string
+		nodeID string
+		poolID string
+	}
+	var (
+		contexts                    []*scheduler.Context
+		metadataPoolsWithHAIncrease map[string]string
+		vols                        []*volume.Volume
+		fioVolList                  map[string]*volume.Volume
+		wg                          sync.WaitGroup
+	)
+
+	itLog := "Drive add while HA increase is in progress"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		isPoolAddDiskSupported := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			Skip("Add disk operation is not supported for DMThin Setup")
+		}
+		applist := Inst().AppList
+		defer func() {
+			Inst().AppList = applist
+		}()
+
+		stepLog := "Create nginx and fio apps"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			//create app nginx
+			Inst().AppList = []string{"nginx"}
+			for i := 0; i < 15; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("createmultiplevols-nginx-%d", i))...)
+			}
+			//create app fio
+			Inst().AppList = []string{"fio"}
+			for i := 0; i < 1; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("createmultiplevols-fio-%d", i))...)
+			}
+			ValidateApplications(contexts)
+		})
+		defer DestroyApps(contexts, nil)
+
+		fioVolList = make(map[string]*volume.Volume)
+		for _, eachContext := range contexts {
+			appVolumes, err := Inst().S.GetVolumes(eachContext)
+			log.FailOnError(err, "Failed to get volumes from context %s", eachContext.App.Key)
+
+			for _, eachVol := range appVolumes {
+				if strings.Contains(eachVol.Name, "fio") {
+					if strings.Contains(eachVol.Name, "log") {
+						continue
+					}
+					fioVolList[eachVol.ID] = eachVol
+				}
+				vols = append(vols, eachVol)
+			}
+		}
+
+		setReplOnVolumes := func(vol *volume.Volume, wg *sync.WaitGroup, setReplErrChan chan error, volHaIncreaseInfoChan chan volHAIncreaseInfo) {
+			defer wg.Done()
+			defer GinkgoRecover()
+			var nodeToBeUpdated *node.Node
+			var poolToBeUpdated string
+			curReplSet, err := Inst().V.GetReplicationFactor(vol)
+			if err != nil {
+				err = fmt.Errorf("failed to get repl factor for the volume %s , err - %v", vol.ID, err)
+				setReplErrChan <- err
+				return
+			}
+
+			// Check if Replication factor is 3. if so, then reduce the repl factor and then set repl factor to 2
+			if curReplSet == 3 {
+				inspectVol, err := Inst().V.InspectVolume(vol.ID)
+				if err != nil {
+					fmt.Errorf("Failed to inspect volume: %v , err - %v", vol.ID, err)
+					setReplErrChan <- err
+					return
+				}
+				replicaSets := inspectVol.ReplicaSets
+				replicaset := replicaSets[len(replicaSets)-1]
+				nodeToBeUpdated, err = GetNodeWithGivenPoolID(replicaset.PoolUuids[0])
+				if err != nil {
+					err = fmt.Errorf("failed to get the node details for the pool %s , err - %v", replicaset.PoolUuids[0], err)
+					setReplErrChan <- err
+					return
+				}
+
+				poolToBeUpdated = replicaset.PoolUuids[0]
+				log.InfoD("Node selected for pool expand: %v , for volume: %s", nodeToBeUpdated.Id, vol.ID)
+				log.InfoD("pool selected for pool expand: %v , for volume: %s", poolToBeUpdated, vol.ID)
+
+				newRepl := int64(curReplSet - 1)
+				err = Inst().V.SetReplicationFactor(vol, newRepl, []string{nodeToBeUpdated.Id}, []string{poolToBeUpdated}, true)
+				if err != nil {
+					err = fmt.Errorf("Failed to set Replicaiton factor for the vol %s to %d , err - %v", vol.ID, newRepl, err)
+					setReplErrChan <- err
+					return
+				}
+			} else {
+				// pick nodes which are not in replicaset
+				inspectVol, err := Inst().V.InspectVolume(vol.ID)
+				if err != nil {
+					err = fmt.Errorf("Failed to inspect volume: %v , err - %v", vol.ID, err)
+					setReplErrChan <- err
+					return
+				}
+				replicaSets := inspectVol.ReplicaSets
+				found := false
+				//pick a node which is not present in replicaset
+				for _, n := range replicaSets {
+					for _, storageNode := range node.GetStorageNodes() {
+						for _, node := range n.Nodes {
+							if storageNode.Id == node {
+								found = true
+								break
+							}
+						}
+						if !found {
+							nodeToBeUpdated = &storageNode
+							break
+						}
+						found = false
+					}
+				}
+				log.InfoD("Node selected: %v , for the volume: %s", nodeToBeUpdated.Id, vol.ID)
+			}
+
+			poolToBeUpdated, err = GetPoolUUIDWithMetadataDisk(*nodeToBeUpdated)
+			if err != nil {
+				err = fmt.Errorf("error identifying pool with metadata disk from the node [%v]", nodeToBeUpdated.Name)
+				setReplErrChan <- err
+				return
+			}
+			log.InfoD("Pool selected: %v , for the volume: %s", poolToBeUpdated, vol.ID)
+
+			var maxReplicaFactor int64
+			maxReplicaFactor = 3
+			err = Inst().V.SetReplicationFactor(vol, maxReplicaFactor, []string{nodeToBeUpdated.Id}, []string{poolToBeUpdated}, false)
+			if err != nil {
+				err = fmt.Errorf("Failed to set Replicaiton factor for the volume %s , err - %v", vol.ID, err)
+				setReplErrChan <- err
+				return
+			}
+			log.Infof("Updated repl to %d on the volume %s successfully", int(maxReplicaFactor), vol.ID)
+
+			obj := volHAIncreaseInfo{
+				volID:  vol.ID,
+				nodeID: nodeToBeUpdated.Id,
+				poolID: poolToBeUpdated,
+			}
+			volHaIncreaseInfoChan <- obj
+		}
+
+		volHaIncreaseInfoChan := make(chan volHAIncreaseInfo, len(vols))
+		stepLog = "HA increase on all the app volumes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			batchSize := 4
+			for i := 0; i < len(vols); i += batchSize {
+				n := i + batchSize
+				if n > len(vols) {
+					n = len(vols)
+				}
+
+				setReplErrChan := make(chan error, batchSize)
+				for _, vol := range vols[i:n] {
+					wg.Add(1)
+					go setReplOnVolumes(vol, &wg, setReplErrChan, volHaIncreaseInfoChan)
+				}
+				wg.Wait()
+				close(setReplErrChan)
+				for err := range setReplErrChan {
+					log.FailOnError(err, "failed to set repl factor to 3")
+				}
+			}
+		})
+
+		close(volHaIncreaseInfoChan)
+		stepLog = "Verify volume replica are in resync state"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			metadataPoolsWithHAIncrease = make(map[string]string, len(vols))
+			for obj := range volHaIncreaseInfoChan {
+				if _, ok := fioVolList[obj.volID]; !ok {
+					continue
+				}
+				vol := fioVolList[obj.volID]
+				log.Infof("Verifying resync status on the volume %s", vol.ID)
+				t := func() (interface{}, bool, error) {
+					volDetails, err := Inst().V.InspectVolume(vol.ID)
+					if err != nil {
+						return nil, true, fmt.Errorf("error getting volume by using id %s", vol.ID)
+					}
+					resync := false
+					replicaStatus := ""
+					for _, v := range volDetails.RuntimeState {
+						replicaStatus = v.GetRuntimeState()["RuntimeState"]
+						log.InfoD("RuntimeState is in state %s", replicaStatus)
+						if replicaStatus == "resync" {
+							resync = true
+						}
+					}
+					if resync {
+						return fmt.Sprintf("Volume resync has started"), false, nil
+					}
+					return nil, true, fmt.Errorf("volume is not in resync state , got replication status %s", replicaStatus)
+				}
+				_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
+				log.FailOnError(err, fmt.Sprintf("volume %s not in resync state", vol.ID))
+				metadataPoolsWithHAIncrease[obj.nodeID] = obj.poolID
+			}
+		})
+
+		log.Infof("Unique list of pools where HA increase is going on : %v", metadataPoolsWithHAIncrease)
+		dash.VerifyFatal(len(metadataPoolsWithHAIncrease) >= 3, true, "verify atleast three nodes are identified for HA increase on metadata pools")
+
+		stepLog = "Pool expand add disk trigger"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, poolID := range metadataPoolsWithHAIncrease {
+				pool, err := GetStoragePoolByUUID(poolID)
+				log.FailOnError(err, "Failed to get pool using UUID %s", poolID)
+
+				drvSize, err := getPoolDiskSize(pool)
+				log.FailOnError(err, "error getting drive size for pool [%s]", poolID)
+				expectedSize := (pool.TotalSize / units.GiB) + drvSize
+				expectedSize = roundUpValue(expectedSize)
+				isjournal, err := IsJournalEnabled()
+				log.FailOnError(err, "Failed to check is journal enabled")
+				err = Inst().V.ExpandPool(poolID, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
+				log.FailOnError(err, "Failed to initiate pool resize")
+
+				//wait for pool expand to complete
+				err = waitForPoolToBeResized(expectedSize, poolID, isjournal)
+				log.FailOnError(err, "Failed to wait for pool to be resized")
+				log.InfoD("Successfully expanded the pool with add disk pool id: %s", poolID)
+			}
+		})
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
 var _ = Describe("{CheckKvdbFailOverAlert}", Label("p0", "staging", "negative", "node_ops"), func() {
 
 	/*
