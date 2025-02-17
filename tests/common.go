@@ -9764,7 +9764,7 @@ func GetPoolExpansionEligibility(stNode *node.Node, expandType opsapi.SdkStorage
 	}
 
 	currentNodeDrives = GetNodeDrivesCount(drivesMap)
-	
+
 	eligibilityMap := make(map[string]bool)
 
 	log.Infof("Node %s has total drives %d", stNode.Name, currentNodeDrives)
