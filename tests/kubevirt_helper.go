@@ -2375,6 +2375,8 @@ func GenericStartAndWaitForVMMigration(vm kubevirtv1.VirtualMachine, ctx context
 	}
 	log.Infof("VM [%v] in namespace [%v] is scheduled on node [%v]", vm.Name, vm.Namespace, nodeName)
 
+	startTime := time.Now()
+
 	migration, err := kubevirtdy.Instance().CreateVirtualMachineInstanceMigration(ctx, vm.Namespace, vm.Name)
 	if err != nil {
 		return err
@@ -2402,6 +2404,9 @@ func GenericStartAndWaitForVMMigration(vm kubevirtv1.VirtualMachine, ctx context
 	}
 	log.Infof("Sleeping for 10 seconds for the migration to complete")
 	time.Sleep(10 * time.Second)
+
+	duration := time.Since(startTime)
+	log.Infof("VM migration for VM [%v] in namespace [%v] is completed in [%.2f] seconds",vm,vm.Namespace,duration)
 
 	//Validate Migration
 	err = ValidateVMMigration(vm, nodeName)
@@ -2604,3 +2609,94 @@ func GenericValidateVMUptime(vm kubevirtv1.VirtualMachine,canSsh bool, initialUp
 	}
 }
 
+
+func GenericColdPlugDataVolumesToKubevirtVM(vm kubevirtv1.VirtualMachine, numberOfDisks int, size string) (bool, error) {
+	var pvcs []*corev1.PersistentVolumeClaim
+	var rawDisk bool
+	var initialDiskCount int
+
+	storageClass, err := GetGenericStorageClassOfVm(vm)
+	if err != nil {
+		return false, fmt.Errorf("Failed to get storage class for VM [%v]: [%v]", vm.Name, err)
+	}
+	log.Infof("Storage class for VM [%v]: [%v]", vm.Name, storageClass)
+
+	// Get VolumeMode using the new function
+	volumeMode, err := GetGenericVolumeModeOfVmPVC(vm)
+	if err != nil {
+		return false, fmt.Errorf("Failed to get volume mode for VM [%v]: [%v]", vm.Name, err)
+	}
+	log.Infof("Volume mode for VM [%v]: [%v]", vm.Name, volumeMode)
+
+	// Determine if VM needs raw disk based on volumeMode
+	if strings.Contains(string(volumeMode), "Block") {
+		rawDisk = true
+	} else {
+		rawDisk = false
+	}
+
+	isWindows, err := IsWindowsVM(vm)
+	if err != nil {
+		return false, fmt.Errorf("Failed to check if VM [%v] is windows: [%v]", vm.Name, err)
+	}
+	log.Infof("Is selected VM [%v] windows VM ? [%v]", vm.Name, isWindows)
+	// Get initial number of disks
+	if !isWindows {
+		initialDiskCount, err = GetNumberOfDrivesInVM(vm)
+		if err != nil {
+			return false, fmt.Errorf("Failed to get initial number of disks in VM [%s]: [%v]", vm.Name, err)
+		}
+		log.Infof("Initial number of disks in VM [%s]: [%d]", vm.Name, initialDiskCount)
+	}
+
+	// Create PVCs based on storage mode
+	if rawDisk {
+		log.Infof("Creating block mode PVCs for VM [%s]", vm.Name)
+		pvcs, err = CreateBlockModePVCsForVM(vm, numberOfDisks, storageClass, size, corev1.PersistentVolumeBlock)
+	} else {
+		log.Infof("Creating filesystem mode PVCs for VM [%s]", vm.Name)
+		pvcs, err = CreatePVCsForVM(vm, numberOfDisks, storageClass, size)
+	}
+	if err != nil {
+		return false, fmt.Errorf("Failed to create PVCs for VM [%s]: %v", vm.Name, err)
+	}
+
+	// Attach PVCs to the VM
+	err = AddPVCsToVirtualMachine(vm, pvcs)
+	if err != nil {
+		return false, fmt.Errorf("Failed to attach PVCs to VM [%s]: [%v]", vm.Name, err)
+	}
+
+	// Restart the VM
+	err = RestartKubevirtVM(vm.Name, vm.Namespace, true)
+	if err != nil {
+		return false, fmt.Errorf("Failed to restart VM [%s]: [%v]", vm.Name, err)
+	}
+
+	// Wait for VM to become ready
+	err = WaitForVMToBeReady(vm.Name, vm.Namespace)
+	if err != nil {
+		return false, fmt.Errorf("VM [%s] did not become ready: [%v]", vm.Name, err)
+	}
+
+	// Verify the number of disks has increased
+	if !isWindows {
+		expectedDiskCount := initialDiskCount + numberOfDisks
+		t := func() (interface{}, bool, error) {
+			newDiskCount, err := GetNumberOfDrivesInVM(vm)
+			if err != nil {
+				return nil, true, err
+			}
+			if newDiskCount != expectedDiskCount {
+				return nil, true, fmt.Errorf("Number of disks in VM [%s] is [%d]; expected %d", vm.Name, newDiskCount, expectedDiskCount)
+			}
+			return newDiskCount, false, nil
+		}
+		_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
+		if err != nil {
+			return false, fmt.Errorf("Failed to verify number of disks in VM [%s]: [%v]", vm.Name, err)
+		}
+		log.Infof("Successfully verified number of disks in VM [%s]", vm.Name)
+	}
+	return true, nil
+}

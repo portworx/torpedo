@@ -1339,10 +1339,13 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options sch
 
 	for _, appSpec := range app.SpecList {
 		t := func() (interface{}, bool, error) {
+			startTime := time.Now()
 			obj, err := k.createVirtualMachineObjects(appSpec, ns, app)
 			if err != nil {
 				return nil, true, err
 			}
+			duration := time.Since(startTime)
+			log.Infof("Total time taken to clone disk and bringing up VM is [%.2f]seconds ",duration)
 			return obj, false, nil
 		}
 		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)

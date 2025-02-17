@@ -436,6 +436,7 @@ func populateTriggerFuncs() {
     	AsyncDRKVDBFailoverSource:           TriggerAsyncDRKVDBFailoverSource,
 		ColdAddDiskToKubevirtVM:             TriggerColdAddDiskToKubevirtVM,
 		GenericHotPluggableDiskToKubevirtVM: TriggerGenericHotPluggableDiskToKubevirtVM,
+		GenericColdAddDiskToKubevirtVM:      TriggerGenericColdAddDiskToKubevirtVM,
 	}
 
 	//Creating a distinct trigger to make sure email triggers at regular intervals
@@ -979,6 +980,7 @@ func populateIntervals() {
   	triggerInterval[AsyncDRKVDBFailoverSource] = make(map[int]time.Duration)
 	triggerInterval[ColdAddDiskToKubevirtVM] = make(map[int]time.Duration)
 	triggerInterval[GenericHotPluggableDiskToKubevirtVM] = make(map[int]time.Duration)
+	triggerInterval[GenericColdAddDiskToKubevirtVM] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -2342,6 +2344,17 @@ func populateIntervals() {
 	triggerInterval[GenericHotPluggableDiskToKubevirtVM][2] = 24 * baseInterval
 	triggerInterval[GenericHotPluggableDiskToKubevirtVM][1] = 27 * baseInterval
 
+	triggerInterval[GenericColdAddDiskToKubevirtVM][10] = 1 * baseInterval
+	triggerInterval[GenericColdAddDiskToKubevirtVM][9] = 3 * baseInterval
+	triggerInterval[GenericColdAddDiskToKubevirtVM][8] = 6 * baseInterval
+	triggerInterval[GenericColdAddDiskToKubevirtVM][7] = 9 * baseInterval
+	triggerInterval[GenericColdAddDiskToKubevirtVM][6] = 12 * baseInterval
+	triggerInterval[GenericColdAddDiskToKubevirtVM][5] = 15 * baseInterval
+	triggerInterval[GenericColdAddDiskToKubevirtVM][4] = 18 * baseInterval
+	triggerInterval[GenericColdAddDiskToKubevirtVM][3] = 21 * baseInterval
+	triggerInterval[GenericColdAddDiskToKubevirtVM][2] = 24 * baseInterval
+	triggerInterval[GenericColdAddDiskToKubevirtVM][1] = 27 * baseInterval
+
 	// Chaos Level of 0 means disable test trigger
 	triggerInterval[DeployApps][0] = 0
 	triggerInterval[RebootNode][0] = 0
@@ -2462,6 +2475,7 @@ func populateIntervals() {
 	triggerInterval[ColdAddDiskToKubevirtVM][0] = 0
 
 	triggerInterval[GenericHotPluggableDiskToKubevirtVM] [0] = 0
+	triggerInterval[GenericColdAddDiskToKubevirtVM][0] = 0
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {

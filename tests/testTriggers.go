@@ -762,6 +762,9 @@ const (
 
 	//Adds Hot pluggable disk to Kubevirt VM including existing VMs
 	GenericHotPluggableDiskToKubevirtVM = "genericHotPluggableDiskToKubevirtVM"
+
+	//Add Cold pluggable disk to kubevirt VM including exisiting VMs
+	GenericColdAddDiskToKubevirtVM = "genericColdAddDiskToKubevirtVM"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -16324,6 +16327,90 @@ func TriggerGenericHotPluggableDiskToKubevirtVM(contexts *[]*scheduler.Context, 
 		if !strings.Contains(app, "windows") {
 			GenericValidateFioInVM(selectedVM, canSsh)
 			GenericValidateVMUptime(selectedVM, canSsh, initialUptime)
+		}
+		updateMetrics(*event)
+	})
+}
+
+// TriggerGenericColdAddDiskToKubevirtVM adds cold add disk to a KubeVirt VM including the existing VMs
+func TriggerGenericColdAddDiskToKubevirtVM(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(GenericColdAddDiskToKubevirtVM)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: GenericColdAddDiskToKubevirtVM,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+
+	var (
+		app        string
+		canSsh     bool
+		selectedVM kubevirtv1.VirtualMachine
+	)
+
+	stepLog := "Cold add disk to a KubeVirt VM"
+	Step(stepLog, func() {
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		if err != nil {
+			UpdateOutcome(event, err)
+			log.FailOnError(err, "Failed to get volume driver namespace")
+		}
+		defer ListEvents(pxNs)
+
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+
+		numberOfVolumes := 1
+		Inst().AppList = []string{app}
+		Inst().CsiAppList = []string{app}
+
+		stepLog := "Fetching KubeVirt VMs and selecting random VM for cold add disk to kubevirt VM"
+		Step(stepLog, func() {
+			vms, err := GetAllVMsFromAllNamespaces()
+			if err != nil {
+				UpdateOutcome(event, err)
+				log.FailOnError(err, "Failed to get VMs from appCtx")
+				return
+			}
+			if len(vms) == 0 {
+				err = fmt.Errorf("No VMs found")
+				UpdateOutcome(event, err)
+				log.FailOnError(err, "No VMs found")
+				return
+			}
+			log.Infof("Total number of VMs : [%v]", len(vms))
+			randomIndex := rand.Intn(len(vms))
+			selectedVM = vms[randomIndex]
+			log.Infof("Selected VM [%v] in namespace [%v] for cold add disk", selectedVM.Name, selectedVM.Namespace)
+		})
+
+		if !strings.Contains(app, "windows") {
+			canSsh = CreateSSHPodAndSetCanSsh()
+			GenericValidateFioInVM(selectedVM, canSsh)
+		}
+
+		stepLog = "Cold add disk to KubeVirt VM"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			numberOfVolumes = 1
+			isColdAddDisk, err := GenericColdPlugDataVolumesToKubevirtVM(selectedVM, numberOfVolumes, "10Gi")
+			log.FailOnError(err, "Failed to add cold disk to KubeVirt VM")
+			dash.VerifyFatal(isColdAddDisk, true, "Successfully added cold disk to KubeVirt VM ?")
+		})
+
+		if !strings.Contains(app, "windows") {
+			GenericValidateFioInVM(selectedVM, canSsh)
 		}
 		updateMetrics(*event)
 	})
