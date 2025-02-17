@@ -753,6 +753,9 @@ const (
 
   // AsyncDR node restart on source runs Async DR migration between two clusters with px restart
 	AsyncDRKVDBFailoverSource = "asyncdrkvdbfailoversource"
+
+	// Cold add disk to kubevirt VM
+	ColdAddDiskToKubevirtVM = "coldAddDiskToKubevirtVM"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -16100,4 +16103,113 @@ func TriggerAsyncDRKVDBFailoverSource(contexts *[]*scheduler.Context, recordChan
 		}
 	})
 	updateMetrics(*event)
+}
+
+func TriggerColdAddDiskToKubevirtVM(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(ColdAddDiskToKubevirtVM)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: ColdAddDiskToKubevirtVM,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+
+	var (
+		app         string
+		canSsh      bool
+		vmNamespace string
+		vmContext   []*scheduler.Context
+	)
+
+	stepLog := "Cold add disk to a KubeVirt VM"
+	Step(stepLog, func() {
+		pxNs, err := Inst().V.GetVolumeDriverNamespace()
+		if err != nil {
+			UpdateOutcome(event, err)
+			log.FailOnError(err, "Failed to get volume driver namespace")
+		}
+		defer ListEvents(pxNs)
+
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+
+		numberOfVolumes := 1
+		Inst().AppList = []string{app}
+		Inst().CsiAppList = []string{app}
+
+		stepLog := "Fetching KubeVirt VMs"
+		Step(stepLog, func() {
+			vms, err := GetAllVMsFromScheduledContexts(*contexts)
+			if err != nil {
+				UpdateOutcome(event, err)
+				log.FailOnError(err, "Failed to get VMs from appCtx")
+				return
+			}
+			if len(vms) == 0 {
+				err = fmt.Errorf("No VMs found")
+				UpdateOutcome(event, err)
+				log.FailOnError(err, "No VMs found")
+				return
+			}
+			randomIndex := rand.Intn(len(vms))
+			selectedVM := vms[randomIndex]
+			log.Infof("VM selected for cold add disk :[%v]", selectedVM.Name)
+			vmNamespace = selectedVM.Namespace
+
+			for _, vmCtx := range *contexts {
+				if vmCtx.App.NameSpace == vmNamespace {
+					vmContext = append(vmContext, vmCtx)
+				}
+			}
+			if vmContext == nil {
+				UpdateOutcome(event, fmt.Errorf("Failed to get VM context"))
+				log.FailOnError(fmt.Errorf("Failed to get VM context"), "Failed to get VM context")
+			}
+		})
+		ValidateApplications(vmContext)
+
+		if !strings.Contains(app, "raw") {
+			for _, appCtx := range vmContext {
+				bindMount, err := IsVMBindMounted(appCtx, false)
+				UpdateOutcome(event, err)
+				log.FailOnError(err, "Failed to verify bind mount")
+				dash.VerifyFatal(bindMount, true, "Successfully verified bind mount ?")
+			}
+		}
+
+		if !strings.Contains(app, "windows") {
+			canSsh = CreateSSHPodAndSetCanSsh()
+			ValidateFioInVMs(vmContext, canSsh)
+		}
+
+		stepLog = "Cold add disk to KubeVirt VM"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			numberOfVolumes = 1
+			for _, appCtx := range vmContext {
+				isColdAddDisk, err := ColdPlugDataVolumesToKubevirtVM([]*scheduler.Context{appCtx}, numberOfVolumes, "10Gi")
+				log.FailOnError(err, "Failed to add cold disk to KubeVirt VM")
+				dash.VerifyFatal(isColdAddDisk, true, "Successfully added cold disk to KubeVirt VM ?")
+			}
+		})
+
+		if !strings.Contains(app, "windows") {
+			ValidateFioInVMs(vmContext, canSsh)
+		}
+		updateMetrics(*event)
+	})
+	if isSSIERun() {
+		validateContexts(event, contexts)
+	}
 }
