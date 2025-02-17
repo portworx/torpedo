@@ -5035,9 +5035,19 @@ func PxBackupUpgrade(versionToUpgrade string) error {
 	customRegistry := os.Getenv("CUSTOM_REGISTRY")
 	customRepo := os.Getenv("CUSTOM_REPO")
 	imagePullSecret := os.Getenv("IMAGE_PULL_SECRET")
+
+	// Export the current Helm values for px-central into a values.yaml file from the specified namespace
+	cmd = fmt.Sprintf("helm get values px-central --namespace %s -o yaml > values.yaml", pxBackupNamespace)
+	log.Infof("Executing Helm get values command: %v", cmd)
+
+	output, _, err = osutils.ExecShell(cmd)
+	if err != nil {
+		return fmt.Errorf("failed to get helm values with error: %v", err)
+	}
+
 	if customRegistry == "" || customRepo == "" {
-		cmd = fmt.Sprintf("helm upgrade px-central px-central-%s.tgz --namespace %s --version %s --timeout=15m --set persistentStorage.enabled=true,persistentStorage.storageClassName=\"%s\",pxbackup.enabled=true",
-			versionToUpgrade, pxBackupNamespace, versionToUpgrade, *storageClassName)
+		cmd = fmt.Sprintf("helm upgrade px-central px-central-%s.tgz --namespace %s --version %s --timeout=15m -f values.yaml",
+			versionToUpgrade, pxBackupNamespace, versionToUpgrade)
 	} else {
 		if imagePullSecret != "" {
 			cmd = fmt.Sprintf("helm upgrade px-central px-central-%s.tgz --namespace %s --version %s --timeout=15m --set persistentStorage.enabled=true,persistentStorage.storageClassName=\"%s\",pxbackup.enabled=true,images.pullSecrets[0]=\"%s\"",
