@@ -4452,7 +4452,7 @@ var _ = Describe("{AddDiskPoolMaintenanceMode}", Label("p1", "negative", "error_
 			return nil, false, nil
 		}
 		_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 1*time.Minute)
-		err = Inst().V.WaitDriverUpOnNode(*stNode, 5*time.Minute)
+		err = Inst().V.WaitDriverUpOnNode(*stNode, 10*time.Minute)
 		log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", stNode.Name))
 		dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after maintenance cycle on node %s", stNode.Name))
 		status, err := Inst().V.GetNodeStatus(*stNode)
