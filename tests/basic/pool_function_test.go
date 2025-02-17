@@ -15,7 +15,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/libopenstorage/openstorage/api"
+	opsapi "github.com/libopenstorage/openstorage/api"
 	. "github.com/onsi/ginkgo/v2"
+	"github.com/pure-px/sched-ops/task"
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/drivers/scheduler"
 	"github.com/pure-px/torpedo/drivers/volume"
@@ -3588,7 +3590,6 @@ var _ = Describe("{AddDataDriveWithMetadrive}", Label("staging", "p0", "postive"
 	})
 })
 
-
 var _ = Describe("{AddDataDriveWithoutMetadrive}", Label("staging", "p0", "postive", "adddrive"), func() {
 	/*
 		ticket id : https://purestorage.atlassian.net/browse/HAZEL-1549
@@ -3647,3 +3648,188 @@ var _ = Describe("{AddDataDriveWithoutMetadrive}", Label("staging", "p0", "posti
 
 })
 
+// Verify rebooting px doesn't enter into maintenance mode when a pool is offline.
+var _ = Describe("{VerifyPxRebootAvoidsMaintenanceWithOfflinePool}", Label("p1", "px_restart", "pool_ops", "Throttling", "NodeMaintenance", "staging"), func() {
+	/*
+		Jira-ID :https://purestorage.atlassian.net/browse/HAZEL-1000
+		Bring pool into offline state (
+			step1: feed p1 size GB I/O on the volume
+			step2: After I/O done p1 should be offline and full)
+		Restart px
+		Validate state of pool & node → It should not go into maintenance mode
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("VerifyPxRebootAvoidsMaintenanceWithOfflinePool", "Verify rebooting px does not enter into maintenance mode when a pool is offline", nil, 0)
+		// Remove if node-type label is set before the test
+		err = RemoveLabelsAllNodes(k8s.NodeType, true, false)
+		log.FailOnError(err, "error removing label on node ")
+	})
+
+	var (
+		selectedNode   node.Node
+		contexts       []*scheduler.Context
+		appList        []string
+		secondReplNode node.Node
+		stNodes        []node.Node
+		isjournal      bool
+	)
+
+	itLog := "Verify rebooting px does not enter into maintenance mode when a pool is offline"
+	It(itLog, func() {
+		stepLog := "Create vols and make pool full"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			selectedNode = *GetNodeWithLeastSize()
+			if selectedNode.Name == "" {
+				log.FailOnError(fmt.Errorf("unable get node with least size"), "error identifying the node with least size")
+			}
+			log.Infof(fmt.Sprintf("Node %s is marked for repl 1", selectedNode.Name))
+			stNodes = node.GetStorageNodes()
+
+			for _, stNode := range stNodes {
+				if stNode.Name != selectedNode.Name {
+					secondReplNode = stNode
+				}
+			}
+
+			isjournal, err = IsJournalEnabled()
+			log.FailOnError(err, "Failed to check if Journal enabled")
+
+			err = adjustReplPools(selectedNode, secondReplNode, isjournal)
+			log.FailOnError(err, "Error setting pools for clean volumes")
+
+			appList = Inst().AppList
+
+			err = Inst().S.AddLabelOnNode(selectedNode, k8s.NodeType, k8s.FastpathNodeType)
+			log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedNode.Name))
+			err = Inst().S.AddLabelOnNode(secondReplNode, k8s.NodeType, k8s.FastpathNodeType)
+			log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", secondReplNode.Name))
+
+			Inst().AppList = []string{"fio-fastpath"}
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("nwplfull-%d", i))...)
+			}
+			ValidateApplications(contexts)
+		})
+		cleanup := func() {
+			log.Info("Executing cleanup tasks")
+			DestroyApps(contexts, nil)
+			Inst().AppList = appList
+			err := Inst().S.RemoveLabelOnNode(selectedNode, k8s.NodeType)
+			log.FailOnError(err, "error removing label on node [%s]", selectedNode.Name)
+			err = Inst().S.RemoveLabelOnNode(secondReplNode, k8s.NodeType)
+			log.FailOnError(err, "error removing label on node [%s]", secondReplNode.Name)
+		}
+		defer cleanup()
+
+		stepLog = "Checking Pool status before Px Restart"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := WaitForPoolOffline(selectedNode)
+			log.FailOnError(err, fmt.Sprintf("Failed to make node %s storage down", selectedNode.Name))
+			log.Infof("Waited for the pool to go offline...")
+			poolsStatus, err := Inst().V.GetNodePoolsStatus(selectedNode)
+			log.FailOnError(err, "error getting pool status on node %s", selectedNode.Name)
+			log.Infof("Pool status on node %s is %v", selectedNode.Name, poolsStatus)
+			for poolID, status := range poolsStatus {
+				if status == "Offline" {
+					log.Infof("The status of the poolID : [%s] is [%v]", poolID, status)
+					break
+				}
+			}
+		})
+
+		stepLog = "Restart Portworx"
+		//Restart portworx and wait for it to come up
+		Step(stepLog, func() {
+			log.Info(stepLog)
+			log.FailOnError(Inst().V.RestartDriver(selectedNode, nil), fmt.Sprintf("Error restarting px on node [%s]", selectedNode.Name))
+			err = Inst().V.WaitDriverUpOnNode(selectedNode, Inst().DriverStartTimeout)
+			if err != nil {
+				log.InfoD("Expanding storage full pools to bring storage down to online status")
+				expandPoolSize := func(node node.Node) {
+					poolStatusMap, err := Inst().V.GetNodePoolsStatus(node)
+
+					for poolID, _ := range poolStatusMap {
+						storagePool := getStoragePool(poolID)
+						expectedSize := (storagePool.TotalSize / units.GiB) * 3
+
+						log.InfoD("Current Size of the pool %s is %d", storagePool.Uuid, storagePool.TotalSize/units.GiB)
+						err = Inst().V.ExpandPool(storagePool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
+						dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+						resizeErr := waitForPoolToBeResized(expectedSize, storagePool.Uuid, isjournal)
+						dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using resize-disk", storagePool.Uuid, node.Name))
+						status, err := Inst().V.GetNodeStatus(node)
+						log.FailOnError(err, fmt.Sprintf("Error getting PX status of node %s", node.Name))
+						dash.VerifySafely(*status, api.Status_STATUS_OK, fmt.Sprintf("validate PX status on node %s. Current status: [%s]", node.Name, status.String()))
+					}
+				}
+				stepLog = "Expanding storage full pools and verify"
+				Step(stepLog, func() {
+					expandPoolSize(selectedNode)
+				})
+			}
+			err = Inst().V.WaitDriverUpOnNode(selectedNode, Inst().DriverStartTimeout)
+			log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", selectedNode.Name))
+		})
+
+		stepLog = "Verify node status After Px Restart"
+		Step(stepLog, func() {
+			log.Info(stepLog)
+			t := func() (interface{}, bool, error) {
+				nodeStatus, err := Inst().V.GetNodeStatus(selectedNode)
+				if err != nil {
+					return nil, true, fmt.Errorf("error getting node status for the node %s", selectedNode.Name)
+				}
+
+				if *nodeStatus == opsapi.Status_STATUS_OK {
+					log.Infof("The status of the node is online")
+					return *nodeStatus, false, nil
+				}
+
+				return nil, true, fmt.Errorf("the status of the node is still not online")
+			}
+			nodeStatus, err := task.DoRetryWithTimeout(t, 30*time.Minute, 20*time.Second)
+			log.FailOnError(err, "error getting node status on node %s", selectedNode.Name)
+			dash.VerifyFatal(nodeStatus.(api.Status), opsapi.Status_STATUS_OK, fmt.Sprintf("validate PX status on node %s", selectedNode.Id))
+		})
+
+		stepLog = "Validate Applications"
+		Step(stepLog, func() {
+			ValidateApplications(contexts)
+		})
+
+		stepLog = "Expanding storage full pools and verify"
+		Step(stepLog, func() {
+			for _, node := range stNodes {
+				poolStatusMap, err := Inst().V.GetNodePoolsStatus(node)
+				for poolID, poolStatus := range poolStatusMap {
+					if poolStatus == "Offline" {
+						storagePool := getStoragePool(poolID)
+						expectedSize := (storagePool.TotalSize / units.GiB) * 3
+
+						log.InfoD("Current Size of the pool %s is %d", storagePool.Uuid, storagePool.TotalSize/units.GiB)
+						err = Inst().V.ExpandPool(storagePool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
+						dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+						resizeErr := waitForPoolToBeResized(expectedSize, storagePool.Uuid, isjournal)
+						dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using resize-disk", storagePool.Uuid, node.Name))
+						status, err := Inst().V.GetNodeStatus(node)
+						log.FailOnError(err, fmt.Sprintf("Error getting PX status of node %s", node.Name))
+						dash.VerifySafely(*status, api.Status_STATUS_OK, fmt.Sprintf("validate PX status on node %s. Current status: [%s]", node.Name, status.String()))
+					}
+				}
+			}
+		})
+
+		stepLog = "Validate Applications"
+		Step(stepLog, func() {
+			ValidateApplications(contexts)
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
