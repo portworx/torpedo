@@ -1395,3 +1395,276 @@ var _ = Describe("{ValidateVPSAffinityWithoutRequiredLabel}", Label("staging", "
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
+
+// Setup VPS and validate that volumes in trashcan aren't considered when anti-affinity rules are set.
+var _ = Describe("{SetupVPSValidateTrashcanAntiAffinity}", Label("p0", "positive", "pure_ops", "px_vol_ops", "px_ops", "staging"), func() {
+	/*
+		Label nodes with some tag
+		Enable trashcan
+		Create VPS
+		Create some volumes using VPS and validate VPS is being followed
+		Delete subset of these volumes
+		Validate they are moved to trashcan
+		Restore volumes
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("SetupVPSValidateTrashcanAntiAffinity", "Setup VPS and validate that volumes in trashcan are not considered when anti-affinity rules are set", nil, 0)
+		// Remove if node-type label is set before the test
+		err = RemoveLabelsAllNodes(k8s.NodeType, true, false)
+		log.FailOnError(err, "error removing label on node ")
+	})
+
+	stepLog := "Setup VPS and validate that volumes in trashcan are not considered when anti-affinity rules are set"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		var (
+			scName     = fmt.Sprintf("mongo-sc-%v", time.Now().Unix())
+			vpsName    = fmt.Sprintf("mongo-vps-%v", time.Now().Unix())
+			pvcName    = fmt.Sprintf("mongo-pvc-%v", time.Now().Unix())
+			namespace  = "default"
+			params     = make(map[string]string)
+			k8sStorage = storage.Instance()
+			nodes      []node.Node
+			currNode   node.Node
+		)
+
+		stepLog = "Enable Trashcan"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			currNode = node.GetStorageDriverNodes()[0]
+			err := Inst().V.SetClusterOptsWithConfirmation(currNode, map[string]string{
+				"--volume-expiration-minutes": "600",
+			})
+			log.FailOnError(err, "error while enabling trashcan")
+			log.InfoD("Trashcan is successfully enabled")
+		})
+
+		stepLog = "Get all nodes and add label for some nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			nodes = node.GetWorkerNodes()
+			log.Infof("node list: %v", nodes)
+			for i, node := range nodes {
+				log.Infof("Adding label for the node: %v", node.Name)
+				err := k8sCore.AddLabelOnNode(node.Name, "zone", "A")
+				log.FailOnError(err, "Failed to add label for the node: %v", node)
+				if i >= len(nodes)/2 {
+					log.Infof("Added label to half of the nodes")
+					break
+				}
+			}
+		})
+
+		stepLog = "Apply volume placement strategy"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			matchExpression := []*v1beta1.LabelSelectorRequirement{
+				{
+					Key:      "zone",
+					Operator: v1beta1.LabelSelectorOpIn,
+					Values:   []string{"A"},
+				},
+			}
+			vpsSpec := vpsutil.ReplicaAntiAffinityByMatchExpression(vpsName, matchExpression)
+			_, err = talisman.Instance().CreateVolumePlacementStrategy(&vpsSpec)
+			dash.VerifyFatal(err, nil, "Check if able to apply volume placement strategy")
+		})
+
+		stepLog = "Apply storage class"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			params["repl"] = "3"
+			params["placement_strategy"] = vpsName
+			v1obj := metav1.ObjectMeta{
+				Name: scName,
+			}
+			bindMode := storageApi.VolumeBindingImmediate
+			scObj := storageApi.StorageClass{
+				ObjectMeta:        v1obj,
+				Provisioner:       k8s.CsiProvisioner,
+				Parameters:        params,
+				VolumeBindingMode: &bindMode,
+			}
+			_, err := k8sStorage.CreateStorageClass(&scObj)
+			dash.VerifyFatal(err, nil, "Verifying creation of new storage class")
+		})
+
+		stepLog = "Apply persistent volume claim"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			_, err := core.Instance().CreatePersistentVolumeClaim(&corev1.PersistentVolumeClaim{
+				TypeMeta: metav1.TypeMeta{
+					Kind: "PersistentVolumeClaim",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: pvcName,
+				},
+				Spec: corev1.PersistentVolumeClaimSpec{
+					AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteMany},
+					StorageClassName: &scName,
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							corev1.ResourceStorage: resource.MustParse("10Gi"),
+						},
+					},
+				},
+			})
+			dash.VerifyFatal(err, nil, "Verifying creation of new storage class")
+		})
+
+		checkVolumePlacement := func() {
+
+			log.Infof("Waiting for 3 minute to get pvc status")
+			time.Sleep(3 * time.Minute)
+			//Waiting for PVC to Bound
+			err = Inst().S.WaitForSinglePVCToBound(pvcName, namespace, 3)
+			log.FailOnError(err, "Failed to wait for pvc to bound")
+			// Get the PVC that was created using sc-1
+			createdPVC, err := k8sCore.GetPersistentVolumeClaim(pvcName, namespace)
+			log.FailOnError(err, "Failed to get PVC")
+			log.Infof("Created PVC details: %v", createdPVC.Status)
+
+			// Check PVC status - Ensure PVC is bound
+			dash.VerifyFatal(createdPVC.Status.Phase == "Bound", true,
+				fmt.Sprintf("PVC should be in 'Bound' status'%v'", createdPVC.Status.Phase))
+
+			// Get the PV bound to the PVC
+			pv, err := core.Instance().GetPersistentVolume(createdPVC.Spec.VolumeName)
+			log.FailOnError(err, "Failed to get PersistentVolume")
+			log.Infof("Persistent Volume details: %v", pv)
+
+			// List all volumes and check replica placement
+			volIDs, err := Inst().V.ListAllVolumes()
+			log.FailOnError(err, "Failed to get volumes")
+			log.Infof("Volume IDs list: %v", volIDs)
+
+			for _, volId := range volIDs {
+				apiVol, err := Inst().V.InspectVolume(volId)
+				log.FailOnError(err, "Failed to inspect volume details")
+				log.Infof("Inspecting volume ID: %s", volId)
+				log.Infof("Found volume %s for createdPVC PVC", createdPVC.Name)
+
+				if apiVol.Locator.VolumeLabels["pvc"] == createdPVC.Name {
+					var nodeList []string
+					for _, replica := range apiVol.ReplicaSets {
+						nodeList = append(nodeList, replica.Nodes...)
+					}
+					// check if volume replicas are placed on nodes without the label 'zone=A'
+					for _, nodeName := range nodeList {
+						nodeID, err := node.GetNodeDetailsByNodeID(nodeName)
+						log.FailOnError(err, "unable to find ID")
+						nodeLabels, err := k8sCore.GetLabelsOnNode(nodeID.Name)
+						log.FailOnError(err, "unable to find the node")
+						labelValue, exists := nodeLabels["zone"]
+						if !exists {
+							log.Infof("Zone label not found : %s", exists)
+						}
+						dash.VerifyFatal(labelValue != "A", true,
+							fmt.Sprintf("Node '%s' has label 'zone=A'. Found label: '%s'", nodeName, labelValue))
+					}
+				}
+			}
+		}
+
+		stepLog = "Check PVC status and verify volume replica placement on nodes without label 'zone=A'"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			checkVolumePlacement()
+		})
+
+		deleteVolumes := func() {
+			volIDs, err := Inst().V.ListAllVolumes()
+			log.FailOnError(err, "Failed to get volumes")
+			log.Infof("Volume IDs list: %v", volIDs)
+			for _, each := range volIDs {
+				if IsVolumeExits(each) {
+					log.InfoD(fmt.Sprintf("delete volume [%v]", each))
+					err := Inst().V.DetachVolume(each)
+					if err != nil {
+						log.Errorf("Failed to detach volume [%v]", each)
+						return
+					}
+					time.Sleep(500 * time.Millisecond)
+					err = Inst().V.DeleteVolume(each)
+					if err != nil {
+						log.Errorf("Delete volume with ID [%v] failed", each)
+						return
+					}
+				}
+			}
+		}
+
+		stepLog = fmt.Sprintf("Deleting volumes")
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			deleteVolumes()
+		})
+
+		var trashcanVols []string
+		stepLog = "validate volumes in trashcan"
+		Step(stepLog, func() {
+			// wait for a few seconds for pvc to get deleted and volume to get detached
+			time.Sleep(10 * time.Second)
+			node := node.GetStorageDriverNodes()[0]
+			log.InfoD(stepLog)
+			trashcanVols, err = Inst().V.GetTrashCanVolumeIds(node)
+			log.FailOnError(err, "error While getting trashcan volumes")
+			log.Infof("trashcan len: %d", len(trashcanVols))
+			dash.VerifyFatal(len(trashcanVols) > 0, true, "validate volumes exist in trashcan")
+		})
+
+		stepLog = "Validating trashcan restore"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, tID := range trashcanVols {
+				if tID != "" {
+					vol, err := Inst().V.InspectVolume(tID)
+					log.FailOnError(err, fmt.Sprintf("error inspecting volume %s", tID))
+					err = trashcanRestore(vol.Id, vol.Locator.Name)
+					log.FailOnError(err, fmt.Sprintf("error restoring volume %s from trashcan", vol.Id))
+				}
+			}
+		})
+
+		stepLog = "Check PVC status and verify volume replica placement on nodes without label 'zone=A'"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			checkVolumePlacement()
+		})
+
+		stepLog = "Disable Trashcan"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := Inst().V.SetClusterOptsWithConfirmation(currNode, map[string]string{
+				"--volume-expiration-minutes": "0",
+			})
+			log.FailOnError(err, "error while enabling trashcan")
+			log.InfoD("Trashcan is successfully Disabled")
+		})
+
+		stepLog = "Remove all newly created specs"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = core.Instance().DeletePersistentVolumeClaim(pvcName, namespace)
+			log.FailOnError(err, "Failed to remove pvc: %v", pvcName)
+
+			log.Infof("Deleting the newly created storage class")
+			err = k8sStorage.DeleteStorageClass(scName)
+			log.FailOnError(err, "Failed to remove storage class: %v", scName)
+
+			log.Infof("Deleting the newly created VPS")
+			err = talisman.Instance().DeleteVolumePlacementStrategy(vpsName)
+			log.FailOnError(err, "Failed to remove VPS: %v", vpsName)
+
+			log.Infof("Deleting the newly created labels from node")
+			for _, node := range nodes {
+				err = Inst().S.RemoveLabelOnNode(node, "zone")
+				log.FailOnError(err, "Failed to remove label from node.")
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
