@@ -1428,15 +1428,20 @@ var _ = Describe("{AddDriveMaintenanceMode}", Label("p1", "negative", "pool_ops"
 var _ = Describe("{AddDriveStoragelessAndResize}", Label("p0", "positive", "pool_ops", "ClusterScale", "PoolExpand", "AddDrive", "ResizeDisk"), func() {
 	var testrailID = 50617
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/2017
-	var runID int
+	var (
+		contexts                []*scheduler.Context
+		jrnlPartPoolID          string
+		isjournal               bool
+		runID                   int
+		expectedSize            uint64
+		expectedSizeWithJournal uint64
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("AddDriveStorageless", "Initiate add-drive to storageless node and pool expansion", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
-	var contexts []*scheduler.Context
 
 	stepLog := "should get the storageless node and add a drive"
-
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
@@ -1445,25 +1450,108 @@ var _ = Describe("{AddDriveStoragelessAndResize}", Label("p0", "positive", "pool
 		}
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
+		isjournal, err = IsJournalEnabled()
+		log.FailOnError(err, "Failed to check is journal enabled")
 
-		slNodes := node.GetStorageLessNodes()
-		if len(slNodes) == 0 {
-			dash.VerifyFatal(len(slNodes) > 0, true, "Storage less nodes found?")
+		nonKvdbNodes := []node.Node{}
+		log.Infof("Select non-kvdb node")
+		stNodes := node.GetStorageNodes()
+		if len(stNodes) == 0 {
+			dash.VerifyFatal(len(stNodes) > 0, true, "Storage less nodes found?")
+		}
+		log.InfoD("storage nodes %+v", stNodes)
+		kvdbNodesIDs := []string{}
+		kvdbMembers, err := Inst().V.GetKvdbMembers(stNodes[0])
+		log.FailOnError(err, "Error getting KVDB members")
+		log.InfoD("kvdb members %+v", kvdbMembers)
+
+		for _, n := range kvdbMembers {
+			kvdbNodesIDs = append(kvdbNodesIDs, n.Name)
+		}
+		// testNodes for pool deletable: [non-kvdb-nodes] + [kvdb-nodes with >= 2 pools]
+		// collect non-kvdb firsts
+		for _, n := range stNodes {
+			if !Contains(kvdbNodesIDs, n.Id) { // non kvdb node
+				log.InfoD("get non-kvdb node %v", n.Name)
+				poolsMap, err := Inst().V.GetPoolDrives(&n)
+				log.FailOnError(err, "cannot get pool drives")
+				log.InfoD("non-kvdb node %v has %v pools %+v", n.Name, len(poolsMap), poolsMap)
+				if len(poolsMap) > 0 {
+					nonKvdbNodes = append(nonKvdbNodes, n)
+				}
+			}
 		}
 
-		slNode := GetRandomStorageLessNode(slNodes)
+		if len(nonKvdbNodes) == 0 {
+			dash.VerifyFatal(len(nonKvdbNodes) > 0, true, "no non-kvdb nodes found?")
+		}
+		slNode := nonKvdbNodes[rand.Intn(len(nonKvdbNodes))]
+		poolsAft, err := GetPoolsDetailsOnNode(&slNode)
+		log.FailOnError(err, fmt.Sprintf("error getting pools on node after adding metadata %s", slNode.Name))
 
 		isDMthin, err := IsDMthin()
 		log.FailOnError(err, "error verifying if set up is DMTHIN enabled")
-
 		if isDMthin {
 			err = AddMetadataDisk(slNode)
 			log.FailOnError(err, "error while adding metadata disk")
 		}
 
+		stepLog = "Convert storage node into storageless node"
+		Step(stepLog, func() {
+			log.Infof(stepLog)
+			journalPoolId := ""
+
+			stepLog = "Selecting journal pool"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+
+				nodePools := slNode.StoragePools
+				if isjournal && len(nodePools) > 1 {
+					jDev, err := Inst().V.GetJournalDevicePath(&slNode)
+					log.FailOnError(err, fmt.Sprintf("error getting journal device path from node %s", slNode.Name))
+					log.Infof("JournalDev: %s", jDev)
+					if jDev == "" {
+						log.FailOnError(fmt.Errorf("no journal device path found"), "error getting journal device path from storage spec")
+					}
+					drivesMap, err := Inst().V.GetPoolDrives(&slNode)
+					jPath := jDev[:len(jDev)-1]
+				outer:
+					for k, v := range drivesMap {
+						for _, dv := range v {
+							if strings.Contains(dv.Device, jPath) {
+								jrnlPartPoolID = k
+								break outer
+							}
+						}
+					}
+
+				}
+
+			})
+
+			for _, pool := range poolsAft {
+				if strconv.Itoa(int(pool.GetID())) == jrnlPartPoolID {
+					continue
+				}
+				err = DeletePoolAndValidate(slNode, strconv.Itoa(int(pool.GetID())))
+				log.FailOnError(err, fmt.Sprintf("Error occured while Validating the deleted pool %s in the node %s", pool.Uuid, slNode.Name))
+				log.InfoD("pool [%d] delete succed", pool.GetID())
+			}
+			if jrnlPartPoolID != "" {
+				log.Infof("Deleting the journal pool [%s]", jrnlPartPoolID)
+				err = DeletePoolAndValidate(slNode, jrnlPartPoolID)
+				log.FailOnError(err, fmt.Sprintf("Error occured while Validating the deleted journal pool %s in the node %s", journalPoolId, slNode.Name))
+				log.InfoD("Journal pool delete succed")
+			}
+			log.InfoD("All pool deleted successfully")
+		})
+
+		err = Inst().V.RefreshDriverEndpoints()
+		log.FailOnError(err, "error refreshing driver end points")
+
 		err = AddCloudDrive(slNode, -1)
 		log.FailOnError(err, "error adding cloud drive")
-		stNodes := node.GetStorageNodes()
+		stNodes = node.GetStorageNodes()
 		var stNode node.Node
 		for _, n := range stNodes {
 			if n.Id == slNode.Id {
@@ -1472,6 +1560,9 @@ var _ = Describe("{AddDriveStoragelessAndResize}", Label("p0", "positive", "pool
 			}
 		}
 		dash.VerifyFatal(stNode.Name != "", true, fmt.Sprintf("Verify node %s is converted to storage node", slNode.Name))
+
+		err = Inst().V.RefreshDriverEndpoints()
+		log.FailOnError(err, "error refreshing driver end points")
 
 		poolToResize := stNode.Pools[0]
 
@@ -1488,17 +1579,14 @@ var _ = Describe("{AddDriveStoragelessAndResize}", Label("p0", "positive", "pool
 		time.Sleep(time.Second * 60)
 		stepLog = "Verify that pool resize is not in progress"
 		Step(stepLog, func() {
-			log.InfoD(stepLog)
+			log.Infof(stepLog)
 			_, err := poolResizeIsInProgress(poolToBeResized)
 			log.FailOnError(err, fmt.Sprintf("pool [%s] cannot be expanded due to error: %v", poolToBeResized.Uuid, err))
 		})
 
-		var expectedSize uint64
-		var expectedSizeWithJournal uint64
-
 		stepLog = "Calculate expected pool size and trigger pool expansion by resize-disk "
 		Step(stepLog, func() {
-			log.InfoD(stepLog)
+			log.Infof(stepLog)
 			expectedSize = poolToBeResized.TotalSize * 2 / units.GiB
 
 			isjournal, err := IsJournalEnabled()
@@ -1524,11 +1612,8 @@ var _ = Describe("{AddDriveStoragelessAndResize}", Label("p0", "positive", "pool
 
 		stepLog = "Calculate expected pool size and trigger pool expansion by add-disk"
 		Step(stepLog, func() {
-			log.InfoD(stepLog)
+			log.Infof(stepLog)
 			expectedSize = poolToBeResized.TotalSize * 2 / units.GiB
-
-			isjournal, err := IsJournalEnabled()
-			log.FailOnError(err, "Failed to check is journal enabled")
 
 			//To-Do Need to handle the case for multiple pools
 			expectedSizeWithJournal = expectedSize
