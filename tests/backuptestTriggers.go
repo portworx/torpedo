@@ -7,6 +7,7 @@ import (
 	"github.com/pure-px/torpedo/drivers/node"
 	"github.com/pure-px/torpedo/pkg/aetosutil"
 	"github.com/pure-px/torpedo/pkg/email"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"os"
@@ -74,6 +75,12 @@ const (
 	//CreateBackupRestoreAndDeleteWithUserFromSharedCluster creates backups and restore and delete the backup for longevity as non-admin user from shared cluster
 	CreateBackupRestoreAndDeleteWithUserFromSharedCluster = "pxbCreateBackupRestoreAndDeleteWithUserFromSharedCluster"
 
+	//CreateParallelScheduleBackup creates parallel schedule backups
+	CreateParallelScheduleBackup = "pxbCreateParallelScheduleBackup"
+
+	//FailScheduleBackup creates failed or partial success backups
+	FailScheduleBackup = "pxbFailScheduleBackup"
+
 	//DeletePxBackup delete backups from the cluster
 	DeletePxBackup = "pxbDeleteBackup"
 
@@ -89,26 +96,27 @@ const (
 
 // Global variables to be used by all flows
 var (
-	LongevityBackupLocationName          string
-	LongevityBackupLocationUID           string
-	LongevitySchedulePolicyName          string
-	LongevitySchedulePolicyUid           string
-	LongevityLockedBackupLocationMap     = make(map[string]string)
-	LongevityAllNamespaces               []string
-	LongevitySourceClusterUID            string
-	LongevityDestinationClusterUID       string
-	LongevityScheduledAppContexts        []*scheduler.Context
-	LongevityAllBackupNames              []string
-	LongevityAllBackupScheduleNames      []string
-	LongevityAllBackupUIDMap             = make(map[string]string)
-	LongevityAllLockedBackupNames        []string
-	LongevityBackupAppContextMap         = make(map[string][]*scheduler.Context)
-	LongevityAllNonAdminUserRoleMap      = make(map[string]backup.PxBackupRole)
-	LongevityAllScheduleNames            []string
-	LongevityAllScheduleUid              []string
-	LongevityAllNonAdminUserNames        []string
-	LongevityClusterSharedUserList       []string
-	LongevityAllClusterSharedBackupNames []string
+	LongevityBackupLocationName             string
+	LongevityBackupLocationUID              string
+	LongevitySchedulePolicyName             string
+	LongevitySchedulePolicyUid              string
+	LongevityLockedBackupLocationMap        = make(map[string]string)
+	LongevityAllNamespaces                  []string
+	LongevitySourceClusterUID               string
+	LongevityDestinationClusterUID          string
+	LongevityScheduledAppContexts           []*scheduler.Context
+	LongevityAllBackupNames                 []string
+	LongevityAllBackupScheduleNames         []string
+	LongevityAllParallelBackupScheduleNames []string
+	LongevityAllBackupUIDMap                = make(map[string]string)
+	LongevityAllLockedBackupNames           []string
+	LongevityBackupAppContextMap            = make(map[string][]*scheduler.Context)
+	LongevityAllNonAdminUserRoleMap         = make(map[string]backup.PxBackupRole)
+	LongevityAllScheduleNames               []string
+	LongevityAllScheduleUid                 []string
+	LongevityAllNonAdminUserNames           []string
+	LongevityClusterSharedUserList          []string
+	LongevityAllClusterSharedBackupNames    []string
 )
 
 type PxBackupLongevity struct {
@@ -144,8 +152,13 @@ type BackupData struct {
 	ClusterUid              string
 	BackupName              string
 	BackupUid               string
+	ScheduleName            string
+	ScheduleOrdinalCount    int
 	SchedulePolicyName      string
 	SchedulePolicyUid       string
+	BackupFailedPvcs        []*corev1.PersistentVolumeClaim
+	BackupDesiredState      api.BackupInfo_StatusInfo_Status
+	ParallelBackup          bool
 	CollectStatsDuration    time.Duration
 	CollectStatsInterval    time.Duration
 }
@@ -267,6 +280,7 @@ const (
 	EventDeleteBackup                               = "EventDeleteBackup"
 	EventAddSchedulePolicy                          = "EventAddSchedulePolicy"
 	EventAddBackupSchedule                          = "EventAddBackupSchedule"
+	EventFailScheduleBackup                         = "EventFailScheduleBackup"
 	EventRestartPxBackupPod                         = "EventRestartPxBackupPod"
 	EventCollectBackupStateStats                    = "EventCollectBackupStateStats"
 )
@@ -289,6 +303,7 @@ var AllBuilders = map[string]PxBackupEventBuilder{
 	EventRestartPxBackupPod:                         eventRestartPxBackupPod,
 	EventCollectBackupStateStats:                    eventCollectBackupStateStats,
 	EventScheduleMultipleApps:                       eventScheduleMultipleApps,
+	EventFailScheduleBackup:                         eventFailScheduleBackup,
 }
 
 type PxBackupEventBuilder func(*PxBackupLongevity) (error, string, EventData)
@@ -389,6 +404,17 @@ func GetRandomNamespacesForBackup() []string {
 	log.Infof("Namespaces selected for restore - [%v]", allNamepsacesForBackup)
 
 	return allNamepsacesForBackup
+}
+
+// GetRandomBackupScheduleName return random schedule backup name
+func GetRandomBackupScheduleName(parallelBackup bool) string {
+	var randomBackupScheduleName string
+	if parallelBackup {
+		randomBackupScheduleName = LongevityAllParallelBackupScheduleNames[rand.Intn(len(LongevityAllParallelBackupScheduleNames))]
+	} else {
+		randomBackupScheduleName = LongevityAllBackupScheduleNames[rand.Intn(len(LongevityAllBackupScheduleNames))]
+	}
+	return randomBackupScheduleName
 }
 
 func GetRandomBackupForRestoreOrDelete() string {
@@ -742,7 +768,7 @@ func eventScheduleBackup(inputsForEventBuilder *PxBackupLongevity) (error, strin
 			appContextsToBackup,
 			labelSelectors,
 			BackupOrgID,
-			"", "", "", "", inputsForEventBuilder.BackupData.SchedulePolicyName, inputsForEventBuilder.BackupData.SchedulePolicyUid, false)
+			"", "", "", "", inputsForEventBuilder.BackupData.SchedulePolicyName, inputsForEventBuilder.BackupData.SchedulePolicyUid, inputsForEventBuilder.BackupData.ParallelBackup)
 
 		backupScheduleNames = append(backupScheduleNames, scheduleName)
 		if err != nil {
@@ -753,9 +779,6 @@ func eventScheduleBackup(inputsForEventBuilder *PxBackupLongevity) (error, strin
 	}
 
 	eventData.BackupScheduleNames = backupScheduleNames
-	LongevityAllBackupScheduleNames = append(LongevityAllBackupScheduleNames, backupScheduleNames...)
-	log.InfoD("Backup schedule names created  - %v", backupScheduleNames)
-
 	// If there were errors, return them
 	if len(errors) > 0 {
 		return fmt.Errorf("encountered errors while scheduling backups: %v", errors), "Error occurred while taking backup", *eventData
@@ -764,7 +787,49 @@ func eventScheduleBackup(inputsForEventBuilder *PxBackupLongevity) (error, strin
 	return nil, "", *eventData
 }
 
-// Event for Backup Creation
+// Event for failed or partial schedule Backup Creation
+func eventFailScheduleBackup(inputsForEventBuilder *PxBackupLongevity) (error, string, EventData) {
+	defer GinkgoRecover()
+	var ctx context1.Context
+	var err error
+	eventData := &EventData{}
+
+	var errors []string // Slice to collect errors
+	if inputsForEventBuilder.BackupUserContext == nil {
+		ctx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+	} else {
+		ctx = inputsForEventBuilder.BackupUserContext
+	}
+
+	log.Infof("Failing a schedule backup for schedule name %s", inputsForEventBuilder.BackupData.ScheduleName)
+	if inputsForEventBuilder.BackupData.ScheduleName != "" {
+		_, err = GetScheduleUID(inputsForEventBuilder.BackupData.ScheduleName, BackupOrgID, ctx)
+		if err != nil {
+			log.Errorf("Error occurred while failing backup for schedule %s: %v", inputsForEventBuilder.BackupData.ScheduleName, err)
+			errors = append(errors, fmt.Sprintf("unable to fetch Schedule uid %s: %v", inputsForEventBuilder.BackupData.ScheduleName, err)) // Collect error message
+		}
+	}
+	err = WaitTillScheduleBackupInDesiredStateToFailOrPartialSuccess(
+		inputsForEventBuilder.BackupData.ScheduleName,
+		BackupOrgID,
+		ctx,
+		inputsForEventBuilder.BackupData.ScheduleOrdinalCount,
+		inputsForEventBuilder.BackupData.BackupFailedPvcs,
+		inputsForEventBuilder.BackupData.BackupDesiredState)
+	if err != nil {
+		log.Errorf("Error occurred while failing backup for schedule %s: %v", inputsForEventBuilder.BackupData.ScheduleName, err)
+		errors = append(errors, fmt.Sprintf("Schedule %s: %v", inputsForEventBuilder.BackupData.ScheduleName, err)) // Collect error message
+	}
+
+	// If there were errors, return them
+	if len(errors) > 0 {
+		return fmt.Errorf("encountered errors while failing scheduling backups: %v", errors), "Error occurred while taking backup", *eventData
+	}
+	return nil, "", *eventData
+}
+
+// Event for locked Backup Creation
 func eventCreateLockedBackup(inputsForEventBuilder *PxBackupLongevity) (error, string, EventData) {
 	defer GinkgoRecover()
 
@@ -1960,6 +2025,108 @@ func eventDeleteBackup(inputsForEventBuilder *PxBackupLongevity) (error, string,
 	log.InfoD("Backup [%s] deleted successfully", inputsForEventBuilder.BackupData.BackupName)
 	LongevityAllBackupNames = RemoveStringItemFromSlice(LongevityAllBackupNames, []string{inputsForEventBuilder.BackupData.BackupName})
 	return nil, "", *eventData
+}
+
+// TriggerParallelScheduleBackup to create parallel schedule backup
+func TriggerParallelScheduleBackup(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(CreateParallelScheduleBackup)
+	var backupScheduleNames []string
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: CreateParallelScheduleBackup,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	result := GetLongevityEventResponse()
+	result.Name = "Create Parallel Schedule Backup From Application Cluster"
+	inputForBuilder := GetLongevityInputParams()
+
+	log.Infof("Creating Parallel Schedule Backup From Cluster [%s]", SourceClusterName)
+	inputForBuilder.BackupData.BackupLocationName = LongevityBackupLocationName
+	inputForBuilder.BackupData.BackupLocationUID = LongevityBackupLocationUID
+	inputForBuilder.BackupData.ClusterName = SourceClusterName
+	inputForBuilder.BackupData.ClusterUid = LongevitySourceClusterUID
+	inputForBuilder.BackupData.Namespaces = GetRandomNamespacesForBackup()
+	inputForBuilder.ApplicationData.SchedulerContext = LongevityScheduledAppContexts
+	inputForBuilder.BackupData.SchedulePolicyName = LongevitySchedulePolicyName
+	inputForBuilder.BackupData.SchedulePolicyUid = LongevitySchedulePolicyUid
+	inputForBuilder.BackupData.ParallelBackup = true
+
+	eventData := RunBuilder(EventAddBackupSchedule, &inputForBuilder, &result)
+
+	backupScheduleNames = eventData.BackupScheduleNames
+	LongevityAllBackupScheduleNames = append(LongevityAllBackupScheduleNames, backupScheduleNames...)
+	log.InfoD("Backup schedule names created  - %v", backupScheduleNames)
+
+	LongevityAllParallelBackupScheduleNames = append(LongevityAllParallelBackupScheduleNames, backupScheduleNames...)
+	log.InfoD("Parallel Backup schedule names created  - %v", backupScheduleNames)
+
+	LongevityAllParallelBackupScheduleNames = append(LongevityAllParallelBackupScheduleNames, backupScheduleNames...)
+	UpdateEventResponse(&result)
+
+	for _, err := range result.Errors {
+		UpdateOutcome(event, err)
+	}
+}
+
+// TriggerFailParallelScheduleBackup wait for parallels schedule backup with particular ordinal value and make it fail or partial success.
+func TriggerFailParallelScheduleBackup(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer GinkgoRecover()
+	defer endLongevityTest()
+	var failedPvcs []*v1.PersistentVolumeClaim
+	startLongevityTest(FailScheduleBackup)
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: FailScheduleBackup,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	result := GetLongevityEventResponse()
+	result.Name = "Fail a intermittent Parallel Schedule Backup From Application Cluster"
+	inputForBuilder := GetLongevityInputParams()
+
+	log.InfoD("Failing a intermittent Parallel Schedule Backup From Application Cluster[%s]", SourceClusterName)
+	inputForBuilder.BackupData.ScheduleName = GetRandomBackupScheduleName(true)
+	_, inputForBuilder.BackupData.ScheduleOrdinalCount = GetNextOrdinalScheduleBackupCount(inputForBuilder.BackupData.ScheduleName)
+	scheduleNamespaces, _ := GetBackupNamespaceFromSchedule(inputForBuilder.BackupData.ScheduleName)
+	for _, scheduleNamespace := range scheduleNamespaces {
+		pvcList, _ := k8sCore.GetPersistentVolumeClaims(scheduleNamespace, make(map[string]string))
+		pvcs := pvcList.Items
+		for j := 0; j < len(pvcList.Items); j++ {
+			log.Infof("PVC Name: [%s], PVC Volume name: [%s], PVC Namespace: [%s]", pvcs[j].Name, pvcs[j].Spec.VolumeName, pvcs[j].Namespace)
+			failedPvcs = append(failedPvcs, &pvcs[j])
+		}
+	}
+	inputForBuilder.BackupData.BackupFailedPvcs = failedPvcs
+	inputForBuilder.BackupData.BackupDesiredState = api.BackupInfo_StatusInfo_Failed
+
+	_ = RunBuilder(EventFailScheduleBackup, &inputForBuilder, &result)
+
+	UpdateEventResponse(&result)
+	log.InfoD("Failed a intermittent Parallel Schedule Backup From Application Cluster[%s]", SourceClusterName)
+	for _, err := range result.Errors {
+		UpdateOutcome(event, err)
+	}
 }
 
 var backuphtmlTemplate = `<!DOCTYPE html>

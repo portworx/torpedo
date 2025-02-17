@@ -125,6 +125,8 @@ func populateBackupIntervals() {
 	triggerInterval[DeployMultipleApps] = map[int]time.Duration{}
 	triggerInterval[AddSchedulePolicy] = map[int]time.Duration{}
 	triggerInterval[MultipleScheduleBackupDeletionAndCollectDeleteStats] = map[int]time.Duration{}
+	triggerInterval[CreateParallelScheduleBackup] = map[int]time.Duration{}
+	triggerInterval[FailScheduleBackup] = map[int]time.Duration{}
 
 	baseInterval := 1 * time.Minute
 
@@ -272,6 +274,28 @@ func populateBackupIntervals() {
 	triggerInterval[CreateClusterUnshare][3] = 48 * baseInterval
 	triggerInterval[CreateClusterUnshare][2] = 54 * baseInterval
 	triggerInterval[CreateClusterUnshare][1] = 60 * baseInterval
+
+	triggerInterval[CreateParallelScheduleBackup][10] = 6 * baseInterval
+	triggerInterval[CreateParallelScheduleBackup][9] = 12 * baseInterval
+	triggerInterval[CreateParallelScheduleBackup][8] = 18 * baseInterval
+	triggerInterval[CreateParallelScheduleBackup][7] = 24 * baseInterval
+	triggerInterval[CreateParallelScheduleBackup][6] = 30 * baseInterval
+	triggerInterval[CreateParallelScheduleBackup][5] = 36 * baseInterval
+	triggerInterval[CreateParallelScheduleBackup][4] = 42 * baseInterval
+	triggerInterval[CreateParallelScheduleBackup][3] = 48 * baseInterval
+	triggerInterval[CreateParallelScheduleBackup][2] = 54 * baseInterval
+	triggerInterval[CreateParallelScheduleBackup][1] = 60 * baseInterval
+
+	triggerInterval[FailScheduleBackup][10] = 6 * baseInterval
+	triggerInterval[FailScheduleBackup][9] = 12 * baseInterval
+	triggerInterval[FailScheduleBackup][8] = 18 * baseInterval
+	triggerInterval[FailScheduleBackup][7] = 24 * baseInterval
+	triggerInterval[FailScheduleBackup][6] = 30 * baseInterval
+	triggerInterval[FailScheduleBackup][5] = 36 * baseInterval
+	triggerInterval[FailScheduleBackup][4] = 42 * baseInterval
+	triggerInterval[FailScheduleBackup][3] = 48 * baseInterval
+	triggerInterval[FailScheduleBackup][2] = 54 * baseInterval
+	triggerInterval[FailScheduleBackup][1] = 60 * baseInterval
 
 	baseInterval = 1 * time.Hour
 

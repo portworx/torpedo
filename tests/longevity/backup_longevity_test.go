@@ -5,10 +5,9 @@ import (
 	"github.com/pure-px/torpedo/drivers/backup"
 	"sync"
 
-	"github.com/pure-px/torpedo/pkg/log"
-
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/pure-px/torpedo/drivers/scheduler"
+	"github.com/pure-px/torpedo/pkg/log"
 	. "github.com/pure-px/torpedo/tests"
 )
 
@@ -32,6 +31,8 @@ var _ = Describe("{BackupLongevity}", func() {
 		CreateClusterUnshare:                                  TriggerUnShareCluster,
 		CreateBackupWithUserFromSharedCluster:                 TriggerCreateBackupWithUserFromSharedCluster,
 		CreateBackupRestoreAndDeleteWithUserFromSharedCluster: TriggerCreateBackupRestoreAndDeleteWithUserFromSharedCluster,
+		CreateParallelScheduleBackup:                          TriggerParallelScheduleBackup,
+		FailScheduleBackup:                                    TriggerFailParallelScheduleBackup,
 		DeletePxBackup:                                        TriggerDeleteSingleBackup,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
@@ -65,6 +66,7 @@ var _ = Describe("{BackupLongevity}", func() {
 		TriggerDeployBackupApps(&contexts, &triggerEventsChan)
 		TriggerAddBackupCluster(&contexts, &triggerEventsChan)
 		TriggerAddBackupCredAndBucket(&contexts, &triggerEventsChan)
+		TriggerAddSchedulePolicy(&contexts, &triggerEventsChan)
 		//TriggerAddLockedBackupCredAndBucket(&contexts, &triggerEventsChan)
 		TriggerCreateUsers(&contexts, &triggerEventsChan)
 

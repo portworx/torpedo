@@ -10951,6 +10951,7 @@ func StopCloudsnapBackup(pvcName, namespace string) error {
 				case "Done":
 					return "", false, fmt.Errorf("cloudsnap for PVC [%s] in namespace [%s] is in %s status, not retrying", pvcName, namespace, value.Status)
 				case "Stopped":
+					log.Warnf("Cloudsnap for PVC [%s] in namespace [%s] is already stopped", pvcName, namespace)
 					continue
 				default:
 					if value.ID == "" {
@@ -15004,4 +15005,68 @@ func ManageTrafficRule(action, endpoint string, selectedNode node.Node) error {
 	}
 	log.Infof("Successfully %sed traffic to endpoint %s on node %s: %s", action, endpoint, selectedNode.Name, output)
 	return nil
+}
+
+// WaitTillScheduleBackupInDesiredStateToFailOrPartialSuccess Wait till schedule Backup is in desired state and fail backup or make the backup partial success
+func WaitTillScheduleBackupInDesiredStateToFailOrPartialSuccess(backupScheduleName string, orgId string, ctx context1.Context, ordinalCount int, failedPvcs []*corev1.PersistentVolumeClaim, desiredState api.BackupInfo_StatusInfo_Status) error {
+	log.InfoD(fmt.Sprintf("WaitTillScheduleBackupInDesiredStateToFailOrPartialSuccess started: for schedule backup %s", backupScheduleName))
+	err := WaitTillScheduleBackupInDesiredState(backupScheduleName, orgId, ctx, ordinalCount, api.BackupInfo_StatusInfo_InProgress)
+	if err != nil {
+		return err
+	}
+	// Go routine to stop backups for the PVCs
+	var wg sync.WaitGroup
+	wg.Add(len(failedPvcs))
+	for _, pvc := range failedPvcs {
+		go func(pvc *corev1.PersistentVolumeClaim) {
+			defer GinkgoRecover()
+			defer wg.Done()
+			log.Infof("Stopping all cs backups for %s [%s] in namespace %s", pvc.Name, pvc.Spec.VolumeName, pvc.Namespace)
+			err = StopCloudsnapBackup(pvc.Name, pvc.Namespace)
+			log.FailOnError(err, fmt.Sprintf("error stopping all cs backups for %s [%s] in namespace %s", pvc.Name, pvc.Spec.VolumeName, pvc.Namespace))
+		}(pvc)
+	}
+	wg.Wait()
+
+	err = WaitTillScheduleBackupInDesiredState(backupScheduleName, orgId, ctx, ordinalCount, desiredState)
+	if err != nil {
+		return err
+	}
+	log.InfoD(fmt.Sprintf("WaitTillScheduleBackupInDesiredStateToFailOrPartialSuccess finished: for schedule backup %s", backupScheduleName))
+	return nil
+}
+
+// GetNextOrdinalScheduleBackupCount returns the next ordinal schedule backup count
+func GetNextOrdinalScheduleBackupCount(scheduleName string) (error, int) {
+	var ordinalCounter int
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return err, ordinalCounter
+	}
+	scheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, BackupOrgID)
+	if err != nil {
+		return err, ordinalCounter
+	}
+	ordinalCounter = len(scheduleBackupNames) + 1
+	log.Infof("Next ordinal schedule backup count for schedule [%s] with total number of schedules backup [%v] is [%d]", scheduleName, len(scheduleBackupNames), ordinalCounter)
+	return nil, ordinalCounter
+}
+
+// GetBackupNamespaceFromSchedule returns the namespaces from the schedule
+func GetBackupNamespaceFromSchedule(scheduleName string) ([]string, error) {
+	var nameSpaces []string
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return nil, err
+	}
+	backupScheduleInspectReq := &api.BackupScheduleInspectRequest{
+		OrgId: BackupOrgID,
+		Name:  scheduleName,
+	}
+	scheduleResp, err := Inst().Backup.InspectBackupSchedule(ctx, backupScheduleInspectReq)
+	if err != nil {
+		return nil, err
+	}
+	nameSpaces = scheduleResp.GetBackupSchedule().Namespaces
+	return nameSpaces, nil
 }
