@@ -9,6 +9,10 @@ parameters:
   repl: "1"
   fastpath: "true"
   priority_io: "high"
+  snapshotschedule.stork.libopenstorage.org/interval-schedule: |
+    schedulePolicyName: intervalpolicy
+    annotations:
+      portworx/snapshot-type: cloud
 allowVolumeExpansion: true
 ---
 ##### Portworx storage class
@@ -22,4 +26,8 @@ parameters:
   repl: "1"
   fastpath: "true"
   priority_io: "high"
+  snapshotschedule.stork.libopenstorage.org/interval-schedule: |
+    schedulePolicyName: intervalpolicy
+    annotations:
+      portworx/snapshot-type: cloud
 allowVolumeExpansion: true

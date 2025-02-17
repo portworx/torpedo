@@ -7587,3 +7587,164 @@ var _ = Describe("{CloudsnapVerification}", Label("staging", "p0", "positive", "
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
+
+var _ = Describe("{FastPathVolumeWithSnapParallel}", Label("p0", "negative", "px_ops"), func() {
+	/*
+		Ticket ID: https://purestorage.atlassian.net/browse/HAZEL-1550
+		Step1: Create a fastpath volume, attach and mount, check fastpath is enabled
+		Step2: Trigger snapshot in parallel
+		Step3: Verify node should not crash
+	*/
+	var (
+		testrailID = 0
+		contexts   []*scheduler.Context
+	)
+	JustBeforeEach(func() {
+		StartTorpedoTest("FastPathVolumeWithSnapParallel", "Create a fastpath volume, trigger snapshots in parallel, and verify that nodes remain stable without crashes", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	stepLog := "Create a fastpath volume, trigger snapshots in parallel, and verify that nodes remain stable without crashes."
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		var (
+			err                  error
+			appVolumes           []*volume.Volume
+			snapshotScheduleName string
+			policyName           string
+			pxNode               node.Node
+			volumecount          = 1
+		)
+		cleanup := func() {
+			err = Inst().S.RemoveLabelOnNode(pxNode, k8s.NodeType)
+			log.FailOnError(err, "error removing label on node [%s]", pxNode.Name)
+			DeletePXCloudCredential()
+			err := storkops.Instance().DeleteSchedulePolicy(policyName)
+			log.FailOnError(err, fmt.Sprintf("error deleting a SchedulePolicy [%s]", policyName))
+			DestroyApps(contexts, nil)
+		}
+		defer cleanup()
+		err = CreatePXCloudCredential()
+		log.FailOnError(err, "failed to create cloud credential")
+		stepLog := "Remove the label on all nodes and select the storage node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = RemoveLabelsAllNodes(k8s.NodeType, true, false)
+			log.FailOnError(err, "error removing label on node ")
+			pxNodes, err := GetStorageNodes()
+			log.FailOnError(err, "Unable to get the storage nodes")
+			if len(pxNodes) > 0 {
+				pxNode = GetRandomNode(pxNodes)
+			} else {
+				log.FailOnError(errors.New("No Storage Node Availiable"), "Error occured while selecting StorageNode")
+			}
+			log.Infof("The Selected node for Fast path label is %v : ", pxNode.Name)
+		})
+
+		stepLog = "Add label on the selected storage node and Schedule application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().S.AddLabelOnNode(pxNode, k8s.NodeType, k8s.FastpathNodeType)
+			log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", pxNode.Name))
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				for i := 0; i < volumecount; i++ {
+					taskName := fmt.Sprintf("fastpath-%d", i)
+					appSpec := "fio-fastpath-repl1"
+					provisioner := Inst().Provisioner
+					contexts = append(contexts, ScheduleApplicationsWithScheduleOptions(taskName, appSpec, provisioner)...)
+				}
+
+			}
+		})
+		ValidateApplications(contexts)
+		stepLog = "Get app volumes and Check fast path is active on the node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				stepLog = fmt.Sprintf("get volumes for %s app", ctx.App.Key)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					appVolumes, err := Inst().S.GetVolumes(ctx)
+					log.FailOnError(err, "Failed to get volumes for app %s", ctx.App.Key)
+					dash.VerifyFatal(len(appVolumes) > 0, true, "App volumes exist?")
+					log.Infof("App volumes details: %v ", appVolumes)
+
+					// Loop through the apps and check if the volumes are fastpath active before reboot
+					for _, appvolume := range appVolumes {
+						log.Infof("current volume : %v", appvolume.Name)
+						if strings.Contains(ctx.App.Key, fastpathAppName) {
+							err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
+							log.FailOnError(err, "fastpath volume validation failed for the volume %v", appvolume.Name)
+						}
+					}
+				})
+			}
+		})
+
+		stepLog = "Get the volume from context, create a snapshot schedule for that volume"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			policyName = "intervalpolicy"
+			schedPolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
+			if err != nil {
+				log.Infof("Schedule policy %v not found, creating new one...", policyName)
+				snapshotInterval := 10
+				log.InfoD("Creating an interval schedule policy %v with interval %v minutes", policyName, snapshotInterval)
+				schedPolicy = &storkv1.SchedulePolicy{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: policyName,
+					},
+					Policy: storkv1.SchedulePolicyItem{
+						Interval: &storkv1.IntervalPolicy{
+							IntervalMinutes: snapshotInterval,
+						},
+					}}
+				_, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
+				log.FailOnError(err, "Unable to create schedule policy")
+				log.Infof("Waiting for 5 mins for Snapshots to be completed...")
+				time.Sleep(10 * time.Minute)
+			} else {
+				log.Infof("Schedule policy %v already exists.", schedPolicy.Name)
+			}
+		})
+		stepLog = "Get volumes from context and validate snapshot schedule"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				log.Infof("Validating volumes for context: %v", ctx.App.NameSpace)
+				appNamespace := ctx.App.NameSpace
+				appVolumes, err = Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "Failed to get volumes for app %s", ctx.App.Key)
+
+				for _, vol := range appVolumes {
+					log.Infof("Selected volume: %v", vol.Name)
+					snapshotScheduleName = vol.Name + "-interval-schedule"
+					_, err = storkops.Instance().ValidateSnapshotSchedule(snapshotScheduleName,
+						appNamespace,
+						snapshotScheduleRetryTimeout,
+						snapshotScheduleRetryInterval)
+					log.FailOnError(err, fmt.Sprintf("Error while getting volume snapshot status for [%s]", snapshotScheduleName))
+				}
+			}
+		})
+		stepLog = "Verify that the pod and Px are ready on all nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, node := range node.GetStorageNodes() {
+				isPodReady := Inst().V.IsPxReadyOnNode(node)
+				if isPodReady {
+					log.Infof("Pod and Px are running and healthy on node: %s", node)
+				} else {
+					err := fmt.Errorf("Pod and Px are not running or not healthy on node: %s", node)
+					log.FailOnError(err, "Pod and Px verification failed for the node")
+				}
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		log.InfoD("Test execution finished, cleaning up resources.")
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
