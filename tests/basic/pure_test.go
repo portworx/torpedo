@@ -9461,8 +9461,8 @@ var _ = Describe("{CreatePodsUsingClonewithMT}", func() {
 				err := storage.Instance().DeleteStorageClass(sc)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Delete storage class [%v]", sc))
 			}
-			log.InfoD("Wait for 1 minute before deleting pods in FA")
-			time.Sleep(1 * time.Minute)
+			log.InfoD("Wait for 2 minutes before deleting pods in FA")
+			time.Sleep(2 * time.Minute)
 			if isRealmExists {
 				err = pureutils.DeletePodinFA(faWithRealm, PodNameinFA)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Delete pod [%v] in FA", PodNameinFA))
