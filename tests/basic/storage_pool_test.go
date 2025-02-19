@@ -8289,8 +8289,9 @@ var _ = Describe("{NodeAddDiskWhileAddDiskInProgress}", Label("p0", "positive", 
 				log.FailOnError(err, "error getting node with pool uuid [%s]", poolToBeResized.Uuid)
 				err = Inst().V.ExpandPoolUsingPxctlCmd(*poolNode, poolToBeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, newExpectedSize, true)
 				expectedErr := false
-				expectedErrStr := fmt.Sprintf("resize for pool %s is already in progress", poolToBeResized.Uuid)
-				if err != nil && strings.Contains(err.Error(), expectedErrStr) {
+				resizeInProgressErrMsg := fmt.Sprintf("resize for pool %s is already in progress", poolToBeResized.Uuid)
+				poolRebalanceErrMsg := fmt.Sprintf("Pool expansion not allowed as pool status is StorageRebalance")
+				if err != nil && (strings.Contains(err.Error(), resizeInProgressErrMsg) || strings.Contains(err.Error(), poolRebalanceErrMsg)) {
 					expectedErr = true
 
 				}
