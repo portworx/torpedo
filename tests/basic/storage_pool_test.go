@@ -14670,6 +14670,7 @@ var _ = Describe("{RebootKVDBLeaderDuringPoolResize}", Label("p0", "positive", "
 		leader            *node.Node
 		poolToBeResized   *api.StoragePool
 		poolIDToBeResized string
+		nonMasterKvdbNode node.Node
 	)
 
 	JustBeforeEach(func() {
@@ -14698,8 +14699,18 @@ var _ = Describe("{RebootKVDBLeaderDuringPoolResize}", Label("p0", "positive", "
 			log.FailOnError(err, "Failed to identify the KVDB leader node")
 			log.Infof("KVDB Leader Node identified: %s", leader.Name)
 
+			//get other kvdb node which is not master
+			kvdbNodes, err := GetAllKvdbNodes()
+			for _, kvdbNode := range kvdbNodes {
+				if !kvdbNode.Leader {
+					nonMasterKvdbNode, err = node.GetNodeDetailsByNodeID(kvdbNode.ID)
+					log.FailOnError(err, "Failed to get kvdb node details by node id")
+					break
+				}
+			}
+
 			// Get all storage pools on the leader node
-			pools, err := GetPoolsDetailsOnNode(leader)
+			pools, err := GetPoolsDetailsOnNode(&nonMasterKvdbNode)
 			log.FailOnError(err, fmt.Sprintf("Error retrieving pools on node %s", leader.Name))
 
 			// Verify that at least one pool exists on the leader node
