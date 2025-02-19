@@ -15436,8 +15436,11 @@ func GetNodeDrivesCount(blockDrives map[string]*node.BlockDrive) int {
 	volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
 	log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
 	pxPureSecret, err := pureutils.GetPXPureSecret(volDriverNamespace)
-	log.FailOnError(err, "failed to get secret [%s]  in namespace [%s]", PureSecretName, volDriverNamespace)
-	isFABackend := len(pxPureSecret.Arrays) > 0
+	var isFABackend bool
+	if err != nil && k8serrors.IsNotFound(err) {
+		isFABackend = false
+	}
+	isFABackend = len(pxPureSecret.Arrays) > 0
 
 	if isFABackend {
 		drvNames := make([]string, 0)
