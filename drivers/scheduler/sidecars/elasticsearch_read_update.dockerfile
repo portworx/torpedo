@@ -1,0 +1,12 @@
+FROM alpine/git AS downloader
+USER root
+RUN cd /tmp && git clone https://github.com/logzio/elasticsearch-stress-test.git
+FROM python:2
+WORKDIR /usr/src/elasticsearch-stress-test
+COPY --from=downloader /tmp/elasticsearch-stress-test/requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+COPY --chmod=777 scripts/elasticsearch/elasticsearch_readupdate.py ./
+COPY --chmod=777 scripts/elasticsearch/elasticsearch-stress-test.py ./
+COPY --chmod=777 scripts/elasticsearch/esreadupdate.sh ./
+COPY --chmod=777 scripts/elasticsearch/esload.sh ./
+RUN chmod 777 esreadupdate.sh
