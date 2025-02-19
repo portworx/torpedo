@@ -1,0 +1,11 @@
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: px-file-sc
+provisioner: pxd.portworx.com
+parameters:
+  repl: "2"
+  io_profile: "db"
+  sharedv4: "true"
+  sharedv4_mount_options: vers=4.0
+  sharedv4_svc_type: ClusterIP
