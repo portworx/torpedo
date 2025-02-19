@@ -465,7 +465,9 @@ PodLoop:
 
 		grepPattern := pvName // For normal PX vols, and for FBDA, we can grep for the filesystem name
 		if pureType, ok := vol.Labels[k8sdriver.PureDAVolumeLabel]; ok && pureType == k8sdriver.PureDAVolumeLabelValueFA {
-			grepPattern = strings.ToLower(vol.Labels[k8sdriver.FADAVolumeSerialLabel]) // FADA we need to grep by volume serial
+			if strings.ToLower(vol.Labels[k8sdriver.FADAVolumeSerialLabel])!= "unavailable"{
+			grepPattern = strings.ToLower(vol.Labels[k8sdriver.FADAVolumeSerialLabel])
+			} // FADA we need to grep by volume serial
 			if isNvme {
 				grepPattern = fmt.Sprintf("%s | grep %s", grepPattern[:14], grepPattern[14:])
 			}

@@ -8,6 +8,8 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	. "github.com/portworx/torpedo/tests"
+	"time"
+	
 )
 
 var _ = Describe("{CrashOneNode}", func() {
@@ -100,5 +102,96 @@ var _ = Describe("{CrashOneNode}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{NodeRebootForOneDay}", func() {
+	/* https://purestorage.atlassian.net/browse/PTX-25705
+	1. Schedule applications
+	2. Reboot 2 node(s) continuously for 24 hours
+	3. Validate applications
+	4. Destroy applications
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("NodeRebootForOneDay", "Reboot node(s) continuously for 24 hours", nil, 0)
+	})
+
+	itLog := "Reboot node(s) continuously for 24 hours"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		contexts := make([]*scheduler.Context, 0)
+		stepLog := "schedule applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("noderebootoneday-%d", i))...)
+			}
+			ValidateApplications(contexts)
+		})
+
+		stepLog = "reboot 2 nodes in parallel continuously for 24 hours and validate applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			nodesToReboot := node.GetStorageDriverNodes()[:2] // Get the first two nodes to reboot
+
+			// Start a timer for 24 hours
+			timer := time.NewTimer(24 * time.Hour)
+			defer timer.Stop()
+
+			doneChan := make(chan struct{}, len(nodesToReboot))
+
+			rebootNode := func(nodeToReboot node.Node) {
+				defer GinkgoRecover()
+
+				for {
+					select {
+					case <-timer.C:
+						doneChan <- struct{}{} // Signal the goroutine to stop after 24 hours
+						return
+					default:
+						// Reboot the node
+						err := Inst().N.RebootNode(nodeToReboot, node.RebootNodeOpts{
+							Force: false,
+							ConnectionOpts: node.ConnectionOpts{
+								Timeout:         60 * time.Minute,
+								TimeBeforeRetry: 30 * time.Second,
+							},
+						})
+						dash.VerifySafely(err, nil, "Validate node is rebooted")
+
+						// Verify that the node is back online
+						err = Inst().N.TestConnection(nodeToReboot, node.ConnectionOpts{
+							Timeout:         60 * time.Minute,
+							TimeBeforeRetry: 30 * time.Second,
+						})
+						dash.VerifyFatal(err, nil, "Validate node is back up")
+
+						// Wait until PX is up on the node
+						err = Inst().V.WaitDriverUpOnNode(nodeToReboot, 60*time.Minute)
+						dash.VerifyFatal(err, nil, "Validate volume driver is up")
+
+						log.InfoD("Rebooted and validated node %s", nodeToReboot.Name)
+
+						// Validate applications after each reboot cycle
+						ValidateApplications(contexts)
+					}
+				}
+			}
+
+			// Start rebooting nodes in parallel using goroutines
+			for _, nodeToReboot := range nodesToReboot {
+				go rebootNode(nodeToReboot)
+			}
+
+			// Wait for all nodes to complete the 24-hour reboot process
+			for range nodesToReboot {
+				<-doneChan
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
 	})
 })
