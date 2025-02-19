@@ -1,0 +1,7 @@
+{
+    "acl": {
+        "tokens": {
+            "agent": "${AGENT_TOKEN}"
+        }
+    }
+}
