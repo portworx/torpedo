@@ -36,8 +36,8 @@ spec:
         name: vdbench
         resources:
           limits:
-            cpu: "1"
-            memory: 500Mi
+            cpu: "2"
+            memory: 2000Mi
           requests:
             cpu: 100m
             memory: 256Mi
