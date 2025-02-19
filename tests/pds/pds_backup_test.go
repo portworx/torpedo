@@ -132,6 +132,66 @@ var _ = Describe("{DeleteDataServiceAndValidateBackupAtObjectStore}", func() {
 	})
 })
 
+var _ = Describe("{AdhocBackupAndValidation}", func() {
+	bkpTargetName = bkpTargetName + pdsbkp.RandString(8)
+	JustBeforeEach(func() {
+		StartTorpedoTest("BackupAndValidation", "Perform multiple backup operations and validate them", pdsLabels, 0)
+		bkpClient, err = pdsbkp.InitializePdsBackup()
+		log.FailOnError(err, "Failed to initialize backup for pds.")
+	})
+
+	It("Perform multiple backup operations and validate them.", func() {
+		stepLog := "Create backup target."
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			bkpTarget, err := bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName), deploymentTargetID)
+			log.FailOnError(err, "Failed to create S3 backup target.")
+			log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
+			awsBkpTargets = append(awsBkpTargets, bkpTarget)
+		})
+		stepLog = "Deploy data service and take adhoc backup, deleting the data service should not delete the backups."
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
+			log.FailOnError(err, "Error while fetching the backup supported ds.")
+			for _, ds := range params.DataServiceToTest {
+				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
+				if !supported {
+					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
+					continue
+				}
+				stepLog = "Deploy and validate data service"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+					log.FailOnError(err, "Error while deploying data services")
+				})
+				stepLog = "Perform adhoc backup and validate them"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					log.Infof("Deployment ID: %v, backuptargetID: %v", deployment.GetId(), awsBkpTargets[0].GetId())
+					err := bkpClient.TriggerAndValidateAdhocBackup(deployment.GetId(), awsBkpTargets[0].GetId(), "s3")
+					log.FailOnError(err, "Failed while performing adhoc backup")
+				})
+				Step("Delete Deployments", func() {
+					log.InfoD("Deleting Deployment %v ", *deployment.ClusterResourceName)
+					resp, err := pdslib.DeleteDeployment(deployment.GetId())
+					log.FailOnError(err, "Error while deleting data services")
+					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+					log.InfoD("Getting all PV and associated PVCs and deleting them")
+					err = pdslib.DeletePvandPVCs(*deployment.ClusterResourceName, false)
+					log.FailOnError(err, "Error while deleting PV and PVCs")
+				})
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		err := bkpClient.AWSStorageClient.DeleteBucket()
+		log.FailOnError(err, "Failed while deleting the bucket")
+	})
+})
+
 func deleteAllBkpTargets() {
 	log.InfoD("Delete all the backup targets.")
 	for _, bkptarget := range awsBkpTargets {
