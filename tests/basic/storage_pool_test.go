@@ -207,7 +207,6 @@ var _ = Describe("{StoragePoolExpandDiskAuto}", Label("p0", "positive", "pool_op
 		}
 
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 		log.FailOnError(err, "Failed to list storage pools")
@@ -273,6 +272,7 @@ var _ = Describe("{StoragePoolExpandDiskAuto}", Label("p0", "positive", "pool_op
 			dash.VerifyFatal(isExpansionSuccess, true, fmt.Sprintf("Expected new pool size to be %v or %v, got %v", expectedSize, expectedSizeWithJournal, newPoolSize))
 
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -306,7 +306,6 @@ var _ = Describe("{PoolResizeDiskReboot}", func() {
 		}
 
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 		dash.VerifyFatal(err, nil, "Validate list storage pools")
@@ -382,6 +381,7 @@ var _ = Describe("{PoolResizeDiskReboot}", func() {
 			dash.VerifyFatal(isExpansionSuccess, true,
 				fmt.Sprintf("Expected new pool size to be %v or %v, got %v", expectedSize, expectedSizeWithJournal, newPoolSize))
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -419,7 +419,6 @@ var _ = Describe("{PoolAddDiskReboot}", Label("p0", "negative", "error_injection
 		}
 
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 		log.FailOnError(err, "Failed to list storage pools")
@@ -498,6 +497,7 @@ var _ = Describe("{PoolAddDiskReboot}", Label("p0", "negative", "error_injection
 			dash.VerifyFatal(isExpansionSuccess, true,
 				fmt.Sprintf("Expected new pool size to be %v or %v if pool has journal, got %v", expectedSize, expectedSizeWithJournal, newPoolSize))
 		})
+		appsValidateAndDestroy(contexts)
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
@@ -562,7 +562,6 @@ func nodePoolsExpansion(testName string) {
 		}
 
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		pools, err = Inst().V.ListStoragePools(metav1.LabelSelector{})
 		log.FailOnError(err, "Failed to list storage pools")
@@ -680,6 +679,7 @@ func nodePoolsExpansion(testName string) {
 			}
 
 		})
+		appsValidateAndDestroy(contexts)
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
@@ -732,7 +732,6 @@ var _ = Describe("{AddNewPoolWhileRebalance}", Label("p0", "positive", "pool_ops
 		}
 
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 
@@ -897,6 +896,7 @@ var _ = Describe("{AddNewPoolWhileRebalance}", Label("p0", "positive", "pool_ops
 				dash.VerifySafely(*status, api.Status_STATUS_OK, fmt.Sprintf("validate PX status on node %s", stNode.Name))
 			}
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -1091,12 +1091,12 @@ var _ = Describe("{PoolAddDrive}", Label("p0", "positive", "pool_ops", "PoolExpa
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pooladddrive-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stNode, err := getRandomNodeWithPoolIOs(contexts)
 		log.FailOnError(err, "error identifying node to run test")
 		err = AddCloudDrive(stNode, -1)
 		log.FailOnError(err, "error adding cloud drive")
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -1128,7 +1128,6 @@ var _ = Describe("{AddDriveAndPXRestart}", Label("p0", "negative", "eror_injecti
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pladddrvrestrt-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stNode, err := getRandomNodeWithPoolIOs(contexts)
 		log.FailOnError(err, "error identifying node to run test")
@@ -1143,6 +1142,7 @@ var _ = Describe("{AddDriveAndPXRestart}", Label("p0", "negative", "eror_injecti
 			log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", stNode.Name))
 			dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after restarting on node %s", stNode.Name))
 		})
+		appsValidateAndDestroy(contexts)
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
@@ -1177,7 +1177,6 @@ var _ = Describe("{AddDriveWithPXRestart}", Label("p0", "negative", "error_injec
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pladddrvwrst-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		var initialPoolCount int
 		stNode, err := getRandomNodeWithPoolIOs(contexts)
@@ -1235,6 +1234,7 @@ var _ = Describe("{AddDriveWithPXRestart}", Label("p0", "negative", "error_injec
 			dash.VerifyFatal(newTotalPoolSize, expectedTotalPoolSize, fmt.Sprintf("Validate total pool size after add cloud drive on node %s", stNode.Name))
 			dash.VerifyFatal(initialPoolCount+1 == finalPoolCount, true, fmt.Sprintf("Total pool count after cloud drive add with PX restart Expected:[%d] Got:[%d]", initialPoolCount+1, finalPoolCount))
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -1267,7 +1267,6 @@ var _ = Describe("{PoolAddDriveVolResize}", Label("p0", "positive", "pool_ops", 
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pooladdvolrz-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -1349,6 +1348,7 @@ var _ = Describe("{PoolAddDriveVolResize}", Label("p0", "positive", "pool_ops", 
 				log.FailOnError(err, fmt.Sprintf("err setting repl factor to %d for vol : %s", newRep, volSelected.Name))
 			}
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -1382,7 +1382,6 @@ var _ = Describe("{AddDriveMaintenanceMode}", Label("p1", "negative", "pool_ops"
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("adddrvmnt-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stNode, err := getRandomNodeWithPoolIOs(contexts)
 		log.FailOnError(err, "error identifying node to run test")
@@ -1417,6 +1416,7 @@ var _ = Describe("{AddDriveMaintenanceMode}", Label("p1", "negative", "pool_ops"
 				dash.VerifyFatal(err == nil, false, fmt.Sprintf("Add drive succeeded whien node [%s] is in maintenance mode", stNode.Name))
 			}
 		})
+		appsValidateAndDestroy(contexts)
 	})
 
 	JustAfterEach(func() {
@@ -1449,7 +1449,6 @@ var _ = Describe("{AddDriveStoragelessAndResize}", Label("p0", "positive", "pool
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("adddrvsl-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 		isjournal, err = IsJournalEnabled()
 		log.FailOnError(err, "Failed to check is journal enabled")
 
@@ -1637,6 +1636,7 @@ var _ = Describe("{AddDriveStoragelessAndResize}", Label("p0", "positive", "pool
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d'", expectedSize, expectedSizeWithJournal))
 			exitPoolMaintenance(poolToBeResized.Uuid)
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -1831,7 +1831,6 @@ var _ = Describe("{AddNewDrivesMultipleTimes}", Label("p1", "positive", "pool_op
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("poolresizemul-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -1883,6 +1882,7 @@ var _ = Describe("{AddNewDrivesMultipleTimes}", Label("p1", "positive", "pool_op
 			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using auto", selectedPool.Uuid, selectedNode.Name))
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -1916,7 +1916,6 @@ var _ = Describe("{PoolResizeDiskDiff}", Label("p1", "positive", "pool_ops", "po
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("plrszediff-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -1980,6 +1979,7 @@ var _ = Describe("{PoolResizeDiskDiff}", Label("p1", "positive", "pool_ops", "po
 			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using resize-disk", selectedPool.Uuid, selectedNode.Name))
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -2017,7 +2017,6 @@ var _ = Describe("{PoolAddDiskDiff}", Label("p1", "positive", "pool_ops", "PoolE
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("plradddiff-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -2083,6 +2082,7 @@ var _ = Describe("{PoolAddDiskDiff}", Label("p1", "positive", "pool_ops", "PoolE
 			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using add-disk", selectedPool.Uuid, selectedNode.Name))
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -2114,7 +2114,6 @@ var _ = Describe("{MultiDriveResizeDisk}", Label("p0", "positive", "pool_ops", "
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("muldrvresize-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -2163,6 +2162,7 @@ var _ = Describe("{MultiDriveResizeDisk}", Label("p0", "positive", "pool_ops", "
 			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using resize-disk", selectedPool.Uuid, selectedNode.Name))
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -2195,7 +2195,6 @@ var _ = Describe("{ResizeWithPXRestart}", Label("p1", "negative", "error_injecti
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rsizedskrst-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stNode, err := getRandomNodeWithPoolIOs(contexts)
 		log.FailOnError(err, "error identifying node to run test")
@@ -2228,6 +2227,7 @@ var _ = Describe("{ResizeWithPXRestart}", Label("p1", "negative", "error_injecti
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using resize-disk", selectedPool.Uuid, stNode.Name))
 
 		})
+		appsValidateAndDestroy(contexts)
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
@@ -2262,7 +2262,6 @@ var _ = Describe("{AddWithPXRestart}", Label("p1", "negative", "error_injection"
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("adddskwrst-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stNode, err := getRandomNodeWithPoolIOs(contexts)
 		log.FailOnError(err, "error identifying node to run test")
@@ -2297,6 +2296,7 @@ var _ = Describe("{AddWithPXRestart}", Label("p1", "negative", "error_injection"
 			exitPoolMaintenance(selectedPool.Uuid)
 
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -2329,7 +2329,6 @@ var _ = Describe("{ResizeDiskVolUpdate}", Label("p0", "positive", "pool_ops", "P
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("plrszvolupdt-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -2401,6 +2400,7 @@ var _ = Describe("{ResizeDiskVolUpdate}", Label("p0", "positive", "pool_ops", "P
 				log.FailOnError(err, fmt.Sprintf("err setting repl factor to %d for vol : %s", newRep, volSelected.Name))
 			}
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -2432,7 +2432,6 @@ var _ = Describe("{VolUpdateResizeDisk}", Label("p0", "positive", "pool_ops", "P
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("volupdtplrsz-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -2558,6 +2557,7 @@ var _ = Describe("{VolUpdateResizeDisk}", Label("p0", "positive", "pool_ops", "P
 			err = Inst().V.SetReplicationFactor(volSelected, currRep, nil, nil, true, opts)
 			log.FailOnError(err, fmt.Sprintf("err setting repl factor to %d for vol : %s", newRep, volSelected.Name))
 		}
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -2590,7 +2590,6 @@ var _ = Describe("{VolUpdateAddDisk}", Label("p0", "positive", "pool_ops", "Pool
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("volupdtplrsz-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -2679,6 +2678,7 @@ var _ = Describe("{VolUpdateAddDisk}", Label("p0", "positive", "pool_ops", "Pool
 			err = Inst().V.SetReplicationFactor(volSelected, currRep, nil, nil, true, opts)
 			log.FailOnError(err, fmt.Sprintf("err setting repl factor to %d for vol : %s", newRep, volSelected.Name))
 		}
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -2710,7 +2710,6 @@ var _ = Describe("{VolUpdateAddDrive}", Label("p0", "positive", "pool_ops", "Add
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("plrszvolupdt-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -2777,6 +2776,7 @@ var _ = Describe("{VolUpdateAddDrive}", Label("p0", "positive", "pool_ops", "Add
 			err = Inst().V.SetReplicationFactor(volSelected, currRep, nil, nil, true, opts)
 			log.FailOnError(err, fmt.Sprintf("err setting repl factor to %d for vol : %s", newRep, volSelected.Name))
 		}
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -2809,7 +2809,6 @@ var _ = Describe("{AddDriveWithNodeReboot}", Label("p1", "negative", "error_inje
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pladddrvwrbt-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stNode, err := getRandomNodeWithPoolIOs(contexts)
 		log.FailOnError(err, "error identifying node to run test")
@@ -2861,6 +2860,7 @@ var _ = Describe("{AddDriveWithNodeReboot}", Label("p1", "negative", "error_inje
 			}
 			dash.VerifyFatal(newTotalPoolSize, expectedTotalPoolSize, fmt.Sprintf("Validate total pool size after add cloud drive on node %s", stNode.Name))
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -2894,7 +2894,6 @@ var _ = Describe("{MulPoolsResize}", Label("p0", "positive", "pool_ops", "PoolEx
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("mulpoolsresiz-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		var poolsToBeResized []*api.StoragePool
 
@@ -2937,8 +2936,8 @@ var _ = Describe("{MulPoolsResize}", Label("p0", "positive", "pool_ops", "PoolEx
 				dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on expansion using resize-disk", selPoolID))
 
 			}
-
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -2975,7 +2974,6 @@ var _ = Describe("{MulPoolsAddDisk}", Label("p0", "positive", "pool_ops", "AddDr
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("mulpooladd-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 
@@ -3045,6 +3043,7 @@ var _ = Describe("{MulPoolsAddDisk}", Label("p0", "positive", "pool_ops", "AddDr
 				dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on expansion using add-disk", selPoolID))
 			}
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -3089,7 +3088,6 @@ var _ = Describe("{ResizeWithJrnlAndMeta}", Label("p0", "positive", "pool_ops", 
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rsizedrvmeta-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stepLog = "Check which node has a metadata pool"
 		Step(stepLog, func() {
@@ -3136,6 +3134,7 @@ var _ = Describe("{ResizeWithJrnlAndMeta}", Label("p0", "positive", "pool_ops", 
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using resize-disk", selectedPoolUUID, selectedNode.Name))
 
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -3169,7 +3168,6 @@ var _ = Describe("{PoolExpandWhileIOAndPXRestart}", Label("p0", "negative", "poo
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rsizerepl-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -3211,6 +3209,7 @@ var _ = Describe("{PoolExpandWhileIOAndPXRestart}", Label("p0", "negative", "poo
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using resize-disk", poolToBeResized.Uuid, storageNode2.Name))
 
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -3245,7 +3244,6 @@ var _ = Describe("{ResizeNodeMaintenanceCycle}", Label("p1", "negative", "error_
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rsizenodem-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -3293,6 +3291,7 @@ var _ = Describe("{ResizeNodeMaintenanceCycle}", Label("p1", "negative", "error_
 			dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after maintenance cycle on node %s", selectedNode.Name))
 
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -3331,7 +3330,6 @@ var _ = Describe("{AddDiskNodeMaintenanceCycle}", Label("p1", "negative", "error
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("addnodem-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -3379,6 +3377,7 @@ var _ = Describe("{AddDiskNodeMaintenanceCycle}", Label("p1", "negative", "error
 			dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after maintenance cycle on node %s", selectedNode.Name))
 
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -3410,7 +3409,6 @@ var _ = Describe("{ResizePoolMaintenanceCycle}", Label("p1", "negative", "error_
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rsizepoolm-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -3458,6 +3456,7 @@ var _ = Describe("{ResizePoolMaintenanceCycle}", Label("p1", "negative", "error_
 			log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", selectedNode.Name))
 			dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after maintenance cycle on node %s", selectedNode.Name))
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -3493,7 +3492,6 @@ var _ = Describe("{AddDiskPoolMaintenanceCycle}", Label("p1", "negative", "error
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("addpoolm-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -3542,6 +3540,7 @@ var _ = Describe("{AddDiskPoolMaintenanceCycle}", Label("p1", "negative", "error
 			dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after maintenance cycle on node %s", selectedNode.Name))
 
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -3576,7 +3575,6 @@ var _ = Describe("{NodeMaintenanceResize}", Label("p1", "negative", "error_injec
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rszedskmnt-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -3660,6 +3658,7 @@ var _ = Describe("{NodeMaintenanceResize}", Label("p1", "negative", "error_injec
 			resizeErr := waitForPoolToBeResized(expectedSize, poolToBeResized.Uuid, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using resize-disk", poolToBeResized.Uuid, stNode.Name))
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 
@@ -3698,7 +3697,6 @@ var _ = Describe("{NodeMaintenanceModeAddDisk}", Label("p1", "negative", "error_
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("adddskmnt-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -3782,6 +3780,7 @@ var _ = Describe("{NodeMaintenanceModeAddDisk}", Label("p1", "negative", "error_
 			resizeErr := waitForPoolToBeResized(expectedSize, poolToBeResized.Uuid, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using add-disk", poolToBeResized.Uuid, stNode.Name))
 		})
+		appsValidateAndDestroy(contexts)
 	})
 
 	JustAfterEach(func() {
@@ -3814,7 +3813,6 @@ var _ = Describe("{PoolMaintenanceModeResize}", Label("p1", "negative", "error_i
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rszedskmnt-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -3892,6 +3890,7 @@ var _ = Describe("{PoolMaintenanceModeResize}", Label("p1", "negative", "error_i
 		status, err = Inst().V.GetNodeStatus(*stNode)
 		log.FailOnError(err, "err getting node [%s] status", stNode.Name)
 		log.Infof(fmt.Sprintf("Node %s status %s after exit", stNode.Name, status.String()))
+		appsValidateAndDestroy(contexts)
 	})
 
 	JustAfterEach(func() {
@@ -3929,7 +3928,6 @@ var _ = Describe("{PoolMaintenanceModeAddDisk}", Label("p1", "negative", "error_
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("adddskmnt-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -4010,6 +4008,7 @@ var _ = Describe("{PoolMaintenanceModeAddDisk}", Label("p1", "negative", "error_
 			log.FailOnError(err, "err getting node [%s] status", stNode.Name)
 			log.Infof(fmt.Sprintf("Node %s status %s after exit", stNode.Name, status.String()))
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 
@@ -4048,7 +4047,6 @@ var _ = Describe("{AddDiskNodeMaintenanceMode}", Label("p1", "negative", "error_
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("mntadddsk-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -4135,6 +4133,7 @@ var _ = Describe("{AddDiskNodeMaintenanceMode}", Label("p1", "negative", "error_
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using add-disk", poolToBeResized.Uuid, stNode.Name))
 
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 
@@ -4169,7 +4168,6 @@ var _ = Describe("{ResizeNodeMaintenanceMode}", Label("p1", "negative", "error_i
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("mntrsze-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -4252,6 +4250,7 @@ var _ = Describe("{ResizeNodeMaintenanceMode}", Label("p1", "negative", "error_i
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using resize-disk", poolToBeResized.Uuid, stNode.Name))
 
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 
@@ -4286,7 +4285,6 @@ var _ = Describe("{ResizePoolMaintenanceMode}", Label("p1", "negative", "erro_in
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("plmntrsze-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -4365,6 +4363,7 @@ var _ = Describe("{ResizePoolMaintenanceMode}", Label("p1", "negative", "erro_in
 		status, err := Inst().V.GetNodeStatus(*stNode)
 		log.FailOnError(err, "error getting node [%s] status", stNode.Name)
 		log.Infof(fmt.Sprintf("Node %s status %s after exit", stNode.Name, status.String()))
+		appsValidateAndDestroy(contexts)
 	})
 
 	JustAfterEach(func() {
@@ -4403,7 +4402,6 @@ var _ = Describe("{AddDiskPoolMaintenanceMode}", Label("p1", "negative", "error_
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("plmntadddsk-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -4482,6 +4480,7 @@ var _ = Describe("{AddDiskPoolMaintenanceMode}", Label("p1", "negative", "error_
 		status, err := Inst().V.GetNodeStatus(*stNode)
 		log.FailOnError(err, "error getting node [%s] status", stNode.Name)
 		log.Infof(fmt.Sprintf("Node %s status %s after exit", stNode.Name, status.String()))
+		appsValidateAndDestroy(contexts)
 	})
 
 	JustAfterEach(func() {
@@ -4511,7 +4510,6 @@ var _ = Describe("{PXRestartResize}", Label("p1", "negative", "error_injection",
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rstrszedsk-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stNode, err := getRandomNodeWithPoolIOs(contexts)
 		log.FailOnError(err, "error identifying node to run test")
@@ -4542,6 +4540,7 @@ var _ = Describe("{PXRestartResize}", Label("p1", "negative", "error_injection",
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using resize-disk", selectedPool.Uuid, stNode.Name))
 
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -4576,7 +4575,6 @@ var _ = Describe("{PXRestartAddDisk}", Label("p1", "negative", "error_injection"
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rstadddsk-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stNode, err := getRandomNodeWithPoolIOs(contexts)
 		log.FailOnError(err, "error identifying node to run test")
@@ -4607,6 +4605,7 @@ var _ = Describe("{PXRestartAddDisk}", Label("p1", "negative", "error_injection"
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using add-disk", selectedPool.Uuid, stNode.Name))
 
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -4647,7 +4646,6 @@ var _ = Describe("{PoolExpandPendingUntilVolClean}", Label("p1", "positive", "po
 		ValidateApplications(contexts)
 		defer func() {
 			Inst().AppList = appList
-			appsValidateAndDestroy(contexts)
 		}()
 
 		_, poolIDToResize, err := getPoolAndVolsWithMaxVols()
@@ -4699,6 +4697,7 @@ var _ = Describe("{PoolExpandPendingUntilVolClean}", Label("p1", "positive", "po
 			resizeErr := waitForPoolToBeResized(expectedSize, poolToResize.Uuid, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using resize-disk", poolToResize.Uuid, nodeSelected.Name))
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -4767,7 +4766,6 @@ var _ = Describe("{AddNewPoolWhileFullPoolExpanding}", Label("p0", "positive", "
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("nwplfullad-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 		//creating a spec to perform add  drive
 		driveSpecs, err := GetCloudDriveDeviceSpecs()
 		log.FailOnError(err, "Error getting cloud drive specs")
@@ -4922,6 +4920,7 @@ var _ = Describe("{AddNewPoolWhileFullPoolExpanding}", Label("p0", "positive", "
 			log.FailOnError(err, fmt.Sprintf("Error getting PX status of node %s", selectedNode.Name))
 			dash.VerifySafely(*nodeStatus, api.Status_STATUS_OK, fmt.Sprintf("validate PX status on node %s", selectedNode.Name))
 		})
+		appsValidateAndDestroy(contexts)
 	})
 
 	JustAfterEach(func() {
@@ -5375,7 +5374,6 @@ var _ = Describe("{StorageFullPoolAddDisk}", Label("p0", "positive", "px_ops", "
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("sfullad-%d", i))...)
 		}
-		defer appsValidateAndDestroy(contexts)
 
 		err = WaitForPoolOffline(*selectedNode)
 		log.FailOnError(err, fmt.Sprintf("Failed to make node %s storage down", selectedNode.Name))
@@ -5454,6 +5452,7 @@ var _ = Describe("{StorageFullPoolAddDisk}", Label("p0", "positive", "px_ops", "
 			log.FailOnError(err, fmt.Sprintf("Error getting PX status of node %s", selectedNode.Name))
 			dash.VerifySafely(*status, api.Status_STATUS_OK, fmt.Sprintf("validate PX status on node %s", selectedNode.Name))
 		})
+		appsValidateAndDestroy(contexts)
 	})
 
 	JustAfterEach(func() {
@@ -5508,7 +5507,6 @@ var _ = Describe("{ResizeKvdbNoQuorum}", Label("p0", "negative", "pool_ops", "kv
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("resiznoqr-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stoageDriverNodes := node.GetStorageNodes()
 
@@ -5585,6 +5583,7 @@ var _ = Describe("{ResizeKvdbNoQuorum}", Label("p0", "negative", "pool_ops", "kv
 			dash.VerifyFatal(validErr, true, fmt.Sprintf("verify err is valid %s", err.Error()))
 
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -5617,7 +5616,6 @@ var _ = Describe("{StoPoolExpMulPools}", Label("p0", "positive", "pool_ops", "Po
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("poolexpand-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		// Get all the storage Nodes present in the system
 		stNodes := node.GetStorageNodes()
@@ -5666,6 +5664,7 @@ var _ = Describe("{StoPoolExpMulPools}", Label("p0", "positive", "pool_ops", "Po
 			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool [%s] on node [%s] expansion using auto", selectedPool.Uuid, selectedNode.Name))
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -5705,7 +5704,6 @@ var _ = Describe("{CreateSnapshotsPoolResize}", Label("p0", "positive", "snapsho
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("snapcreateresizepool-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		var stNode node.Node
 		var err error
@@ -5772,6 +5770,7 @@ var _ = Describe("{CreateSnapshotsPoolResize}", Label("p0", "positive", "snapsho
 			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool [%s] on node [%s] expansion using auto", selectedPool.Uuid, selectedNode.Name))
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -5838,7 +5837,6 @@ var _ = Describe("{PoolResizeVolumesResync}", Label("p0", "positive", "px_vol_op
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("snapcreateresizepool-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		time.Sleep(5 * time.Second)
 		for _, each := range contexts {
@@ -5955,6 +5953,7 @@ var _ = Describe("{PoolResizeVolumesResync}", Label("p0", "positive", "px_vol_op
 			resizeErr := waitForPoolToBeResized(expectedSize, rebootPoolID, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool [%s] on node [%s] expansion using auto", rebootPoolID, restartDriver.Name))
 		}
+		appsValidateAndDestroy(contexts)
 	})
 
 	JustAfterEach(func() {
@@ -5990,7 +5989,6 @@ var _ = Describe("{PoolIncreaseSize20TB}", Label("p1", "positive", "pool_ops", "
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("snapcreateresizepool-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		selectedNode := GetNodeWithLeastSize()
 		if selectedNode == nil {
@@ -6115,6 +6113,7 @@ var _ = Describe("{PoolIncreaseSize20TB}", Label("p1", "positive", "pool_ops", "
 			err = Inst().V.RefreshDriverEndpoints()
 			log.FailOnError(err, "Failed to refresh driver endpoints")
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 
@@ -6207,7 +6206,6 @@ var _ = Describe("{ResizePoolDrivesInDifferentSize}", Label("p1", "positive", "p
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("resizepooldrivesdiffsize-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 		allPools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 		log.FailOnError(err, "Failed to list storage pools")
 		poolUUID := pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, 0)
@@ -6265,6 +6263,7 @@ var _ = Describe("{ResizePoolDrivesInDifferentSize}", Label("p1", "positive", "p
 
 		dash.VerifyFatal(response, true,
 			fmt.Sprintf("Validate pool expansion with Disk size same as pool size [%v GiB] is successful", diskSize))
+		appsValidateAndDestroy(contexts)
 	})
 
 	JustAfterEach(func() {
@@ -6364,7 +6363,6 @@ var _ = Describe("{PoolDelete}", Label("p0", "positive", "pool_ops"), func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("resiznoqr-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		newSpecSize := (poolToDelete.TotalSize / units.GiB) / 2
 		///creating a spec to perform add  drive
@@ -6462,6 +6460,7 @@ var _ = Describe("{PoolDelete}", Label("p0", "positive", "pool_ops"), func() {
 			log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", nodeSelected.Name))
 			log.InfoD("pool is added")
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -6707,7 +6706,6 @@ var _ = Describe("{PoolResizeSameSize}", Label("p1", "positive", "pool_ops", "Po
 		}
 
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		err := Inst().V.RefreshDriverEndpoints()
 		log.FailOnError(err, "error refreshing end points")
@@ -6780,6 +6778,7 @@ var _ = Describe("{PoolResizeSameSize}", Label("p1", "positive", "pool_ops", "Po
 					selectedNodePool.Uuid, stNode.Name))
 
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -6932,7 +6931,6 @@ var _ = Describe("{ChangedIOPriorityPersistPoolExpand}", Label("p1", "positive",
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("chgpriopoolex-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		// Get the Pool UUID on which IO is running
 		poolUUID := pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_AUTO, 0)
@@ -7000,6 +6998,7 @@ var _ = Describe("{ChangedIOPriorityPersistPoolExpand}", Label("p1", "positive",
 
 		log.InfoD(fmt.Sprintf("Priority Before [%s] was set to [%s] and Priority after Pool Expansion [%s]", ioPriorityBefore, setIOPriority, ioPriorityAfter))
 		dash.VerifyFatal(strings.ToLower(setIOPriority) == strings.ToLower(ioPriorityAfter), true, "IO Priority mismatch after pool expansion")
+		appsValidateAndDestroy(contexts)
 
 	})
 
@@ -7037,7 +7036,6 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", Label("p1", "negative", "poo
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("deleteinvalidpoolid-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		kvdbNodes, err := GetAllKvdbNodes()
 		log.FailOnError(err, "failed to get kvdb nodes")
@@ -7131,6 +7129,7 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", Label("p1", "negative", "poo
 					api.ResourceType_RESOURCE_TYPE_POOL,
 					eachAlert))
 		}
+		appsValidateAndDestroy(contexts)
 	})
 
 	JustAfterEach(func() {
@@ -7165,7 +7164,6 @@ var _ = Describe("{PoolResizeInvalidPoolID}", Label("p1", "negative", "pool_ops"
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("invalidpoolid-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		// Get the Pool UUID on which IO is running
 		poolUUID := pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_AUTO, 0)
@@ -7254,6 +7252,7 @@ var _ = Describe("{PoolResizeInvalidPoolID}", Label("p1", "negative", "pool_ops"
 			dash.VerifyFatal(len(alerts.Alerts) > 0, true, alertErrorMessage)
 
 		})
+		appsValidateAndDestroy(contexts)
 	})
 
 	JustAfterEach(func() {
@@ -7282,7 +7281,6 @@ var _ = Describe("{ResizePoolReduceErrorcheck}", Label("p0", "positive", "pool_o
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("reducesize-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		// Get the Pool UUID on which IO is running
 		poolUUID := pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_AUTO, 0)
@@ -7311,6 +7309,7 @@ var _ = Describe("{ResizePoolReduceErrorcheck}", Label("p0", "positive", "pool_o
 			dash.VerifyFatal(errMatch, nil, "Pool expand to lower size than existing pool size completed?")
 
 		})
+		appsValidateAndDestroy(contexts)
 	})
 
 	JustAfterEach(func() {
@@ -7350,7 +7349,6 @@ var _ = Describe("{PoolDeleteRebalancePxState}", Label("p0", "positive", "pool_o
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pooldeleterebalanceid-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		poolsBfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 		log.FailOnError(err, "Failed to list storage pools")
@@ -7490,6 +7488,8 @@ var _ = Describe("{PoolDeleteRebalancePxState}", Label("p0", "positive", "pool_o
 		dash.VerifyFatal(resizeErr, nil,
 			fmt.Sprintf("Verify pool %s on expansion using auto option", poolUUID))
 
+		appsValidateAndDestroy(contexts)
+
 	})
 
 	JustAfterEach(func() {
@@ -7528,7 +7528,6 @@ var _ = Describe("{AddMultipleDriveStorageLessNodeResizeDisk}", Label("p0", "pos
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("storagelessresizedisk-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		// Get Pool with running IO on the cluster
 		poolUUID := pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_AUTO, 0)
@@ -7604,6 +7603,7 @@ var _ = Describe("{AddMultipleDriveStorageLessNodeResizeDisk}", Label("p0", "pos
 			dash.VerifyFatal(resizeErr, nil,
 				fmt.Sprintf("Verify pool %s on expansion using auto option", eachPool))
 		}
+		appsValidateAndDestroy(contexts)
 	})
 
 	JustAfterEach(func() {
@@ -7640,7 +7640,6 @@ var _ = Describe("{DriveAddPXDown}", Label("p0", "negative", "pool_ops", "px_ops
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("adddrivepxdownid-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		// Get Pool with running IO on the cluster
 		poolUUID := pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, 0)
@@ -7685,6 +7684,7 @@ var _ = Describe("{DriveAddPXDown}", Label("p0", "negative", "pool_ops", "px_ops
 		} else {
 			log.FailOnError(err, "Expect the addition of a new pool on the node to fail.")
 		}
+		appsValidateAndDestroy(contexts)
 	})
 
 	JustAfterEach(func() {
@@ -7722,7 +7722,6 @@ var _ = Describe("{ExpandUsingAddDriveAndPXRestart}", Label("p1", "negative", "p
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pladddrvrestrt-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		// Get Pool with running IO on the cluster
 		poolUUID := pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, 100)
@@ -7758,6 +7757,7 @@ var _ = Describe("{ExpandUsingAddDriveAndPXRestart}", Label("p1", "negative", "p
 			dash.VerifyFatal(err == nil, true,
 				fmt.Sprintf("PX is up after restarting on node [%s]", nodeDetail.Name))
 		})
+		appsValidateAndDestroy(contexts)
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
@@ -7792,7 +7792,6 @@ var _ = Describe("{ExpandUsingAddDriveAndNodeRestart}", Label("p1", "negative", 
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("expanddiskadddrive-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		// Get Pool with running IO on the cluster
 		poolUUID := pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, 0)
@@ -7844,6 +7843,8 @@ var _ = Describe("{ExpandUsingAddDriveAndNodeRestart}", Label("p1", "negative", 
 				expectedSize,
 				expectedSizeWithJournal))
 
+		appsValidateAndDestroy(contexts)
+
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
@@ -7877,7 +7878,6 @@ var _ = Describe("{ResizeDiskAddDiskSamePool}", Label("p1", "positive", "pool_op
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("resizediskadddisk-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		// Get Pool with running IO on the cluster
 		poolUUID := pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, 0)
@@ -7942,6 +7942,7 @@ var _ = Describe("{ResizeDiskAddDiskSamePool}", Label("p1", "positive", "pool_op
 			dash.VerifyFatal(len(allPoolsOnNode) <= len(allPoolsOnNodeAfterResize), true,
 				"New pool is created on trying to expand pool using add disk option")
 		}
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -7973,7 +7974,6 @@ var _ = Describe("{DriveAddRebalanceInMaintenance}", Label("p1", "negative", "er
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("resizediskadddisk-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		// Get Pool with running IO on the cluster
 		poolUUID := pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, 0)
@@ -8036,6 +8036,7 @@ var _ = Describe("{DriveAddRebalanceInMaintenance}", Label("p1", "negative", "er
 			fmt.Sprintf("pool %v rebalance failed", poolUUID))
 		err = Inst().V.RefreshDriverEndpoints()
 		log.FailOnError(err, "error refreshing driver end points")
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -8189,7 +8190,6 @@ var _ = Describe("{AllPoolsDeleteAndCreateAndDelete}", Label("p0", "positive", "
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("alpldel2-%d", i))...)
 			}
 			ValidateApplications(contexts)
-			defer appsValidateAndDestroy(contexts)
 
 			isReplExists := false
 
@@ -8259,6 +8259,7 @@ var _ = Describe("{AllPoolsDeleteAndCreateAndDelete}", Label("p0", "positive", "
 			}
 			log.InfoD("Adding new pool was successful")
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 
@@ -8294,7 +8295,6 @@ var _ = Describe("{NodeAddDiskWhileAddDiskInProgress}", Label("p0", "positive", 
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pladddskinp-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		poolUUIDToBeResized := pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, 0)
 
@@ -8376,6 +8376,7 @@ var _ = Describe("{NodeAddDiskWhileAddDiskInProgress}", Label("p0", "positive", 
 			})
 
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -8410,7 +8411,6 @@ var _ = Describe("{NodeAddDiskWhileResizeDiskInProgress}", Label("p0", "positive
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("plrszdskinp-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		poolUUIDToBeResized := pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, 0)
 
@@ -8493,6 +8493,7 @@ var _ = Describe("{NodeAddDiskWhileResizeDiskInProgress}", Label("p0", "positive
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verify pool %s on expansion using add-disk", poolToBeResized.Uuid))
 
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -8530,7 +8531,6 @@ var _ = Describe("{MulVolPoolResize}", Label("p0", "positive", "node_ops", "pool
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("nwplfullad-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stepLog = "Get pool with multiple volumes"
 		var selectedPoolID string
@@ -8578,6 +8578,7 @@ var _ = Describe("{MulVolPoolResize}", Label("p0", "positive", "node_ops", "pool
 			resizeErr := waitForPoolToBeResized(expectedSize, poolToBeResized.Uuid, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on expansion using resize-disk", poolToBeResized.Uuid))
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 
@@ -8731,7 +8732,6 @@ var _ = Describe("{MulPoolsUpMetaPoolFullAndResize}", Label("p0", "positive", "p
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("mtplfullrz-%d", i))...)
 			}
 			ValidateApplications(contexts)
-			defer appsValidateAndDestroy(contexts)
 
 			err = waitForStorageDown(selectedNode)
 			log.FailOnError(err, fmt.Sprintf("Failed to make node %s storage down", selectedNode.Name))
@@ -8762,6 +8762,7 @@ var _ = Describe("{MulPoolsUpMetaPoolFullAndResize}", Label("p0", "positive", "p
 			status, err := Inst().V.GetNodeStatus(selectedNode)
 			log.FailOnError(err, fmt.Sprintf("Error getting PX status of node %s", selectedNode.Name))
 			dash.VerifySafely(*status, api.Status_STATUS_OK, fmt.Sprintf("validate PX status on node %s. Current status: [%s]", selectedNode.Name, status.String()))
+			appsValidateAndDestroy(contexts)
 
 		})
 
@@ -8800,7 +8801,6 @@ var _ = Describe("{DiffPoolExpansionFromMaintenanceNode}", Label("p1", "negative
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("nwplfullad-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stepLog = "Get pool with IOs"
 		var selectedPoolID string
@@ -8851,6 +8851,7 @@ var _ = Describe("{DiffPoolExpansionFromMaintenanceNode}", Label("p1", "negative
 			resizeErr := waitForPoolToBeResized(expectedSize, poolToBeResized.Uuid, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on expansion using resize-disk", poolToBeResized.Uuid))
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 
@@ -8890,7 +8891,6 @@ var _ = Describe("{ResyncFailedPoolOutOfRebalance}", Label("p1", "positive", "po
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("reducesize-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		// Get Pool with running IO on the cluster
 		poolUUID := pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, 0)
@@ -8964,6 +8964,7 @@ var _ = Describe("{ResyncFailedPoolOutOfRebalance}", Label("p1", "positive", "po
 				}
 			}
 		}
+		appsValidateAndDestroy(contexts)
 	})
 
 	JustAfterEach(func() {
@@ -8997,7 +8998,6 @@ var _ = Describe("{AddDiskAddDriveAndDeleteInstance}", Label("p0", "positive", "
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("plrszdskinp-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		poolUUIDToBeResized := pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, 0)
 
@@ -9223,6 +9223,7 @@ var _ = Describe("{AddDiskAddDriveAndDeleteInstance}", Label("p0", "positive", "
 
 			dash.VerifySafely(isInitDedicatedMetadataDiskExist, isNewDedicatedMetadataDiskExist, "Verify dedicated metadisk status")
 		})
+		appsValidateAndDestroy(contexts)
 	})
 
 	JustAfterEach(func() {
@@ -9265,7 +9266,6 @@ var _ = Describe("{DriveAddAsJournal}", Label("p0", "positive", "pool_ops"), fun
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("adddriveasjournal-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		// Get Pool with running IO on the cluster
 		poolUUID := pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_AUTO, 0)
@@ -9357,6 +9357,7 @@ var _ = Describe("{DriveAddAsJournal}", Label("p0", "positive", "pool_ops"), fun
 				log.FailOnError(err, "error refreshing driver end points")
 			}
 		}
+		appsValidateAndDestroy(contexts)
 	})
 
 	JustAfterEach(func() {
@@ -9424,7 +9425,6 @@ var _ = Describe("{ReplResyncOnPoolExpand}", Label("p0", "positive", "pool_ops",
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("replresyncpoolexpand-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		// Get a pool with running IO
 		poolUUID := pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, 0)
@@ -9498,6 +9498,7 @@ var _ = Describe("{ReplResyncOnPoolExpand}", Label("p0", "positive", "pool_ops",
 		for _, eachVol := range volumes {
 			log.FailOnError(waitTillVolumeStatusUp(eachVol), "failed to get volume status UP")
 		}
+		appsValidateAndDestroy(contexts)
 	})
 
 	JustAfterEach(func() {
@@ -9532,7 +9533,6 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", Label("p1", "negative", "p
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("volumepooloperations-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		// Get Pool with running IO on the cluster
 		poolUUID := pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, 0)
@@ -9713,6 +9713,7 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", Label("p1", "negative", "p
 			}
 		}
 		stopRoutine()
+		appsValidateAndDestroy(contexts)
 	})
 
 	JustAfterEach(func() {
@@ -9744,7 +9745,6 @@ var _ = Describe("{KvdbFailoverDuringPoolExpand}", Label("p1", "negative", "pool
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("volumepooloperations-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		// Get a pool with running IO
 		poolUUID := pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, 0)
@@ -9806,6 +9806,7 @@ var _ = Describe("{KvdbFailoverDuringPoolExpand}", Label("p1", "negative", "pool
 			return nil
 		}
 		log.FailOnError(expandPoolWithKVDBFailover(poolUUID), "pool expand with kvdb failover failed")
+		appsValidateAndDestroy(contexts)
 
 	})
 
@@ -9838,7 +9839,6 @@ var _ = Describe("{KvdbRestartNewNodeAcquired}", Label("p1", "negative", "pool_o
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("kvdbrestartnewnodeacquired-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		killType := []string{"reboot", "kill"}
 
@@ -9876,6 +9876,7 @@ var _ = Describe("{KvdbRestartNewNodeAcquired}", Label("p1", "negative", "pool_o
 				fmt.Sprintf("all kvdb nodes are not up available total kvdb nodes [%v]", len(allKvdbNodes)))
 
 		}
+		appsValidateAndDestroy(contexts)
 	})
 
 	JustAfterEach(func() {
@@ -9945,7 +9946,6 @@ var _ = Describe("{ExpandMultiplePoolWithIOsInClusterAtOnce}", Label("p0", "posi
 		}
 		time.Sleep(60 * time.Second)
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		poolIdsToExpand := []string{}
 		for _, eachNodes := range node.GetStorageNodes() {
@@ -9967,6 +9967,7 @@ var _ = Describe("{ExpandMultiplePoolWithIOsInClusterAtOnce}", Label("p0", "posi
 		dash.VerifyFatal(err, nil, "Pool expansion in parallel failed")
 
 		wg.Wait()
+		appsValidateAndDestroy(contexts)
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
@@ -10095,7 +10096,6 @@ var _ = Describe("{CreateNewPoolsOnClusterInParallel}", Label("p0", "positive", 
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("createnewpoolsinparallel-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		getNodes := node.GetNodes()
 		for _, each := range getNodes {
@@ -10112,6 +10112,7 @@ var _ = Describe("{CreateNewPoolsOnClusterInParallel}", Label("p0", "positive", 
 		}
 		err := CreateNewPoolsOnMultipleNodesInParallel(nodesToUse)
 		log.FailOnError(err, "error adding cloud drives in parallel")
+		appsValidateAndDestroy(contexts)
 
 	})
 
@@ -10145,7 +10146,6 @@ var _ = Describe("{AddDriveMetadataPool}", Label("p0", "positive", "pool_ops"), 
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("adddrivemetadatapool-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		// Get Pool with running IO on the cluster
 		poolUUID := pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, 0)
@@ -10182,6 +10182,7 @@ var _ = Describe("{AddDriveMetadataPool}", Label("p0", "positive", "pool_ops"), 
 		resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
 		dash.VerifyFatal(resizeErr, nil,
 			fmt.Sprintf("Verify pool %s on expansion using auto option", poolUUID))
+		appsValidateAndDestroy(contexts)
 
 	})
 
@@ -10420,7 +10421,6 @@ var _ = Describe("{PoolExpandRebalanceShutdownNode}", Label("p1", "negative", "n
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rebalanceshutdown-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		// Get Pool with running IO on the cluster
 		poolUUID := pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, 0)
@@ -10496,6 +10496,7 @@ var _ = Describe("{PoolExpandRebalanceShutdownNode}", Label("p1", "negative", "n
 		resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
 		dash.VerifyFatal(resizeErr, nil,
 			fmt.Sprintf("waiting for pool expansion to complete failed on pool %s", poolUUID))
+		appsValidateAndDestroy(contexts)
 	})
 
 	JustAfterEach(func() {
@@ -10530,7 +10531,6 @@ var _ = Describe("{AddDriveWithKernelPanic}", Label("p1", "negative", "pool_ops"
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pladddrvwrst-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		// Get Pool with running IO on the cluster
 		poolUUID := pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, 200)
@@ -10589,6 +10589,7 @@ var _ = Describe("{AddDriveWithKernelPanic}", Label("p1", "negative", "pool_ops"
 		err = ValidateDriveRebalance(*stNode)
 		log.FailOnError(err, "Pool re-balance failed")
 		dash.VerifyFatal(err == nil, true, "PX is up after add drive with kernel panic")
+		appsValidateAndDestroy(contexts)
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
@@ -10830,7 +10831,6 @@ var _ = Describe("{PoolDeleteFunctionality}", Label("p0", "positive", "pool_ops"
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pooldeletefunc-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stepLog = fmt.Sprintf("Adding cloud drive to node [%v] with size [%v]", selectedNode.Name, poolToAddBack.TotalSize/units.GiB)
 		Step(stepLog, func() {
@@ -10884,6 +10884,7 @@ var _ = Describe("{PoolDeleteFunctionality}", Label("p0", "positive", "pool_ops"
 			resizeErr := waitForPoolToBeResized(expectedSize, poolIDSelected, false)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on expansion using auto option", poolIDSelected))
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -10927,7 +10928,6 @@ var _ = Describe("{PoolDeleteNegative}", Label("p1", "negative", "error_injectio
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pooldeleteinvalidid-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		// test pool delete without entering pool maintenance mode - should fail
 		// TODO (do we need this check?) if IsLocalCluster(*selectedNode) || IsIksCluster() {
@@ -10949,6 +10949,7 @@ var _ = Describe("{PoolDeleteNegative}", Label("p1", "negative", "error_injectio
 		deletePoolAndValidateFaliure("-1", selectedNode, errRegExp)
 
 		log.FailOnError(ExitPoolMaintenance(*selectedNode), "failed to exit pool maintenance mode")
+		appsValidateAndDestroy(contexts)
 	})
 
 	ItLog = "Delete pool that has a volume on it"
@@ -10960,7 +10961,6 @@ var _ = Describe("{PoolDeleteNegative}", Label("p1", "negative", "error_injectio
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pooldeletewithvol-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		selectedPoolUUID := pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, 0)
 		log.InfoD("Pool UUID on which IO is running [%s]", selectedPoolUUID)
@@ -10973,6 +10973,7 @@ var _ = Describe("{PoolDeleteNegative}", Label("p1", "negative", "error_injectio
 		errRegExp := regexp.MustCompile("Cannot delete pool: Following volumes have data on pool")
 		deletePoolAndValidateFaliure(fmt.Sprintf("%v", selectedPool.ID), selectedNode, errRegExp)
 		log.FailOnError(ExitPoolMaintenance(*selectedNode), "failed to exit pool maintenance mode")
+		appsValidateAndDestroy(contexts)
 	})
 
 	ItLog = "Delete pool while a volume on the pool is in resync"
@@ -10990,7 +10991,6 @@ var _ = Describe("{PoolDeleteNegative}", Label("p1", "negative", "error_injectio
 		log.InfoD("scheduling apps ")
 		appNamespace := fmt.Sprintf("pooldeletewithresync-%s", Inst().InstanceID)
 		contexts := ScheduleApplicationsOnNamespace(appNamespace, "pooldeletewithresync")
-		defer appsValidateAndDestroy(contexts)
 
 		// waiting for the data to be written before performing ha-update
 		testVolume, err := GetVolumeWithMinimumSize(contexts, 50)
@@ -11035,6 +11035,7 @@ var _ = Describe("{PoolDeleteNegative}", Label("p1", "negative", "error_injectio
 		errRegExp := regexp.MustCompile("Cannot delete pool: Following volumes have data on pool")
 		deletePoolAndValidateFaliure(fmt.Sprintf("%v", replAddPool.ID), replAddNode, errRegExp)
 		log.FailOnError(ExitPoolMaintenance(*replAddNode), "failed to exit pool maintenance mode")
+		appsValidateAndDestroy(contexts)
 	})
 
 	JustAfterEach(func() {
@@ -12315,7 +12316,6 @@ var _ = Describe("{PoolResizeWhenReplOneVolinPool}", Label("p0", "positive", "po
 		})
 
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stepLog = "Resize pool with resize disk"
 		Step(stepLog, func() {
@@ -12358,6 +12358,7 @@ var _ = Describe("{PoolResizeWhenReplOneVolinPool}", Label("p0", "positive", "po
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d' if pool has journal", expectedSize, expectedSizeWithJournal))
 
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 
@@ -12480,7 +12481,6 @@ var _ = Describe("{AddingDrivesBeyondSupportedLimit}", Label("p1", "pool_ops", "
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pooldrivemax-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		var selectedNode node.Node
 		stepStr := "Get random storage nodes"
@@ -12592,6 +12592,7 @@ var _ = Describe("{AddingDrivesBeyondSupportedLimit}", Label("p1", "pool_ops", "
 			err = Inst().V.RefreshDriverEndpoints()
 			log.FailOnError(err, "Error refreshing volume endpoints")
 		})
+		appsValidateAndDestroy(contexts)
 
 	})
 	JustAfterEach(func() {
@@ -14127,7 +14128,6 @@ var _ = Describe("{StoragePoolMultipleExpandDiskResize}", Label("p0", "negative"
 			contexts = scheduleApps()
 			ValidateApplications(contexts)
 		})
-		defer appsValidateAndDestroy(contexts)
 
 		log.InfoD("Get all KVDB nodes")
 		kvdbNodes, err := GetAllKvdbNodes()
@@ -14178,6 +14178,7 @@ var _ = Describe("{StoragePoolMultipleExpandDiskResize}", Label("p0", "negative"
 				log.Infof("stopped px on node %s", pxStopNode.Id)
 			}
 		})
+		appsValidateAndDestroy(contexts)
 	})
 
 	JustAfterEach(func() {
@@ -14756,7 +14757,6 @@ var _ = Describe("{RebootKVDBLeaderDuringPoolResize}", Label("p0", "positive", "
 			}
 
 		})
-		defer appsValidateAndDestroy(contexts)
 		stepLog = "Identify the KVDB leader node & get the pool to be resized"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -14841,6 +14841,7 @@ var _ = Describe("{RebootKVDBLeaderDuringPoolResize}", Label("p0", "positive", "
 			dash.VerifyFatal(isExpansionSuccess, true,
 				fmt.Sprintf("Expected new pool size to be %v or %v, got %v", expectedSize, expectedSizeWithJournal, newPoolSize))
 		})
+		appsValidateAndDestroy(contexts)
 	})
 
 	JustAfterEach(func() {
@@ -15428,7 +15429,6 @@ var _ = Describe("{StorageFullPoolResizeWithPxkill}", Label("p0", "staging", "po
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("sfullrzwpxk-%d", i))...)
 		}
-		defer appsValidateAndDestroy(contexts)
 
 		err = WaitForPoolOffline(*selectedNode)
 		log.FailOnError(err, fmt.Sprintf("Failed to make node %s storage down", selectedNode.Name))
@@ -15483,6 +15483,7 @@ var _ = Describe("{StorageFullPoolResizeWithPxkill}", Label("p0", "staging", "po
 			log.FailOnError(err, fmt.Sprintf("Error getting PX status of node %s", selectedNode.Name))
 			dash.VerifySafely(*status, api.Status_STATUS_OK, fmt.Sprintf("validate PX status on node %s", selectedNode.Name))
 		})
+		appsValidateAndDestroy(contexts)
 	})
 
 	JustAfterEach(func() {
