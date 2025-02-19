@@ -12813,11 +12813,7 @@ func SwitchBothKubeConfigANDContext(cluster string) error {
 func DoPDBValidation(stopSignal <-chan struct{}, mError *error) {
 	pdbValue, allowedDisruptions := GetPDBValue()
 	isClusterParallelyUpgraded := false
-	nodes, err := Inst().V.GetDriverNodes()
-	if err != nil {
-		*mError = multierr.Append(*mError, err)
-		return
-	}
+	nodes := node.GetStorageNodes()
 	totalNodes := len(nodes)
 	itr := 1
 	for {
@@ -14329,11 +14325,7 @@ func DoVolumeQuorumValidation(volumeQuorumValidationStopSignal chan struct{}, vQ
 }
 func DoParallelUpgradePDBValidation(stopSignal <-chan struct{}, mError *error) {
 
-	nodes, err := Inst().V.GetDriverNodes()
-	if err != nil {
-		*mError = multierr.Append(*mError, err)
-		return
-	}
+	nodes := node.GetStorageNodes()
 	stc, err := Inst().V.GetDriver()
 	if err != nil {
 		*mError = multierr.Append(*mError, err)
