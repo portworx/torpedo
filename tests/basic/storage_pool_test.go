@@ -1958,7 +1958,7 @@ var _ = Describe("{MultiDriveResizeDisk}", func() {
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
-			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
+			dash.VerifyFatal(len(stNodes) > 0, true, "No Storage less nodes exists")
 		}
 		isjournal, err := IsJournalEnabled()
 		log.FailOnError(err, "Failed to check if Journal enabled")
