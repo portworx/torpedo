@@ -1345,7 +1345,7 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options sch
 				return nil, true, err
 			}
 			duration := time.Since(startTime)
-			log.Infof("Total time taken to clone disk and bringing up VM is [%.2f]seconds ",duration)
+			log.Infof("Total time taken to clone disk and bringing up VM is [%.2f]seconds ", duration)
 			return obj, false, nil
 		}
 		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
@@ -2388,27 +2388,36 @@ func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *corev1.ConfigMa
 
 	setSecureParams := func(obj *storageapi.StorageClass) {
 		if encryptionFlag {
-			log.Infof("Adding encryption parameter to storage class app %s", app.Key)
-			obj.Parameters[encryptionName] = "true"
+			// Encryption is not supported for FB Volumes
+			if val, ok := obj.Parameters[PureBackend]; !ok || val != PureFile {
+				log.Infof("Adding encryption parameter to storage class app %s", app.Key)
+				obj.Parameters[encryptionName] = "true"
+			}
 		}
 		if app.IsCSI {
-			obj.Parameters[CsiProvisionerSecretName] = configMap.Data[secretNameKey]
-			obj.Parameters[CsiProvisionerSecretNamespace] = configMap.Data[secretNamespaceKey]
-			obj.Parameters[CsiNodePublishSecretName] = configMap.Data[secretNameKey]
-			obj.Parameters[CsiNodePublishSecretNamespace] = configMap.Data[secretNamespaceKey]
-			obj.Parameters[CsiControllerExpandSecretName] = configMap.Data[secretNameKey]
-			obj.Parameters[CsiControllerExpandSecretNamespace] = configMap.Data[secretNamespaceKey]
+			// Encryption is not supported for FB Volumes
+			if val, ok := obj.Parameters[PureBackend]; !ok || val != PureFile {
+				obj.Parameters[CsiProvisionerSecretName] = configMap.Data[secretNameKey]
+				obj.Parameters[CsiProvisionerSecretNamespace] = configMap.Data[secretNamespaceKey]
+				obj.Parameters[CsiNodePublishSecretName] = configMap.Data[secretNameKey]
+				obj.Parameters[CsiNodePublishSecretNamespace] = configMap.Data[secretNamespaceKey]
+				obj.Parameters[CsiControllerExpandSecretName] = configMap.Data[secretNameKey]
+				obj.Parameters[CsiControllerExpandSecretNamespace] = configMap.Data[secretNamespaceKey]
+			}
 		}
 		if strings.Contains(volume.GetStorageProvisioner(), "pxd") {
-			if secretNameKeyFlag {
-				obj.Parameters[CsiProvisionerSecretName] = configMap.Data[secretNameKey]
-				obj.Parameters[CsiNodePublishSecretName] = configMap.Data[secretNameKey]
-				obj.Parameters[CsiControllerExpandSecretName] = configMap.Data[secretNameKey]
-			}
-			if secretNamespaceKeyFlag {
-				obj.Parameters[CsiProvisionerSecretNamespace] = configMap.Data[secretNamespaceKey]
-				obj.Parameters[CsiNodePublishSecretNamespace] = configMap.Data[secretNamespaceKey]
-				obj.Parameters[CsiControllerExpandSecretNamespace] = configMap.Data[secretNamespaceKey]
+			// Encryption is not supported for FB Volumes
+			if val, ok := obj.Parameters[PureBackend]; !ok || val != PureFile {
+				if secretNameKeyFlag {
+					obj.Parameters[CsiProvisionerSecretName] = configMap.Data[secretNameKey]
+					obj.Parameters[CsiNodePublishSecretName] = configMap.Data[secretNameKey]
+					obj.Parameters[CsiControllerExpandSecretName] = configMap.Data[secretNameKey]
+				}
+				if secretNamespaceKeyFlag {
+					obj.Parameters[CsiProvisionerSecretNamespace] = configMap.Data[secretNamespaceKey]
+					obj.Parameters[CsiNodePublishSecretNamespace] = configMap.Data[secretNamespaceKey]
+					obj.Parameters[CsiControllerExpandSecretNamespace] = configMap.Data[secretNamespaceKey]
+				}
 			}
 		} else {
 			if secretNameKeyFlag {
