@@ -4114,7 +4114,7 @@ func CreateClusterPairFile(pairInfo map[string]string, skipStorage, resetConfig 
 	return addStorageOptions(pairInfo, clusterPairFileName)
 }
 
-func ScheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings string, objectStoreType storkv1.BackupLocationType, secretName string, mode string, sourceCluster int, destCluster int) (err error) {
+func ScheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings string, objectStoreType storkv1.BackupLocationType, secretName string, mode string, sourceCluster int, destCluster int, extraArgs map[string]string) (err error) {
 	// var token string
 	// Setting kubeconfig to source because we will create bidirectional cluster pair based on source as reference
 	err = SetCustomKubeConfig(sourceCluster)
@@ -4194,6 +4194,13 @@ func ScheduleBidirectionalClusterPair(cpName, cpNamespace, projectMappings strin
 			"--src-kube-file", srcKubeConfigPath,
 			"--dest-kube-file", destKubeConfigPath,
 			"--mode", "sync-dr",
+		}
+	}
+
+	if extraArgs != nil {
+		for key, value := range extraArgs {
+			cmdArgs = append(cmdArgs, "--"+key)
+			cmdArgs = append(cmdArgs, value)
 		}
 	}
 
