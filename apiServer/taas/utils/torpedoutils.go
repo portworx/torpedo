@@ -184,9 +184,7 @@ func ScheduleAppsAndValidate(c *gin.Context) {
 		NamespaceSuffix string   `json:"nsSuffix"`
 		AppList         []string `json:"appList"`
 	}
-	var errors []error
 	errStrings := make([]string, 0)
-	errChan := make(chan error, 100)
 	if !checkTorpedoInit(c) {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": fmt.Errorf("error during InitInstance"),
@@ -206,16 +204,20 @@ func ScheduleAppsAndValidate(c *gin.Context) {
 		return
 	}
 	for _, ctx := range context {
+		errChan := make(chan error, 100)
+		var errors []error
 		tests.ValidateContext(ctx, &errChan)
-	}
-	for err = range errChan {
-		errors = append(errors, err)
-	}
-	for _, err = range errors {
-		if err != nil {
-			errStrings = append(errStrings, err.Error())
+
+		for err = range errChan {
+			errors = append(errors, err)
+		}
+		for _, err = range errors {
+			if err != nil {
+				errStrings = append(errStrings, err.Error())
+			}
 		}
 	}
+
 	if len(errStrings) > 0 {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": errStrings})
 		return
