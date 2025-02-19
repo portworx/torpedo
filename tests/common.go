@@ -363,6 +363,7 @@ const (
 	pureSecretFlag                   = "pure-secret"
 
 	// AutoFSTrim
+
 	autoFSTrimEnableFlag = "auto-fs-trim-enable"
 
 	// PSA Specific
@@ -15431,12 +15432,31 @@ func GetPoolMaxCloudDriveLimit(stNode *node.Node) (int32, error) {
 
 func GetNodeDrivesCount(blockDrives map[string]*node.BlockDrive) int {
 	var driveCounts int
-	for _, drv := range blockDrives {
-		log.Infof("Drive detail from node %v", drv)
-		if drv.MountPoint == "" && drv.Type == "disk" && strings.Contains(drv.Path, "sd") {
-			driveCounts++
+
+	volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+	log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
+	pxPureSecret, err := pureutils.GetPXPureSecret(volDriverNamespace)
+	log.FailOnError(err, "failed to get secret [%s]  in namespace [%s]", PureSecretName, volDriverNamespace)
+	isFABackend := len(pxPureSecret.Arrays) > 0
+
+	if isFABackend {
+		drvNames := make([]string, 0)
+		for _, drv := range blockDrives {
+
+			if !slices.Contains(drvNames, drv.Path) && drv.Type == "mpath" && drv.FSType != "crypto_LUKS" {
+				drvNames = append(drvNames, drv.Path)
+				driveCounts++
+			}
+		}
+	} else {
+		for _, drv := range blockDrives {
+			log.Infof("Drive detail from node %v", drv)
+			if drv.MountPoint == "" && drv.Type == "disk" && strings.Contains(drv.Path, "sd") {
+				driveCounts++
+			}
 		}
 	}
+
 	return driveCounts
 
 }

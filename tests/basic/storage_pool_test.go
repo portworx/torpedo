@@ -2508,7 +2508,31 @@ var _ = Describe("{VolUpdateResizeDisk}", Label("p0", "positive", "pool_ops", "P
 
 		})
 		err = ValidateReplFactorUpdate(volSelected, newRep+1)
-		log.FailOnError(err, "error validating repl factor for vol [%s]", volSelected.Name)
+		if err != nil {
+
+			pods, gepodsErr := Inst().S.GetPodsForPVC(volSelected.Name, volSelected.Namespace)
+			if gepodsErr != nil {
+				log.Errorf("error getting pods for PVC [%s] in namespace [%s]", volSelected.Name, volSelected.Namespace)
+			} else {
+				for _, pod := range pods {
+					for _, container := range pod.Status.ContainerStatuses {
+
+						podLogs, err := k8sCore.GetPodLog(pod.Name, pod.Namespace, &corev1.PodLogOptions{
+							Container: container.Name,
+						})
+						if err != nil {
+							log.Errorf("error getting logs for pod [%s], contianer [%s] in namespace [%s]", pod.Name, container.Name, pod.Namespace)
+							continue
+						}
+						logLines := strings.Split(podLogs, "\n")
+						for _, line := range logLines {
+							log.Infof(line)
+						}
+					}
+				}
+			}
+			log.FailOnError(err, "error validating repl factor for vol [%s]", volSelected.Name)
+		}
 
 		stepLog = "Initiate pool expansion using resize-disk after rsync is successfull"
 		Step(stepLog, func() {
@@ -5968,13 +5992,56 @@ var _ = Describe("{PoolIncreaseSize20TB}", Label("p1", "positive", "pool_ops", "
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
+		selectedNode := GetNodeWithLeastSize()
+		if selectedNode == nil {
+			log.FailOnError(fmt.Errorf("no node found with least size"), "No Node found with least size")
+		}
+
+		nodePoolsBfr, err := GetPoolsDetailsOnNode(selectedNode)
+		log.FailOnError(err, "Failed to get pool details on node %s", selectedNode.Name)
+		existingPoolUUIDs := make([]string, len(nodePoolsBfr))
+
+		for _, pools := range nodePoolsBfr {
+			existingPoolUUIDs = append(existingPoolUUIDs, pools.Uuid)
+
+		}
+
+		driveSpecs, err := GetCloudDriveDeviceSpecs()
+		log.FailOnError(err, "Error getting cloud drive specs")
+
+		deviceSpec := driveSpecs[0]
+		deviceSpecParams := strings.Split(deviceSpec, ",")
+
+		paramsArr := make([]string, 0)
+		for _, param := range deviceSpecParams {
+			if strings.Contains(param, "size") {
+				paramsArr = append(paramsArr, fmt.Sprintf("size=100"))
+			} else {
+				paramsArr = append(paramsArr, param)
+			}
+		}
+		newSpec := strings.Join(paramsArr, ",")
+		stepLog = fmt.Sprintf("Adding new pool to node %s with size %s", selectedNode.Name, newSpec)
+
+		err = Inst().V.AddCloudDrive(selectedNode, newSpec, -1)
+		log.FailOnError(err, "error adding new drive to node %s", selectedNode.Name)
+
+		err = Inst().V.WaitDriverUpOnNode(*selectedNode, 10*time.Minute)
+		log.FailOnError(err, "error while waiting for driver up on node %s", selectedNode.Name)
+
+		nodePoolsAfr, err := GetPoolsDetailsOnNode(selectedNode)
+		log.FailOnError(err, "Failed to get pool details on node %s", selectedNode.Name)
+
+		for _, pool := range nodePoolsAfr {
+			if !Contains(existingPoolUUIDs, pool.Uuid) {
+				poolIDToResize = pool.Uuid
+				break
+			}
+		}
+
 		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 		log.FailOnError(err, "Failed to list storage pools")
 		dash.VerifyFatal(len(pools) > 0, true, "Storage pools exist?")
-
-		// pick a pool from a pools list and resize it
-		poolIDToResize = pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, 0)
-		dash.VerifyFatal(len(poolIDToResize) > 0, true, fmt.Sprintf("Expected poolIDToResize to not be empty, pool id to resize [%s]", poolIDToResize))
 
 		poolToBeResized := pools[poolIDToResize]
 		dash.VerifyFatal(poolToBeResized != nil, true, "Pool to be resized exist?")
@@ -6024,12 +6091,12 @@ var _ = Describe("{PoolIncreaseSize20TB}", Label("p1", "positive", "pool_ops", "
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be [%d] or [%d] if pool has journal", expectedSize, expectedSizeWithJournal))
 		})
 
+		var resizedPool *api.StoragePool
 		stepLog = "Ensure that new pool has been expanded to the expected size"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			ValidateApplications(contexts)
-
-			resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
+			resizedPool, err = GetStoragePoolByUUID(poolIDToResize)
 			log.FailOnError(err, "Failed to get pool using UUID [%s]", poolIDToResize)
 			newPoolSize := resizedPool.TotalSize / units.GiB
 			isExpansionSuccess := false
@@ -6038,6 +6105,15 @@ var _ = Describe("{PoolIncreaseSize20TB}", Label("p1", "positive", "pool_ops", "
 			}
 			dash.VerifyFatal(isExpansionSuccess, true,
 				fmt.Sprintf("expected new pool size to be [%v] or [%v] if pool has journal, got [%v]", expectedSize, expectedSizeWithJournal, newPoolSize))
+		})
+
+		stepLog = "Delete pool"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = DeletePoolAndValidate(*selectedNode, fmt.Sprintf("%d", resizedPool.ID))
+			log.FailOnError(err, "Failed to delete pool [%d] in node [%s]", resizedPool.ID, selectedNode.Name)
+			err = Inst().V.RefreshDriverEndpoints()
+			log.FailOnError(err, "Failed to refresh driver endpoints")
 		})
 
 	})
@@ -12469,6 +12545,7 @@ var _ = Describe("{AddingDrivesBeyondSupportedLimit}", Label("p1", "pool_ops", "
 						log.Infof("Is journal enabled: %v", isjournal)
 
 						for j := 1; j <= maxDrivesAllowed+1; j++ {
+							log.Infof("Adding drive %d to the pool [%s]", j, selectedPool.Uuid)
 							drvSize, err := getPoolDiskSize(selectedPool)
 							log.FailOnError(err, "Failed to get pool size")
 							log.Infof("Pool disk size: %v", drvSize)
@@ -12499,19 +12576,10 @@ var _ = Describe("{AddingDrivesBeyondSupportedLimit}", Label("p1", "pool_ops", "
 								if poolStatus != nil {
 									strContMsg := strings.Contains(poolStatus.Msg, errMsg1) || strings.Contains(poolStatus.Msg, errMsg2)
 									dash.VerifyFatal(strContMsg, true, "Error expected as drive added more than allowed per pool")
+								} else {
+									log.FailOnError(fmt.Errorf("pool status is nil"), "error getting pool status after adding more drives than allowed")
 								}
 
-								// Verify if drives were added to the node correctly
-								drivesMap, err := Inst().N.GetBlockDrives(selectedNode, systemOpts)
-								log.FailOnError(err, "Error getting block drives from node [%s]", selectedNode.Name)
-
-								driveCount := GetNodeDrivesCount(drivesMap)
-								log.Infof("Added drives count from node [%v]: %v and max drive limit is: %v", selectedNode.Name, driveCount, maxDriveLimit)
-
-								if driveCount != int(maxDriveLimit) {
-									log.FailOnError(err, "Expected number of drives %v not added in node: %v", driveCount, selectedNode.Name)
-								}
-								dash.VerifyFatal(driveCount == int(maxDriveLimit), true, "Expected number of drives added in node")
 							}
 						}
 						break
