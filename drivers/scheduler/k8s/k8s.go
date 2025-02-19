@@ -4408,6 +4408,9 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 				}
 			}
 		} else if vm, ok := specObj.(*kubevirtv1.VirtualMachine); ok {
+			// This approach assumes PVCs linked to VMs or DataVolumes via owner references
+			// are dynamically provisioned. However, explicitly defined PVCs with owner
+			// references will be counted as such, causing duplicates.
 			pvcList, err := k8sCore.GetPersistentVolumeClaims(vm.Namespace, nil)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get PVCs in namespace %s: %w", vm.Namespace, err)
@@ -4426,6 +4429,7 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 					if ownerRef.Kind == vm.Kind {
 						if ownerRef.Name == vm.Name {
 							want = true
+							break
 						}
 					}
 					// If volume is still not found, try the datavolume for the virtual machine
@@ -4439,33 +4443,18 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 								for _, ownerRef := range dataVol.OwnerReferences {
 									if ownerRef.Name == vm.Name {
 										want = true
+										break
 									}
 								}
 							}
 						}
 					}
 				}
-				// If volume is still not found, try the virt-launcher pod as well
-				if !want {
-					virtLauncherPodsList, err := k8sCore.GetPods(vm.Namespace, nil)
+				if want {
+					vols, err = k.appendVolForPVC(vols, &pvc)
 					if err != nil {
-						return nil, fmt.Errorf("failed to get pods in namespace: %s: %w", vm.Namespace, err)
+						return nil, err
 					}
-					for _, virtLauncher := range virtLauncherPodsList.Items {
-						for _, ownerRef := range virtLauncher.OwnerReferences {
-							if ownerRef.Kind == "VirtualMachineInstance" && ownerRef.Name == vm.Name {
-								// since VMI name is same as VM name
-								want = true
-							}
-						}
-					}
-				}
-				if !want {
-					continue
-				}
-				vols, err = k.appendVolForPVC(vols, &pvc)
-				if err != nil {
-					return nil, err
 				}
 			}
 		} else if pipeline, ok := specObj.(*tektoncdv1.PipelineRun); ok {
@@ -4494,7 +4483,21 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	for _, vol := range vols {
 		log.Infof("K8s.GetVolumes() found volume %s for app %s", vol.Name, ctx.App.Key)
 	}
-	return vols, nil
+	log.Infof("The number of volumes found for app %s is %d", ctx.App.Key, len(vols))
+	// Filtering out duplicate volumes
+	var uniqueVols []*volume.Volume
+	// vol.Name is used as the key because GetVolumes might be called before the PVC
+	// is bound, leaving vol.ID empty
+	var volNameTrackerMap = make(map[string]bool)
+	for _, vol := range vols {
+		if _, found := volNameTrackerMap[vol.Name]; found {
+			log.Warnf("duplicate volume found ID: [%s], Name: [%s], Namespace: [%s]", vol.ID, vol.Name, vol.Namespace)
+			continue
+		}
+		volNameTrackerMap[vol.Name] = true
+		uniqueVols = append(uniqueVols, vol)
+	}
+	return uniqueVols, nil
 }
 
 // GetPureVolumes  Get the Pure volumes (if enabled) by type (PureFile or PureBlock)
