@@ -1059,11 +1059,6 @@ var _ = Describe("{CloudsnapAndRestore}", Label("p0", "positive", "px_vol_ops", 
 
 		})
 
-		defer func() {
-			err := storkops.Instance().DeleteSchedulePolicy(policyName)
-			log.FailOnError(err, fmt.Sprintf("error deleting a SchedulePolicy [%s]", policyName))
-		}()
-
 		stepLog = "Verify that cloud snap status"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -1164,6 +1159,7 @@ var _ = Describe("{CloudsnapAndRestore}", Label("p0", "positive", "px_vol_ops", 
 					}
 				}
 			}
+
 		})
 
 		stepLog = "Validating cloud snapshot backup size values"
@@ -1281,14 +1277,20 @@ var _ = Describe("{CloudsnapAndRestore}", Label("p0", "positive", "px_vol_ops", 
 			}
 		})
 
-	})
-	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		err = storkops.Instance().DeleteSchedulePolicy(policyName)
+		log.FailOnError(err, fmt.Sprintf("error deleting a SchedulePolicy [%s]", policyName))
 		bucketName, err := GetCloudsnapBucketName(contexts)
 		log.FailOnError(err, "error getting cloud snap bucket name")
 		opts := make(map[string]bool)
 		DestroyApps(contexts, opts)
-		DeleteCloudSnapBucket(bucketName)
+		err = DeleteCloudSnapBucket(bucketName)
+		if err != nil {
+			log.Errorf("Error deleting cloud snap bucket. Err %v", err)
+		}
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
 		AfterEachTest(contexts)
 	})
 })
