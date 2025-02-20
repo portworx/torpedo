@@ -7141,12 +7141,13 @@ var _ = Describe("{VolumeRelaxedReclaimLimitEnforcement}", Label("p0", "positive
 			}
 		})
 
-		stepLog = "Setting maximum pending relaxed reclaim"
+		stepLog = "Setting relaxed reclaim to on and maximum pending relaxed reclaim"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			currNode := node.GetStorageDriverNodes()[0]
 			err := Inst().V.SetClusterOptsWithConfirmation(currNode, map[string]string{
-				"--relaxedreclaim-max-pending": "50",
+				"--relaxedreclaim-max-pending":    "50",
+				"--relaxedreclaim-delete-seconds": "30",
 			})
 			if err != nil {
 				err = fmt.Errorf("error while enabling relaxed reclaim, Error:%v", err)
