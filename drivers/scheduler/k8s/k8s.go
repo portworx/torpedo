@@ -8858,7 +8858,7 @@ func (k *K8s) waitForPodToBeReady(podname string, namespace string) error {
 		}
 		return "", false, nil
 	}
-	if _, err := task.DoRetryWithTimeout(t, k8sPodCreateTimeout, DefaultRetryInterval); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, 10*time.Minute, DefaultRetryInterval); err != nil {
 		return err
 	}
 	log.Infof("Pod is up and running: %s", pod.Name)
