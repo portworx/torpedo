@@ -410,6 +410,7 @@ const (
 	BackupAndRestoreJobWithNodeAffinityLabel                                                TestCaseName  = "BackupAndRestoreJobWithNodeAffinity"
 	AddBackupLocationWhileNfsValidatorPodIsRunningLabel                                     TestCaseLabel = "AddBackupLocationWhileNfsValidatorPodIsRunning"
 	ChangeSchedulePolicyAndVerifyBackupsLabel                                               TestCaseLabel = "ChangeSchedulePolicyAndVerifyBackups"
+	BackupFailsOnUnreachableObjectStoreEndpoint                                             TestCaseLabel = "VerifyBackupFailureWhenObjectStoreEndpointIsUnreachable"
 )
 
 // Common Labels

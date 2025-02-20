@@ -175,6 +175,8 @@ const (
 	BackupDeleteTimeout                   = 80 * time.Minute
 	BackupDeleteRetryTime                 = 30 * time.Second
 	BackupLocationDeleteTimeout           = 120 * time.Minute
+	BackupFailureTimeout                  = 80 * time.Minute
+	BackupFailureRetryTime                = 30 * time.Second
 	ScaleBackupLocationDeleteTimeout      = 120 * time.Minute
 	BackupLocationDeleteRetryTime         = 30 * time.Second
 	IptablesCommandExecutionTimeout       = 10 * time.Minute

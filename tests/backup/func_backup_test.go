@@ -2651,3 +2651,153 @@ var _ = Describe("{BackupOperatorNamespaceAfterCrCreation}", Label(TestCaseLabel
 
 	})
 })
+
+// This test case validates the behavior of backup failure when the object store endpoint becomes unreachable
+var _ = Describe("{VerifyBackupFailureWhenObjectStoreEndpointIsUnreachable}", Label(TestCaseLabelsMap[BackupFailsOnUnreachableObjectStoreEndpoint]...), func() {
+	var (
+		scheduledAppContexts []*scheduler.Context
+		ctx                  context.Context
+		backupLocationName   string
+		backupLocationUID    string
+		cloudCredName        string
+		cloudCredUID         string
+		backupName           string
+		clusterUid           string
+		bkpNamespaces        []string
+		backupLocationMap    map[string]string
+		providers            []string
+		backupDriver         backup.Driver
+		backupUid            string
+		storkRunningNode     node.Node
+		objectStoreEndpoint  string
+		present              bool
+		err                  error
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("VerifyBackupFailureWhenObjectStoreEndpointIsUnreachable", "Validating Backup failure Under Network Interruptions", nil, 300497, Nvettaiyan, Q1FY25)
+
+		objectStoreEndpoint, present = os.LookupEnv("S3_ENDPOINT")
+		if present {
+			log.InfoD("Fetching the S3 location endpoint [%s] from the environment variable", objectStoreEndpoint)
+		} else {
+			log.FailOnError(err, "Env variable %s not set hence returning empty", objectStoreEndpoint)
+		}
+
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		bkpNamespaces = make([]string, 0)
+		providers = GetBackupProviders()
+		backupLocationMap = make(map[string]string)
+		backupDriver = Inst().Backup
+
+		log.InfoD("Scheduling Applications")
+		appContexts := ScheduleApplications(TaskNamePrefix)
+		for _, appCtx := range appContexts {
+			appCtx.ReadinessTimeout = AppReadinessTimeout
+			namespace := GetAppNamespace(appCtx, TaskNamePrefix)
+			bkpNamespaces = append(bkpNamespaces, namespace)
+			scheduledAppContexts = append(scheduledAppContexts, appCtx)
+		}
+		ctx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+	})
+
+	It("Ensuring Backup Fails When ObjectStore Endpoint is Unreachable", func() {
+
+		Step("Validate applications", func() {
+			log.InfoD("Validating applications")
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		Step("Creating backup location and cloud setting", func() {
+			log.InfoD("Creating backup location and cloud setting")
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, RandomString(5))
+				backupLocationName = fmt.Sprintf("%s-%s-%v-bl", provider, getGlobalBucketName(provider), RandomString(5))
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = backupLocationName
+				err = CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocationName))
+			}
+		})
+
+		Step("Register cluster for backup", func() {
+			log.InfoD("Register cluster for backup")
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+			clusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			clusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			log.InfoD("Uid of [%s] cluster is %s", SourceClusterName, clusterUid)
+		})
+
+		Step("Setting Up for Network Failure Simulation, Retrieving Stork Pod Information", func() {
+			log.InfoD("Setting Up Network Failure Simulation, Retrieving Stork Pod Information")
+			storkNamespace, err := k8sutils.GetStorkPodNamespace()
+			dash.VerifyFatal(err, nil, "Fetching stork pods namespace")
+			storkLeaderPod, err := GetStorkLeaderPod()
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching stork leader pod from configmap in namespace [%s]", storkNamespace))
+			nodeName, err := GetNodeNameFromPod(*storkLeaderPod, storkNamespace)
+			dash.VerifyFatal(err, nil, "Fetching node from stork pod running")
+			log.Infof("Node name retrieved from Stork leader pod: %s", nodeName)
+			storkRunningNode, err = node.GetNodeByName(nodeName)
+			dash.VerifyFatal(err, nil, "Retrieve details of the node identified by the name")
+		})
+
+		Step("Taking backup of applications", func() {
+			log.InfoD("Taking backup of applications")
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+			log.InfoD("Creating backup using the backup location of [%s]", backupLocationName)
+			backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, RandomString(10))
+			_, err = CreateBackupWithoutCheck(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, nil, BackupOrgID, clusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", backupName))
+		})
+
+		Step("Simulating Network Failure by Blocking objectStore Endpoint Connectivity", func() {
+			log.InfoD("Simulating Network Failure by Blocking objectStore Endpoint Connectivity")
+			err = DisconnectNetworkOnNode(storkRunningNode, objectStoreEndpoint)
+			dash.VerifyFatal(err, nil, "Disconnect objectStore endpoint from node")
+		})
+
+		Step("Validating Backup Failure with Unreachable Object Store", func() {
+			log.InfoD("Validating Backup Failure with Unreachable Object Store")
+			err = BackupFailedCheck(backupName, BackupOrgID, BackupFailureTimeout, BackupFailureRetryTime, ctx)
+			dash.VerifyFatal(err, nil, "Verifying if the backup failed")
+			backupUid, err = backupDriver.GetBackupUID(ctx, backupName, BackupOrgID)
+			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
+			backupInspectRequest := &api.BackupInspectRequest{
+				Name:  backupName,
+				Uid:   backupUid,
+				OrgId: BackupOrgID,
+			}
+			backupInspectResponse, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
+			log.FailOnError(err, "Failed to inspect backup")
+			actualStatus := backupInspectResponse.GetBackup().GetStatus().Status
+			actualReason := backupInspectResponse.GetBackup().GetStatus().Reason
+			log.InfoD("Actual status: %v", actualStatus)
+			log.InfoD("Actual reason: %v", actualReason)
+			dash.VerifyFatal(actualStatus == api.BackupInfo_StatusInfo_Failed, true, fmt.Sprintf("Verifying that the backup status is 'Failed'. Actual: %s", actualStatus))
+			dash.VerifyFatal(strings.Contains(actualReason, "Volume backups failed"), true, fmt.Sprintf("Verifying that the reason contains 'Volume backups failed'. Actual reason: %s", actualReason))
+		})
+	})
+
+	JustAfterEach(func() {
+		log.InfoD("Reconnect objectStore Endpoint Connectivity on Node Post-Disruption")
+		err = ConnectNetworkOnNode(storkRunningNode, objectStoreEndpoint)
+		dash.VerifyFatal(err, nil, "connect objectStore endpoint from node")
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		log.InfoD("Deleting the deployed apps after the testcase")
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		DestroyApps(scheduledAppContexts, opts)
+		err = DeleteAllBackups(ctx, BackupOrgID)
+		dash.VerifySafely(err, nil, "Verifying backup deletion")
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+
+	})
+})
