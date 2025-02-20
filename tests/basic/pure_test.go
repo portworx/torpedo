@@ -22,6 +22,8 @@ import (
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	"github.com/libopenstorage/openstorage/api"
+	opsapi "github.com/libopenstorage/openstorage/api"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v12 "github.com/pure-px/px-operator/pkg/apis/core/v1"
@@ -11902,5 +11904,91 @@ var _ = Describe("{ValidateStoragelessNodeClaimDrive}", Label("p1", "negative", 
 
 	JustAfterEach(func() {
 		EndTorpedoTest()
+	})
+})
+
+var _ = Describe("{PXValidationWithIPTablesBlockAndNodeRestart}", Label("staging", "p1", "negative", "pure_ops", "node_ops", "error_injection", "node_reboot"), func() {
+
+	/*
+	   https://purestorage.atlassian.net/browse/HAZEL-746
+
+	   Restart all Worker Nodes in the cluster , you should use VSphere APIs to do that.
+	   before doing Restart of worker nodes block IP Tables of port 3260,
+	   and once Nodes comes up, all the Volumes / Pools should be intact
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("PXValidationWithIPTablesBlockAndNodeRestart", "Validate PX with Block IP Tables of port 3260 and restart all worker node",
+			nil, 0)
+	})
+
+	itLog := "Validate PX with Block IP Tables of port 3260 and restart all worker node"
+	It(itLog, func() {
+		var (
+			storageNodes       []node.Node
+			contexts           []*scheduler.Context
+			expectedPoolStatus = "Online"
+			appList            = Inst().AppList
+		)
+
+		cleanup := func() {
+			log.Infof("Cleaning up")
+			DestroyApps(contexts, nil)
+			Inst().AppList = appList
+			flushAllIPtableRulesOnAllNodes()
+		}
+		defer cleanup()
+
+		Inst().AppList = []string{"fio-fa-davol"}
+		stepLog = "Schedule application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("faipblock-%d", i))...)
+			}
+		})
+
+		ValidateApplications(contexts)
+
+		stepLog = "Block IP tables port 3260 for all nodes with node restart"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			storageNodes = node.GetStorageNodes()
+			log.Infof("List of storage node: %v", storageNodes)
+
+			for _, eachNode := range storageNodes {
+				if eachNode.MgmtIp == "" {
+					log.FailOnError(fmt.Errorf("MgmtIp not found"), "Failed to get the MgmtIp from the node: %v", eachNode.Name)
+				}
+				log.Infof("MgmtIp for the node: %v is: %v", eachNode.Name, eachNode.MgmtIp)
+
+				log.Infof("Blocking IPAddress on Node [%v] before restart", eachNode.Name)
+				err = blockiSCSIPortOnNode(&eachNode, true)
+				log.FailOnError(err, "failed to block IP tables on Node [%v]", eachNode.Name)
+
+				log.Infof("Waiting for a minute before restart the node")
+				time.Sleep(1 * time.Minute)
+
+				log.Infof("Restart the node: %v", eachNode.Name)
+				err = RebootNodeAndWaitForPxUp(eachNode)
+				log.FailOnError(err, "failed to reboot node [%v] and wait till it is up", eachNode.Name)
+
+				nodeStatus, err := Inst().V.GetNodeStatus(eachNode)
+				log.FailOnError(err, fmt.Sprintf("failed to get px status on node [%s]", eachNode.Name))
+				dash.VerifyFatal(*nodeStatus, opsapi.Status_STATUS_OK, fmt.Sprintf("validate PX status on node %s", eachNode.Name))
+
+				err = WaitForPoolStatusToUpdate(eachNode, expectedPoolStatus)
+				log.FailOnError(err, fmt.Sprintf("node %s pools are not in status %s", eachNode.Name, expectedPoolStatus))
+
+				ValidateApplications(contexts)
+				log.Info("Application running. Restart with IP tables block operation completed for the node %v", eachNode.Name)
+			}
+		})
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
 	})
 })
