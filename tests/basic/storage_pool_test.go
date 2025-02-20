@@ -10014,9 +10014,10 @@ var _ = Describe("{CreateNewPoolsOnClusterInParallel}", Label("p0", "positive", 
 			replNodes := appVol.ReplicaSets[0].Nodes
 			selectedNodeIds = append(selectedNodeIds, replNodes[0])
 			excludeNodeIds = append(excludeNodeIds, replNodes[1:]...)
+			break
 		}
 
-		for _, ctx := range contexts[1:] {
+		for _, ctx := range contexts {
 			vols, err := Inst().S.GetVolumes(ctx)
 			log.FailOnError(err, "Failed to get volumes")
 			for _, vol := range vols {
@@ -10026,10 +10027,14 @@ var _ = Describe("{CreateNewPoolsOnClusterInParallel}", Label("p0", "positive", 
 				replAdded := false
 				for _, replNode := range replNodes {
 					if !slices.Contains(selectedNodeIds, replNode) && !slices.Contains(excludeNodeIds, replNode) {
-						selectedNodeIds = append(selectedNodeIds, replNode)
-						replAdded = true
+						if !replAdded {
+							log.Infof("adding node %v to selected node ids", replNode)
+							selectedNodeIds = append(selectedNodeIds, replNode)
+							replAdded = true
+						}
 					}
 					if replAdded {
+						log.Infof("adding node %v to exclude node ids", replNode)
 						excludeNodeIds = append(excludeNodeIds, replNode)
 					}
 				}
