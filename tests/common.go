@@ -9916,7 +9916,7 @@ func GetPoolsDetailsOnNode(n *node.Node) ([]*opsapi.StoragePool, error) {
 		return nil, err
 	}
 	// updating the node info after refresh
-	log.Infof("updating node: %s/%s", n.Name, n.VolDriverNodeID)
+
 	stDriverNodes := node.GetStorageDriverNodes()
 	for _, stDriverNode := range stDriverNodes {
 		if stDriverNode.VolDriverNodeID == n.VolDriverNodeID {
@@ -9926,22 +9926,17 @@ func GetPoolsDetailsOnNode(n *node.Node) ([]*opsapi.StoragePool, error) {
 	}
 
 	if node.IsStorageNode(*n) == false {
-		return nil, fmt.Errorf("Node [%s] is not Storage Node", n.Id)
+		return nil, fmt.Errorf("node [%s] is not a storage node", n.Id)
 	}
 
-	nodes := node.GetStorageNodes()
-
-	for _, eachNode := range nodes {
-		if eachNode.Id == n.Id {
-			for _, eachPool := range eachNode.Pools {
-				poolInfo, err := GetStoragePoolByUUID(eachPool.Uuid)
-				if err != nil {
-					return nil, err
-				}
-				poolDetails = append(poolDetails, poolInfo)
-			}
+	for _, eachPool := range n.Pools {
+		poolInfo, err := GetStoragePoolByUUID(eachPool.Uuid)
+		if err != nil {
+			return nil, err
 		}
+		poolDetails = append(poolDetails, poolInfo)
 	}
+
 	return poolDetails, nil
 }
 

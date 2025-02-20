@@ -761,8 +761,7 @@ func (d *portworx) IsDriverInstalled(n node.Node) (bool, error) {
 }
 
 func (d *portworx) updateNode(n *node.Node, pxNodes []*api.StorageNode) error {
-	//log.Infof("Updating node %+v", *n) // NOTE: Do we really need to print the whole node?
-	log.Infof("Updating node [%s]", n.Name)
+
 	isPX, err := d.schedOps.IsPXEnabled(*n)
 	if err != nil {
 		return err
@@ -775,8 +774,6 @@ func (d *portworx) updateNode(n *node.Node, pxNodes []*api.StorageNode) error {
 
 	for _, address := range n.Addresses {
 		for _, pxNode := range pxNodes {
-			//log.Debugf("Checking PX node %+v for address %s", pxNode, address) // NOTE: Do we really need to print the whole node?
-			log.Debugf("Checking PX node [%s] for address [%s]", pxNode.Hostname, address)
 			if address == pxNode.DataIp || address == pxNode.MgmtIp || n.Name == pxNode.SchedulerNodeName {
 				if len(pxNode.Id) > 0 {
 					n.StorageNode = pxNode
@@ -793,13 +790,15 @@ func (d *portworx) updateNode(n *node.Node, pxNodes []*api.StorageNode) error {
 						log.Infof("Updating node [%s] as storage node", n.Name)
 						n.StoragePools = nil
 						for _, pxNodePool := range pxNode.Pools {
-							log.Infof("Adding storage pool [%s] with size [%d] to node [%s]", pxNodePool.Uuid, pxNodePool.TotalSize/units.GiB, n.Name)
+							log.Infof("Updating node [%s] with storage pool [%s] having size [%d]", n.Name, pxNodePool.Uuid, pxNodePool.TotalSize/units.GiB)
 							storagePool := node.StoragePool{
 								StoragePool:       pxNodePool,
 								StoragePoolAtInit: pxNodePool,
 							}
 							n.StoragePools = append(n.StoragePools, storagePool)
 						}
+					} else {
+						log.Infof("Updating node [%s] as storageless node", n.Name)
 					}
 
 					if err = node.UpdateNode(*n); err != nil {
