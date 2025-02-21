@@ -411,6 +411,7 @@ const (
 	AddBackupLocationWhileNfsValidatorPodIsRunningLabel                                     TestCaseLabel = "AddBackupLocationWhileNfsValidatorPodIsRunning"
 	ChangeSchedulePolicyAndVerifyBackupsLabel                                               TestCaseLabel = "ChangeSchedulePolicyAndVerifyBackups"
 	BackupFailsOnUnreachableObjectStoreEndpoint                                             TestCaseLabel = "VerifyBackupFailureWhenObjectStoreEndpointIsUnreachable"
+	ClusterTestLabel                                                                        TestCaseLabel = "ClusterAdditionwithDifferentUserRoles"
 )
 
 // Common Labels
