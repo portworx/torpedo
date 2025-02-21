@@ -722,7 +722,7 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	ValidateClusterShareWhileBringDownPxBackupPods:                         {ValidateClusterShareWhileBringDownPxBackupPodsLabel, ClusterShareAndSuperAdminLabel, vanillaPipeline, SystemTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
 	StorkControllerConfigCM:                                                {StorkControllerConfigCMLabel},
 	BackupShare:                                                            {BackupShareLabel},
-	SoftDeleteAndRecoverBackupOnContainerAndBlobLevel:                      {SoftDeleteAndRecoverBackupOnContainerAndBlobLevelLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, AzureBackupLocationLabel, Day3LockedBucketLabel, AzureImmutableBucket, LockedBucketTest},
+	SoftDeleteAndRecoverBackupOnContainerAndBlobLevel:                      {SoftDeleteAndRecoverBackupOnContainerAndBlobLevelLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, AzureBackupLocationLabel, Day0LockedBucketLabel, AzureImmutableBucket, LockedBucketTest},
 	DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel:                {DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevelLabel, vanillaPipeline, SystemTest, PxBackupLabel, P2, PxLabel, AzureBackupLocationLabel, Day3LockedBucketLabel, AzureImmutableBucket, LockedBucketTest},
 	BackupDeletionWithDynamicPVCGeneration:                                 {BackupDeletionWithDynamicPVCGenerationLabel, vanillaPipeline, ScaleTest, PxBackupLabel, P1, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel},
 	BackupScheduleEnumerate:                                                {BackupScheduleEnumerateLabel},
