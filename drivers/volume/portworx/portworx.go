@@ -401,6 +401,11 @@ func (d *portworx) init(sched, nodeDriver, token, storageProvisioner, csiGeneric
 		d.skipPXSvcEndpoint, _ = strconv.ParseBool(skipStr)
 	}
 
+	if host := os.Getenv("KUBERNETES_SERVICE_HOST"); host == "" {
+		log.Warnf("PX is not installed on the host. Falling back to the REST API for communication")
+		d.skipPXSvcEndpoint = true
+	}
+
 	// If true, will skip upgrade of PX Operator along with PX during upgrade hops
 	if skipStr := os.Getenv(envSkipPxOperatorUpgrade); skipStr != "" {
 		d.skipPxOperatorUpgrade, _ = strconv.ParseBool(skipStr)
@@ -4744,7 +4749,7 @@ func hasIgnorePrefix(str string) bool {
 	return false
 }
 
-// GetKvdbMembers return KVDM member nodes of the PX Cluster
+// GetKvdbMembers return KVDB member nodes of the PX Cluster
 func (d *portworx) GetKvdbMembers(n node.Node) (map[string]*torpedovolume.MetadataNode, error) {
 	var err error
 	kvdbMembers := make(map[string]*torpedovolume.MetadataNode)
