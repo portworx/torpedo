@@ -8875,7 +8875,10 @@ func RebootNodeAndWaitForPxDown(n node.Node) error {
 }
 
 // GetNodeWithGivenPoolID returns node having pool id
-func GetNodeWithGivenPoolID(poolID string) (*node.Node, error) {
+func GetNodeWithGivenPoolID(poolUUID string) (*node.Node, error) {
+	if poolUUID == "" {
+		return nil, fmt.Errorf("pool UUID is empty")
+	}
 	var mu sync.Mutex
 	mu.Lock()
 	defer mu.Unlock()
@@ -8891,12 +8894,12 @@ func GetNodeWithGivenPoolID(poolID string) (*node.Node, error) {
 	for _, n := range pxNodes {
 		pools := n.Pools
 		for _, p := range pools {
-			if poolID == p.Uuid {
+			if poolUUID == p.Uuid {
 				return &n, nil
 			}
 		}
 	}
-	return nil, fmt.Errorf("no storage node found with given Pool UUID : %s", poolID)
+	return nil, fmt.Errorf("no storage node found with given Pool UUID : %s", poolUUID)
 }
 
 // GetStoragePoolByUUID reruns storage pool based on ID
@@ -9819,30 +9822,16 @@ func GetPoolExpansionEligibility(stNode *node.Node, expandType opsapi.SdkStorage
 					} else {
 						currentPoolDrives := len(d)
 						expectedNodeDrivesAfterExpansion := currentNodeDrives + (expectedPoolDrivesAfterExpansion - currentPoolDrives)
-						stc, err := Inst().V.GetDriver()
-						if err != nil {
-							return nil, err
-						}
-						if stc.Spec.CloudStorage.JournalDeviceSpec != nil {
-							expectedNodeDrivesAfterExpansion++
-						}
-						if stc.Spec.CloudStorage.KvdbDeviceSpec != nil || stc.Spec.CloudStorage.SystemMdDeviceSpec != nil {
-							expectedNodeDrivesAfterExpansion++
-						}
 						log.Infof("Expected node drives after pool [%s ] expansion for node [%s] is [%d], max cloud drives allowed [%d]", pool.Uuid, stNode.Name, expectedNodeDrivesAfterExpansion, maxCloudDrives)
 						if expectedNodeDrivesAfterExpansion > maxCloudDrives {
 							log.Infof("node %s  will reach max drives if pool %s expanded to size [%v] using add-drive", stNode.Name, pool.Uuid, targetSizeGiB)
 							eligibilityMap[pool.Uuid] = false
 						}
-
 					}
-
 				}
 			}
 		}
-
 	}
-
 	return eligibilityMap, nil
 }
 
@@ -10379,8 +10368,30 @@ func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string, retry bool) 
 	if err != nil {
 		return fmt.Errorf("error getting volumes node [%s],Err: %v ", stNode.Name, err)
 	}
+	nodePools := stNode.Pools
+	var poolUUIDToDelete string
+	for _, nodePool := range nodePools {
+		nodePoolID := fmt.Sprintf("%d", nodePool.ID)
+		if nodePoolID == poolIDToDelete {
+			poolUUIDToDelete = nodePool.Uuid
+			break
+		}
+	}
+	volsToMove := make([]string, 0)
 
 	for _, vol := range nodeVols {
+		appVol, err := Inst().V.InspectVolume(vol)
+		if err != nil {
+			return err
+		}
+		replPoolUUIDs := appVol.GetReplicaSets()[0].GetPoolUuids()
+		// selecting volume which has repl in the poolIDToDelete
+		if slices.Contains(replPoolUUIDs, poolUUIDToDelete) {
+			volsToMove = append(volsToMove, vol)
+		}
+	}
+
+	for _, vol := range volsToMove {
 
 		newReplicaNode, replicaErr := GetNodeIdToMoveReplica(vol)
 		log.Infof("New Replica node is [%s]", newReplicaNode)
@@ -13604,12 +13615,10 @@ func GetNodeIdToMoveReplica(volName string) (string, error) {
 	}
 	replNodes := appVol.GetReplicaSets()[0].GetNodes()
 	stNodes := node.GetStorageNodes()
-	log.Infof("replNodes %v", replNodes)
 
 	ShuffleSlice(stNodes)
 
 	for _, stNode := range stNodes {
-		log.Infof("checking for node [%s]", stNode.VolDriverNodeID)
 		if !Contains(replNodes, stNode.VolDriverNodeID) {
 			return stNode.VolDriverNodeID, nil
 		}

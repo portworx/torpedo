@@ -792,16 +792,17 @@ func (d *portworx) updateNode(n *node.Node, pxNodes []*api.StorageNode) error {
 					n.IsMetadataNode = isMetadataNode
 
 					if pxNode.Pools != nil && len(pxNode.Pools) > 0 {
-						log.Infof("Updating node [%s] as storage node", n.Name)
 						n.StoragePools = nil
+						var poolDetails []string
 						for _, pxNodePool := range pxNode.Pools {
-							log.Infof("Updating node [%s] with storage pool [%s] having size [%d]", n.Name, pxNodePool.Uuid, pxNodePool.TotalSize/units.GiB)
+							poolDetails = append(poolDetails, fmt.Sprintf("[%s: %dGiB]", pxNodePool.Uuid, pxNodePool.TotalSize/units.GiB))
 							storagePool := node.StoragePool{
 								StoragePool:       pxNodePool,
 								StoragePoolAtInit: pxNodePool,
 							}
 							n.StoragePools = append(n.StoragePools, storagePool)
 						}
+						log.Infof("Updated node [%s] with storage pools: %s", n.Name, strings.Join(poolDetails, ", "))
 					} else {
 						log.Infof("Updating node [%s] as storageless node", n.Name)
 					}
