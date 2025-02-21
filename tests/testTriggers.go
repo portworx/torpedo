@@ -754,7 +754,7 @@ const (
 	//Generic Kubevirt VM live migration event handles already existing VMs as well
 	GenericKubevirtVMLiveMigration = "genericKubevirtVMLiveMigration"
 
-  // AsyncDR node restart on source runs Async DR migration between two clusters with px restart
+	// AsyncDR node restart on source runs Async DR migration between two clusters with px restart
 	AsyncDRKVDBFailoverSource = "asyncdrkvdbfailoversource"
 
 	// Cold add disk to kubevirt VM
@@ -765,6 +765,9 @@ const (
 
 	//Add Cold pluggable disk to kubevirt VM including exisiting VMs
 	GenericColdAddDiskToKubevirtVM = "genericColdAddDiskToKubevirtVM"
+
+	// KVDBNodePXStopAndStart trigger to Stop PX on KVDB node
+	KVDBNodePXStopAndStart = "kvdbNodePXStopAndStart"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -16310,16 +16313,16 @@ func TriggerGenericHotPluggableDiskToKubevirtVM(contexts *[]*scheduler.Context, 
 					log.FailOnError(err, "Failed to get volumeMode for VM [%v]", selectedVM)
 				}
 				log.Infof(" For VM [%v] Volume mode is [%v]", selectedVM.Name, volumeMode)
-				
+
 				isHotPlugged, err := GenericHotPlugDataVolumesToKubevirtVM(selectedVM, numberOfVolumes, "50Gi", string(volumeMode), false)
-				vmHotAddDiskCount[selectedVM.Name]++ 
-				
+				vmHotAddDiskCount[selectedVM.Name]++
+
 				log.Infof("For selected VM [%v], the number of Hot pluggable disks count is [%v]", selectedVM.Name, vmHotAddDiskCount[selectedVM.Name])
 				log.FailOnError(err, "Failed to add Hot pluggable disk to KubeVirt VM")
 				dash.VerifyFatal(isHotPlugged, true, "Successfully added Hot pluggable disk to KubeVirt VM ?")
 			} else {
 				log.Infof("For selected VM [%v], Number of Hot Pluggable disks has recahed its maximum capacity [%v]",
-				selectedVM.Name, vmHotAddDiskCount[selectedVM.Name])
+					selectedVM.Name, vmHotAddDiskCount[selectedVM.Name])
 			}
 
 		})
@@ -16414,4 +16417,133 @@ func TriggerGenericColdAddDiskToKubevirtVM(contexts *[]*scheduler.Context, recor
 		}
 		updateMetrics(*event)
 	})
+}
+
+//TriggerKVDBNodePXStopAndStart, Stops PX on KVDB node and make sure the stopped node is no longer a KVDB member
+func TriggerKVDBNodePXStopAndStart(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(KVDBNodePXStopAndStart)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: KVDBNodePXStopAndStart,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+	var kvdbNodesIDsBeforePXStop, kvdbNodesIDsAfterPXStop []string
+	var nodeForPXStop node.Node
+
+	stepLog := "Stop PX on KVDB node and make sure the stopped node is no longer a KVDB member.Stopped kvdb node should be devoid of kvdb driver"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		//check if DMThin enabled, if so skip the KVDBNodePXStopAndStart trigger
+		isDMthin, err := IsDMthin()
+		if err != nil {
+			UpdateOutcome(event, err)
+			return
+		}
+		if isDMthin {
+			log.Warn("This test is not supported when DMThin is enabled")
+			UpdateOutcome(event, err)
+			return
+		}
+
+		//Check for metadata on selected node, if true then skip the test
+		isMetadata, err := IsMetadataEnabled()
+		log.Infof("Tets purpose checking if Metadata enabled ? : [%v]", isMetadata)
+		if isMetadata {
+			log.Warnf("This test is not applicable when there is metadata is enabled ")
+			UpdateOutcome(event, err)
+			return
+		}
+
+		//Check KVDB node health before PX stop and start
+		isHealthybeforePXStop, err := CheckKVDBNodesHealth()
+		log.FailOnError(err, "Failed to check kvdb nodes health before PX stop")
+		dash.VerifyFatal(isHealthybeforePXStop, true, "Is kvdb nodes are healthy before PX stop?")
+
+		//Getting all kvdb nodeIDs before PX stop
+		kvdbNodesIDsBeforePXStop, err = GetAllkvdbNodeIDs()
+		if err != nil {
+			log.Infof("Failed to get All kvdb Node IDs, err : [%v]", err)
+			UpdateOutcome(event, err)
+			return
+		}
+		log.Infof("KVDB node IDs before stopping PX : [%v]", kvdbNodesIDsBeforePXStop)
+
+		//selecting node to stop and start PX
+		index := rand.Intn(len(kvdbNodesIDsBeforePXStop))
+		selectedNode := kvdbNodesIDsBeforePXStop[index]
+		log.Infof("Node ID selected for PX to stop : [%v]", selectedNode)
+		nodeForPXStop, err = node.GetNodeDetailsByNodeID(selectedNode)
+		if err != nil {
+			log.Infof("Failed to get details of node : [%v]", selectedNode)
+			UpdateOutcome(event, err)
+			return
+		}
+		//Getting KVDB drive before PX stop
+		kvdbDriverBeforePXStop, err := GetKvdbDriveOnNode(nodeForPXStop)
+		if err != nil {
+			log.Infof("Failed to get kvdb drive on node : [%v]", nodeForPXStop.Name)
+			UpdateOutcome(event, fmt.Errorf("Failed to get KVDB driver on node [%s], Cause: [%v]", nodeForPXStop.Name, err))
+			return
+		}
+		log.Infof("kvdb driver before PX stop : [%v]", kvdbDriverBeforePXStop)
+
+		//Stopping PX on KVDB node
+		log.Infof("Stop volume driver [%s] on node: [%s]", Inst().V.String(), nodeForPXStop)
+		StopVolDriverAndWait([]node.Node{nodeForPXStop})
+
+		//Wait till new kvdb memeber comes up
+		err = WaitForKVDBMembers()
+		UpdateOutcome(event, err)
+		log.FailOnError(err, "failed waiting for KVDB members to be active")
+
+		//Start the PX on the sane node where it was stopped
+		log.Infof("Starting volume driver [%s] on node [%s]", Inst().V.String(), nodeForPXStop)
+		StartVolDriverAndWait([]node.Node{nodeForPXStop})
+
+		//Get KVDB members after PX stop
+		kvdbNodesIDsAfterPXStop, err = GetAllkvdbNodeIDs()
+		if err != nil {
+			log.Infof("Failed to get All kvdb Node IDs, err : [%v]", err)
+			UpdateOutcome(event, err)
+			return
+		}
+		log.Infof("KVDB node IDs after stopping PX on KVDB node : [%v]", kvdbNodesIDsAfterPXStop)
+		//Check KVDB node health before PX stop and start
+		isHealthyAfterPXStop, err := CheckKVDBNodesHealth()
+		log.FailOnError(err, "Failed to check of kvdb nodes after PX stop, err : [%v]", err)
+		dash.VerifyFatal(isHealthyAfterPXStop, true, "Is kvdb nodes are healthy after PX stop ?")
+
+		//Getting KVDB drive after PX stop
+		kvdbDriverAfterPXStop, err := GetKvdbDriveOnNode(nodeForPXStop)
+		if err != nil {
+			log.Infof("Failed to get kvdb drive on node : [%v]", nodeForPXStop.Name)
+			UpdateOutcome(event, fmt.Errorf("Failed to get KVDB driver on node [%s], Cause: [%v]", nodeForPXStop.Name, err))
+		}
+		log.Infof("kvdb driver after PX stop : [%v]", kvdbDriverAfterPXStop)
+
+		//Validating older kvdb node is not part of new kvdb nodes
+		kvdbNodeBeforePXStop, kvdbNodeAfterPXStop, err := FindReplacedKvdbNode(kvdbNodesIDsBeforePXStop, kvdbNodesIDsAfterPXStop)
+		if err != nil {
+			UpdateOutcome(event, err)
+			return
+		}
+		dash.VerifyFatal(kvdbNodeBeforePXStop != "" && kvdbNodeAfterPXStop != "", true, fmt.Sprintf("Successfully created new kvdb node [%v] in place of [%v]", kvdbNodeAfterPXStop, kvdbNodeBeforePXStop))
+
+		//Validating absence of kvdb driver after PX start
+		dash.VerifyFatal(kvdbDriverBeforePXStop != "" && kvdbDriverAfterPXStop == "", true, "Validated absence of KVDB driver after PX stop and start ?")
+	})
+	if isSSIERun() {
+		validateContexts(event, contexts)
+	}
+	updateMetrics(*event)
 }

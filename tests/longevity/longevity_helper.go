@@ -433,10 +433,11 @@ func populateTriggerFuncs() {
 		AddHotPlugDiskToAllVMAndLiveMigrate: TriggerAddHotPlugDiskToAllVMAndLiveMigrate,
 		AsyncDRNodeRestartDestination:       TriggerAsyncDRNodeRestartDestination,
 		GenericKubevirtVMLiveMigration:      TriggerGenericKubevirtVMLiveMigration,
-    	AsyncDRKVDBFailoverSource:           TriggerAsyncDRKVDBFailoverSource,
+		AsyncDRKVDBFailoverSource:           TriggerAsyncDRKVDBFailoverSource,
 		ColdAddDiskToKubevirtVM:             TriggerColdAddDiskToKubevirtVM,
 		GenericHotPluggableDiskToKubevirtVM: TriggerGenericHotPluggableDiskToKubevirtVM,
 		GenericColdAddDiskToKubevirtVM:      TriggerGenericColdAddDiskToKubevirtVM,
+		KVDBNodePXStopAndStart:              TriggerKVDBNodePXStopAndStart,
 	}
 
 	//Creating a distinct trigger to make sure email triggers at regular intervals
@@ -977,10 +978,11 @@ func populateIntervals() {
 	triggerInterval[AsyncDRNodeRestartDestination] = make(map[int]time.Duration)
 	triggerInterval[AddHotPlugDiskToAllVMAndLiveMigrate] = make(map[int]time.Duration)
 	triggerInterval[GenericKubevirtVMLiveMigration] = make(map[int]time.Duration)
-  	triggerInterval[AsyncDRKVDBFailoverSource] = make(map[int]time.Duration)
+	triggerInterval[AsyncDRKVDBFailoverSource] = make(map[int]time.Duration)
 	triggerInterval[ColdAddDiskToKubevirtVM] = make(map[int]time.Duration)
 	triggerInterval[GenericHotPluggableDiskToKubevirtVM] = make(map[int]time.Duration)
 	triggerInterval[GenericColdAddDiskToKubevirtVM] = make(map[int]time.Duration)
+	triggerInterval[KVDBNodePXStopAndStart] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -2311,7 +2313,7 @@ func populateIntervals() {
 	triggerInterval[GenericKubevirtVMLiveMigration][2] = 24 * baseInterval
 	triggerInterval[GenericKubevirtVMLiveMigration][1] = 27 * baseInterval
 
-  triggerInterval[AsyncDRKVDBFailoverSource][10] = 1 * baseInterval
+	triggerInterval[AsyncDRKVDBFailoverSource][10] = 1 * baseInterval
 	triggerInterval[AsyncDRKVDBFailoverSource][9] = 3 * baseInterval
 	triggerInterval[AsyncDRKVDBFailoverSource][8] = 6 * baseInterval
 	triggerInterval[AsyncDRKVDBFailoverSource][7] = 9 * baseInterval
@@ -2354,6 +2356,17 @@ func populateIntervals() {
 	triggerInterval[GenericColdAddDiskToKubevirtVM][3] = 21 * baseInterval
 	triggerInterval[GenericColdAddDiskToKubevirtVM][2] = 24 * baseInterval
 	triggerInterval[GenericColdAddDiskToKubevirtVM][1] = 27 * baseInterval
+
+	triggerInterval[KVDBNodePXStopAndStart][10] = 1 * baseInterval
+	triggerInterval[KVDBNodePXStopAndStart][9] = 3 * baseInterval
+	triggerInterval[KVDBNodePXStopAndStart][8] = 6 * baseInterval
+	triggerInterval[KVDBNodePXStopAndStart][7] = 9 * baseInterval
+	triggerInterval[KVDBNodePXStopAndStart][6] = 12 * baseInterval
+	triggerInterval[KVDBNodePXStopAndStart][5] = 15 * baseInterval
+	triggerInterval[KVDBNodePXStopAndStart][4] = 18 * baseInterval
+	triggerInterval[KVDBNodePXStopAndStart][3] = 21 * baseInterval
+	triggerInterval[KVDBNodePXStopAndStart][2] = 24 * baseInterval
+	triggerInterval[KVDBNodePXStopAndStart][1] = 27 * baseInterval
 
 	// Chaos Level of 0 means disable test trigger
 	triggerInterval[DeployApps][0] = 0
@@ -2471,11 +2484,11 @@ func populateIntervals() {
 	triggerInterval[AddHotPlugDiskToAllVMAndLiveMigrate][0] = 0
 	triggerInterval[AsyncDRNodeRestartDestination][0] = 0
 	triggerInterval[GenericKubevirtVMLiveMigration][0] = 0
-	triggerInterval[AsyncDRKVDBFailoverSource][0] = 0	
+	triggerInterval[AsyncDRKVDBFailoverSource][0] = 0
 	triggerInterval[ColdAddDiskToKubevirtVM][0] = 0
-
-	triggerInterval[GenericHotPluggableDiskToKubevirtVM] [0] = 0
+	triggerInterval[GenericHotPluggableDiskToKubevirtVM][0] = 0
 	triggerInterval[GenericColdAddDiskToKubevirtVM][0] = 0
+	triggerInterval[KVDBNodePXStopAndStart][0] = 0
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {

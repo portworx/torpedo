@@ -5873,3 +5873,135 @@ var _ = Describe("{VerifyFstrimWithNodeRestart}", Label("staging", "p0", "positi
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{StopPXOnKVDBNodeAndNewKVDBNodeWillBeUp}", Label("staging", "p0", "positive", "kvdb_ops"), func() {
+	/*
+		https://purestorage.atlassian.net/browse/HAZEL-1080
+		1. Stop PX on kvdb Node
+		2. Wait for 5 mins and restart PX on stopped node
+		3. New kvdb node would comeup
+		3. Make sure old kvdb node is no longer kvdb memeber and should be devoid of kvdb driver
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("StopPXOnKVDBNodeAndNewKVDBNodeWillBeUp", "Stop PX on KVDB node and make sure the stopped node is no longer a KVDB member.Stopped kvdb node should be devoid of kvdb driver", nil, 0)
+		//check if DMThin enabled, if so skip the KVDBNodePXStopAndStart trigger
+		isDMthin, err := IsDMthin()
+		log.FailOnError(err, "Failed to check if DMthin is enabled or not")
+		if isDMthin {
+			Skip("This test is not applicable when DMThin is enabled")
+		}
+		//Check for metadata on selected node, if true then skip the test
+		isMetadata, err := IsMetadataEnabled()
+		log.FailOnError(err, "Failed to check if Metadata is present or not")
+		if isMetadata {
+			Skip("This test is not applicable when there is metadata")
+		}
+	})
+	var (
+		kvdbNodesIDsBeforePXStop, kvdbNodesIDsAfterPXStop []string
+		kvdbDriverBeforePXStop, kvdbDriverAfterPXStop     string
+		nodeForPXStop                                     node.Node
+	)
+
+	stepLog := "Stop PX on KVDB node and make sure the stopped node is no longer a KVDB member.Stopped kvdb node should be devoid of kvdb driver"
+	It(stepLog, func() {
+
+		stepLog = "Schedule application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				uniqueChar := string('a' + rune(i%26))
+				appName := fmt.Sprintf("kvdb-%d-%s", i, uniqueChar)
+				contexts = append(contexts, ScheduleApplications(appName)...)
+			}
+		})
+
+		stepLog := "Check kvdb node health before stopping PX"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			isHealthybeforePXStop, err := CheckKVDBNodesHealth()
+			log.FailOnError(err, "Failed to check kvdb nodes health before PX stop")
+			dash.VerifyFatal(isHealthybeforePXStop, true, "Is kvdb nodes are healthy before PX stop?")
+		})
+
+		stepLog = "Getting all kvdb node IDs before PX stop"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			kvdbNodesIDsBeforePXStop, err = GetAllkvdbNodeIDs()
+			log.FailOnError(err, "Failed to get kvdb node IDs")
+			log.InfoD("KVDB node IDs before stopping PX : [%v]", kvdbNodesIDsBeforePXStop)
+		})
+
+		//selecting node to stop and start PX
+		index := rand.Intn(len(kvdbNodesIDsBeforePXStop))
+		selectedNode := kvdbNodesIDsBeforePXStop[index]
+		log.Infof("Node ID selected for PX to stop : [%v]", selectedNode)
+		nodeForPXStop, err = node.GetNodeDetailsByNodeID(selectedNode)
+		log.FailOnError(err, "Failed to get node details for node : [%v]", selectedNode)
+		log.Infof("Node selected for PX to stop : [%v]", nodeForPXStop.Name)
+
+		stepLog = "Getting kvdb driver on selected node before PX stop"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			kvdbDriverBeforePXStop, err = GetKvdbDriveOnNode(nodeForPXStop)
+			log.FailOnError(err, "Failed to get kvdb driver on node : [%v]", nodeForPXStop.Name)
+			log.InfoD("kvdb driver before PX stop : [%v]", kvdbDriverBeforePXStop)
+		})
+
+		stepLog = "Stopping PX on kvdb node, wait for 5 mins and start PX again on same node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Infof("Stop volume driver [%s] on node: [%s]", Inst().V.String(), nodeForPXStop)
+			StopVolDriverAndWait([]node.Node{nodeForPXStop})
+
+			//Wait till new kvdb memeber comes up
+			err := WaitForKVDBMembers()
+			log.FailOnError(err, "Failed waiting for KVDB members to be active")
+
+			//Start the PX on the sane node where it was stopped
+			log.Infof("Starting volume driver [%s] on node [%s]", Inst().V.String(), nodeForPXStop)
+			StartVolDriverAndWait([]node.Node{nodeForPXStop})
+		})
+
+		stepLog = "Getting kvdb nodes IDs after PX stop"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			kvdbNodesIDsAfterPXStop, err = GetAllkvdbNodeIDs()
+			log.FailOnError(err, "Failed to kvdb nodes after PX stop")
+			log.InfoD("KVDB node IDs after stopping PX on KVDB node : [%v]", kvdbNodesIDsAfterPXStop)
+		})
+
+		stepLog = "Checking Health of kvdb nodes after PX stop"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			isHealthyAfterPXStop, err := CheckKVDBNodesHealth()
+			log.FailOnError(err, "Failed to check of kvdb nodes after PX stop, err : [%v]", err)
+			dash.VerifyFatal(isHealthyAfterPXStop, true, "Is kvdb nodes are healthy after PX stop ?")
+		})
+
+		stepLog = "Getting kvdb driver on selected node after PX stop"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			kvdbDriverAfterPXStop, err = GetKvdbDriveOnNode(nodeForPXStop)
+			log.FailOnError(err, "Failed to get kvdb driver on node after PX stop: [%v]", nodeForPXStop.Name)
+			log.InfoD("kvdb driver after PX stop : [%v]", kvdbDriverAfterPXStop)
+		})
+
+		stepLog = "Validation kvdb nodes after PX restart"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			kvdbNodeBeforePXStop, kvdbNodeAfterPXStop, err := FindReplacedKvdbNode(kvdbNodesIDsBeforePXStop, kvdbNodesIDsAfterPXStop)
+			log.FailOnError(err, "Failed to find the new kvdb node after PX resatrt")
+			//validating creation of new kvdb node after PX stop
+			dash.VerifyFatal(kvdbNodeBeforePXStop != kvdbNodeAfterPXStop, true, fmt.Sprintf("Successfully created new kvdb node [%v] in place of [%v]", kvdbNodeAfterPXStop, kvdbNodeBeforePXStop))
+			//Validating absence of kvdb driver after PX start
+			dash.VerifyFatal(kvdbDriverBeforePXStop != "" && kvdbDriverAfterPXStop == "", true, fmt.Sprintf("Validating kvdb driver [%v] before PX stop and kvdb driver [%v] after PX stop ?", kvdbDriverBeforePXStop, kvdbDriverAfterPXStop))
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+
+})

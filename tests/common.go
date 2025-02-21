@@ -17094,3 +17094,134 @@ func GetNodePoolsMap() (map[string][]string, error) {
 	}
 	return nodePoolsMap, nil
 }
+
+func GetKvdbDriveOnNode(n node.Node) (string, error) {
+	type DiskConfig struct {
+		ID     string `json:"ID"`
+		PXType string `json:"PXType"`
+	}
+	type NodeConfig struct {
+		Configs map[string]DiskConfig `json:"Configs"`
+	}
+	type ClusterConfig map[string]NodeConfig
+
+	jsonConvert := func(jsonString string) (ClusterConfig, error) {
+		var config ClusterConfig
+		err := json.Unmarshal([]byte(jsonString), &config)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to parse drives JSON : [%v]", err)
+		}
+		return config, nil
+	}
+	cmd := fmt.Sprintf("pxctl cd list --json")
+	out, err := Inst().N.RunCommand(n, cmd, node.ConnectionOpts{
+		Timeout:         2 * time.Minute,
+		TimeBeforeRetry: 10 * time.Second,
+	})
+	if err != nil {
+		return "", fmt.Errorf("Failed to run command [%v] on node [%v]", cmd, n)
+	}
+	log.Infof("kvdb driver [%v] for node [%v]", out, n.Name)
+
+	config, err := jsonConvert(out)
+	if err != nil {
+		return "", err
+	}
+
+	nodeConfig, ok := config[n.Id]
+	if !ok {
+		return "", fmt.Errorf("node [%v] not found in cluster configuration", n.Id)
+	}
+
+	for _, disk := range nodeConfig.Configs {
+		if disk.PXType == "kvdb" {
+			return disk.ID, nil
+		}
+	}
+	log.Warnf("No KVDB drive found on node [%s]", n.Name)
+	return "", nil
+}
+
+func IsMetadataEnabled() (bool, error) {
+	storageSpec, err := Inst().V.GetStorageSpec()
+	if err != nil {
+		return false, err
+	}
+	jDev := storageSpec.GetSystemMetadataDev()
+	if jDev != "" {
+		log.Infof("MetadataDev: %s", jDev)
+		return true, nil
+	}
+	return false, nil
+}
+
+func CheckKVDBNodesHealth() (bool, error) {
+	var healthCount int
+	kvdbNodes, err := GetAllKvdbNodes()
+	if err != nil {
+		log.Infof("Failed to get KVDB nodes for checking KVDB node health ")
+		return false, err
+	}
+	healthCount = 0
+	for _, kvdbNode := range kvdbNodes {
+		if kvdbNode.IsHealthy {
+			healthCount++
+		}
+	}
+	if healthCount <= 2 {
+		log.Infof("Health of KVDB nodes is not good")
+		return false, fmt.Errorf("Health of KVDB nodes is not good")
+	}
+	log.Infof("Number of KVDB node which is healthy : [%v]", healthCount)
+	return true, nil
+}
+
+func GetAllkvdbNodeIDs() (kvdbNodesIDs []string, err error) {
+	kvdbNodes, err := GetAllKvdbNodes()
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get All kvdb Nodes, err : [%v]", err)
+	}
+	log.Infof("All KVDB nodes : [%+v]", kvdbNodes)
+	for _, n := range kvdbNodes {
+		kvdbNodesIDs = append(kvdbNodesIDs, n.ID)
+	}
+	return kvdbNodesIDs, nil
+}
+
+func FindReplacedKvdbNode(kvdbNodeIDsBeforePXStop, kvdbNodeIDsAfterPXStop []string) (replacedKvdbNode, replacedWithKvdbNode string, err error) {
+	if len(kvdbNodeIDsBeforePXStop) != len(kvdbNodeIDsAfterPXStop) {
+		return "", "", fmt.Errorf("kvdb quorum is not maintained: lengths of slices differ")
+	}
+	beforeMap := make(map[string]bool)
+	afterMap := make(map[string]bool)
+
+	for _, id := range kvdbNodeIDsBeforePXStop {
+		beforeMap[id] = true
+	}
+	log.Infof("beforeMap : [%v]", beforeMap)
+	for _, id := range kvdbNodeIDsAfterPXStop {
+		afterMap[id] = true
+	}
+	log.Infof("afterMap : [%v]", afterMap)
+
+	// Identify the replaced and new nodes
+	for _, id := range kvdbNodeIDsBeforePXStop {
+		if !afterMap[id] {
+			replacedKvdbNode = id
+			log.Infof("replacedKvdbNode : [%v]", replacedKvdbNode)
+			break
+		}
+	}
+	for _, id := range kvdbNodeIDsAfterPXStop {
+		if !beforeMap[id] {
+			replacedWithKvdbNode = id
+			log.Infof("replacedWithKvdbNode : [%v]", replacedWithKvdbNode)
+			break
+		}
+	}
+	if replacedKvdbNode == "" || replacedWithKvdbNode == "" {
+		err = fmt.Errorf("no node was replaced")
+		return
+	}
+	return replacedKvdbNode, replacedWithKvdbNode, nil
+}
