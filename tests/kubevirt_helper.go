@@ -33,9 +33,9 @@ import (
 )
 
 const (
-	mountTypeBind = "bind"
-	mountTypeNFS  = "nfs"
-
+	mountTypeBind                         = "bind"
+	mountTypeNFS                          = "nfs"
+	kubevirtVMPwdParam                    = "KUBEVIRT_VM_PWD"
 	kubevirtTemplates                     = "kubevirt-templates"
 	kubevirtTemplateNamespace             = "openshift-virtualization-os-images"
 	kubevirtCDIStorageConditionAnnotation = "cdi.kubevirt.io/storage.condition.running.reason"
@@ -1022,9 +1022,11 @@ func GetVMIPAddress(vm kubevirtv1.VirtualMachine) (string, error) {
 }
 
 func TestSSHConnectivity(ipAddress string) error {
-	sshPwd, present := os.LookupEnv("KUBEVIRT_VM_PWD")
-	if !present {
-		return fmt.Errorf("Please set KUBEVIRT_VM_PWD to login inside the Kubevirt VM")
+	sshPwd, present := os.LookupEnv(kubevirtVMPwdParam)
+	if !present || sshPwd == "" {
+		return fmt.Errorf("Please set [%s] to login inside the Kubevirt VM", kubevirtVMPwdParam)
+	} else {
+		log.Infof("[%s] is set.", kubevirtVMPwdParam)
 	}
 	testCmdArgs := getSSHCommandArgs(sshUserName, sshPwd, ipAddress, "hostname")
 	t := func() (interface{}, bool, error) {
@@ -1047,8 +1049,10 @@ func TestSSHConnectivity(ipAddress string) error {
 
 func RunCommandInVM(ipAddress, command string) (string, error) {
 	sshPwd, present := os.LookupEnv("KUBEVIRT_VM_PWD")
-	if !present {
-		return "", fmt.Errorf("Please set KUBEVIRT_VM_PWD to login inside the Kubevirt VM")
+	if !present || sshPwd == "" {
+		return "", fmt.Errorf("Please set [%s] to login inside the Kubevirt VM", kubevirtVMPwdParam)
+	} else {
+		log.Infof("[%s] is set.", kubevirtVMPwdParam)
 	}
 	cmdArgs := getSSHCommandArgs(sshUserName, sshPwd, ipAddress, command)
 	output, err := k8sCore.RunCommandInPod(cmdArgs, sshPodName, "ssh-container", "default")
@@ -2406,7 +2410,7 @@ func GenericStartAndWaitForVMMigration(vm kubevirtv1.VirtualMachine, ctx context
 	time.Sleep(10 * time.Second)
 
 	duration := time.Since(startTime)
-	log.Infof("VM migration for VM [%v] in namespace [%v] is completed in [%.2f] seconds",vm,vm.Namespace,duration)
+	log.Infof("VM migration for VM [%v] in namespace [%v] is completed in [%.2f] seconds", vm, vm.Namespace, duration)
 
 	//Validate Migration
 	err = ValidateVMMigration(vm, nodeName)
@@ -2596,19 +2600,18 @@ func GenericValidateFioInVM(vm kubevirtv1.VirtualMachine, canSsh bool) {
 	}
 }
 
-func GenericValidateVMUptime(vm kubevirtv1.VirtualMachine,canSsh bool, initialUptime map[string]time.Duration){
-	if canSsh{
+func GenericValidateVMUptime(vm kubevirtv1.VirtualMachine, canSsh bool, initialUptime map[string]time.Duration) {
+	if canSsh {
 		stepLog := "Validate VMs have not restarted"
-		Step(stepLog,func() {
+		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			err := CheckVMUptime(vm, initialUptime)
-			if LogAndReturnIfErr(err,"Failed to validate uptimein VM [%v]: [%v]",vm.Name,err){
+			if LogAndReturnIfErr(err, "Failed to validate uptimein VM [%v]: [%v]", vm.Name, err) {
 				return
 			}
 		})
 	}
 }
-
 
 func GenericColdPlugDataVolumesToKubevirtVM(vm kubevirtv1.VirtualMachine, numberOfDisks int, size string) (bool, error) {
 	var pvcs []*corev1.PersistentVolumeClaim

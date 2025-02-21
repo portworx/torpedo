@@ -192,7 +192,7 @@ const (
 	cdiPvcRunningMessageAnnotationKey = "cdi.kubevirt.io/storage.condition.running.message"
 	cdiPvcImportEndpointAnnotationKey = "cdi.kubevirt.io/storage.import.endpoint"
 	cdiImportComplete                 = "Import Complete"
-	cdiImageImportTimeout             = 20 * time.Minute
+	cdiImageImportTimeout             = 30 * time.Minute
 	cdiImageImportRetry               = 30 * time.Second
 
 	pvcDeletionTimeout = 10 * time.Minute
@@ -5879,8 +5879,8 @@ func (k *K8s) createVirtualMachineObjects(
 					return nil, err
 				}
 			}
-			log.Infof("Sleeping for 30 seconds to let data volume settle")
-			time.Sleep(30 * time.Second)
+			log.Infof("Sleeping for 3 minutes to let data volume settle")
+			time.Sleep(180 * time.Second)
 			vm, err = k8sKubevirt.GetVirtualMachine(obj.Name, obj.Namespace)
 			if err != nil {
 				return nil, fmt.Errorf("failed to retrieve VM after creating/waiting for DataVolumes: %v", err)
