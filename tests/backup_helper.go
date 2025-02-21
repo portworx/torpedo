@@ -177,6 +177,8 @@ const (
 	BackupLocationDeleteTimeout           = 120 * time.Minute
 	BackupFailureTimeout                  = 80 * time.Minute
 	BackupFailureRetryTime                = 30 * time.Second
+	NamespaceDeletionTimeout              = 10 * time.Minute
+	NameSpaceRetryTime                    = 30 * time.Second
 	ScaleBackupLocationDeleteTimeout      = 120 * time.Minute
 	BackupLocationDeleteRetryTime         = 30 * time.Second
 	IptablesCommandExecutionTimeout       = 10 * time.Minute
@@ -15081,4 +15083,31 @@ func GetBackupNamespaceFromSchedule(scheduleName string) ([]string, error) {
 	}
 	nameSpaces = scheduleResp.GetBackupSchedule().Namespaces
 	return nameSpaces, nil
+}
+
+func WaitForNamespaceDeletion(namespaces []string) error {
+	checkNamespaceDeletion := func() (interface{}, bool, error) {
+		// List the namespaces
+		listOfNamespaces, err := core.Instance().ListNamespacesUsingLabelSelector(metav1.LabelSelector{})
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to list namespaces: %v", err)
+		}
+		// Filter out the namespaces to check
+		namespacesToCheck := make(map[string]struct{})
+		for _, ns := range namespaces {
+			namespacesToCheck[ns] = struct{}{}
+		}
+		// Check if the namespaces to be deleted still exist
+		for _, ns := range listOfNamespaces.Items {
+			if _, exists := namespacesToCheck[ns.Name]; exists {
+				return nil, true, fmt.Errorf("namespace [%s] still exists", ns.Name)
+			}
+		}
+		return nil, false, nil
+	}
+	_, err := DoRetryWithTimeoutWithGinkgoRecover(checkNamespaceDeletion, NamespaceDeletionTimeout, NameSpaceRetryTime)
+	if err != nil {
+		return fmt.Errorf("namespace deletion check failed after retries: %v", err)
+	}
+	return nil
 }

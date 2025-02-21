@@ -2798,6 +2798,143 @@ var _ = Describe("{VerifyBackupFailureWhenObjectStoreEndpointIsUnreachable}", La
 		err = DeleteAllBackups(ctx, BackupOrgID)
 		dash.VerifySafely(err, nil, "Verifying backup deletion")
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
+})
 
+// This test case verifies that a backup fails with a Backup CR missing error when a namespace with volumes is deleted during the backup process
+var _ = Describe("{BackupCRMissingAfterNamespaceDeletion}", Label(TestCaseLabelsMap[PxBackupLabel]...), func() {
+
+	var (
+		adminCtx             context.Context
+		scheduledAppContexts []*scheduler.Context
+		providers            []string
+		backupDriver         backup.Driver
+		backupName           string
+		backupLocationName   string
+		backupLocationUID    string
+		cloudCredName        string
+		cloudCredUID         string
+		clusterUid           string
+		clusterStatus        api.ClusterInfo_StatusInfo_Status
+		err                  error
+		bkpNamespaces        []string
+		backupLocationMap    map[string]string
+		controlChannel       chan string
+		errorGroup           *errgroup.Group
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("BackupCRMissingAfterNamespaceDeletion",
+			"Verifies that a backup fails with a Backup CR missing error when a namespace with volumes is deleted during the backup process", nil, 300711, Nvettaiyan, Q1FY25)
+
+		adminCtx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		bkpNamespaces = make([]string, 0)
+		providers = GetBackupProviders()
+		backupLocationMap = make(map[string]string)
+		backupDriver = Inst().Backup
+
+		// Schedule Application
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+		}()
+		Inst().AppList = []string{"postgres-withdata"}
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		bkpNamespaces = make([]string, 0)
+
+		log.Infof("Scheduling applications")
+		appContexts := ScheduleApplications(TaskNamePrefix)
+		for _, appCtx := range appContexts {
+			namespace := GetAppNamespace(appCtx, TaskNamePrefix)
+			bkpNamespaces = append(bkpNamespaces, namespace)
+			scheduledAppContexts = append(scheduledAppContexts, appCtx)
+			appCtx.ReadinessTimeout = AppReadinessTimeout
+		}
+	})
+
+	It("Ensures that the backup fails with a Backup CR missing error if the namespace is deleted while the backup is in progress", func() {
+
+		Step("Validate applications", func() {
+			log.InfoD("Validate applications")
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, adminCtx)
+		})
+
+		Step("Creating backup location and cloud setting", func() {
+			log.InfoD("Creating backup location and cloud setting")
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, RandomString(5))
+				backupLocationName = fmt.Sprintf("%s-%s-%v-bl", provider, getGlobalBucketName(provider), RandomString(5))
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = backupLocationName
+				err = CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, adminCtx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocationName))
+			}
+		})
+
+		Step("Register cluster for backup", func() {
+			log.InfoD("Register cluster for backup")
+			err = CreateApplicationClusters(BackupOrgID, "", "", adminCtx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, adminCtx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			clusterUid, err = Inst().Backup.GetClusterUID(adminCtx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			log.InfoD("Uid of [%s] cluster is %s", SourceClusterName, clusterUid)
+		})
+
+		Step("Taking backup of applications", func() {
+			log.InfoD("Taking backup of applications")
+			backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, RandomString(5))
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+			_, err = CreateBackupWithoutCheck(adminCtx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, nil, BackupOrgID, clusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", backupName))
+		})
+
+		Step("Verifying Backup CR Missing Error After Namespace Deletion During Backup Process", func() {
+			log.InfoD("Verifying Backup CR Missing Error After Namespace Deletion During Backup Process")
+			err = DeleteNamespaces(bkpNamespaces)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Initiating deletion of namespaces for backup [%s]", backupName))
+			err = WaitForNamespaceDeletion(bkpNamespaces)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying successful deletion of namespaces for backup [%s]", backupName))
+			err = BackupFailedCheck(backupName, BackupOrgID, BackupFailureTimeout, BackupFailureRetryTime, adminCtx)
+			dash.VerifyFatal(err, nil, "Verifying if the backup failed")
+			backupUid, err := backupDriver.GetBackupUID(adminCtx, backupName, BackupOrgID)
+			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
+			backupInspectRequest := &api.BackupInspectRequest{
+				Name:  backupName,
+				Uid:   backupUid,
+				OrgId: BackupOrgID,
+			}
+			backupInspectResponse, err := backupDriver.InspectBackup(adminCtx, backupInspectRequest)
+			log.FailOnError(err, "Failed to inspect backup")
+			actualStatus := backupInspectResponse.GetBackup().GetStatus().Status
+			actualReason := backupInspectResponse.GetBackup().GetStatus().Reason
+			log.InfoD("Actual status: %v", actualStatus)
+			log.InfoD("Actual reason: %v", actualReason)
+			dash.VerifyFatal(actualStatus == api.BackupInfo_StatusInfo_Failed, true, fmt.Sprintf("Verifying that the backup status is 'Failed'. Actual: %s", actualStatus))
+			dash.VerifyFatal(
+				strings.Contains(actualReason, "backup CR missing"),
+				true,
+				fmt.Sprintf("Verifying that the reason contains 'backup CR missing'. Actual reason: %s", actualReason),
+			)
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		log.InfoD("Deleting the deployed apps after the testcase")
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		dash.VerifySafely(err, nil, "Deleting Apps With Data")
+		err = DeleteAllBackups(adminCtx, BackupOrgID)
+		dash.VerifySafely(err, nil, "Deleting All Backups")
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, adminCtx)
 	})
 })
