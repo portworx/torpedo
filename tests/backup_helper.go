@@ -2261,6 +2261,7 @@ func CreateRestoreWithCRValidation(restoreName string, backupName string, namesp
 	actual := resp.GetBackup().GetStatus().Status
 	reason := resp.GetBackup().GetStatus().Reason
 	if actual != api.BackupInfo_StatusInfo_Success {
+		log.InfoD(fmt.Sprintf("Backup JSON Output: %s", resp.String()))
 		return fmt.Errorf("backup status for [%s] expected was [%s] but got [%s] because of [%s]", backupName, api.BackupInfo_StatusInfo_Success, actual, reason)
 	}
 	backupDriver := Inst().Backup
@@ -3186,6 +3187,7 @@ func BackupSuccessCheck(backupName string, orgID string, retryDuration time.Dura
 		}
 		for _, status := range statusesUnexpected {
 			if actual == status {
+				log.InfoD(fmt.Sprintf("Backup JSON Output: %s", resp.String()))
 				return "", false, fmt.Errorf("backup status for [%s] expected was [%s] but got [%s] because of [%s]", backupName, statusesExpected, actual, reason)
 			}
 		}
@@ -3235,6 +3237,7 @@ func BackupSuccessCheckPartialSuccessCheck(backupName string, orgID string, retr
 		}
 		for _, status := range statusesUnexpected {
 			if actual == status {
+				log.InfoD(fmt.Sprintf("Backup JSON Output: %s", resp.String()))
 				return "", false, fmt.Errorf("backup status for [%s] expected was [%s] but got [%s] because of [%s]", backupName, statusesExpected, actual, reason)
 			}
 		}
@@ -3284,6 +3287,7 @@ func BackupWithPartialSuccessCheck(backupName string, orgID string, retryDuratio
 		}
 		for _, status := range statusesUnexpected {
 			if actual == status {
+				log.InfoD(fmt.Sprintf("Backup JSON Output: %s", resp.String()))
 				return "", false, fmt.Errorf("backup status for [%s] expected was [%s] but got [%s] because of [%s]", backupName, statusesExpected, actual, reason)
 			}
 		}
@@ -3334,6 +3338,7 @@ func BackupFailedCheck(backupName string, orgID string, retryDuration time.Durat
 		}
 		for _, status := range statusesUnexpected {
 			if actual == status {
+				log.InfoD(fmt.Sprintf("Backup JSON Output: %s", resp.String()))
 				return "", false, fmt.Errorf("backup status for [%s] expected was [%s] but got [%s] because of [%s]", backupName, statusesExpected, actual, reason)
 			}
 		}
@@ -3980,6 +3985,7 @@ func RestoreSuccessCheck(restoreName string, orgID string, retryDuration time.Du
 		}
 		for _, status := range statusesUnexpected {
 			if actual == status {
+				log.InfoD(fmt.Sprintf("Restore JSON Output: %s", resp.String()))
 				return "", false, fmt.Errorf("restore status for [%s] expected was [%v] but got [%s] because of [%s]", restoreName, statusesExpected, actual, reason)
 			}
 		}
@@ -4024,6 +4030,7 @@ func restoreSuccessWithReplacePolicy(restoreName string, orgID string, retryDura
 
 		for _, status := range statusesUnexpected {
 			if actual == status {
+				log.InfoD(fmt.Sprintf("Restore JSON Output: %s", resp.String()))
 				return "", false, fmt.Errorf("restore status for [%s] expected was [%v] but got [%s] because of [%s]", restoreName, statusesExpected, actual, reason)
 			}
 		}
