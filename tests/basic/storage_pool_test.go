@@ -5041,6 +5041,7 @@ func storageFullPoolExpansion(testName string) {
 		log.FailOnError(err, "error removing label on pool [%s]", secondReplPoolUUID)
 	}()
 
+	testName = strings.ToLower(testName)
 	vpsName := fmt.Sprintf("storagefull-vps-%s", testName)
 	nsName := fmt.Sprintf("storagefull-ns-%s", testName)
 	scName := fmt.Sprintf("storagefull-sc-%s", testName)
@@ -9317,7 +9318,6 @@ var _ = Describe("{ReplResyncOnPoolExpand}", Label("p0", "positive", "pool_ops",
 		revertAppList := func() {
 			Inst().AppList = currAppList
 		}
-		defer revertAppList()
 
 		Inst().AppList = []string{}
 		var ioIntensiveApp = []string{"fio", "fio-writes"}
@@ -9360,7 +9360,6 @@ var _ = Describe("{ReplResyncOnPoolExpand}", Label("p0", "positive", "pool_ops",
 			}
 		}
 
-		defer revertReplica()
 		for _, eachVol := range volumes {
 			getReplicaSets, err := Inst().V.GetReplicaSets(eachVol)
 			log.FailOnError(err, "Failed to get replication factor on the volume")
@@ -9402,7 +9401,10 @@ var _ = Describe("{ReplResyncOnPoolExpand}", Label("p0", "positive", "pool_ops",
 		for _, eachVol := range volumes {
 			log.FailOnError(waitTillVolumeStatusUp(eachVol), "failed to get volume status UP")
 		}
+
+		revertReplica()
 		appsValidateAndDestroy(contexts)
+		revertAppList()
 	})
 
 	JustAfterEach(func() {
