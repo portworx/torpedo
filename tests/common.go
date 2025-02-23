@@ -1888,10 +1888,13 @@ func ValidateCSISnapshotAndRestore(ctx *scheduler.Context, errChan ...*chan erro
 			}
 
 		}
-
 		if err = Inst().S.DeleteCsiSnapshotClass(snapShotClassName); err != nil {
 			log.Errorf("Delete volume snapshot class failed with error: [%v]", err)
 			expect(err).NotTo(haveOccurred(), "failed to delete snapshot class")
+		}
+		if err = WaitForSnapshotClassGotDeleted(snapShotClassName); err != nil {
+			log.Errorf("Deleted Snapshot class: [%s] still present in a cluster: [%v]", snapShotClassName, err)
+			expect(err).NotTo(haveOccurred(), "failed to cleanup snapshot class from a cluster after delete")
 		}
 	})
 }
@@ -17233,4 +17236,54 @@ func FindReplacedKvdbNode(kvdbNodeIDsBeforePXStop, kvdbNodeIDsAfterPXStop []stri
 		return
 	}
 	return replacedKvdbNode, replacedWithKvdbNode, nil
+}
+
+// IsCSISnapshotClassPresent checks if a CSI SnapshotClass with the given name exists.
+//
+// Parameters:
+//
+//	snapShotClassName - The name of the CSI SnapshotClass to check for.
+//
+// Returns:
+//
+//	bool - True if the SnapshotClass is present, false otherwise.
+//	error - An error if there was an issue retrieving the SnapshotClasses.
+func IsCSISnapshotClassPresent(snapShotClassName string) (bool, error) {
+	snapShotClasses, err := Inst().S.GetAllSnapshotClasses()
+	if err != nil {
+		return false, err
+	}
+	for _, snapshotClass := range snapShotClasses.Items {
+		if snapshotClass.Name == snapShotClassName {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// WaitForSnapshotClassGotDeleted waits until the specified CSI snapshot class is deleted.
+// It repeatedly checks for the presence of the snapshot class until it is no longer found
+// or an error occurs.
+//
+// Parameters:
+//
+//	snapShotClassName - The name of the CSI snapshot class to check for deletion.
+//
+// Returns:
+//
+//	error - An error if the snapshot class is still present after the timeout or if an error occurs during the check.
+func WaitForSnapshotClassGotDeleted(snapShotClassName string) error {
+	log.InfoD("Wait for snapshot class got deleted")
+	t := func() (interface{}, bool, error) {
+		if present, err := IsCSISnapshotClassPresent(snapShotClassName); present || err != nil {
+			return "", true, err
+		}
+
+		return "", false, nil
+	}
+	_, err := task.DoRetryWithTimeout(t, defaultTimeout, 10*time.Second)
+	if err != nil {
+		return err
+	}
+	return nil
 }
