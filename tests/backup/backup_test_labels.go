@@ -208,6 +208,7 @@ const (
 	AddBackupLocationWhileNfsValidatorPodIsRunning                                     TestCaseName = "AddBackupLocationWhileNfsValidatorPodIsRunning"
 	UninstallPxBackupAndRestoreFromTheBackup                                           TestCaseName = "UninstallPxBackupAndRestoreFromTheBackup"
 	ChangeSchedulePolicyAndVerifyBackups                                               TestCaseName = "ChangeSchedulePolicyAndVerifyBackups"
+	BackupAppDeployedUsingVPS                                                          TestCaseName = "BackupAppDeployedUsingVPS"
 )
 
 // Test case labels
@@ -412,6 +413,7 @@ const (
 	ChangeSchedulePolicyAndVerifyBackupsLabel                                               TestCaseLabel = "ChangeSchedulePolicyAndVerifyBackups"
 	BackupFailsOnUnreachableObjectStoreEndpoint                                             TestCaseLabel = "VerifyBackupFailureWhenObjectStoreEndpointIsUnreachable"
 	ClusterTestLabel                                                                        TestCaseLabel = "ClusterAdditionwithDifferentUserRoles"
+	BackupAppDeployedUsingVPSLabel                                                          TestCaseLabel = "BackupAppDeployedUsingVPS"
 )
 
 // Common Labels
