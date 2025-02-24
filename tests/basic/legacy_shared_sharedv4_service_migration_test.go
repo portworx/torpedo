@@ -283,13 +283,15 @@ var _ = Describe("{LegacySharedVolumeMigrate_CreateIdle}", Label("p0", "positive
 var _ = Describe("{LegacySharedVolumeAppMigrateBasic}", Label("p0", "positive", "px_ops", "px_vol_ops", "shared_v4"), func() {
 	var testrailID = 296374
 	var runID int
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("LegacySharedVolumeAppMigrateBasic", "Legacy Shared to Sharedv4 Service Functional Test", nil, testrailID)
 		namespacePrefix := "lstsv4mbasic"
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 		setCreateLegacySharedAsSharedv4Service(false)
 		setMigrateLegacySharedToSharedv4Service(false)
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", namespacePrefix, i))...)
 		}
@@ -328,13 +330,15 @@ var _ = Describe("{LegacySharedVolumeAppMigrateBasic}", Label("p0", "positive", 
 var _ = Describe("{LegacySharedToSharedv4ServiceMigrationBasicMany}", Label("p0", "positive", "px_ops", "px_vol_ops", "shared_v4"), func() {
 	var testrailID = 296728
 	var runID int
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("LegacySharedVolumeAppMigrateMany", "Legacy Shared to Sharedv4 Service Functional Test with Many Volumes", nil, testrailID)
 		namespacePrefix := "lstsv4mbasic2"
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 		setCreateLegacySharedAsSharedv4Service(false)
 		setMigrateLegacySharedToSharedv4Service(false)
-		contexts = make([]*scheduler.Context, 0)
 		numberNameSpaces := Inst().GlobalScaleFactor
 		if numberNameSpaces < numApps {
 			numberNameSpaces = numApps
@@ -374,13 +378,15 @@ var _ = Describe("{LegacySharedToSharedv4ServiceMigrationBasicMany}", Label("p0"
 var _ = Describe("{LegacySharedToSharedv4ServiceMigrationRestart}", Label("p0", "negative", "px_ops", "error_injection", "px_vol_ops", "shared_v4"), func() {
 	var testrailID = 296736
 	var runID int
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("LegacySharedVolumeAppMigrationRestart", "Legacy Shared to Sharedv4 Service Functional Test with Many Volumes", nil, testrailID)
 		namespacePrefix := "lstsv4m-re"
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 		setCreateLegacySharedAsSharedv4Service(false)
 		setMigrateLegacySharedToSharedv4Service(false)
-		contexts = make([]*scheduler.Context, 0)
 		numberNameSpaces := Inst().GlobalScaleFactor
 		if numberNameSpaces < numApps {
 			numberNameSpaces = numApps
@@ -432,13 +438,15 @@ var _ = Describe("{LegacySharedToSharedv4ServiceMigrationRestart}", Label("p0", 
 var _ = Describe("{LegacySharedToSharedv4ServicePxRestart}", Label("p1", "negative", "px_ops", "error_injection", "px_vol_ops", "shared_v4", "px_restart"), func() {
 	var testrailID = 296732
 	var runID int
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("LegacySharedVolumeAppMigrationRestart", "Legacy Shared to Sharedv4 Service Functional Test with Many Volumes", nil, testrailID)
 		namespacePrefix := "lstsv4m-px-mig-res"
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 		setCreateLegacySharedAsSharedv4Service(false)
 		setMigrateLegacySharedToSharedv4Service(false)
-		contexts = make([]*scheduler.Context, 0)
 		numberNameSpaces := Inst().GlobalScaleFactor
 		if numberNameSpaces < numApps {
 			numberNameSpaces = numApps
@@ -491,10 +499,13 @@ var _ = Describe("{LegacySharedToSharedv4ServicePxRestart}", Label("p1", "negati
 })
 
 var _ = Describe("{LegacySharedToSharedv4ServiceNodeDecommission}", Label("p1", "negative", "node_ops", "error_injection", "px_ops", "px_vol_ops", "shared_v4", "RecycleNode"), func() {
-	var testrailID = 297580
-	var runID int
-	var pxNode node.Node
-	var nodeDecommissioned bool
+	var (
+		testrailID         = 297580
+		runID              int
+		pxNode             node.Node
+		nodeDecommissioned bool
+		contexts           = make([]*scheduler.Context, 0)
+	)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("LegacySharedServiceNodeDecomssion", "Legacy Shared to Sharedv4 Service Functional Test with Node Decommission", nil, testrailID)
@@ -502,7 +513,6 @@ var _ = Describe("{LegacySharedToSharedv4ServiceNodeDecommission}", Label("p1", 
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 		setCreateLegacySharedAsSharedv4Service(false)
 		setMigrateLegacySharedToSharedv4Service(false)
-		contexts = make([]*scheduler.Context, 0)
 		numberNameSpaces := Inst().GlobalScaleFactor
 		if numberNameSpaces < 10 {
 			numberNameSpaces = 10
@@ -604,15 +614,17 @@ var _ = Describe("{LegacySharedToSharedv4ServiceNodeDecommission}", Label("p1", 
 })
 
 var _ = Describe("{LegacySharedToSharedv4ServiceRestartCoordinator}", Label("p1", "negative", "error_injection", "px_ops", "px_vol_ops", "shared_v4", "px_restart"), func() {
-	var testrailID = 296732
-	var runID int
+	var (
+		testrailID = 296732
+		runID      int
+		contexts   = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("LegacySharedVolumeAppRestartCoordinator", "Legacy Shared to Sharedv4 Service Migration and coordinator restart", nil, testrailID)
 		namespacePrefix := "lstsv4m-px-res-cd"
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 		setCreateLegacySharedAsSharedv4Service(false)
 		setMigrateLegacySharedToSharedv4Service(false)
-		contexts = make([]*scheduler.Context, 0)
 		numberNameSpaces := Inst().GlobalScaleFactor
 		if numberNameSpaces < numApps {
 			numberNameSpaces = numApps
@@ -670,17 +682,19 @@ var _ = Describe("{LegacySharedToSharedv4ServiceRestartCoordinator}", Label("p1"
 })
 
 var _ = Describe("{LegacySharedToSharedv4ServiceCreateSnapshotsClones}", Label("p0", "positive", "snapshot_ops", "px_ops", "shared_v4"), func() {
-	var testrailID = 296731
-	var runID int
-	podMap := make(map[types.UID]bool)
-	volMap := make(map[string]bool)
+	var (
+		testrailID = 296731
+		runID      int
+		podMap     = make(map[types.UID]bool)
+		volMap     = make(map[string]bool)
+		contexts   = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("LegacySharedVolumeAppRestartCoordinator", "Legacy Shared to Sharedv4 Service Migration with creation of snapshots and clones", nil, testrailID)
 		namespacePrefix := "lstsv4m-snap-clone"
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 		setCreateLegacySharedAsSharedv4Service(false)
 		setMigrateLegacySharedToSharedv4Service(false)
-		contexts = make([]*scheduler.Context, 0)
 		numberNameSpaces := Inst().GlobalScaleFactor
 		if numberNameSpaces < 5 {
 			numberNameSpaces = 5
@@ -725,15 +739,17 @@ var _ = Describe("{LegacySharedToSharedv4ServiceCreateSnapshotsClones}", Label("
 })
 
 var _ = Describe("{LegacySharedToSharedv4ServicePxRestartAll}", Label("p1", "negative", "px_ops", "error_injection", "px_vol_ops", "shared_v4", "multiple_px_crash"), func() {
-	var testrailID = 297579
-	var runID int
+	var (
+		testrailID = 297579
+		runID      int
+		contexts   = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("LegacySharedVolumePxRestartAll", "Legacy Shared to Sharedv4 Service Functional Test with restart px on all nodes", nil, testrailID)
 		namespacePrefix := "lstsv4m-px-res-all"
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 		setCreateLegacySharedAsSharedv4Service(false)
 		setMigrateLegacySharedToSharedv4Service(false)
-		contexts = make([]*scheduler.Context, 0)
 		numberNameSpaces := Inst().GlobalScaleFactor
 		if numberNameSpaces < numApps {
 			numberNameSpaces = numApps
@@ -787,15 +803,17 @@ var _ = Describe("{LegacySharedToSharedv4ServicePxRestartAll}", Label("p1", "neg
 })
 
 var _ = Describe("{LegacySharedToSharedv4ServicePxKill}", Label("p0", "negative", "error_injection", "px_ops", "px_vol_ops", "shared_v4", "multiple_px_crash"), func() {
-	var testrailID = 297579
-	var runID int
+	var (
+		testrailID = 297579
+		runID      int
+		contexts   = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("LegacySharedVolumePxkill", "Legacy Shared to Sharedv4 Service Functional Test with restart px kill on one nodes", nil, testrailID)
 		namespacePrefix := "lstsv4m-px-kill"
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 		setCreateLegacySharedAsSharedv4Service(false)
 		setMigrateLegacySharedToSharedv4Service(false)
-		contexts = make([]*scheduler.Context, 0)
 		numberNameSpaces := Inst().GlobalScaleFactor
 		if numberNameSpaces < numApps {
 			numberNameSpaces = numApps
@@ -945,15 +963,17 @@ var _ = Describe("{LegacySharedVolumeAppMigrateHAupdating}", Label("p0", "positi
 
 // Migrate when volume state is Degraded.
 var _ = Describe("{LegacySharedVolumeAppDegraded}", Label("p1", "positive", "px_ops", "px_vol_ops", "shared_v4"), func() {
-	var testrailID = 297585
-	var runID int
+	var (
+		testrailID = 297585
+		runID      int
+		contexts   = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("LegacySharedVolumeAppDegraded", "Legacy Shared to Sharedv4 Service when Volume in Degraded State", nil, testrailID)
 		namespacePrefix := "lstsv4mdegraded"
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 		setCreateLegacySharedAsSharedv4Service(false)
 		setMigrateLegacySharedToSharedv4Service(false)
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", namespacePrefix, i))...)
 		}
@@ -1028,15 +1048,17 @@ var _ = Describe("{LegacySharedVolumeAppDegraded}", Label("p1", "positive", "px_
 
 // Migrate when volume state is Out of Quorum.
 var _ = Describe("{LegacySharedVolumeAppOutofQuorum}", Label("p1", "positive", "px_ops", "px_vol_ops", "shared_v4"), func() {
-	var testrailID = 297586
-	var runID int
+	var (
+		testrailID = 297586
+		runID      int
+		contexts   = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("LegacySharedVolumeAppOutOfQuorum", "Legacy Shared to Sharedv4 Service when Volume in Out of Quorum State", nil, testrailID)
 		namespacePrefix := "lstsv4moutofquorum"
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 		setCreateLegacySharedAsSharedv4Service(false)
 		setMigrateLegacySharedToSharedv4Service(false)
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", namespacePrefix, i))...)
 		}

@@ -2232,6 +2232,9 @@ var _ = Describe(fmt.Sprintf("{%sFunctionalTests}", testSuiteName), Label("p0", 
 	var testrailID = 12345
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/12345
 	var runID int
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest(fmt.Sprintf("{%sFunctionalTests}", testSuiteName), "Perform several autopilot functional tests", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
@@ -2617,6 +2620,9 @@ var _ = Describe("{NodeInMaintenanceModeDuringPoolExpandWithAutopilotRule}", Lab
 	*/
 	var testrailID = 0
 	var runID int
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest(fmt.Sprintf("{%sNodeInMaintenanceModeDuringPoolExpandWithAutopilotRule}", testSuiteName), "Put node in maintenance mode and apply autopilot rule", tags, testrailID)

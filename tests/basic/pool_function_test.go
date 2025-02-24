@@ -36,6 +36,12 @@ var (
 	err           error
 )
 var _ = Describe("{PoolExpandMultipleTimes}", Label("p0", "positive", "pool_ops", "px_ops", "PoolExpand", "AddDrive"), func() {
+
+	var (
+		poolToResize   *api.StoragePool
+		poolIDToResize string
+		contexts       = make([]*scheduler.Context, 0)
+	)
 	BeforeEach(func() {
 		contexts = scheduleApps()
 	})
@@ -101,6 +107,11 @@ var _ = Describe("{PoolExpandMultipleTimes}", Label("p0", "positive", "pool_ops"
 })
 
 var _ = Describe("{PoolExpandSmoke}", Label("p0", "positive", "pool_ops", "px_ops", "PoolExpand"), func() {
+	var (
+		poolToResize   *api.StoragePool
+		poolIDToResize string
+		contexts       = make([]*scheduler.Context, 0)
+	)
 	BeforeEach(func() {
 		contexts = scheduleApps()
 	})
@@ -169,6 +180,12 @@ var _ = Describe("{PoolExpandSmoke}", Label("p0", "positive", "pool_ops", "px_op
 })
 
 var _ = Describe("{PoolExpandRejectConcurrentDiskResize}", Label("p1", "positive", "pool_ops", "px_ops", "PoolExpand", "ResizeDisk"), func() {
+
+	var (
+		poolToResize   *api.StoragePool
+		poolIDToResize string
+		contexts       = make([]*scheduler.Context, 0)
+	)
 	BeforeEach(func() {
 		contexts = scheduleApps()
 	})
@@ -254,6 +271,12 @@ var _ = Describe("{PoolExpandRejectConcurrentDiskResize}", Label("p1", "positive
 })
 
 var _ = Describe("{PoolExpandRejectConcurrentDiskAdd}", Label("p1", "positive", "pool_ops", "px_ops", "PoolExpand", "AddDrive"), func() {
+
+	var (
+		poolToResize   *api.StoragePool
+		poolIDToResize string
+		contexts       = make([]*scheduler.Context, 0)
+	)
 	BeforeEach(func() {
 		contexts = scheduleApps()
 	})
@@ -344,6 +367,12 @@ var _ = Describe("{PoolExpandRejectConcurrentDiskAdd}", Label("p1", "positive", 
 })
 
 var _ = Describe("{PoolExpandDiskResizeWithReboot}", Label("p1", "negative", "pool_ops", "px_ops", "error_injection", "PoolExpand", "node_reboot", "ResizeDisk"), func() {
+
+	var (
+		poolToResize   *api.StoragePool
+		poolIDToResize string
+		contexts       = make([]*scheduler.Context, 0)
+	)
 	BeforeEach(func() {
 		contexts = scheduleApps()
 	})
@@ -399,6 +428,12 @@ var _ = Describe("{PoolExpandDiskResizeWithReboot}", Label("p1", "negative", "po
 })
 
 var _ = Describe("{PoolExpandDiskAddWithReboot}", Label("p1", "negative", "pool_ops", "error_injection", "PoolExpand", "node_reboot", "AddDrive"), func() {
+
+	var (
+		poolToResize   *api.StoragePool
+		poolIDToResize string
+		contexts       = make([]*scheduler.Context, 0)
+	)
 	BeforeEach(func() {
 		contexts = scheduleApps()
 	})
@@ -454,6 +489,12 @@ var _ = Describe("{PoolExpandDiskAddWithReboot}", Label("p1", "negative", "pool_
 })
 
 var _ = Describe("{PoolExpandDiskResizePXRestart}", Label("p1", "negative", "pool_ops", "error_injection", "PoolExpand", "px_restart", "ResizeDisk"), func() {
+
+	var (
+		poolToResize   *api.StoragePool
+		poolIDToResize string
+		contexts       = make([]*scheduler.Context, 0)
+	)
 	BeforeEach(func() {
 		contexts = scheduleApps()
 	})
@@ -516,6 +557,12 @@ var _ = Describe("{PoolExpandDiskResizePXRestart}", Label("p1", "negative", "poo
 })
 
 var _ = Describe("{PoolExpandDiskAddPXRestart}", Label("p1", "negative", "pool_ops", "error_injection", "PoolExpand", "px_restart", "AddDrive"), func() {
+
+	var (
+		poolToResize   *api.StoragePool
+		poolIDToResize string
+		contexts       = make([]*scheduler.Context, 0)
+	)
 	BeforeEach(func() {
 		contexts = scheduleApps()
 	})
@@ -641,6 +688,11 @@ var _ = Describe("{PoolExpandResizeInvalidPoolID}", Label("p2", "negative", "poo
 
 var _ = Describe("{PoolExpandDiskResizeAndVerifyFromOtherNode}", Label("p0", "positive", "pool_ops", "PoolExpand", "ResizeDisk"), func() {
 
+	var (
+		poolToResize   *api.StoragePool
+		poolIDToResize string
+		contexts       = make([]*scheduler.Context, 0)
+	)
 	BeforeEach(func() {
 		StartTorpedoTest("PoolExpandDiskResizeAndVerifyFromOtherNode",
 			"Initiate pool expansion and verify from other node", nil, 34542840)
@@ -717,6 +769,11 @@ var _ = Describe("{PoolExpandDiskResizeAndVerifyFromOtherNode}", Label("p0", "po
 
 var _ = Describe("{PoolExpandDiskAddAndVerifyFromOtherNode}", Label("p0", "positive", "pool_ops", "PoolExpand", "AddDrive"), func() {
 	// TestrailID: https://portworx.testrail.net/index.php?/tests/view/34542840
+	var (
+		poolToResize   *api.StoragePool
+		poolIDToResize string
+		contexts       = make([]*scheduler.Context, 0)
+	)
 	BeforeEach(func() {
 		StartTorpedoTest("PoolExpandDiskAddAndVerifyFromOtherNode",
 			"Initiate pool expansion and verify from other node", nil, 34542840)
@@ -794,6 +851,7 @@ var _ = Describe("{PoolExpandDiskAddAndVerifyFromOtherNode}", Label("p0", "posit
 var _ = Describe("{PoolExpandResizeWithSameSize}", Label("p1", "positive", "pool_ops", "PoolExpand", "ResizeDisk"), func() {
 	// TestrailId: https://portworx.testrail.net/index.php?/tests/view/34542944
 
+	var poolToResize *api.StoragePool
 	BeforeEach(func() {
 		StartTorpedoTest("PoolExpandResizeWithSameSize",
 			"Initiate pool expansion using same size", nil, 34542944)
@@ -831,7 +889,11 @@ var _ = Describe("{PoolExpandWhileResizeDiskInProgress}", Label("p1", "positive"
 
 	var testrailID = 34542896
 	// TestrailId: https://portworx.testrail.net/index.php?/tests/view/34542896
-
+	var (
+		poolToResize   *api.StoragePool
+		poolIDToResize string
+		contexts       = make([]*scheduler.Context, 0)
+	)
 	BeforeEach(func() {
 		StartTorpedoTest("PoolExpandWhileResizeDiskInProgress",
 			"Initiate pool expansion on a pool where one pool expansion is already in progress", nil, testrailID)
@@ -898,7 +960,11 @@ var _ = Describe("{PoolExpandWhileResizeDiskInProgress}", Label("p1", "positive"
 var _ = Describe("{PoolExpandResizePoolMaintenanceCycle}", Label("p1", "negative", "pool_ops", "error_injection", "PoolExpand", "NodeMaintenance"), func() {
 	var testrailID = 34542842
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542842
-
+	var (
+		poolToResize   *api.StoragePool
+		poolIDToResize string
+		contexts       = make([]*scheduler.Context, 0)
+	)
 	BeforeEach(func() {
 		StartTorpedoTest("PoolExpandResizePoolMaintenanceCycle",
 			"Initiate pool expansion and do a maintenance cycle after resize", nil, testrailID)
@@ -971,7 +1037,11 @@ var _ = Describe("{MaintenanceCycleDuringPoolExpandResizeDisk}", Label("p1", "ne
 	       2. Cycle the node through maintenance mode.
 	       3. Verify pool expand operation goes to completion.
 	*/
-
+	var (
+		poolToResize   *api.StoragePool
+		poolIDToResize string
+		contexts       = make([]*scheduler.Context, 0)
+	)
 	BeforeEach(func() {
 		StartTorpedoTest("MaintenanceCycleDuringPoolExpandResizeDisk",
 			"Perform maintenance cycle during pool expand with resize-disk operation", nil, testrailID)
@@ -1051,7 +1121,11 @@ var _ = Describe("{PoolExpandResizeDiskInMaintenanceMode}", Label("p1", "negativ
 			3. Exit out of maintenance mode (PX only performs pool expand in normal mode, not in maintenance mode)
 			4. Verify pool expand operation goes to completion.
 	*/
-
+	var (
+		poolToResize   *api.StoragePool
+		poolIDToResize string
+		contexts       = make([]*scheduler.Context, 0)
+	)
 	BeforeEach(func() {
 		StartTorpedoTest("PoolExpandResizeDiskInMaintenanceMode",
 			"Initiate pool expand with resize-disk when node is already in maintenance mode", nil, testrailID)
@@ -1131,7 +1205,11 @@ var _ = Describe("{PoolExpandAddDiskInMaintenanceMode}", Label("p1", "negative",
 			3. Exit out of maintenance mode (PX only performs pool expand in normal mode, not in maintenance mode)
 			4. Verify pool expand operation goes to completion.
 	*/
-
+	var (
+		poolToResize   *api.StoragePool
+		poolIDToResize string
+		contexts       = make([]*scheduler.Context, 0)
+	)
 	BeforeEach(func() {
 		StartTorpedoTest("PoolExpandAddDiskInMaintenanceMode",
 			"Initiate pool expand with add-disk when node is already in maintenance mode", nil, testrailID)
@@ -1211,8 +1289,11 @@ var _ = Describe("{PoolExpandAddDiskInMaintenanceMode}", Label("p1", "negative",
 
 var _ = Describe("{StorageFullPoolExpansion}", Label("p0", "positive", "pool_ops", "PoolExpand", "Throttling"), func() {
 	var (
-		appList      []string
-		selectedNode *node.Node
+		appList        []string
+		selectedNode   *node.Node
+		poolToResize   *api.StoragePool
+		poolIDToResize string
+		contexts       = make([]*scheduler.Context, 0)
 	)
 
 	BeforeEach(func() {
@@ -1270,7 +1351,12 @@ var _ = Describe("{StorageFullPoolExpansion}", Label("p0", "positive", "pool_ops
 })
 
 var _ = Describe("{PoolExpandTestLimits}", Label("p1", "positive", "pool_ops", "PoolExpand"), func() {
-	var poolSizeInGiB uint64
+	var (
+		poolSizeInGiB  uint64
+		poolToResize   *api.StoragePool
+		poolIDToResize string
+		contexts       = make([]*scheduler.Context, 0)
+	)
 	BeforeEach(func() {
 		isDMthin, err := IsDMthin()
 		dash.VerifyFatal(err, nil, "error verifying if set up is DMTHIN enabled")
@@ -1387,6 +1473,11 @@ var _ = Describe("{PoolExpandTestLimits}", Label("p1", "positive", "pool_ops", "
 var _ = Describe("{PoolExpandAndCheckAlertsUsingResizeDisk}", Label("p0", "positive", "pool_ops", "PoolExpand", "ResizeDisk"), func() {
 
 	var testrailID = 34542894
+	var (
+		poolToResize   *api.StoragePool
+		poolIDToResize string
+		contexts       = make([]*scheduler.Context, 0)
+	)
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542894
 
 	BeforeEach(func() {
@@ -1483,7 +1574,11 @@ var _ = Describe("{CheckPoolLabelsAfterResizeDisk}", Label("p0", "positive", "po
 
 	var testrailID = 34542904
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542904
-
+	var (
+		poolToResize   *api.StoragePool
+		poolIDToResize string
+		contexts       = make([]*scheduler.Context, 0)
+	)
 	BeforeEach(func() {
 		StartTorpedoTest("CheckPoolLabelsAfterResizeDisk",
 			"Initiate pool expansion and Newly set pool labels should persist post pool expand resize-disk operation", nil, testrailID)
@@ -1544,7 +1639,11 @@ var _ = Describe("{CheckPoolLabelsAfterAddDisk}", Label("p0", "positive", "pool_
 
 	var testrailID = 34542906
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542906
-
+	var (
+		poolToResize   *api.StoragePool
+		poolIDToResize string
+		contexts       = make([]*scheduler.Context, 0)
+	)
 	BeforeEach(func() {
 		StartTorpedoTest("CheckPoolLabelsAfterAddDisk",
 			"Initiate pool expansion and Newly set pool labels should persist post pool expand add-disk operation", nil, testrailID)
@@ -1643,6 +1742,12 @@ var _ = Describe("{CheckPoolLabelsAfterAddDisk}", Label("p0", "positive", "pool_
 var _ = Describe("{PoolExpandAndCheckAlertsUsingAddDisk}", Label("p1", "positive", "pool_ops", "PoolExpand", "AddDrive"), func() {
 
 	var testrailID = 34542894
+	var (
+		poolToResize   *api.StoragePool
+		poolIDToResize string
+		contexts       = make([]*scheduler.Context, 0)
+	)
+
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542894
 
 	BeforeEach(func() {
@@ -1739,6 +1844,10 @@ var _ = Describe("{PoolVolUpdateResizeDisk}", Label("p0", "positive", "pool_ops"
 	var testrailID = 34542876
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542876
 
+	var (
+		poolIDToResize string
+		contexts       = make([]*scheduler.Context, 0)
+	)
 	BeforeEach(func() {
 		StartTorpedoTest("PoolVolUpdateResizeDisk", "Increase the HA replica of the volume and expand pool using resize-disk during the increase", nil, testrailID)
 		contexts = scheduleApps()
@@ -1746,7 +1855,7 @@ var _ = Describe("{PoolVolUpdateResizeDisk}", Label("p0", "positive", "pool_ops"
 	JustBeforeEach(func() {
 		poolIDToResize = pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, 100)
 		log.Infof("Picked pool %s to resize", poolIDToResize)
-		poolToResize = getStoragePool(poolIDToResize)
+		//poolToResize = getStoragePool(poolIDToResize)
 		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
 		log.FailOnError(err, "Failed to get node with given pool ID")
 
@@ -1760,8 +1869,11 @@ var _ = Describe("{PoolVolUpdateResizeDisk}", Label("p0", "positive", "pool_ops"
 		EndTorpedoTest()
 	})
 	It("Increase the HA replica of the volume and expand pool using resize-disk during the increase", func() {
-		var newRep int64
-		var currRep int64
+		var (
+			newRep       int64
+			currRep      int64
+			poolToResize *api.StoragePool
+		)
 		volSelected, err := GetVolumeWithMinimumSize(contexts, 10)
 		log.FailOnError(err, "error identifying volume")
 		opts := volume.Options{
@@ -1926,7 +2038,10 @@ var _ = Describe("{DriveAddDifferentTypesAndResize}", Label("p1", "positive", "p
 
 	var testrailID = 34542903
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542903
-
+	var (
+		poolIDToResize string
+		contexts       = make([]*scheduler.Context, 0)
+	)
 	BeforeEach(func() {
 		StartTorpedoTest("DriveAddDifferentTypesAndResize",
 			"Create pools with different types of drive and pool expand using resize-disk", nil, testrailID)
@@ -1950,7 +2065,10 @@ var _ = Describe("{DriveAddDifferentTypesAndResize}", Label("p1", "positive", "p
 	})
 
 	It("creating pools with different drive types and resizing them", func() {
-		var driveTypes []string
+		var (
+			driveTypes   []string
+			poolToResize *api.StoragePool
+		)
 
 		driveSize := "100"
 		driveTypes, err = Inst().N.GetSupportedDriveTypes()
@@ -2153,10 +2271,13 @@ var _ = Describe("{DriveAddAsJournalWithNodeReboot}", Label("p1", "hal_ops_disre
 		https://portworx.testrail.net/index.php?/cases/view/301929
 	*/
 
-	var nodeDetail *node.Node
-	var poolUUID string
-	var blockDeviceBefore int
-	var systemOpts node.SystemctlOpts
+	var (
+		nodeDetail        *node.Node
+		poolUUID          string
+		blockDeviceBefore int
+		systemOpts        node.SystemctlOpts
+		contexts          = make([]*scheduler.Context, 0)
+	)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("DriveAddAsJournalWithNodeReboot",
@@ -2306,10 +2427,13 @@ var _ = Describe("{DriveAddAsJournalWithNodeMaintenanceCycle}", Label("p1", "hal
 		https://portworx.testrail.net/index.php?/cases/view/301931
 	*/
 
-	var nodeDetail *node.Node
-	var poolUUID string
-	var blockDeviceBefore int
-	var systemOpts node.SystemctlOpts
+	var (
+		nodeDetail        *node.Node
+		poolUUID          string
+		blockDeviceBefore int
+		systemOpts        node.SystemctlOpts
+		contexts          = make([]*scheduler.Context, 0)
+	)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("DriveAddAsJournalWithNodeMaintenanceCycle",
@@ -2638,10 +2762,13 @@ var _ = Describe("{DriveAddAsJournalWithPXRestart}", Label("p1", "hal_ops_disrep
 		https://portworx.testrail.net/index.php?/cases/view/301927
 	*/
 
-	var nodeDetail *node.Node
-	var poolUUID string
-	var blockDeviceBefore int
-	var systemOpts node.SystemctlOpts
+	var (
+		nodeDetail        *node.Node
+		poolUUID          string
+		blockDeviceBefore int
+		systemOpts        node.SystemctlOpts
+		contexts          = make([]*scheduler.Context, 0)
+	)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("DriveAddAsJournalWithPXRestart",

@@ -1,8 +1,6 @@
 package tests
 
 import (
-	"github.com/libopenstorage/openstorage/api"
-	"github.com/pure-px/torpedo/drivers/scheduler"
 	"time"
 )
 
@@ -15,9 +13,6 @@ const (
 	JournalDeviceSizeInGB            = 3
 )
 
-var contexts []*scheduler.Context
-var poolIDToResize string
-var poolToResize *api.StoragePool
 var isJournalEnabled bool
 var bufferSizeInGB uint64
 var targetSizeInBytes uint64

@@ -1475,6 +1475,9 @@ var _ = Describe("{CreateMlWorkloadOnSharedv4SvcWithCronJob}", Label("p0", "posi
 	var origAppList []string
 	var provider string
 	totalRunTime := 45
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("CreateMlWorkloadOnSharedv4SvcWithCronJob", "Create multiple pods coming and going and trying to edit/read a model on same volume", nil, 0)
@@ -1551,7 +1554,7 @@ func ReadEnvVariable(envVar string) string {
 	return ""
 }
 
-// returns the contexts that are running test-sv4-svc* apps
+// returns the context that are running test-sv4-svc* apps
 func getTestSv4Contexts(contexts []*scheduler.Context) []*scheduler.Context {
 	var testSv4Contexts []*scheduler.Context
 	for _, ctx := range contexts {

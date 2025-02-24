@@ -251,8 +251,11 @@ var _ = Describe("{PVCCreationWithRWXAccessModeAndSharedv4False}", Label("p0", "
 			step2: create pvc in have readwrite many.
 			step3: pvc should in pending state with this error msg
 	*/
-	var testrailID = 0
-	var runID int
+	var (
+		testrailID = 0
+		runID      int
+		contexts   = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("PVCCreationWithRWXAccessModeAndSharedv4False", "When PVC with RWX is ignored due to sharedv4:false", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
@@ -359,8 +362,11 @@ var _ = Describe("{PVCCreationWithRWXAccessModeAndSharedv4True}", Label("p0", "s
 			step1: set this parameter "sharedv4: true" in sc file
 		    step2: pvc is rwx and it's should be bound
 	*/
-	var testrailID = 0
-	var runID int
+	var (
+		testrailID = 0
+		runID      int
+		contexts   = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("PVCCreationWithRWXAccessModeAndSharedv4True", "verifies PVC creation with RWX access mode and shared volume support for v4.", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)

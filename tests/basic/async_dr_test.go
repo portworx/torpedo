@@ -301,6 +301,9 @@ var _ = Describe("{MigrateDeploymentMetroAsync}", Label("p0", "positive", "Metro
 
 var _ = Describe("{StorkctlPerformFailoverFailbackDefaultAsyncSingle}", Label("p0", "positive", "AsyncDR"), func() {
 	testrailID = 296255
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/296255
 	BeforeEach(func() {
 		if !kubeConfigWritten {
@@ -327,6 +330,10 @@ var _ = Describe("{StorkctlPerformFailoverFailbackDefaultAsyncSingle}", Label("p
 })
 
 var _ = Describe("{StorkctlPerformFailoverFailbackDefaultAsyncJob}", Label("p0", "positive", "AsyncDR"), func() {
+
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	testrailID = 302499
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/302499
 	// run this test only with k8s job resource spec
@@ -355,6 +362,10 @@ var _ = Describe("{StorkctlPerformFailoverFailbackDefaultAsyncJob}", Label("p0",
 })
 
 var _ = Describe("{StorkctlPerformFailoverFailbackDefaultAsyncSkipSourceOperations}", Label("p1", "positive", "AsyncDR"), func() {
+
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	testrailID = 296256
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/296256
 	BeforeEach(func() {
@@ -382,6 +393,10 @@ var _ = Describe("{StorkctlPerformFailoverFailbackDefaultAsyncSkipSourceOperatio
 })
 
 var _ = Describe("{StorkctlPerformFailoverFailbackDefaultAsyncIncludeNs}", Label("p1", "positive", "AsyncDR"), func() {
+
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	testrailID = 296368
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/296368
 	BeforeEach(func() {
@@ -409,6 +424,10 @@ var _ = Describe("{StorkctlPerformFailoverFailbackDefaultAsyncIncludeNs}", Label
 })
 
 var _ = Describe("{StorkctlPerformFailoverFailbackDefaultAsyncExcludeNs}", Label("p0", "positive", "AsyncDR"), func() {
+
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	testrailID = 296367
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/296367
 	BeforeEach(func() {
@@ -436,6 +455,10 @@ var _ = Describe("{StorkctlPerformFailoverFailbackDefaultAsyncExcludeNs}", Label
 })
 
 var _ = Describe("{StorkctlPerformFailoverFailbackDefaultAsyncMultiple}", Label("p1", "positive", "AsyncDR", "MiniScale"), func() {
+
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	testrailID = 296255
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/296255
 	BeforeEach(func() {
@@ -463,6 +486,10 @@ var _ = Describe("{StorkctlPerformFailoverFailbackDefaultAsyncMultiple}", Label(
 })
 
 var _ = Describe("{StorkctlPerformFailoverFailbackDefaultMetroSingle}", Label("p0", "positive", "MetroDR"), func() {
+
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	testrailID = 296291
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/296291
 	BeforeEach(func() {
@@ -494,6 +521,10 @@ var _ = Describe("{StorkctlPerformFailoverFailbackDefaultMetroSingle}", Label("p
 })
 
 var _ = Describe("{StorkctlPerformFailoverFailbackDefaultMetroMultiple}", Label("p0", "positive", "MetroDR", "MiniScale"), func() {
+
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	testrailID = 296291
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/296291
 	BeforeEach(func() {
@@ -525,6 +556,10 @@ var _ = Describe("{StorkctlPerformFailoverFailbackDefaultMetroMultiple}", Label(
 })
 
 var _ = Describe("{StorkctlPerformFailoverFailbackPostgresql}", Label("p1", "positive", "AsyncDR"), func() {
+
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	testrailID = 296287
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/296287
 	BeforeEach(func() {
@@ -566,6 +601,10 @@ var _ = Describe("{StorkctlPerformFailoverFailbackPostgresql}", Label("p1", "pos
 })
 
 var _ = Describe("{StorkctlPerformFailoverFailbackElasticSearch}", Label("p1", "positive", "AsyncDR"), func() {
+
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	testrailID = 296285
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/296285
 	BeforeEach(func() {
@@ -606,6 +645,10 @@ var _ = Describe("{StorkctlPerformFailoverFailbackElasticSearch}", Label("p1", "
 })
 
 var _ = Describe("{StorkctlPerformFailoverFailbackPostgresqlClusterwide}", Label("p1", "positive", "AsyncDR"), func() {
+
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	testrailID = 297919
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/297919
 	BeforeEach(func() {
@@ -647,6 +690,10 @@ var _ = Describe("{StorkctlPerformFailoverFailbackPostgresqlClusterwide}", Label
 })
 
 var _ = Describe("{StorkctlPerformFailoverFailbackeckEsClusterwide}", Label("p1", "positive", "AsyncDR"), func() {
+
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	testrailID = 297921
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/297921
 	BeforeEach(func() {
@@ -688,6 +735,10 @@ var _ = Describe("{StorkctlPerformFailoverFailbackeckEsClusterwide}", Label("p1"
 })
 
 var _ = Describe("{FaFbPodEvictionTest}", Label("p1", "positive", "VolumeSnapshot"), func() {
+
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	testrailID = 302503
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/302503
 	BeforeEach(func() {
@@ -756,6 +807,10 @@ var _ = Describe("{FaFbPodEvictionTest}", Label("p1", "positive", "VolumeSnapsho
 })
 
 var _ = Describe("{UpdateVolumeSnapshotSchedule}", Label("p1", "positive", "VolumeSnapshot"), func() {
+
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	testrailID = 302510
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/302510
 	BeforeEach(func() {
@@ -824,6 +879,10 @@ var _ = Describe("{UpdateVolumeSnapshotSchedule}", Label("p1", "positive", "Volu
 })
 
 var _ = Describe("{UpgradeVolumeDriverDuringAppBkpRestore}", Label("p2", "positive", "AsyncDR", "Upgrade"), func() {
+
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	BeforeEach(func() {
 		if !kubeConfigWritten {
 			// Write kubeconfig files after reading from the config maps created by torpedo deploy script
@@ -1290,6 +1349,9 @@ var _ = Describe("{UpgradeStorkDuringAsyncDrMigration}", Label("p2", "positive",
 
 var _ = Describe("{AutoVolumeSnapshot}", Label("p1", "positive", "VolumeSnapshot"), func() {
 	testrailID = 302510
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/302510
 	BeforeEach(func() {
 		if !kubeConfigWritten {
@@ -1351,6 +1413,9 @@ var _ = Describe("{AutoVolumeSnapshot}", Label("p1", "positive", "VolumeSnapshot
 
 var _ = Describe("{AutoVolumeSnapshotCloud}", Label("p1", "positive", "VolumeSnapshot"), func() {
 	testrailID = 302510
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/302510
 	BeforeEach(func() {
 		if !kubeConfigWritten {

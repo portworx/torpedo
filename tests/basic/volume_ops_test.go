@@ -745,7 +745,7 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", Label("p1", "negative", "
 })
 
 var _ = Describe("{VolumeMultipleHAIncreaseVolResize}", Label("p1", "positive", "px_vol_ops", "MiniScale", "HA_Increase_Decrease"), func() {
-	var testrailID = 0
+
 	/*  Try Volume resize to 5 GB every time
 	        Try HA Refactor of the volume
 	        Try one HA node Reboot
@@ -753,7 +753,11 @@ var _ = Describe("{VolumeMultipleHAIncreaseVolResize}", Label("p1", "positive", 
 	    	all the above 3 operations are done in parallel
 	*/
 	// JIRA ID :https://portworx.atlassian.net/browse/PWX-27123
-	var runID int
+	var (
+		testrailID = 0
+		runID      int
+		contexts   = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("VolumeMultipleHAIncreaseVolResize",
 			"Px crashes when we perform multiple HAUpdate in a loop", nil, testrailID)
@@ -768,8 +772,6 @@ var _ = Describe("{VolumeMultipleHAIncreaseVolResize}", Label("p1", "positive", 
 		volReplMap := make(map[string]int64)
 
 		driverNode = nil
-
-		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("volmulhaupvolr-%d", i))...)
@@ -1691,7 +1693,10 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotInvalidCredentials}", func() {
 		StartTorpedoTest("CSIOnlyTestCloudSnapshotInvalidCredentials", "Test create and restore snapshot with invalid creds", nil, 0)
 	})
 
-	var pvcName, ns, snapShotClassName, snapName, scName, secretName string
+	var (
+		pvcName, ns, snapShotClassName, snapName, scName, secretName string
+		contexts                                                     []*scheduler.Context
+	)
 	context := &scheduler.Context{
 		App: &spec.AppSpec{
 			Key: "snapshot-invalid-cred-test",
@@ -1887,7 +1892,10 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotHAUpdateState}", func() {
 		StartTorpedoTest("CSIOnlyTestCloudSnapshotHAUpdateState", "Test create and restore snapshot, volume in HA update", nil, 0)
 	})
 
-	var pvcName, ns, snapShotClassName, snapName, scName string
+	var (
+		pvcName, ns, snapShotClassName, snapName, scName string
+		contexts                                         []*scheduler.Context
+	)
 	context := &scheduler.Context{
 		App: &spec.AppSpec{
 			Key: "snapshot-ha-update-test",
@@ -1975,7 +1983,10 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotRestartPX}", func() {
 		StartTorpedoTest("CSIOnlyTestCloudSnapshotRestartPX", "Test create snapshot, with restart px", nil, 0)
 	})
 
-	var pvcName, ns, snapShotClassName, snapName, scName string
+	var (
+		pvcName, ns, snapShotClassName, snapName, scName string
+		contexts                                         []*scheduler.Context
+	)
 	context := &scheduler.Context{
 		App: &spec.AppSpec{
 			Key: "snapshpot-restart-px-test",
@@ -2087,7 +2098,10 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotMultipleSnapshotAndRestore}", func() 
 		StartTorpedoTest("CSIOnlyTestCloudSnapshotMultipleSnapshotAndRestore", "Test create and restore multiple snapshots", nil, 0)
 	})
 
-	var ns, snapShotClassName, scName string
+	var (
+		ns, snapShotClassName, scName string
+		contexts                      []*scheduler.Context
+	)
 	context := &scheduler.Context{
 		App: &spec.AppSpec{
 			Key: "snapshot-multiple-test",
@@ -2192,7 +2206,10 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotRestartNode}", func() {
 		StartTorpedoTest("CSIOnlyTestCloudSnapshotRestartNode", "Test create snapshot, with restart node", nil, 0)
 	})
 
-	var pvcName, ns, snapShotClassName, snapName, scName string
+	var (
+		pvcName, ns, snapShotClassName, snapName, scName string
+		contexts                                         = make([]*scheduler.Context, 0)
+	)
 	context := &scheduler.Context{
 		App: &spec.AppSpec{
 			Key: "snapshot-restart-node-test",
@@ -2316,7 +2333,10 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotRestartCSIPods}", func() {
 		StartTorpedoTest("CSIOnlyTestCloudSnapshotRestartCSIPods", "Test create snapshot, with restart csi pods", nil, 0)
 	})
 
-	var pvcName, ns, snapShotClassName, snapName, scName string
+	var (
+		pvcName, ns, snapShotClassName, snapName, scName string
+		contexts                                         []*scheduler.Context
+	)
 	context := &scheduler.Context{
 		App: &spec.AppSpec{
 			Key: "snapshot-restart-csi-pods-test",
@@ -2427,7 +2447,10 @@ var _ = Describe("{CSIOnlyTestCloudRestoreRestartCSIPods}", func() {
 		StartTorpedoTest("CSIOnlyTestCloudRestoreRestartCSIPods", "Test create snapshot, with restart csi pods", nil, 0)
 	})
 
-	var pvcName, ns, snapShotClassName, snapName, scName string
+	var (
+		pvcName, ns, snapShotClassName, snapName, scName string
+		contexts                                         []*scheduler.Context
+	)
 	context := &scheduler.Context{
 		App: &spec.AppSpec{
 			Key: "snapshot-restart-csi-pods-test",
@@ -2531,7 +2554,10 @@ var _ = Describe("{CSIOnlyTestCloudRestoreRestartNode}", func() {
 		StartTorpedoTest("CSIOnlyTestCloudRestoreRestartNode", "Test create restore, with restart node", nil, 0)
 	})
 
-	var pvcName, ns, snapShotClassName, snapName, scName string
+	var (
+		pvcName, ns, snapShotClassName, snapName, scName string
+		contexts                                         = make([]*scheduler.Context, 0)
+	)
 	context := &scheduler.Context{
 		App: &spec.AppSpec{
 			Key: "restore-restart-node-test",
@@ -2634,7 +2660,10 @@ var _ = Describe("{CSIOnlyTestCloudRestoreRestartPx}", func() {
 		StartTorpedoTest("CSIOnlyTestCloudRestoreRestartPx", "Test create restore, with restart px", nil, 0)
 	})
 
-	var pvcName, ns, snapShotClassName, snapName, scName string
+	var (
+		pvcName, ns, snapShotClassName, snapName, scName string
+		contexts                                         []*scheduler.Context
+	)
 	context := &scheduler.Context{
 		App: &spec.AppSpec{
 			Key: "restore-restart-px-test",
@@ -2736,7 +2765,10 @@ var _ = Describe("{CSIOnlyTestCloudRestoreAfterBucketDelete}", func() {
 		StartTorpedoTest("CSIOnlyTestCloudRestoreAfterBucketDelete", "Test create restore, after deleting bucket", nil, 0)
 	})
 
-	var pvcName, ns, snapShotClassName, snapName, scName string
+	var (
+		pvcName, ns, snapShotClassName, snapName, scName string
+		contexts                                         = make([]*scheduler.Context, 0)
+	)
 	context := &scheduler.Context{
 		App: &spec.AppSpec{
 			Key: "restore-bucket-delete-test",
@@ -2836,7 +2868,10 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotDegradedState}", func() {
 		StartTorpedoTest("CSIOnlyTestCloudSnapshotDegradedState", "Test create and restore snapshot, volume in degraded state", nil, 0)
 	})
 
-	var pvcName, ns, snapShotClassName, snapName, scName string
+	var (
+		pvcName, ns, snapShotClassName, snapName, scName string
+		contexts                                         = make([]*scheduler.Context, 0)
+	)
 	context := &scheduler.Context{
 		App: &spec.AppSpec{
 			Key: "snapshot-degraded-stateƒIn",
@@ -2919,7 +2954,10 @@ var _ = Describe("{CSIOnlyTestCloudSnapshotOutOfQuorum}", func() {
 		StartTorpedoTest("CSIOnlyTestCloudSnapshotOutOfQuorum", "Test create and restore snapshot, volume in out of quorum state", nil, 0)
 	})
 
-	var pvcName, ns, snapShotClassName, snapName, scName string
+	var (
+		pvcName, ns, snapShotClassName, snapName, scName string
+		contexts                                         = make([]*scheduler.Context, 0)
+	)
 	context := &scheduler.Context{
 		App: &spec.AppSpec{
 			Key: "snapshot-out-of-quorum",
@@ -3252,6 +3290,9 @@ var _ = Describe("{TrashcanRecoveryWithCloudsnap}", Label("p1", "positive", "px_
 		6) Validate the data and verify cloudsnap schedules continues after restore
 
 	*/
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("TrashcanRecoveryWithCloudsnap", "Validate the successful restore from Trashcan when volumes got deleted in resync state", nil, 0)
 	})
@@ -3332,7 +3373,6 @@ var _ = Describe("{TrashcanRecoveryWithCloudsnap}", Label("p1", "positive", "px_
 		}()
 		Inst().AppList = []string{"fio-pod"}
 
-		contexts = make([]*scheduler.Context, 0)
 		actRepls := make(map[*volume.Volume]int64)
 
 		log.InfoD("scheduling apps ")
@@ -3587,7 +3627,10 @@ func setVolumeRepl(setRepls map[*volume.Volume]int64, waitToFinish bool) error {
 func validateCloudSnaps(appNamespace string) (map[string]string, error) {
 
 	log.Infof("Verify that cloud snap status")
-	snapsMap := make(map[string]string, 0)
+	var (
+		snapsMap = make(map[string]string, 0)
+		contexts = make([]*scheduler.Context, 0)
+	)
 
 	for _, ctx := range contexts {
 		if strings.Contains(ctx.App.Key, "cloudsnap") || strings.Contains(ctx.App.Key, "fastpath") {
@@ -3786,8 +3829,11 @@ func deletePXVolume(volName string) error {
 }
 
 var _ = Describe("{CloudSnapWithPXEvents}", Label("p0", "positive", "px_vol_ops", "px_ops", "CloudSnapAndRestore"), func() {
-	var testrailID = 0
-	var runID int
+	var (
+		testrailID = 0
+		runID      int
+		contexts   = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("CloudSnapWithPXEvents", "Validate cloudsnap during PX events", nil, 0)
 		runID = testrailuttils.AddRunsToMilestone(0)
@@ -4169,8 +4215,11 @@ var _ = Describe("{PoolFullCloudsnap}", Label("p1", "positive", "px_vol_ops", "T
 		3. Do pool expansion and validate cloudsnaps
 	*/
 
-	var testrailID = 0
-	var runID int
+	var (
+		testrailID = 0
+		runID      int
+		contexts   = make([]*scheduler.Context, 0)
+	)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("PoolFullCloudsnap",
@@ -4189,7 +4238,6 @@ var _ = Describe("{PoolFullCloudsnap}", Label("p1", "positive", "px_vol_ops", "T
 			log.InfoD(stepLog)
 			err := CreatePXCloudCredential()
 			log.FailOnError(err, "failed to create cloud credential")
-			contexts = make([]*scheduler.Context, 0)
 
 			stepLog = fmt.Sprintf("create schedule policy %s", policyName)
 			Step(stepLog, func() {
@@ -5256,7 +5304,10 @@ var _ = Describe("{EnableTrashCanForvolume}", Label("p0", "positive", "px_vol_op
 		make sure the volume deleted should go to trashcan .
 		Step7:waiting for 10 min should delete the volumes under trashcan.
 	*/
-	var testrailID = 0
+	var (
+		testrailID = 0
+		contexts   = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("EnableTrashCanForvolume", "Create multiple volumes on node and delete and validate trashcan volume expiry", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
@@ -5264,7 +5315,6 @@ var _ = Describe("{EnableTrashCanForvolume}", Label("p0", "positive", "px_vol_op
 	stepLog := "Create volumes on the storage node "
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("storagenodecreatevolume-%d", i))...)
 		}
@@ -5866,7 +5916,10 @@ var _ = Describe("{DeleteVolFromTrashCanWithVEM}", Label("p0", "positive", "px_o
 		make sure the volume deleted should go to trashcan.
 		Step8:waiting for 10 min should delete the volumes under trashcan.
 	*/
-	var testrailID = 86093862
+	var (
+		testrailID = 86093862
+		contexts   = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("DeleteVolFromTrashCanWithVEM", "Create multiple volumes on node and delete and validate trashcan volume expiry", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
@@ -5874,7 +5927,6 @@ var _ = Describe("{DeleteVolFromTrashCanWithVEM}", Label("p0", "positive", "px_o
 	stepLog := "Create volumes on the storage node "
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 
 		log.InfoD("Pick the one Storage node in cluster")
 		pickNode := node.GetStorageNodes()[0]
@@ -6382,7 +6434,10 @@ var _ = Describe("{GroupCloudSnapshot}", Label("staging", "p0", "positive", "px_
 	   step4: Create groupcloudsnapshot
 	   step5: verify snapshot is done
 	*/
-	var testrailID = 0
+	var (
+		testrailID = 0
+		contexts   = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("GroupCloudSnapshot", "Initiating Group CloudSnaphot for the volume. Verifying that snapshots are completed successfully.", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
@@ -6390,7 +6445,6 @@ var _ = Describe("{GroupCloudSnapshot}", Label("staging", "p0", "positive", "px_
 	stepLog := "Initiating Group CloudSnaphot for the volume. Verifying that snapshots are completed successfully."
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("groupsnapshot-%d", i))...)
 		}
@@ -6565,7 +6619,10 @@ var _ = Describe("{EmptyTrashcanBeforeVEM}", Label("p0", "positive", "px_vol_ops
 		make sure the volume deleted should go to trashcan.
 		Step8: Delete the volumes under trashcan immediately
 	*/
-	var testrailID = 0
+	var (
+		testrailID = 0
+		contexts   = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("EmptyTrashcanBeforeVEM", "delete Volumes in trashcan before volume expiry minutes", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
@@ -6574,7 +6631,6 @@ var _ = Describe("{EmptyTrashcanBeforeVEM}", Label("p0", "positive", "px_vol_ops
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 		var (
-			contexts                 = make([]*scheduler.Context, 0)
 			originalTrashcanVols     []string
 			originalTrashcanVolsLeng int
 		)
@@ -7488,6 +7544,7 @@ var _ = Describe("{CloudsnapVerification}", Label("staging", "p0", "positive", "
 	var (
 		volumeNames []string
 		appVolumes  []*volume.Volume
+		contexts    = make([]*scheduler.Context, 0)
 	)
 
 	stepLog := "Create a CloudSnap, delete the app entirely, and verify the CloudSnap remains intact."

@@ -122,6 +122,8 @@ func GetPxPIDMap(nodes []node.Node) (map[string]string, error) {
 }
 
 func StartPureBackgroundWriteRoutines() func() {
+
+	contexts := make([]*scheduler.Context, 0)
 	pureStopWriteRoutine := false
 	pureErrOutChan := make(chan error, 1) // We only need one failure to fail the entire test: no reason to store more than we need
 
@@ -2014,6 +2016,7 @@ var _ = Describe("{DrainAllNodes}", Label("p2", "positive", "node_ops"), func() 
 	*/
 	var testrailID = 0
 	var runID int
+	var contexts = make([]*scheduler.Context, 0)
 	JustBeforeEach(func() {
 		StartTorpedoTest("DrainAllNodes", "Drain the node wait for all app pods get drained from node", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
@@ -2114,6 +2117,9 @@ var _ = Describe("{TrashcanPVCRestoreByAttachingExistingPVCToPod}", Label("stagi
 	   3. Restore pvc from trashcan.
 	   4. Attach this new PVC to kuberntes pod and make sure readIO can be performed.
 	*/
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("TrashcanPVCRestoreByAttachingExistingPVCToPod", "Trashcan restore using Kubenetes way by attaching existing PVC to kubernetes pod", nil, 0)
 	})
@@ -2131,7 +2137,6 @@ var _ = Describe("{TrashcanPVCRestoreByAttachingExistingPVCToPod}", Label("stagi
 		var (
 			appNamespace = fmt.Sprintf("tc-cs-%s", Inst().InstanceID)
 			fioPVcName   = "tc-pvc-restore"
-			contexts     = make([]*scheduler.Context, 0)
 			allPvcList   *v1.PersistentVolumeClaimList
 			scForPvc     *storageApi.StorageClass
 			restoredVol  *api.Volume
@@ -2370,6 +2375,9 @@ var _ = Describe("{VerifyNoIOInterruptionDuringRunFlatState}", Label("staging", 
 			2. Verify deployment of new pod is failed but IO is running on existing pods.
 			3. When you bring the KVDB nodes back verify cluster is no more in run-flat state and new deployment is
 	*/
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("VerifyNoIOInterruptionDuringRunFlatState",
 			"Simulate run-flat state, ensuring uninterrupted IO operations and new deployments fail during this state", nil, 0)
@@ -2379,7 +2387,6 @@ var _ = Describe("{VerifyNoIOInterruptionDuringRunFlatState}", Label("staging", 
 	It(itLog, func() {
 		log.InfoD(itLog)
 		var (
-			contexts          []*scheduler.Context
 			postRunFlatCtx    []*scheduler.Context
 			postPxUpCtx       []*scheduler.Context
 			selectedKvdbNodes []KvdbNode
@@ -2674,7 +2681,9 @@ var _ = Describe("{VerifyFstrimWithFastPathVolumes}", Label("staging", "p0", "ne
 	   1. Enabel scheduled FSTrim on the cluster
 	   2. Verify scheduled FSTrim with fast path volumes
 	*/
-
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("VerifyFstrimWithFastPathVolumes", "Enable Fstrim Schedule on FastPath Volumes and verify its running", nil, 0)
 	})
@@ -2685,7 +2694,6 @@ var _ = Describe("{VerifyFstrimWithFastPathVolumes}", Label("staging", "p0", "ne
 			storageNodes        []node.Node
 			selectedStorageNode node.Node
 			volAttachedNode     node.Node
-			contexts            []*scheduler.Context
 			volumeList          []*opsapi.Volume
 		)
 
@@ -2822,12 +2830,14 @@ var _ = Describe("{DeleteVolumeWhenClusterInRunFlatState}", Label("staging", "kv
 		StartTorpedoTest("DeleteVolumeWhenClusterInRunFlatState",
 			"Simulate run-flat state, delete the apps validate it should succeed and bring the nodes again", nil, 0)
 	})
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 
 	itLog := "Simulate run-flat state, delete the apps validate it should succeed and bring the nodes again"
 	It(itLog, func() {
 		log.InfoD(itLog)
 		var (
-			contexts          []*scheduler.Context
 			selectedKvdbNodes []KvdbNode
 			kvdbNodes         []KvdbNode
 		)
@@ -3091,6 +3101,9 @@ var _ = Describe("{ValidateSecondKVDBFailOverWithOnlyThreeNodeLabel}", Label("st
 
 	var testrailID = 0
 	var runID int
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("ValidateSecondKVDBFailOverWithOnlyThreeNodeLabel", "KVDB cluster failover and quorum maintenance by stopping and restarting PX on KVDB nodes, verifying cluster health, and ensuring app availability.", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
@@ -3099,7 +3112,6 @@ var _ = Describe("{ValidateSecondKVDBFailOverWithOnlyThreeNodeLabel}", Label("st
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 		var (
-			contexts                            []*scheduler.Context
 			stopped_px_kvdb_nodes_ids           []string
 			nonKvdbNodes                        []node.Node
 			selected_node_for_px_stop           KvdbNode
@@ -3507,6 +3519,9 @@ var _ = Describe("{ValidateSecondKVDBFailOver}", Label("staging", "kvdb_ops", "p
 
 	var testrailID = 0
 	var runID int
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest(" ValidateSecondKVDBFailOver", "Testing KVDB cluster failover, quorum, and recovery under node failures while ensuring application availability.", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
@@ -3515,7 +3530,6 @@ var _ = Describe("{ValidateSecondKVDBFailOver}", Label("staging", "kvdb_ops", "p
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 		var (
-			contexts                            []*scheduler.Context
 			stopped_px_kvdb_nodes_ids           []string
 			nonKvdbNodes                        []node.Node
 			selectedNodesNotInKvdbForLabelTrue  []node.Node
@@ -4842,12 +4856,14 @@ var _ = Describe("{HaUpdateWhenClusterInRunFlatState}", Label("staging", "kvdb_o
 		StartTorpedoTest("HaUpdateWhenClusterInRunFlatState",
 			"Keep volumes in resync state with one replica being in clean state , transition to no-kvdb quorum state, IOs should continue on clean node", nil, 0)
 	})
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 
 	itLog := "Keep volumes in resync state with one replica being in clean state , transition to no-kvdb quorum state, IOs should continue on clean node"
 	It(itLog, func() {
 		log.InfoD(itLog)
 		var (
-			contexts          []*scheduler.Context
 			selectedKvdbNodes []KvdbNode
 			kvdbNodes         []KvdbNode
 			nonKvdbNodes      []node.Node
@@ -5149,13 +5165,15 @@ var _ = Describe("{VerifyFstrimWithPoolOffline}", Label("staging", "p0", "positi
 	JustBeforeEach(func() {
 		StartTorpedoTest("VerifyFstrimWithPoolOffline", "Verify Fstrim Schedule with pool full / offline", nil, 0)
 	})
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 
 	stepLog := "Create volumes, make pool full / offline with scheduled fs trim"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 
 		var (
-			contexts          []*scheduler.Context
 			selectedNode      *node.Node
 			secondReplNode    node.Node
 			fsTrimRunningNode node.Node
@@ -5445,13 +5463,15 @@ var _ = Describe("{VerifyFstrimWithPVCRresize}", Label("staging", "p0", "positiv
 	JustBeforeEach(func() {
 		StartTorpedoTest("VerifyFstrimWithPVCRresize", "Verify Fstrim schedule with Volume / pvc resize", nil, 0)
 	})
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 
 	stepLog := "Verify FS trim continues after volume / pvc resize"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 
 		var (
-			contexts            []*scheduler.Context
 			storageNodes        []node.Node
 			selectedStorageNode node.Node
 			appList             = Inst().AppList
@@ -5762,13 +5782,15 @@ var _ = Describe("{VerifyFstrimWithNodeRestart}", Label("staging", "p0", "positi
 	JustBeforeEach(func() {
 		StartTorpedoTest("VerifyFstrimWithNodeRestart", "Verify Fstrim schedule after Node Reboot", nil, 0)
 	})
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 
 	stepLog := "Verify Fstrim schedule after Node Reboot"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 
 		var (
-			contexts                    []*scheduler.Context
 			storageNodes                []node.Node
 			selectedStorageNode         node.Node
 			selectedNodeForRestart      node.Node
@@ -5901,6 +5923,7 @@ var _ = Describe("{StopPXOnKVDBNodeAndNewKVDBNodeWillBeUp}", Label("staging", "p
 		kvdbNodesIDsBeforePXStop, kvdbNodesIDsAfterPXStop []string
 		kvdbDriverBeforePXStop, kvdbDriverAfterPXStop     string
 		nodeForPXStop                                     node.Node
+		contexts                                          = make([]*scheduler.Context, 0)
 	)
 
 	stepLog := "Stop PX on KVDB node and make sure the stopped node is no longer a KVDB member.Stopped kvdb node should be devoid of kvdb driver"

@@ -1092,6 +1092,9 @@ var _ = Describe("{FADAPodRecoveryAfterBounce}", Label("p0", "positive", "Custom
 			If a volume was expected to be read-only during creation (e.g ReadOnlyMany PVCs), it’ll be excluded.
 
 	*/
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("FADAPodRecoveryAfterBounce",
 			"Verify Pod Recovers from RO mode after Bounce",
@@ -1100,14 +1103,12 @@ var _ = Describe("{FADAPodRecoveryAfterBounce}", Label("p0", "positive", "Custom
 
 	itLog := "FADAPodRecoveryAfterBounce"
 	It(itLog, func() {
-		var contexts []*scheduler.Context
 		var k8sCore = core.Instance()
 
 		// Pick all the Volumes with RWO Status, We check if the Volume is with Access Mode RWO and PureBlock Volume
 		vols := make([]*volume.Volume, 0)
 		stepLog = "Schedule application"
 		Step(stepLog, func() {
-			contexts = make([]*scheduler.Context, 0)
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("fapodrecovery-%d", i))...)
 			}
@@ -1238,6 +1239,9 @@ var _ = Describe("{FADAPodRecoveryAllPathDownUsingIptableRule}", Label("p0", "po
 			Expectation : PODS should be up and running after connection restored.
 
 	*/
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("FADAPodRecoveryAllPathDownUsingIptableRule",
 			"Verify Pod Recovers from RO mode after Bounce after blocking iptable Rules",
@@ -1246,15 +1250,12 @@ var _ = Describe("{FADAPodRecoveryAllPathDownUsingIptableRule}", Label("p0", "po
 
 	itLog := "FADAPodRecoveryAllPathDownUsingIptableRule"
 	It(itLog, func() {
-
-		var contexts []*scheduler.Context
 		var k8sCore = core.Instance()
 
 		// Pick all the Volumes with RWO Status, We check if the Volume is with Access Mode RWO and PureBlock Volume
 		vols := make([]*volume.Volume, 0)
 		stepLog = "Schedule application"
 		Step(stepLog, func() {
-			contexts = make([]*scheduler.Context, 0)
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("fapodrecovery-%d", i))...)
 			}

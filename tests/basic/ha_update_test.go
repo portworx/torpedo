@@ -173,7 +173,9 @@ var _ = Describe("{VolResizeAllVolumes}", Label("p0", "positive", "px_vol_ops", 
 		PTX-23576
 		Trigger vol resize on all volumes at once
 	*/
-
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("VolResizeAllVolumes", "Trigger vol resize on all volumes at once", nil, 0)
 	})
@@ -423,6 +425,10 @@ var _ = Describe("{VolResizeAllVolumes}", Label("p0", "positive", "px_vol_ops", 
 })
 
 var _ = Describe("{VolHAIncreaseAllVolumes}", Label("p0", "positive", "px_vol_ops", "MiniScale", "HA_Increase_Decrease"), func() {
+
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("VolHAIncreaseAllVolumes", "Trigger vol HA Increase on all volumes at once", nil, 0)
 	})

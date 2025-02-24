@@ -176,8 +176,11 @@ var _ = Describe("{YankJournalWithIOsRunning}", Label("p1", "hal_ops_disruption"
 })
 
 func YankJournalTest(testName, testDesc string) {
-	var nodeSelected node.Node
-	var busID string
+	var (
+		nodeSelected node.Node
+		busID        string
+		contexts     = make([]*scheduler.Context, 0)
+	)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest(testName, testDesc, nil, 0)
@@ -190,7 +193,7 @@ func YankJournalTest(testName, testDesc string) {
 		stepLog := "Schedule apps to perform IOs"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			contexts = make([]*scheduler.Context, 0)
+
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("yankjournal-%d", i))...)
 			}
@@ -446,6 +449,7 @@ func YankMetadataTest(testName, testDesc string) {
 		nodeSelected node.Node
 		busID, path  string
 		kvdbNodesIDs []string
+		contexts     = make([]*scheduler.Context, 0)
 	)
 	JustBeforeEach(func() {
 		StartTorpedoTest(testName, testDesc, nil, 0)
@@ -458,7 +462,6 @@ func YankMetadataTest(testName, testDesc string) {
 		stepLog := "Schedule apps to perform IOs"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			contexts = make([]*scheduler.Context, 0)
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("yankmetadata-%d", i))...)
 			}
@@ -1097,8 +1100,11 @@ func DeletePoolAfterYankDrive(testName, testDesc string) {
 }
 
 func YankPoolDriveTest(testName, testDesc string) {
-	var nodeSelected *node.Node
-	var busID, poolDrive string
+	var (
+		nodeSelected     *node.Node
+		busID, poolDrive string
+		contexts         = make([]*scheduler.Context, 0)
+	)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest(testName, testDesc, nil, 0)
@@ -1111,7 +1117,6 @@ func YankPoolDriveTest(testName, testDesc string) {
 		stepLog := "Schedule apps to perform IOs"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			contexts = make([]*scheduler.Context, 0)
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("yankjournal-%d", i))...)
 			}

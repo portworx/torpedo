@@ -556,6 +556,9 @@ var _ = Describe("{FADAVolTokenTimout}", Label("p0", "positive", "pure_ops"), fu
 		    2. Deploy nginx pods using two FADA volumes creating 40 volumes at same time on the node-1
 		    3. After that verify volumes are created successfully
 	*/
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 
 		StartTorpedoTest("FADAVolTokenTimout", "Validate FADA volumes token timeout when multiple requests hit same node at same time", nil, 0)
@@ -584,7 +587,6 @@ var _ = Describe("{FADAVolTokenTimout}", Label("p0", "positive", "pure_ops"), fu
 		stepLog = "Schedule apps and attach 200+ volumes"
 		i := 0
 		Step(stepLog, func() {
-			contexts = make([]*scheduler.Context, 0)
 			appScale := 200
 
 			for i = 1; i < appScale; i++ {
@@ -647,6 +649,9 @@ var _ = Describe("{FADARemoteDetach}", Label("p1", "negative", "pure_ops", "erro
 	   		6. pod node-1 should be terminated
 	   		7. Repeat same step from 2-5 and schedule pod on node-1
 	*/
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("FADARemoteDetach", "Validate FADA volume remote detach when px is down", nil, 0)
@@ -661,7 +666,6 @@ var _ = Describe("{FADARemoteDetach}", Label("p1", "negative", "pure_ops", "erro
 		var newPod *v1.Pod
 
 		var appNamespace string
-		contexts = make([]*scheduler.Context, 0)
 		pxNodes := node.GetStorageNodes()
 		if Inst().V.IsPxLiteCluster() {
 			pxNodes = node.GetStorageDriverNodes()
@@ -3508,7 +3512,7 @@ var _ = Describe("{FBDAMultiTenancyBasicTest}", Label("p0", "positive", "px_vol_
 		if !Inst().V.IsPxLiteCluster() {
 			Step("setup credential necessary for cloudsnap", createCloudsnapCredential)
 		}
-		customConfigAppName = skipTestIfNoRequiredCustomAppConfigFound()
+		customConfigAppName = skipTestIfNoRequiredCustomAppConfigFound(contexts)
 		contexts = ScheduleApplications(testName)
 		for i := 0; i < len(contexts); i++ {
 			contexts[i].SkipVolumeValidation = true
@@ -3562,7 +3566,7 @@ var _ = Describe("{FBDAMultiTenancyUpdatePureNFSEnpoint}", Label("p0", "positive
 		if !Inst().V.IsPxLiteCluster() {
 			Step("setup credential necessary for cloudsnap", createCloudsnapCredential)
 		}
-		customConfigAppName = skipTestIfNoRequiredCustomAppConfigFound()
+		customConfigAppName = skipTestIfNoRequiredCustomAppConfigFound(contexts)
 
 		// save the original custom app configs
 		origCustomAppConfigs = make(map[string]scheduler.AppConfig)
@@ -3726,7 +3730,7 @@ func scaleAppToZero(ctx *scheduler.Context) (map[string]int32, error) {
 	return originalAppScaleMap, nil
 }
 
-func skipTestIfNoRequiredCustomAppConfigFound() string {
+func skipTestIfNoRequiredCustomAppConfigFound(contexts []*scheduler.Context) string {
 	var customConfigAppName string
 	if Inst().CustomAppConfig == nil {
 		log.Warnf("No CustomAppConfig found, skipping test")
@@ -3759,6 +3763,9 @@ var _ = Describe("{FADAPodRecoveryDisableDataPortsOnFA}", Label("p1", "negative"
 		Verify that FA Pods Recovers after bringing back network Interface down on all FA's
 
 	*/
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		log.Infof("Starting Torpedo tests ")
 		StartTorpedoTest("FADAPodRecoveryDisableDataPortsOnFA",
@@ -3768,8 +3775,6 @@ var _ = Describe("{FADAPodRecoveryDisableDataPortsOnFA}", Label("p1", "negative"
 
 	itLog := "FADAPodRecoveryDisableDataPortsOnFA"
 	It(itLog, func() {
-
-		var contexts []*scheduler.Context
 		var k8sCore = core.Instance()
 
 		// Pick all the Volumes with RWO Status, We check if the Volume is with Access Mode RWO and PureBlock Volume
@@ -3953,6 +3958,9 @@ var _ = Describe("{PoolResizeFewIscsiPortsDown}", Label("p1", "negative", "pool_
 		Do pool resize when few of the iscsi ports are down in FA
 
 	*/
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		log.Infof("Starting Torpedo tests ")
 		StartTorpedoTest("PoolResizeFewIscsiPortsDown",
@@ -3962,7 +3970,6 @@ var _ = Describe("{PoolResizeFewIscsiPortsDown}", Label("p1", "negative", "pool_
 
 	itLog := "PoolResizeFewIscsiPortsDown"
 	It(itLog, func() {
-		var contexts []*scheduler.Context
 		//var k8sCore = core.Instance()
 		stepLog = "Schedule application"
 		Step(stepLog, func() {
@@ -4048,6 +4055,9 @@ var _ = Describe("{PoolResizeAllIscsiPortsDown}", Label("p1", "negative", "pool_
 		Do pool resize when all of iscsi ports are down in FA
 
 	*/
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		log.Infof("Starting Torpedo tests ")
 		StartTorpedoTest("PoolResizeAllIscsiPortsDown",
@@ -4057,11 +4067,9 @@ var _ = Describe("{PoolResizeAllIscsiPortsDown}", Label("p1", "negative", "pool_
 
 	itLog := "PoolResizeAllIscsiPortsDown"
 	It(itLog, func() {
-		var contexts []*scheduler.Context
 		//var k8sCore = core.Instance()
 		stepLog = "Schedule application"
 		Step(stepLog, func() {
-			contexts = make([]*scheduler.Context, 0)
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("poolresizeiscsidown-%d", i))...)
 			}
@@ -4165,6 +4173,9 @@ var _ = Describe("{IscsiPortsDownDuringPoolExpandInProgress}", Label("p1", "nega
 		bring iscsi port down when pool expansion in progress
 
 	*/
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		log.Infof("Starting Torpedo tests ")
 		StartTorpedoTest("IscsiPortsDownDuringPoolExpandInProgress",
@@ -4274,6 +4285,9 @@ var _ = Describe("{IscsiPortsDownDuringNewPoolCreateInProgress}", Label("p1", "n
 		bring iscsi port down when pool Creation in progress
 
 	*/
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		log.Infof("Starting Torpedo tests ")
 		StartTorpedoTest("IscsiPortsDownDuringNewPoolCreateInProgress",
@@ -4283,7 +4297,6 @@ var _ = Describe("{IscsiPortsDownDuringNewPoolCreateInProgress}", Label("p1", "n
 
 	itLog := "IscsiPortsDownDuringNewPoolCreateInProgress"
 	It(itLog, func() {
-		var contexts []*scheduler.Context
 		var wg sync.WaitGroup
 
 		//var k8sCore = core.Instance()
@@ -4379,11 +4392,14 @@ var _ = Describe("{IscsiPortsDownDuringNewPoolCreateInProgress}", Label("p1", "n
 })
 
 var _ = Describe("{FBDATopologyCreateTest}", Label("p0", "positive", "pure_ops"), func() {
-	var scName, ns, pvcName, pureNfsEndpoint string
+	var (
+		scName, ns, pvcName, pureNfsEndpoint string
+		contexts                             = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("FBDATopologyCreateTest",
 			"Try Creating FBDA pvcs using various topology options", nil, 0)
-		customConfigAppName := skipTestIfNoRequiredCustomAppConfigFound()
+		customConfigAppName := skipTestIfNoRequiredCustomAppConfigFound(contexts)
 		pureNfsEndpoint = Inst().CustomAppConfig[customConfigAppName].StorageClassPureNfsEndpoint
 	})
 	itLog := "FBDATopologyCreateTest"
@@ -4622,6 +4638,10 @@ var _ = Describe("{FBDAROXWithoutExportRulesTest}", func() {
 
 // Test CSI snapshots with FA, FA does not support cloud snap
 var _ = Describe("{CSIOnlyTestCloudSnapshotFA}", func() {
+
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("CSIOnlyTestCloudSnapshotFA", "Test create snapshot using FA", nil, 0)
 	})
@@ -4689,6 +4709,9 @@ var _ = Describe("{DeleteFADAVolumeFromBackend}", Label("p1", "negative", "pure_
 		Px Should throw proper error message when backend volumes from FA is deleted
 
 	*/
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		log.Infof("Starting Torpedo tests ")
 		StartTorpedoTest("DeleteFADAVolumeFromBackend",
@@ -4785,6 +4808,9 @@ var _ = Describe("{ExpandMultiplePoolsWhenFADAVolumeCreationInProgress}", Label(
 		Expand multiple pools in parallel , when lots of FADA Volumes are being created
 
 	*/
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		log.Infof("Starting Torpedo tests ")
 		StartTorpedoTest("CreateNewPoolWhenFADAVolumeCreationInProgress",
@@ -4896,6 +4922,9 @@ var _ = Describe("{ExpandMultiplePoolsWhenFBDAVolumeCreationInProgress}", Label(
 		Expand multiple pools in parallel , when lots of FBDA Volumes are being created
 
 	*/
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		log.Infof("Starting Torpedo tests ")
 		StartTorpedoTest("ExpandMultiplePoolsWhenFBDAVolumeCreationInProgress",
@@ -5019,6 +5048,9 @@ var _ = Describe("{CreateNewPoolsWhenFadaFbdaVolumeCreationInProgress}", Label("
 		Expand multiple pools in parallel , when lots of FADA and FBDA Volumes are being created
 
 	*/
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		log.Infof("Starting Torpedo tests ")
 		StartTorpedoTest("CreateNewPoolsWhenFadaFbdaVolumeCreationInProgress",
@@ -5162,6 +5194,9 @@ var _ = Describe("{CreateNewPoolsWhenFadaFbdaVolumeDeletionInProgress}", Label("
 	var testrailID = 86018
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/86018
 	var runID int
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 
 		StartTorpedoTest("CreateNewPoolsWhenFadaFbdaVolumeCreationInProgress",
@@ -5365,6 +5400,9 @@ var _ = Describe("{CreateAndValidatePVCWithIopsAndBandwidth}", Label("p0", "posi
 				5. Validate if corresponding portworx volumes are created in FB backend
 				6. Delete the pvc and volume and check if volumes got deleted in backend as well
 	*/
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("CreateAndValidatePVCWithIopsAndBandwidth",
 			"Create PVCs with updated MaxBandwidth / Max IOPS ( update the storage class )",
@@ -5901,6 +5939,9 @@ var _ = Describe("{DeployAppsAndStopPortworx}", Label("p0", "negative", "error_i
 		2.After 10 mins make it up and check if the pods are running
 		3.Destroy the apps
 	*/
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("DeployAppsAndStopPortworx",
 			"Deploy Apps and then stop portworx for 10 mins, and after 10 min make it up and check if the pods are running",
@@ -5909,7 +5950,6 @@ var _ = Describe("{DeployAppsAndStopPortworx}", Label("p0", "negative", "error_i
 	itLog := "DeployAppsAndStopPortworx"
 	It(itLog, func() {
 		log.InfoD(itLog)
-		var contexts []*scheduler.Context
 		var nodeToReboot []node.Node
 		stNodes := node.GetStorageNodes()
 		if Inst().V.IsPxLiteCluster() {
@@ -6338,6 +6378,10 @@ var _ = Describe("{TrashcanRecovery}", Label("p0", "positive", "pure_ops", "px_v
 		3) Make sure all the volumes are in the trashcan.
 		4) Recover all volumes from trashcan and Verify the volumes are restored correctly.
 	*/
+
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("TrashcanRecoveryWithCloudsnap", "Validate the successful restore from Trashcan when volumes got deleted in resync state", nil, 0)
 	})
@@ -6383,7 +6427,6 @@ var _ = Describe("{TrashcanRecovery}", Label("p0", "positive", "pure_ops", "px_v
 		}()
 		Inst().AppList = []string{"fio-pod"}
 
-		contexts = make([]*scheduler.Context, 0)
 		log.InfoD("scheduling apps ")
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplicationsOnNamespace(appNamespace, fmt.Sprintf("trashrec-%d", i))...)
@@ -9964,6 +10007,9 @@ var _ = Describe("{MeasureFADAVolumeCreationTimeTaken}", Label("staging", "p1", 
 	   1. Create 100 FADA volumes at the same time
 	   3. Calculate the time taken to create FADA volumes.
 	*/
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("MeasureFADAVolumeCreationTimeTaken", "Measure the time taken by FADA volume attachment", nil, 0)
 	})
@@ -9974,7 +10020,6 @@ var _ = Describe("{MeasureFADAVolumeCreationTimeTaken}", Label("staging", "p1", 
 
 		var (
 			scheduleCount    = 25
-			contexts         []*scheduler.Context
 			wg               sync.WaitGroup
 			podAttachTimeout = 15 * time.Minute
 			mutex            sync.Mutex
@@ -11920,12 +11965,14 @@ var _ = Describe("{PXValidationWithIPTablesBlockAndNodeRestart}", Label("staging
 		StartTorpedoTest("PXValidationWithIPTablesBlockAndNodeRestart", "Validate PX with Block IP Tables of port 3260 and restart all worker node",
 			nil, 0)
 	})
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 
 	itLog := "Validate PX with Block IP Tables of port 3260 and restart all worker node"
 	It(itLog, func() {
 		var (
 			storageNodes       []node.Node
-			contexts           []*scheduler.Context
 			expectedPoolStatus = "Online"
 			appList            = Inst().AppList
 		)

@@ -53,6 +53,12 @@ import (
 )
 
 var _ = Describe("{StoragePoolExpandDiskResize}", Label("p0", "positive", "pool_ops", "PoolExpand", "ResizeDisk"), func() {
+
+	var (
+		poolToResize   *api.StoragePool
+		poolIDToResize string
+		contexts       = make([]*scheduler.Context, 0)
+	)
 	BeforeEach(func() {
 		StartTorpedoTest(testName, testDescription, nil, 0)
 		contexts = scheduleApps()
@@ -97,6 +103,10 @@ var _ = Describe("{StoragePoolExpandDiskResize}", Label("p0", "positive", "pool_
 
 var _ = Describe("{StoragePoolExpandDiskAdd}", Label("p0", "positive", "pool_ops", "PoolExpand", "AddDrive"), func() {
 
+	var (
+		poolIDToResize string
+		contexts       = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("StoragePoolExpandDiskAdd", "Validate storage pool expansion using add-disk option", nil, 0)
 	})
@@ -107,7 +117,6 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", Label("p0", "positive", "pool_ops
 		if !IsPoolAddDiskSupported() {
 			Skip("Pool Add Disk is not supported on DMthin Cluster")
 		}
-		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pooladddisk-%d", i))...)
@@ -193,6 +202,12 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", Label("p0", "positive", "pool_ops
 })
 
 var _ = Describe("{StoragePoolExpandDiskAuto}", Label("p0", "positive", "pool_ops", "PoolExpand", "AutoExpand"), func() {
+
+	var (
+		contexts       = make([]*scheduler.Context, 0)
+		poolIDToResize string
+	)
+
 	JustBeforeEach(func() {
 		StartTorpedoTest("StoragePoolExpandDiskAuto", "Validate storage pool expansion using auto option", nil, 0)
 	})
@@ -200,7 +215,6 @@ var _ = Describe("{StoragePoolExpandDiskAuto}", Label("p0", "positive", "pool_op
 	stepLog := "has to schedule apps, and expand it by resizing a disk"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("poolexpandauto-%d", i))...)
@@ -291,7 +305,11 @@ var _ = Describe("{PoolResizeDiskReboot}", func() {
 
 	var testrailID = 51309
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/51309
-	var runID int
+	var (
+		contexts       = make([]*scheduler.Context, 0)
+		poolIDToResize string
+		runID          int
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("PoolResizeDiskReboot", "Initiate pool expansion using resize-disk and reboot node", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
@@ -299,7 +317,6 @@ var _ = Describe("{PoolResizeDiskReboot}", func() {
 
 	stepLog := "has to schedule apps, and expand it by resizing a disk"
 	It(stepLog, func() {
-		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("poolresizediskreboot-%d", i))...)
@@ -398,7 +415,11 @@ var _ = Describe("{PoolAddDiskReboot}", Label("p0", "negative", "error_injection
 	*/
 	var testrailID = 51440
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/51440
-	var runID int
+	var (
+		contexts       = make([]*scheduler.Context, 0)
+		poolIDToResize string
+		runID          int
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("PoolAddDiskReboot", "Initiate pool expansion using add-disk and reboot node", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
@@ -412,7 +433,6 @@ var _ = Describe("{PoolAddDiskReboot}", Label("p0", "negative", "error_injection
 			Skip("Add disk operation is not supported for DMThin Setup")
 		}
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pooladddiskreboot-%d", i))...)
@@ -550,12 +570,13 @@ func nodePoolsExpansion(testName string) {
 		nodePoolToExpanded node.Node
 		nodePools          []*api.StoragePool
 		eligibility        map[string]bool
+		contexts           = make([]*scheduler.Context, 0)
+		poolIDToResize     string
 	)
 
 	stepLog := fmt.Sprintf("has to schedule apps, and expand it by %s", option)
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("nodepools-%s-%d", option, i))...)
@@ -711,6 +732,9 @@ var _ = Describe("{AddNewPoolWhileRebalance}", Label("p0", "positive", "pool_ops
 		nodeSelected         node.Node
 		pools                map[string]*api.StoragePool
 		volSelected          *volume.Volume
+		poolToResize         *api.StoragePool
+		poolIDToResize       string
+		contexts             = make([]*scheduler.Context, 0)
 	)
 
 	JustBeforeEach(func() {
@@ -725,7 +749,6 @@ var _ = Describe("{AddNewPoolWhileRebalance}", Label("p0", "positive", "pool_ops
 		if !isPoolAddDiskSupported {
 			Skip("Add disk operation is not supported for DMThin Setup")
 		}
-		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("addnewpoolrebal-%d", i))...)
@@ -1076,7 +1099,10 @@ var _ = Describe("{PoolAddDrive}", Label("p0", "positive", "pool_ops", "PoolExpa
 	*/
 	var testrailID = 2017
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/2017
-	var runID int
+	var (
+		contexts = make([]*scheduler.Context, 0)
+		runID    int
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("PoolAddDrive", "Initiate pool expansion using add-drive", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
@@ -1086,7 +1112,6 @@ var _ = Describe("{PoolAddDrive}", Label("p0", "positive", "pool_ops", "PoolExpa
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pooladddrive-%d", i))...)
 		}
@@ -1112,7 +1137,10 @@ var _ = Describe("{AddDriveAndPXRestart}", Label("p0", "negative", "eror_injecti
 	//4) Restart px service where the pool is present.
 	var testrailID = 2014
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/2014
-	var runID int
+	var (
+		contexts = make([]*scheduler.Context, 0)
+		runID    int
+	)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("AddDriveAndPXRestart", "Initiate pool expansion using add-drive and restart PX", nil, testrailID)
@@ -1123,7 +1151,6 @@ var _ = Describe("{AddDriveAndPXRestart}", Label("p0", "negative", "eror_injecti
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pladddrvrestrt-%d", i))...)
 		}
@@ -1160,19 +1187,20 @@ var _ = Describe("{AddDriveWithPXRestart}", Label("p0", "negative", "error_injec
 
 	var testrailID = 50632
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/50632
-	var runID int
+	var (
+		contexts = make([]*scheduler.Context, 0)
+		runID    int
+	)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("AddDriveWithPXRestart", "Initiate pool expansion using add-drive and restart PX while it is in progress", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
-	var contexts []*scheduler.Context
 
 	stepLog := "should get the existing storage node and expand the pool by adding a drive"
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pladddrvwrst-%d", i))...)
 		}
@@ -1256,13 +1284,12 @@ var _ = Describe("{PoolAddDriveVolResize}", Label("p0", "positive", "pool_ops", 
 		StartTorpedoTest("PoolAddDriveVolResize", "pool expansion using add-drive and expand volume to the pool", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 
 	stepLog := "should get the existing storage node and expand the pool by adding a drive"
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pooladdvolrz-%d", i))...)
 		}
@@ -1371,13 +1398,12 @@ var _ = Describe("{AddDriveMaintenanceMode}", Label("p1", "negative", "pool_ops"
 		StartTorpedoTest("AddDriveMaintenanceMode", "pool expansion using add-drive when node is in maintenance mode", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 
 	stepLog := "should get the existing storage node and put it in maintenance mode"
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("adddrvmnt-%d", i))...)
 		}
@@ -1429,7 +1455,7 @@ var _ = Describe("{AddDriveStoragelessAndResize}", Label("p0", "positive", "pool
 	var testrailID = 50617
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/2017
 	var (
-		contexts                []*scheduler.Context
+		contexts                = make([]*scheduler.Context, 0)
 		jrnlPartPoolID          string
 		isjournal               bool
 		runID                   int
@@ -1444,7 +1470,6 @@ var _ = Describe("{AddDriveStoragelessAndResize}", Label("p0", "positive", "pool
 	stepLog := "should get the storageless node and add a drive"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("adddrvsl-%d", i))...)
 		}
@@ -1819,13 +1844,12 @@ var _ = Describe("{AddNewDrivesMultipleTimes}", Label("p1", "positive", "pool_op
 		StartTorpedoTest("PoolResizeMul", "Initiate pool resize multiple times", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 
 	stepLog := "should get the existing storage node and expand the pool multiple times"
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("poolresizemul-%d", i))...)
@@ -1904,13 +1928,12 @@ var _ = Describe("{PoolResizeDiskDiff}", Label("p1", "positive", "pool_ops", "po
 		StartTorpedoTest("PoolResizeDiskDiff", "Initiate pool resize multiple times with different size multiples using resize-disk", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 
 	stepLog := "should get the existing storage node and expand the pool multiple times"
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("plrszediff-%d", i))...)
@@ -2001,7 +2024,7 @@ var _ = Describe("{PoolAddDiskDiff}", Label("p1", "positive", "pool_ops", "PoolE
 		StartTorpedoTest("PoolAddDiskDiff", "Initiate pool resize multiple times with different size multiples using add-disk", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 
 	stepLog := "should get the existing storage node and expand the pool multiple times"
 
@@ -2011,7 +2034,6 @@ var _ = Describe("{PoolAddDiskDiff}", Label("p1", "positive", "pool_ops", "PoolE
 			Skip("Add disk operation is not supported for DMThin Setup")
 		}
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("plradddiff-%d", i))...)
@@ -2101,14 +2123,13 @@ var _ = Describe("{MultiDriveResizeDisk}", Label("p0", "positive", "pool_ops", "
 		StartTorpedoTest("MultiDriveResizeDisk", "Initiate pool resize multiple drive", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 
 	stepLog := "should get the existing storage node with multi drives and resize-disk"
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 		var err error
-		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("muldrvresize-%d", i))...)
@@ -2184,13 +2205,12 @@ var _ = Describe("{ResizeWithPXRestart}", Label("p1", "negative", "error_injecti
 		StartTorpedoTest("ResizeWithPXRestart", "Initiate pool expansion using resize-disk and restart PX while it is in progress", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 
 	stepLog := "should get the existing storage node and expand the pool by resize-disk"
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rsizedskrst-%d", i))...)
 		}
@@ -2246,7 +2266,7 @@ var _ = Describe("{AddWithPXRestart}", Label("p1", "negative", "error_injection"
 		StartTorpedoTest("AddWithPXRestart", "Initiate pool expansion using add-disk and restart PX while it is in progress", nil, 0)
 
 	})
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 
 	stepLog := "should get the existing storage node and expand the pool by resize-disk"
 
@@ -2256,7 +2276,6 @@ var _ = Describe("{AddWithPXRestart}", Label("p1", "negative", "error_injection"
 			Skip("Add disk operation is not supported for DMThin Setup")
 		}
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("adddskwrst-%d", i))...)
@@ -2318,13 +2337,12 @@ var _ = Describe("{ResizeDiskVolUpdate}", Label("p0", "positive", "pool_ops", "P
 		StartTorpedoTest("ResizeDiskVolUpdate", "pool expansion using resize-disk and expand volume to the pool", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 
 	stepLog := "should get the existing storage node and expand the pool by resize-disk"
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("plrszvolupdt-%d", i))...)
 		}
@@ -2421,13 +2439,12 @@ var _ = Describe("{VolUpdateResizeDisk}", Label("p0", "positive", "pool_ops", "P
 		StartTorpedoTest("VolUpdateResizeDisk", "expand volume to the pool and pool expansion using resize-disk", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 
 	stepLog := "should get the existing storage node and expand the pool by resize-disk"
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("volupdtplrsz-%d", i))...)
 		}
@@ -2575,7 +2592,7 @@ var _ = Describe("{VolUpdateAddDisk}", Label("p0", "positive", "pool_ops", "Pool
 	JustBeforeEach(func() {
 		StartTorpedoTest("VolUpdateAddDisk", "expand volume to the pool and pool expansion using add-disk", nil, 0)
 	})
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 
 	stepLog := "should get the existing storage node and expand the pool by resize-disk"
 
@@ -2585,7 +2602,6 @@ var _ = Describe("{VolUpdateAddDisk}", Label("p0", "positive", "pool_ops", "Pool
 			Skip("Add disk operation is not supported for DMThin Setup")
 		}
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("volupdtplrsz-%d", i))...)
 		}
@@ -2699,13 +2715,12 @@ var _ = Describe("{VolUpdateAddDrive}", Label("p0", "positive", "pool_ops", "Add
 		StartTorpedoTest("VolUpdateAddDrive", "expand volume to the pool and pool expansion using add drive", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 
 	stepLog := "should get the existing storage node and expand the pool by resize-disk"
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("plrszvolupdt-%d", i))...)
 		}
@@ -2798,13 +2813,12 @@ var _ = Describe("{AddDriveWithNodeReboot}", Label("p1", "negative", "error_inje
 		StartTorpedoTest("AddDriveAndNodeReboot", "Initiate pool expansion using add-drive and reboot node", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 
 	stepLog := "should get the existing storage node and expand the pool by adding a drive and reboot node"
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pladddrvwrbt-%d", i))...)
 		}
@@ -2882,13 +2896,12 @@ var _ = Describe("{MulPoolsResize}", Label("p0", "positive", "pool_ops", "PoolEx
 		StartTorpedoTest("MulPoolsResize", "Initiate multiple pool resize on same node in parallel", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 
 	stepLog := "should get the existing storage node with multiple pools and expand pools at same time using resize-disk"
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("mulpoolsresiz-%d", i))...)
@@ -2958,7 +2971,7 @@ var _ = Describe("{MulPoolsAddDisk}", Label("p0", "positive", "pool_ops", "AddDr
 		StartTorpedoTest("MulPoolsAddDisk", "Initiate multiple pool add-disk on same node in parallel", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 
 	stepLog := "should get the existing storage node with multiple pools and expand pools at same time using add-disk"
 
@@ -2968,7 +2981,6 @@ var _ = Describe("{MulPoolsAddDisk}", Label("p0", "positive", "pool_ops", "AddDr
 			Skip("Add disk operation is not supported for DMThin Setup")
 		}
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("mulpooladd-%d", i))...)
@@ -3066,7 +3078,7 @@ var _ = Describe("{ResizeWithJrnlAndMeta}", Label("p0", "positive", "pool_ops", 
 			"the pool the with journal and metadata devices", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 	var selectedNode node.Node
 
 	stepLog := "should get the metadata node and expand the pool by resize-disk"
@@ -3083,7 +3095,6 @@ var _ = Describe("{ResizeWithJrnlAndMeta}", Label("p0", "positive", "pool_ops", 
 		journalStatus, err := IsJournalEnabled()
 		log.FailOnError(err, "err getting journal status")
 		dash.VerifyFatal(journalStatus, true, "verify journal device is enabled")
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rsizedrvmeta-%d", i))...)
 		}
@@ -3157,13 +3168,12 @@ var _ = Describe("{PoolExpandWhileIOAndPXRestart}", Label("p0", "negative", "poo
 		StartTorpedoTest("PoolExpandWhileIOAndPXRestart", "Initiate pool expansion and restart px on n1 and at the same time expand the pool on n2 where vol repl exists", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 
 	stepLog := "should get the volume with IOs, expand the pool by resize-disk and restart PX on one the repl node"
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rsizerepl-%d", i))...)
 		}
@@ -3233,13 +3243,12 @@ var _ = Describe("{ResizeNodeMaintenanceCycle}", Label("p1", "negative", "error_
 		StartTorpedoTest("ResizeNodeMaintenanceCycle", "Initiate pool expansion using resize-disk and perform node maintenance cycle", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 
 	stepLog := "should get the volume with IOs, expand the pool by resize-disk and perform node maintenance cycle"
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rsizenodem-%d", i))...)
 		}
@@ -3315,7 +3324,7 @@ var _ = Describe("{AddDiskNodeMaintenanceCycle}", Label("p1", "negative", "error
 		StartTorpedoTest("AddDiskNodeMaintenanceCycle", "Initiate pool expansion using add-disk and perform node maintenance cycle", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 
 	stepLog := "should get the volume with IOs, expand the pool by add-disk and perform node maintenance cycle"
 
@@ -3325,7 +3334,6 @@ var _ = Describe("{AddDiskNodeMaintenanceCycle}", Label("p1", "negative", "error
 			Skip("Pool Add disk is not supported on DMThin Cluster")
 		}
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("addnodem-%d", i))...)
 		}
@@ -3398,7 +3406,7 @@ var _ = Describe("{ResizePoolMaintenanceCycle}", Label("p1", "negative", "error_
 		StartTorpedoTest("ResizePoolMaintenanceCycle", "Initiate pool expansion using resize-disk and perform pool maintenance cycle", nil, 0)
 
 	})
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 
 	stepLog := "should get the volume with IOs, expand the pool by resize-disk and perform pool maintenance cycle"
 
@@ -3477,7 +3485,7 @@ var _ = Describe("{AddDiskPoolMaintenanceCycle}", Label("p1", "negative", "error
 		StartTorpedoTest("AddDiskPoolMaintenanceCycle", "Initiate pool expansion using add-disk and perform pool maintenance cycle", nil, 0)
 
 	})
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 
 	stepLog := "should get the volume with IOs, expand the pool by add-disk and perform pool maintenance cycle"
 
@@ -3487,7 +3495,6 @@ var _ = Describe("{AddDiskPoolMaintenanceCycle}", Label("p1", "negative", "error
 			Skip("Add disk operation is not supported for DMThin Setup")
 		}
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("addpoolm-%d", i))...)
 		}
@@ -3564,13 +3571,15 @@ var _ = Describe("{NodeMaintenanceResize}", Label("p1", "negative", "error_injec
 		StartTorpedoTest("NodeMaintenanceResize", "pool expansion using resize-disk when node is in maintenance mode", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
-	var contexts []*scheduler.Context
+	var (
+		contexts       = make([]*scheduler.Context, 0)
+		poolIDToResize string
+	)
 
 	stepLog := "should get the existing storage node and put it in maintenance mode"
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rszedskmnt-%d", i))...)
 		}
@@ -3682,7 +3691,10 @@ var _ = Describe("{NodeMaintenanceModeAddDisk}", Label("p1", "negative", "error_
 		StartTorpedoTest("NodeMaintenanceModeAddDisk", "pool expansion using add-disk when node is in maintenance mode", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
-	var contexts []*scheduler.Context
+	var (
+		contexts       = make([]*scheduler.Context, 0)
+		poolIDToResize string
+	)
 
 	stepLog := "should get the existing storage node and put it in maintenance mode"
 
@@ -3692,7 +3704,6 @@ var _ = Describe("{NodeMaintenanceModeAddDisk}", Label("p1", "negative", "error_
 			Skip("Add disk operation is not supported for DMThin Setup")
 		}
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("adddskmnt-%d", i))...)
 		}
@@ -3802,13 +3813,15 @@ var _ = Describe("{PoolMaintenanceModeResize}", Label("p1", "negative", "error_i
 		StartTorpedoTest("PoolMaintenanceModeResize", "pool expansion using resize-disk when pool is in maintenance mode", nil, 0)
 
 	})
-	var contexts []*scheduler.Context
+	var (
+		contexts       = make([]*scheduler.Context, 0)
+		poolIDToResize string
+	)
 
 	stepLog := "should get the existing storage node and put it in maintenance mode"
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rszedskmnt-%d", i))...)
 		}
@@ -3908,7 +3921,8 @@ var _ = Describe("{PoolMaintenanceModeAddDisk}", Label("p1", "negative", "error_
 	*/
 
 	var (
-		contexts = make([]*scheduler.Context, 0)
+		contexts       = make([]*scheduler.Context, 0)
+		poolIDToResize string
 	)
 
 	JustBeforeEach(func() {
@@ -4027,7 +4041,8 @@ var _ = Describe("{AddDiskNodeMaintenanceMode}", Label("p1", "negative", "error_
 	*/
 
 	var (
-		contexts = make([]*scheduler.Context, 0)
+		contexts       = make([]*scheduler.Context, 0)
+		poolIDToResize string
 	)
 
 	JustBeforeEach(func() {
@@ -4042,7 +4057,6 @@ var _ = Describe("{AddDiskNodeMaintenanceMode}", Label("p1", "negative", "error_
 			Skip("Add disk operation is not supported for DMThin Setup")
 		}
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("mntadddsk-%d", i))...)
 		}
@@ -4152,7 +4166,8 @@ var _ = Describe("{ResizeNodeMaintenanceMode}", Label("p1", "negative", "error_i
 	*/
 
 	var (
-		contexts = make([]*scheduler.Context, 0)
+		contexts       = make([]*scheduler.Context, 0)
+		poolIDToResize string
 	)
 
 	JustBeforeEach(func() {
@@ -4163,7 +4178,6 @@ var _ = Describe("{ResizeNodeMaintenanceMode}", Label("p1", "negative", "error_i
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("mntrsze-%d", i))...)
 		}
@@ -4269,7 +4283,8 @@ var _ = Describe("{ResizePoolMaintenanceMode}", Label("p1", "negative", "erro_in
 	*/
 
 	var (
-		contexts = make([]*scheduler.Context, 0)
+		contexts       = make([]*scheduler.Context, 0)
+		poolIDToResize string
 	)
 
 	JustBeforeEach(func() {
@@ -4280,7 +4295,6 @@ var _ = Describe("{ResizePoolMaintenanceMode}", Label("p1", "negative", "erro_in
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("plmntrsze-%d", i))...)
 		}
@@ -4382,7 +4396,8 @@ var _ = Describe("{AddDiskPoolMaintenanceMode}", Label("p1", "negative", "error_
 	*/
 
 	var (
-		contexts = make([]*scheduler.Context, 0)
+		contexts       = make([]*scheduler.Context, 0)
+		poolIDToResize string
 	)
 
 	JustBeforeEach(func() {
@@ -4397,7 +4412,6 @@ var _ = Describe("{AddDiskPoolMaintenanceMode}", Label("p1", "negative", "error_
 			Skip("Pool Add disk is not supported on DMThin Cluster")
 		}
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("plmntadddsk-%d", i))...)
 		}
@@ -4499,13 +4513,14 @@ var _ = Describe("{PXRestartResize}", Label("p1", "negative", "error_injection",
 		StartTorpedoTest("PXRestartResize", "Restart PX and initiate pool expansion using resize-disk", nil, 0)
 
 	})
-	var contexts []*scheduler.Context
+	var (
+		contexts []*scheduler.Context
+	)
 
 	stepLog := "should get the existing storage node,restart PX and expand the pool by resize-disk"
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rstrszedsk-%d", i))...)
 		}
@@ -4560,7 +4575,7 @@ var _ = Describe("{PXRestartAddDisk}", Label("p1", "negative", "error_injection"
 		StartTorpedoTest("PXRestartAddDisk", "Restart PX and Initiate pool expansion using add-disk", nil, 0)
 
 	})
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 
 	stepLog := "should get the existing storage node and expand the pool by add-disk"
 
@@ -4570,7 +4585,6 @@ var _ = Describe("{PXRestartAddDisk}", Label("p1", "negative", "error_injection"
 			Skip("Add disk operation is not supported for DMThin Setup")
 		}
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rstadddsk-%d", i))...)
 		}
@@ -4631,13 +4645,14 @@ var _ = Describe("{PoolExpandPendingUntilVolClean}", Label("p1", "positive", "po
 		StartTorpedoTest("PoolExpandPendingUntilVolClean", "Expand pool should wait until volume gets clean", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
-	var contexts []*scheduler.Context
+	var (
+		contexts []*scheduler.Context
+	)
 
 	stepLog := "should get the volume with IOs and resync pending, expand the pool by resize-disk"
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 		appList := Inst().AppList
 		Inst().AppList = []string{"vdbench-sv4-svc", "fio-writes"}
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -4654,7 +4669,7 @@ var _ = Describe("{PoolExpandPendingUntilVolClean}", Label("p1", "positive", "po
 		log.FailOnError(err, fmt.Sprintf("error getting node with pool id %s", poolIDToResize))
 
 		log.Infof("selected node %s, pool %s", nodeSelected.Name, poolIDToResize)
-		poolToResize, err = GetStoragePoolByUUID(poolIDToResize)
+		poolToResize, err := GetStoragePoolByUUID(poolIDToResize)
 		log.FailOnError(err, fmt.Sprintf("unable to get pool using UUID  %s", poolIDToResize))
 
 		stepLog := fmt.Sprintf("Stop PX on node %s and validate volume data and start PX ", nodeSelected.Name)
@@ -4723,7 +4738,7 @@ var _ = Describe("{AddNewPoolWhileFullPoolExpanding}", Label("p0", "positive", "
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 
 	stepLog := "Create vols and make pool full"
 	It(stepLog, func() {
@@ -4974,7 +4989,7 @@ var _ = Describe("{StorageFullPoolResize}", Label("p0", "positive", "px_ops", "p
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 
 	stepLog := "Create vols and make pool full"
 	It(stepLog, func() {
@@ -5346,7 +5361,7 @@ var _ = Describe("{StorageFullPoolAddDisk}", Label("p0", "positive", "px_ops", "
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 
 	stepLog := "Create vols and make pool full"
 	It(stepLog, func() {
@@ -5400,13 +5415,12 @@ var _ = Describe("{ResizeKvdbNoQuorum}", Label("p0", "negative", "pool_ops", "kv
 		StartTorpedoTest("ResizeKvdbNoQuorum", "Initiate pool expansion by resize-disk when kvdb is out quorum", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 
 	stepLog := "should make kvdb out of quorum, and expand healthy pool using resize-disk"
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("resiznoqr-%d", i))...)
@@ -5509,13 +5523,11 @@ var _ = Describe("{StoPoolExpMulPools}", Label("p0", "positive", "pool_ops", "Po
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 
 	stepLog := "Has to schedule apps, and expand it by resizing a pool"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-
-		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("poolexpand-%d", i))...)
@@ -5591,7 +5603,9 @@ var _ = Describe("{CreateSnapshotsPoolResize}", Label("p0", "positive", "snapsho
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 
-	var contexts []*scheduler.Context
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	totalSnapshotsPerVol := 60
 
 	snapshotList := make(map[string][]string)
@@ -5602,8 +5616,6 @@ var _ = Describe("{CreateSnapshotsPoolResize}", Label("p0", "positive", "snapsho
 	It(stepLog, func() {
 
 		log.InfoD(stepLog)
-
-		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("snapcreateresizepool-%d", i))...)
@@ -5729,7 +5741,7 @@ var _ = Describe("{PoolResizeVolumesResync}", Label("p0", "positive", "px_vol_op
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 	var volIds []string
 
 	stepLog := "should get the existing storage node and expand the pool by resize-disk"
@@ -5876,7 +5888,8 @@ var _ = Describe("{PoolIncreaseSize20TB}", Label("p1", "positive", "pool_ops", "
 	var runID int
 
 	var (
-		contexts = make([]*scheduler.Context, 0)
+		contexts       = make([]*scheduler.Context, 0)
+		poolIDToResize string
 	)
 
 	JustBeforeEach(func() {
@@ -5888,7 +5901,6 @@ var _ = Describe("{PoolIncreaseSize20TB}", Label("p1", "positive", "pool_ops", "
 	stepLog := "should get the existing storage node and expand the pool by resize-disk"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("snapcreateresizepool-%d", i))...)
@@ -6106,7 +6118,6 @@ var _ = Describe("{ResizePoolDrivesInDifferentSize}", Label("p1", "positive", "p
 			Skip("Add disk operation is not supported for DMThin Setup")
 		}
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("resizepooldrivesdiffsize-%d", i))...)
 		}
@@ -6192,7 +6203,7 @@ var _ = Describe("{PoolDelete}", Label("p0", "positive", "pool_ops"), func() {
 		StartTorpedoTest("PoolDelete", "Initiate pool deletion", nil, 0)
 
 	})
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 
 	stepLog := "Initiate pool delete, then add a new pool and expand the pool"
 
@@ -6414,7 +6425,7 @@ var _ = Describe("{VolDeletePoolExpand}", Label("p0", "positive", "px_vol_ops", 
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 
 	})
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 	var newContexts []*scheduler.Context
 
 	stepLog := "should get the existing storage node and write ~150G data to a volume"
@@ -6600,7 +6611,7 @@ var _ = Describe("{PoolResizeSameSize}", Label("p1", "positive", "pool_ops", "Po
 		StartTorpedoTest("PoolResizeSameSize", "Validate storage pool expansion using resize-disk with same size should fail", nil, 0)
 	})
 
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 	stepLog := "add multiple pools and do resize on a pool with same size"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
@@ -6924,6 +6935,9 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", Label("p1", "negative", "poo
 	// Testrail Description : Delete pool when PX/Pool (2.6.0+) is not in maintenance mode and verify the error message
 
 	var runID int
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("VerifyPoolDeleteInvalidPoolID",
@@ -6936,7 +6950,6 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", Label("p1", "negative", "poo
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("deleteinvalidpoolid-%d", i))...)
 		}
@@ -7050,6 +7063,9 @@ var _ = Describe("{PoolResizeInvalidPoolID}", Label("p1", "negative", "pool_ops"
 	// Testrail Description : Resize with invalid pool ID
 	// Testrail Corresponds : https://portworx.testrail.net/index.php?/cases/view/84470
 	var runID int
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("PoolResizeInvalidPoolID",
@@ -7063,8 +7079,6 @@ var _ = Describe("{PoolResizeInvalidPoolID}", Label("p1", "negative", "pool_ops"
 		log.InfoD(stepLog)
 
 		startTime := time.Now()
-
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("invalidpoolid-%d", i))...)
 		}
@@ -7171,6 +7185,9 @@ var _ = Describe("{PoolResizeInvalidPoolID}", Label("p1", "negative", "pool_ops"
 var _ = Describe("{ResizePoolReduceErrorcheck}", Label("p0", "positive", "pool_ops", "PoolExpand"), func() {
 	// Testrail Description : Resize to lower size than existing pool size,should fail with proper error statement
 
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("ResizePoolReduceErrorcheck",
 			"Resize to lower size than existing pool size,should fail with proper error statement",
@@ -7181,7 +7198,6 @@ var _ = Describe("{ResizePoolReduceErrorcheck}", Label("p0", "positive", "pool_o
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("reducesize-%d", i))...)
 		}
@@ -7238,6 +7254,9 @@ var _ = Describe("{PoolDeleteRebalancePxState}", Label("p0", "positive", "pool_o
 	// Testrail Description : Delete Pool while Rebalance and verify Px comes up
 	var runID int
 
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("PoolDeleteRebalancePxState",
 			"Get Px State after pool delete",
@@ -7249,7 +7268,6 @@ var _ = Describe("{PoolDeleteRebalancePxState}", Label("p0", "positive", "pool_o
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pooldeleterebalanceid-%d", i))...)
 		}
@@ -7416,6 +7434,9 @@ var _ = Describe("{AddMultipleDriveStorageLessNodeResizeDisk}", Label("p0", "pos
 	var testrailID = 0
 	// Testrail Description : Pool Resize after adding drives to storage less node
 	var runID int
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("AddMultipleDriveStorageLessNodeResizeDisk",
@@ -7428,7 +7449,6 @@ var _ = Describe("{AddMultipleDriveStorageLessNodeResizeDisk}", Label("p0", "pos
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("storagelessresizedisk-%d", i))...)
 		}
@@ -7528,6 +7548,9 @@ var _ = Describe("{DriveAddPXDown}", Label("p0", "negative", "pool_ops", "px_ops
 	var testrailID = 0
 	// Testrail Description : add drive when px is down
 	var runID int
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("DriveAddPXDown",
@@ -7539,8 +7562,6 @@ var _ = Describe("{DriveAddPXDown}", Label("p0", "negative", "pool_ops", "px_ops
 	stepLog := "Add Drive when Px is down"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("adddrivepxdownid-%d", i))...)
 		}
@@ -7607,6 +7628,9 @@ var _ = Describe("{ExpandUsingAddDriveAndPXRestart}", Label("p1", "negative", "p
 	*/
 	var testrailID = 0
 	var runID int
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("ExpandUsingAddDriveAndPXRestart",
@@ -7622,7 +7646,6 @@ var _ = Describe("{ExpandUsingAddDriveAndPXRestart}", Label("p1", "negative", "p
 			Skip("Add disk is not supported in DMThin")
 		}
 
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pladddrvrestrt-%d", i))...)
 		}
@@ -7676,6 +7699,9 @@ var _ = Describe("{ExpandUsingAddDriveAndNodeRestart}", Label("p1", "negative", 
 	*/
 	var testrailID = 0
 	var runID int
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("ExpandUsingAddDriveAndNodeRestart",
@@ -7692,7 +7718,6 @@ var _ = Describe("{ExpandUsingAddDriveAndNodeRestart}", Label("p1", "negative", 
 			Skip("Add disk is not supported on DMThin Cluster")
 		}
 
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("expanddiskadddrive-%d", i))...)
 		}
@@ -7763,6 +7788,9 @@ var _ = Describe("{ResizeDiskAddDiskSamePool}", Label("p1", "positive", "pool_op
 	*/
 	var testrailID = 0
 	var runID int
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("ResizeDiskAddDiskSamePool",
@@ -7778,7 +7806,6 @@ var _ = Describe("{ResizeDiskAddDiskSamePool}", Label("p1", "positive", "pool_op
 			Skip("Add disk operation is not supported for DMThin Setup")
 		}
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("resizediskadddisk-%d", i))...)
 		}
@@ -7863,6 +7890,9 @@ var _ = Describe("{DriveAddRebalanceInMaintenance}", Label("p1", "negative", "er
 	*/
 	var testrailID = 0
 	var runID int
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("DriveAddRebalanceInMaintenance",
@@ -7874,7 +7904,6 @@ var _ = Describe("{DriveAddRebalanceInMaintenance}", Label("p1", "negative", "er
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("resizediskadddisk-%d", i))...)
 		}
@@ -7977,7 +8006,7 @@ var _ = Describe("{AllPoolsDeleteAndCreateAndDelete}", Label("p0", "positive", "
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 	stepLog := "Delete all the pools in a node, create a new pool and delete again"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
@@ -8182,6 +8211,9 @@ var _ = Describe("{NodeAddDiskWhileAddDiskInProgress}", Label("p0", "positive", 
 	var testrailID = 51356
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/51356
 	var runID int
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("NodeAddDiskWhileAddDiskInProgress", "Initiate pool expansion using add-drive while one already in progress", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
@@ -8195,7 +8227,6 @@ var _ = Describe("{NodeAddDiskWhileAddDiskInProgress}", Label("p0", "positive", 
 			Skip("Add disk operation is not supported for DMThin Setup")
 		}
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pladddskinp-%d", i))...)
 		}
@@ -8298,6 +8329,9 @@ var _ = Describe("{NodeAddDiskWhileResizeDiskInProgress}", Label("p0", "positive
 	var testrailID = 50939
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/50939
 	var runID int
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("NodeAddDiskWhileResizeDiskInProgress", "Initiate pool expansion using add-disk while one already in progress with resize-disk", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
@@ -8311,7 +8345,6 @@ var _ = Describe("{NodeAddDiskWhileResizeDiskInProgress}", Label("p0", "positive
 			Skip("Add disk operation is not supported for DMThin Setup")
 		}
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("plrszdskinp-%d", i))...)
 		}
@@ -8426,7 +8459,7 @@ var _ = Describe("{MulVolPoolResize}", Label("p0", "positive", "node_ops", "pool
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 	stepLog := "Deploy multiple volumes"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
@@ -8515,7 +8548,9 @@ var _ = Describe("{MulPoolsUpMetaPoolFullAndResize}", Label("p0", "positive", "p
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 
-	var contexts []*scheduler.Context
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	stepLog := "Get node with multiple pools and deploy volumes"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
@@ -8632,7 +8667,6 @@ var _ = Describe("{MulPoolsUpMetaPoolFullAndResize}", Label("p0", "positive", "p
 			log.FailOnError(err, fmt.Sprintf("error update cluster options disable-provisioning-labels with value [%s]", clusterOptsVal))
 
 			Inst().AppList = []string{"fio-fastpath"}
-			contexts = make([]*scheduler.Context, 0)
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("mtplfullrz-%d", i))...)
 			}
@@ -8701,7 +8735,6 @@ var _ = Describe("{DiffPoolExpansionFromMaintenanceNode}", Label("p1", "negative
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("nwplfullad-%d", i))...)
 		}
@@ -8777,6 +8810,9 @@ var _ = Describe("{ResyncFailedPoolOutOfRebalance}", Label("p1", "positive", "po
 		Observed the volume status to be degraded
 		Waited for pool to come online
 	*/
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("ResyncFailedPoolOutOfRebalance",
@@ -8791,7 +8827,6 @@ var _ = Describe("{ResyncFailedPoolOutOfRebalance}", Label("p1", "positive", "po
 			Skip("Add disk operation is not supported for DMThin Setup")
 		}
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("reducesize-%d", i))...)
 		}
@@ -8885,6 +8920,9 @@ var _ = Describe("{AddDiskAddDriveAndDeleteInstance}", Label("p0", "positive", "
 	   3. Delete the instance
 	*/
 
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("AddDiskAddDriveAndDeleteInstance", "Initiate pool expand using add-disk and create new pool and delete instance", nil, 0)
 
@@ -8898,7 +8936,6 @@ var _ = Describe("{AddDiskAddDriveAndDeleteInstance}", Label("p0", "positive", "
 			Skip("Add disk operation is not supported for DMThin Setup")
 		}
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("plrszdskinp-%d", i))...)
 		}
@@ -9148,6 +9185,9 @@ var _ = Describe("{DriveAddAsJournal}", Label("p0", "positive", "pool_ops"), fun
 	var testrailID = 0
 	// Testrail Description : Add drive when as journal
 	var runID int
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("DriveAddAsJournal",
@@ -9166,7 +9206,6 @@ var _ = Describe("{DriveAddAsJournal}", Label("p0", "positive", "pool_ops"), fun
 			Skip("Drive add Journal Device is not supported for DMThin")
 		}
 
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("adddriveasjournal-%d", i))...)
 		}
@@ -9308,11 +9347,13 @@ var _ = Describe("{ReplResyncOnPoolExpand}", Label("p0", "positive", "pool_ops",
 			"Resync failed for a volume after pool came out of rebalance",
 			nil, 0)
 	})
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 
 	stepLog := "Resync volume after rebalance"
 	It(stepLog, func() {
 
-		contexts = make([]*scheduler.Context, 0)
 		currAppList := Inst().AppList
 
 		revertAppList := func() {
@@ -9419,6 +9460,9 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", Label("p1", "negative", "p
 	// Do multiple pool operations on the pool and volume and make sure kvdb leader is up and running
 	// JIRA ID :https://portworx.atlassian.net/browse/PTX-17728
 	var runID int
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("VolumeHAPoolOpsNoKVDBleaderDown",
 			"Test Volume HA Pool Operations should not make KVDB node down", nil, testrailID)
@@ -9428,7 +9472,6 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", Label("p1", "negative", "p
 	stepLog := "has to schedule apps and update replication factor for attached node"
 	It(stepLog, func() {
 		var wg sync.WaitGroup
-		contexts = make([]*scheduler.Context, 0)
 		numGoroutines := 2
 
 		wg.Add(numGoroutines)
@@ -9737,10 +9780,11 @@ var _ = Describe("{KvdbRestartNewNodeAcquired}", Label("p1", "negative", "pool_o
 			nil, 0)
 	})
 
-	var contexts []*scheduler.Context
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	stepLog := "Resync volume after rebalance"
 	It(stepLog, func() {
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("kvdbrestartnewnodeacquired-%d", i))...)
 		}
@@ -9843,10 +9887,11 @@ var _ = Describe("{ExpandMultiplePoolWithIOsInClusterAtOnce}", Label("p0", "posi
 			nil, 0)
 	})
 
-	var contexts []*scheduler.Context
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	stepLog := "Expand multiple pool in the cluster at once in parallel"
 	It(stepLog, func() {
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("expandmultiplepoolparallel-%d", i))...)
 		}
@@ -9991,13 +10036,14 @@ var _ = Describe("{CreateNewPoolsOnClusterInParallel}", Label("p0", "positive", 
 			nil, 0)
 	})
 
-	var contexts []*scheduler.Context
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	stepLog := "create new pools on the cluster in parallel"
 	It(stepLog, func() {
 
 		var nodesToUse []node.Node
 
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("createnewpoolsinparallel-%d", i))...)
 		}
@@ -10084,11 +10130,13 @@ var _ = Describe("{AddDriveMetadataPool}", Label("p0", "positive", "pool_ops"), 
 			"Test Add Drive to Metadata Pool",
 			nil, 0)
 	})
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 
 	stepLog := "Test Add Drive to Metadata Pool"
 	It(stepLog, func() {
 
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("adddrivemetadatapool-%d", i))...)
 		}
@@ -10350,6 +10398,9 @@ var _ = Describe("{PoolExpandRebalanceShutdownNode}", Label("p1", "negative", "n
 	var testrailID = 0
 	// Testrail Description : while pool expand Rebalance is in progress ShutdownNode and check operation resumes
 	var runID int
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("PoolExpandRebalanceShutdownNode",
@@ -10363,7 +10414,6 @@ var _ = Describe("{PoolExpandRebalanceShutdownNode}", Label("p1", "negative", "n
 		if !IsPoolAddDiskSupported() {
 			Skip("Add disk is not supported on DMTHin Cluster.. Skipping the test")
 		}
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rebalanceshutdown-%d", i))...)
 		}
@@ -10463,6 +10513,9 @@ var _ = Describe("{AddDriveWithKernelPanic}", Label("p1", "negative", "pool_ops"
 
 	var testrailID = 0
 	var runID int
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("AddDriveWithKernelPanic", "Initiate pool expansion using add-drive and do kernel panic while it is in progress", nil, testrailID)
@@ -10473,7 +10526,6 @@ var _ = Describe("{AddDriveWithKernelPanic}", Label("p1", "negative", "pool_ops"
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pladddrvwrst-%d", i))...)
 		}
@@ -10725,7 +10777,9 @@ var _ = Describe("{PoolDeleteFunctionality}", Label("p0", "positive", "pool_ops"
 	JustBeforeEach(func() {
 		StartTorpedoTest("PoolDeleteFunctionality", "Initiate pool deletion", nil, 0)
 	})
-	var contexts []*scheduler.Context
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 
 	ItLog := "Initiate pool delete, then add a new pool and expand the pool"
 	It(ItLog, func() {
@@ -10773,7 +10827,6 @@ var _ = Describe("{PoolDeleteFunctionality}", Label("p0", "positive", "pool_ops"
 		})
 
 		// deploy applications
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pooldeletefunc-%d", i))...)
 		}
@@ -10861,6 +10914,9 @@ var _ = Describe("{PoolDeleteNegative}", Label("p1", "negative", "error_injectio
 	})
 
 	var selectedNode *node.Node
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	BeforeEach(func() {
 		selectedNode = selectPoolDeletableNode()
 		dash.VerifyFatal(selectedNode != nil, true, "very if select test node ok")
@@ -10870,7 +10926,6 @@ var _ = Describe("{PoolDeleteNegative}", Label("p1", "negative", "error_injectio
 	It(ItLog, func() {
 		log.InfoD(stepLog)
 
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pooldeleteinvalidid-%d", i))...)
 		}
@@ -10903,7 +10958,6 @@ var _ = Describe("{PoolDeleteNegative}", Label("p1", "negative", "error_injectio
 	It(ItLog, func() {
 		log.InfoD(stepLog)
 
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pooldeletewithvol-%d", i))...)
 		}
@@ -11002,7 +11056,9 @@ var _ = Describe("{PoolDeleteVariations}", Label("p0", "positive", "pool_ops"), 
 	JustBeforeEach(func() {
 		StartTorpedoTest("PoolDeleteVariations", "Pool delete with variations", nil, 0)
 	})
-	var contexts []*scheduler.Context
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 
 	itLog := fmt.Sprintf("Verify pool delete variations")
 	It(itLog, func() {
@@ -11207,7 +11263,9 @@ var _ = Describe("{PoolDeleteServiceDisruption}", Label("p1", "positive", "px_op
 		StartTorpedoTest("PoolDeleteServiceDisruption", "Pool delete with service disruption", nil, 0)
 	})
 
-	var contexts []*scheduler.Context
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 
 	itLog := "PoolDeleteServiceDisruption"
 	It(itLog, func() {
@@ -11289,7 +11347,9 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", Label("p0", "positive", "px
 	JustBeforeEach(func() {
 		StartTorpedoTest("HAIncreasePoolresizeAndAdddisk", "HA increase, pool resize and add disk run all this parallely", nil, 57783)
 	})
-	var contexts []*scheduler.Context
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	var poolToBeUpdated string
 
 	itLog := "HAIncreasePoolresizeAndAdddisk"
@@ -11464,7 +11524,9 @@ var _ = Describe("{PoolResizeInTrashCanNode}", Label("p0", "positive", "px_vol_o
 		StartTorpedoTest("PoolResizeInTrashCanNode", "Pool resize with volumes in trashcan", nil, 0)
 	})
 
-	var contexts []*scheduler.Context
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 
 	var trashcanVolsBeforePoolExpand []string
 
@@ -11619,7 +11681,9 @@ var _ = Describe("{CheckPoolOffline}", Label("p0", "positive", "pool_ops"), func
 	JustBeforeEach(func() {
 		StartTorpedoTest(itLog, "Check if pool is offline when capacity is reached", nil, 0)
 	})
-	var contexts []*scheduler.Context
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	var selectedNode *node.Node
 
 	It(itLog, func() {
@@ -11693,7 +11757,9 @@ var _ = Describe("{FACDPoolIOPriorityCheck}", Label("p0", "positive", "pool_ops"
 		StartTorpedoTest("FACDPoolIOPriorityCheck", "Verify the Priority of the pools with FACD is High", nil, 0)
 	})
 
-	var contexts []*scheduler.Context
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 
 	itLog := "FACDPoolIOPriorityCheck"
 	It(itLog, func() {
@@ -11742,7 +11808,7 @@ var _ = Describe("{OnlineJournalAddCheck}", Label("p0", "positive", "pool_ops"),
 		StartTorpedoTest("OnlineJournalAddCheck", "Online journal add check", nil, 0)
 	})
 
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 	var selectedNode = node.Node{}
 	diskMapBeforeDriveAdd := make(map[string]string)
 
@@ -11933,7 +11999,7 @@ var _ = Describe("{DriveAddMetaDataDiskStatusCheck}", Label("p0", "positive", "p
 	JustBeforeEach(func() {
 		StartTorpedoTest(itLog, "Drive add and check metadata disk status", nil, 0)
 	})
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 	var selectedNode node.Node
 
 	It(itLog, func() {
@@ -12118,7 +12184,7 @@ var _ = Describe("{NetworkDelayWhilePoolExpand}", Label("p1", "negative", "pool_
 		StartTorpedoTest("NetworkDelayWhilePoolExpand", "Network delay while pool expand", nil, 0)
 	})
 
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 	var selectedNode node.Node
 
 	itLog := "NetworkDelayWhilePoolExpand"
@@ -12173,7 +12239,6 @@ var _ = Describe("{NetworkDelayWhilePoolExpand}", Label("p1", "negative", "pool_
 				err = waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isJournalEnabled)
 				log.FailOnError(err, "Failed to wait for pool to be resized")
 
-				poolToResize = getStoragePool(selectedPool.Uuid)
 				expectedSize = selectedPool.TotalSize/units.GiB + 150
 
 				err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
@@ -12227,10 +12292,12 @@ var _ = Describe("{PoolResizeWhenReplOneVolinPool}", Label("p0", "positive", "po
 	JustBeforeEach(func() {
 		StartTorpedoTest("PoolResizeWhenReplOneVolinPool", "Pool resize when repl factor is 1", nil, 0)
 	})
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 
 	itLog := "PoolResizeWhenReplOneVolinPool"
 	It(itLog, func() {
-		var contexts []*scheduler.Context
 		// Create px volumes with repl factor 1
 
 		applist := Inst().AppList
@@ -12280,7 +12347,7 @@ var _ = Describe("{PoolResizeWhenReplOneVolinPool}", Label("p0", "positive", "po
 			isjournal, err := IsJournalEnabled()
 			log.FailOnError(err, "Failed to check is Journal enabled")
 
-			poolToResize, err = GetStoragePoolByUUID(poolID)
+			poolToResize, err := GetStoragePoolByUUID(poolID)
 			log.FailOnError(err, "Failed to get pool using UUID %s", poolID)
 
 			// Resize pool with resize disk
@@ -12321,7 +12388,7 @@ var _ = Describe("{PoolDeleteMultiplePools}", Label("p0", "positive", "pool_ops"
 		StartTorpedoTest("PoolDeleteMultiplePools", "Pool delete with multiple pools", nil, 0)
 	})
 
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 
 	itLog := "PoolDeleteMultiplePools"
 	It(itLog, func() {
@@ -12400,6 +12467,9 @@ var _ = Describe("{AddingDrivesBeyondSupportedLimit}", Label("p1", "pool_ops", "
 	*/
 	var testrailID = 0
 	var runID int
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("AddingDrivesBeyondSupportedLimit", "Adding more drives than the supported limit and expecting error", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
@@ -12415,7 +12485,6 @@ var _ = Describe("{AddingDrivesBeyondSupportedLimit}", Label("p1", "pool_ops", "
 			Skip(fmt.Sprintf("skipping test %s as this is Dmthin setup", "AddingDrivesBeyondSupportedLimit"))
 		}
 
-		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pooldrivemax-%d", i))...)
 		}
@@ -12541,7 +12610,7 @@ var _ = Describe("{AddingDrivesBeyondSupportedLimit}", Label("p1", "pool_ops", "
 })
 
 func PoolDeleteWithTimeInterval(testName, testDesc, testType string) {
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 	var poolsMap map[string][]volume.DiskResource
 	var poolToDelete node.StoragePool
 	var jrnlPartPoolID string
@@ -12888,6 +12957,9 @@ var _ = Describe("{PXInstallWithNodeReboot}", Label("p1", "negative", "pool_ops"
 	BeforeEach(func() {
 		StartTorpedoTest("PXInstallWithNodeReboot", "PX install with node reboot", nil, 0)
 	})
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 	ItLog := "PXInstallWithNodeReboot"
 	It(ItLog, func() {
 		workerNodes := node.GetStorageDriverNodes()
@@ -13378,7 +13450,7 @@ var _ = Describe("{PXInstallWithPXRestart}", Label("p1", "px_install", "hal_init
 	   7.  Verify node rejoin
 	*/
 
-	var contexts []*scheduler.Context
+	var contexts = make([]*scheduler.Context, 0)
 	BeforeEach(func() {
 		StartTorpedoTest("PXInstallWithPXRestart", "px install with px restart", nil, 0)
 	})
@@ -13524,7 +13596,7 @@ var _ = Describe("{VolumeCloneSnapAndPoolExpand}", Label("p1", "px_vol_ops", "po
 	})
 
 	var (
-		contexts        []*scheduler.Context
+		contexts        = make([]*scheduler.Context, 0)
 		clonedVolumeId  string
 		targetNode      node.Node
 		poolTobeResized *api.StoragePool
@@ -13828,11 +13900,13 @@ var _ = Describe("{PoolResizeWithVolumeResync}", Label("p0", "negative", "stagin
 	BeforeEach(func() {
 		StartTorpedoTest("PoolResizeWithVolumeResync", "Try pool resize when lot of volumes are in resync state	", nil, 0)
 	})
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 
 	ItLog := "Try pool resize when lot of volumes are in resync state"
 	It(ItLog, func() {
 		var (
-			contexts   []*scheduler.Context
 			nodePools  = make(map[string][]*api.StoragePool)
 			fioVolList []*volume.Volume
 			allVolList []*volume.Volume
@@ -14043,7 +14117,7 @@ var _ = Describe("{StoragePoolMultipleExpandDiskResize}", Label("p0", "negative"
 			Validate apps
 	*/
 	var (
-		contexts            []*scheduler.Context
+		contexts            = make([]*scheduler.Context, 0)
 		poolIdsToExpand     []string
 		pxStopNodes         []node.Node
 		nodesNotInKvdbNodes []node.Node
@@ -14138,7 +14212,7 @@ var _ = Describe("{PoolResizeAndPXRestartWithVolumeResync}", Label("p0", "negati
 	   7. Validate apps
 	*/
 	var (
-		contexts   []*scheduler.Context
+		contexts   = make([]*scheduler.Context, 0)
 		fioVolList []*volume.Volume
 		allVolList []*volume.Volume
 		wg         sync.WaitGroup
@@ -14688,7 +14762,7 @@ var _ = Describe("{RebootKVDBLeaderDuringPoolResize}", Label("p0", "positive", "
 	It("reboots the KVDB leader node during pool resize and verifies cluster adjustments", func() {
 		// Identify the KVDB leader node & get the pool to be resized
 
-		var contexts []*scheduler.Context
+		var contexts = make([]*scheduler.Context, 0)
 		stepLog := "schedule Application"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -14811,7 +14885,7 @@ var _ = Describe("{RestartPxDuringPoolDeletion}", Label("p1", "hal_ops_disruptio
 		Validate apps
 	*/
 	var (
-		contexts         []*scheduler.Context
+		contexts         = make([]*scheduler.Context, 0)
 		poolsMap         = make(map[string]bool)
 		poolToDelete     node.StoragePool
 		jrnlPartPoolID   string
@@ -15000,10 +15074,11 @@ var _ = Describe("{AddDriveWithNodeRebootAndNodeMaintenanceMode}", Label("p1", "
 	*/
 
 	var (
-		testrailID   = 0
-		runID        int
-		contexts     []*scheduler.Context
-		expectedSize uint64
+		testrailID     = 0
+		runID          int
+		contexts       = make([]*scheduler.Context, 0)
+		poolIDToResize string
+		expectedSize   uint64
 	)
 
 	JustBeforeEach(func() {
@@ -15017,7 +15092,6 @@ var _ = Describe("{AddDriveWithNodeRebootAndNodeMaintenanceMode}", Label("p1", "
 		log.InfoD(stepLog)
 		stepLog := "Schedule application"
 		Step(stepLog, func() {
-			contexts = make([]*scheduler.Context, 0)
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("plrandnm-%d", i))...)
 			}
@@ -15183,7 +15257,7 @@ var _ = Describe("{AddDriveWithPXRestartForMultipleIterations}", Label("p0", "st
 	var (
 		testrailID       = 0
 		runID            int
-		contexts         []*scheduler.Context
+		contexts         = make([]*scheduler.Context, 0)
 		initialPoolCount int
 		driveSpecs       []string
 		deviceSpec       string
@@ -15333,7 +15407,7 @@ var _ = Describe("{StorageFullPoolResizeWithPxkill}", Label("p0", "staging", "po
 	var (
 		testrailID = 0
 		runID      int
-		contexts   []*scheduler.Context
+		contexts   = make([]*scheduler.Context, 0)
 	)
 
 	JustBeforeEach(func() {
@@ -15814,7 +15888,7 @@ var _ = Describe("{HAIncreasePoolExpandAddDisk}", Label("p0", "positive", "px_vo
 		StartTorpedoTest("HAIncreasePoolExpandAddDisk", "Drive add while HA increase is in progress", nil, 0)
 	})
 	var (
-		contexts             []*scheduler.Context
+		contexts             = make([]*scheduler.Context, 0)
 		volHaIncreasePoolMap map[string][]string
 		poolsWithHAIncrease  map[string]bool
 		vols                 []*volume.Volume
@@ -16058,6 +16132,9 @@ var _ = Describe("{AddDataNodeRebootVerifyPoolStatus}", Label("staging", "p0", "
 	JustBeforeEach(func() {
 		StartTorpedoTest("AddDataNodeRebootVerifyPoolStatus", "Added metadrive on storageless node, added data drive on storage node, verified conversion to storage node, created volumes, rebooted the node, and verified pool status.", nil, 0)
 	})
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 
 	itLog := "Added metadrive on storageless node, added data drive on storage node, verified conversion to storage node, created volumes, rebooted the node, and verified pool status"
 	It(itLog, func() {

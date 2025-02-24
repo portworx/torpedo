@@ -459,8 +459,11 @@ var _ = Describe("{ValidateVPSruleWithPoolRestriction}", Label("p0", "positive",
 		4.	check if replica 1 created in pool labeled SSD and replica 2 on pool labeled SATA
 		5.  remove the labels and delete the pvc, stc, vps
 	*/
-	var testrailID = 0
-	var runID int
+	var (
+		testrailID = 0
+		runID      int
+		contexts   = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("ValidateVPSruleWithPoolRestriction", "Validate behavior when VPS rules are used in conjunction with storage pool restrictions", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
@@ -639,8 +642,11 @@ var _ = Describe("{ValidateVPSAffinityAndAntiAffinityConflict}", Label("p0", "po
 		3.	Verify volume is not provisioned.
 		4.  remove all labels and delete the pvc, stc, vps
 	*/
-	var testrailID = 0
-	var runID int
+	var (
+		testrailID = 0
+		runID      int
+		contexts   = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("ValidateVPSAffinityAndAntiAffinityConflict", "Validate VPS handles conflicting affinity and anti-affinity rules.", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
@@ -782,8 +788,11 @@ var _ = Describe("{ValidateVPSFailOnInsufficientPools}", Label("p0", "VPS", "sta
 		4.	check if volume creation should fail when VolumePlacementStrategy fails to find enough pools
 		5.  remove the labels and delete the pvc, vps
 	*/
-	var testrailID = 0
-	var runID int
+	var (
+		testrailID = 0
+		runID      int
+		contexts   = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("ValidateVPSFailOnInsufficientPools", "Validate Volume Creation behavior when VPS rules are providing insufficient pools", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
@@ -936,6 +945,7 @@ var _ = Describe("{VolumeCloneWithDifferentPlacementStrategy}", Label("p0", "pos
 		testrailID = 0
 		runID      int
 		namespace  = "default"
+		contexts   = make([]*scheduler.Context, 0)
 	)
 
 	JustBeforeEach(func() {
@@ -1270,8 +1280,11 @@ var _ = Describe("{ValidateVPSAffinityWithoutRequiredLabel}", Label("staging", "
 		2. Create a volume using that rule
 		3. Volume should be in pending state because it couldn’t find any node with that label.
 	*/
-	var testrailID = 0
-	var runID int
+	var (
+		testrailID = 0
+		runID      int
+		contexts   = make([]*scheduler.Context, 0)
+	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("ValidateVPSAffinityWithoutRequiredLabel", "VPS with nodes in a zone not having the required labels", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
@@ -1413,6 +1426,9 @@ var _ = Describe("{SetupVPSValidateTrashcanAntiAffinity}", Label("p0", "positive
 		err = RemoveLabelsAllNodes(k8s.NodeType, true, false)
 		log.FailOnError(err, "error removing label on node ")
 	})
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 
 	stepLog := "Setup VPS and validate that volumes in trashcan are not considered when anti-affinity rules are set"
 	It(stepLog, func() {
