@@ -19,11 +19,11 @@ spec:
           imagePullPolicy: IfNotPresent
           resources:
             limits:
-              cpu: 1000m
-              memory: 500Mi
+              cpu: 2000m
+              memory: 4Gi
             requests:
-              memory: 256Mi
-              cpu: 100m
+              memory: 2Gi
+              cpu: 500m
           command: ["./bench_runner.sh"]
           args: ["Writes", "21600"]
           volumeMounts:
