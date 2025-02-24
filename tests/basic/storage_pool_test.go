@@ -9696,7 +9696,8 @@ var _ = Describe("{KvdbFailoverDuringPoolExpand}", Label("p1", "negative", "pool
 		ValidateApplications(contexts)
 
 		// Get a pool with running IO
-		poolUUID := pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, 0)
+		targetIncrementSize := uint64(200)
+		poolUUID := pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, targetIncrementSize)
 		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
 
 		// Get Node Details of the Pool with IO
@@ -9724,7 +9725,7 @@ var _ = Describe("{KvdbFailoverDuringPoolExpand}", Label("p1", "negative", "pool
 
 		expandPoolWithKVDBFailover := func(poolUUID string) error {
 
-			expectedSize := (poolToBeResized.TotalSize / units.GiB) + 200
+			expectedSize := (poolToBeResized.TotalSize / units.GiB) + targetIncrementSize
 			log.InfoD("Current Size of the pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
 
 			err = Inst().V.ExpandPool(poolUUID, pickType, expectedSize, true)

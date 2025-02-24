@@ -958,6 +958,8 @@ var _ = Describe("{VolumeCloneWithDifferentPlacementStrategy}", Label("p0", "pos
 		stepLog = "Adding Labels on Nodes"
 		var nodes []node.Node
 		nodes = node.GetStorageNodes()
+		zoneANodeCount := 0
+		zoneBNodeCount := 0
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			// Iterate over the nodes and apply labels
@@ -968,11 +970,13 @@ var _ = Describe("{VolumeCloneWithDifferentPlacementStrategy}", Label("p0", "pos
 					err := k8sCore.AddLabelOnNode(node.Name, "zone", "A")
 					log.FailOnError(err, "Failed to add label 'zone=A' for node: %v", node)
 					log.Infof("Successfully added label 'zone=A' to node: %v", node.Name)
+					zoneANodeCount++
 				} else {
 					// Apply 'zone=B' label for  nodes 2, 4,6...
 					err := k8sCore.AddLabelOnNode(node.Name, "zone", "B")
 					log.FailOnError(err, "Failed to add label 'zone=B' for node: %v", node)
 					log.Infof("Successfully added label 'zone=B' to node: %v", node.Name)
+					zoneBNodeCount++
 				}
 			}
 
@@ -1021,10 +1025,20 @@ var _ = Describe("{VolumeCloneWithDifferentPlacementStrategy}", Label("p0", "pos
 			bindMode         = storageApi.VolumeBindingImmediate
 		)
 		Step(stepLog, func() {
+			zoneARepl := "2"
+			if zoneANodeCount < 2 {
+				zoneARepl = "1"
+			}
+			zoneBRepl := "1"
+			if zoneBNodeCount > 2 {
+				zoneBRepl = "3"
+			} else {
+				zoneBRepl = fmt.Sprintf("%d", zoneBNodeCount)
+			}
 			log.InfoD(stepLog)
 			// Create sc-1 with VPS-1
 			log.Infof("Creating sc-1 using VPS-1")
-			params1["repl"] = "2"
+			params1["repl"] = zoneARepl
 			params1["placement_strategy"] = vpsName1
 			scObj1 := storageApi.StorageClass{
 				ObjectMeta:        metav1.ObjectMeta{Name: scName1},
@@ -1036,7 +1050,7 @@ var _ = Describe("{VolumeCloneWithDifferentPlacementStrategy}", Label("p0", "pos
 			log.FailOnError(err, "Failed to create sc-1")
 			// Create sc-2 with VPS-2
 			log.Infof("Creating sc-2 using VPS-2")
-			params2["repl"] = "3"
+			params2["repl"] = zoneBRepl
 			params2["placement_strategy"] = vpsName2
 			scObj2 := storageApi.StorageClass{
 				ObjectMeta:        metav1.ObjectMeta{Name: scName2},
@@ -1126,7 +1140,7 @@ var _ = Describe("{VolumeCloneWithDifferentPlacementStrategy}", Label("p0", "pos
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			policyName := "intervalpolicy"
-			fmt.Sprintf("create schedule policy %s", policyName)
+			log.Infof("Creating a interval schedule policy %v with interval %v minutes", policyName, 5)
 			log.InfoD(stepLog)
 			schedPolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
 			retain := 8
