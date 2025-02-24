@@ -10,7 +10,10 @@ import (
 	"sync"
 	"time"
 
+	storkv1 "github.com/pure-px/stork/pkg/apis/stork/v1alpha1"
+	storkops "github.com/pure-px/stork/pkg/crud/stork"
 	"github.com/pure-px/torpedo/drivers/scheduler/k8s"
+	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/google/uuid"
@@ -3958,5 +3961,236 @@ var _ = Describe("{VerifyPxRebootAvoidsMaintenanceWithOfflinePool}", Label("p1",
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{DMthinIncrementalPoolExpand}", Label("p1", "positive", "pool_ops", "px_ops", "PoolExpand", "staging"), func() {
+	/*
+		Try Incremental Pool expansion on the Pool till Max Supported size is reached , every time increase by 1T , and Max Limit is 15T .
+		when trying pool expansion , we should have REPL1 , Repl2 , FastPath Volumes , with inflight IOs , and On going snapshots in progress.
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("DMthinIncrementalPoolExpand", "Validate incremental pool expansion in DMTHIN", nil, 0)
+	})
+
+	var (
+		contexts                []*scheduler.Context
+		poolToResize            *api.StoragePool
+		poolIDToResize          string
+		targetSizeInBytes       uint64
+		originalSizeInBytes     uint64
+		targetSizeGiB           uint64
+		resizeErr               error
+		randomResizeMethodIndex int
+		appList                 []string
+		coordinatorNodes        []node.Node
+	)
+
+	stepLog := "DMthin incremental pool expansion"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+
+		contexts = make([]*scheduler.Context, 0)
+		retain := 3
+		interval := 2
+
+		// creating cloud credentials
+		err := CreatePXCloudCredential()
+		log.FailOnError(err, "failed to create cloud credential")
+		defer DeletePXCloudCredential()
+		n := node.GetStorageDriverNodes()[0]
+		uuidCmd := "pxctl cred list -j | grep uuid"
+		output, err := runCmd(uuidCmd, n)
+		log.FailOnError(err, "error getting uuid for cloudsnap credential")
+		if output == "" {
+			log.FailOnError(fmt.Errorf("cloud cred is not created"), "Check for cloud cred exists?")
+		}
+
+		credUUID := strings.Split(strings.TrimSpace(output), " ")[1]
+		credUUID = strings.ReplaceAll(credUUID, "\"", "")
+		log.Infof("Got Cred UUID: %s", credUUID)
+
+		isDMthin, err := IsDMthin()
+		log.FailOnError(err, "Failed to check if the cluster is DMTHIN")
+		if !isDMthin {
+			Skip("Cluster is not DMTHIN so skipping the test")
+		}
+
+		contexts = make([]*scheduler.Context, 0)
+		policyNameList := []string{"localintervalpolicy", "intervalpolicy"}
+		stepLog = "Create schedule policy"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, policyName := range policyNameList {
+				schedPolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
+				if err != nil {
+					log.InfoD("Creating a interval schedule policy %v with interval %v minutes", policyName, interval)
+					schedPolicy = &storkv1.SchedulePolicy{
+						ObjectMeta: meta_v1.ObjectMeta{
+							Name: policyName,
+						},
+						Policy: storkv1.SchedulePolicyItem{
+							Interval: &storkv1.IntervalPolicy{
+								Retain:          storkv1.Retain(retain),
+								IntervalMinutes: interval,
+							},
+						}}
+
+					_, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
+					log.FailOnError(err, fmt.Sprintf("error creating a SchedulePolicy [%s]", policyName))
+				}
+			}
+		})
+
+		appList = Inst().AppList
+		Inst().AppList = []string{"fio-cloudsnap", "fio-fastpath-repl1"}
+		stepLog = "schedule the applications and validate"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("dmthinincrementalexpand-%d", i))...)
+			}
+			ValidateApplications(contexts)
+		})
+
+		defer func() {
+			Inst().AppList = appList
+		}()
+
+		stepLog = "Verify that snapshots are happening"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				var appVolumes []*volume.Volume
+				var err error
+				appNamespace := ctx.App.Key + "-" + ctx.UID
+				log.Infof("Namespace: %v", appNamespace)
+				stepLog = fmt.Sprintf("Getting app volumes for volume %s", ctx.App.Key)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					appVolumes, err = Inst().S.GetVolumes(ctx)
+					log.FailOnError(err, "error getting volumes for [%s]", ctx.App.Key)
+					dash.VerifyFatal(len(appVolumes) >= 1, true, "There should be atleast one volume to proceed with taking snapshot")
+				})
+				log.Infof("Got volume count : %v", len(appVolumes))
+
+				for _, v := range appVolumes {
+					snapshotScheduleName := v.Name + "-interval-schedule"
+					log.InfoD("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
+
+					var latestSnapshot *storkv1.ScheduledVolumeSnapshotStatus
+					// Polling for the new snapshot
+					_, err = task.DoRetryWithTimeout(func() (interface{}, bool, error) {
+						resp, err := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
+						if err != nil {
+							return nil, false, fmt.Errorf("error getting snapshot schedule for %s, volume:%s in namespace %s", snapshotScheduleName, v.Name, v.Namespace)
+						}
+						if len(resp.Status.Items) == 0 {
+							return nil, true, fmt.Errorf("waiting for new snapshot schedules for %s, volume:%s in namespace %s", snapshotScheduleName, v.Name, v.Namespace)
+						}
+
+						// Find the latest snapshot
+						for _, item := range resp.Status.Items {
+							for _, status := range item {
+								if latestSnapshot == nil || status.CreationTimestamp.After(latestSnapshot.CreationTimestamp.Time) {
+									latestSnapshot = status
+								}
+							}
+						}
+
+						if latestSnapshot != nil {
+							return latestSnapshot, false, nil
+						}
+						return nil, true, fmt.Errorf("latest snapshot not found")
+					}, time.Duration(15*interval)*defaultCommandTimeout, defaultReadynessTimeout)
+					log.FailOnError(err, "Failed to get a latest snapshot")
+
+					log.Infof("Latest snapshot %s for volume: %s", latestSnapshot.Name, v.Name)
+				}
+			}
+		})
+
+		stepLog = "Trigger the RESIZE_TYPE_RESIZE_DISK or RESIZE_TYPE_AUTO operation for incremental pool expansion"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			maxLimit := uint64(15)
+			maxLimitSizeInBytes := maxLimit * units.TiB
+			maxLimitSizeInGiB := maxLimitSizeInBytes / units.GiB
+
+			// pick the coordinator nodes for the apps
+			for _, ctx := range contexts {
+				vols, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "Failed to get volumes for app %s", ctx.App.Key)
+				vol := vols[0]
+				attachedNode, err := Inst().V.GetNodeForVolume(vol, 1*time.Minute, 5*time.Second)
+				log.FailOnError(err, "Failed to Get Attached node for volume [%v]", vol.ID)
+				log.Infof("The coordinator node for app [%v] is [%s]", ctx.App.Key, attachedNode.Name)
+				coordinatorNodes = append(coordinatorNodes, *attachedNode)
+			}
+
+			// randomly select a coordinator node to get one pool on it
+			randGen := rand.New(rand.NewSource(time.Now().UnixNano()))
+			randomIndex := randGen.Intn(len(coordinatorNodes))
+			selectedNode := coordinatorNodes[randomIndex]
+			log.Infof("Randomly selected coordinator node: %s", selectedNode.Name)
+
+			// get pools of selected coordinator node
+			poolIDs, err := GetAllPoolsOnNode(selectedNode.Id)
+			log.FailOnError(err, "failed to get all pools on node [%s]", selectedNode.Id)
+			log.Infof("Pool Ids of the node [%v]", poolIDs)
+			// selecting one pool to resize
+			poolIDToResize = poolIDs[0]
+			log.Infof("Pool Id to resize [%v]", poolIDs)
+
+			// map to store the method of resize on dmthin
+			poolResizeMethod := map[api.SdkStoragePool_ResizeOperationType]string{
+				api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK: "resize disk",
+				api.SdkStoragePool_RESIZE_TYPE_AUTO:        "auto",
+			}
+			resizeMethodList := make([]api.SdkStoragePool_ResizeOperationType, 0, len(poolResizeMethod))
+			for rm := range poolResizeMethod {
+				resizeMethodList = append(resizeMethodList, rm)
+			}
+
+			for {
+				// random pool expansion method on dmthin from the map
+				randomResizeMethodIndex = rand.Intn(len(poolResizeMethod))
+				poolToResize = getStoragePool(poolIDToResize)
+				log.Infof(fmt.Sprintf("Pool going to resize is UUID: [%s]", poolIDToResize))
+				originalSizeInBytes = poolToResize.TotalSize
+				targetSizeInBytes = originalSizeInBytes + 1*units.TiB
+				targetSizeGiB = targetSizeInBytes / units.GiB
+				log.Infof("targetSizeGiB [%v] and resizeMethod [%v]", targetSizeGiB, poolResizeMethod[resizeMethodList[randomResizeMethodIndex]])
+
+				if targetSizeGiB >= maxLimitSizeInGiB {
+					// pool should not expand beyond maximum limit
+					err := Inst().V.ExpandPool(poolIDToResize, resizeMethodList[randomResizeMethodIndex], targetSizeGiB, true)
+					dash.VerifyFatal(strings.Contains(err.Error(), "cannot be expanded beyond maximum size 15 TiB"), true, fmt.Sprintf("Pool expansion beyond the maximum limit with Resize type %v failed?", poolResizeMethod[resizeMethodList[randomResizeMethodIndex]]))
+					break
+				}
+
+				triggerPoolExpansion(poolIDToResize, targetSizeGiB, resizeMethodList[randomResizeMethodIndex])
+				resizeErr = waitForOngoingPoolExpansionToComplete(poolIDToResize)
+				dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Pool expansion with Resize type %v succeed?", poolResizeMethod[resizeMethodList[randomResizeMethodIndex]]))
+				verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
+			}
+		})
+
+		stepLog = "Validate and destroy applications"
+		Step(stepLog, func() {
+			for _, policyName := range policyNameList {
+				err := storkops.Instance().DeleteSchedulePolicy(policyName)
+				log.FailOnError(err, fmt.Sprintf("error deleting a SchedulePolicy [%s]", policyName))
+			}
+			appsValidateAndDestroy(contexts)
+		})
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
 	})
 })
