@@ -2227,6 +2227,8 @@ var _ = Describe("{AddNewPoolWithPxRestart}", Label("p1", "hal_ops_disruption", 
 		stepLog = "verify the Px status"
 		Step(stepLog, func() {
 			log.Info(stepLog)
+			err = Inst().V.WaitDriverUpOnNode(selectedNode, 10*time.Minute)
+			log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", selectedNode.Name))
 			pxReady := Inst().V.IsPxReadyOnNode(selectedNode)
 			dash.VerifyFatal(pxReady, true, fmt.Sprintf("expected Px status response to be true but received false"))
 
