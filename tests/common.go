@@ -375,6 +375,12 @@ const (
 	defaultValidateDeployRetryInterval    = 30 * time.Second
 	defaultValidateUninstallTimeout       = 15 * time.Minute
 	defaultValidateUninstallRetryInterval = 30 * time.Second
+	HashicorpVault                        = "hashicorpvault"
+	Azure                                 = "azure"
+	Aws                                   = "aws"
+	TokenAuth                             = "token_authentication"
+	KubernetesAuth                        = "kubernetes_authentication"
+	AppRoleAuth                           = "appRole_authentication"
 )
 
 // Dashboard params
@@ -768,6 +774,74 @@ type InitParams struct {
 	CollectEvents bool
 }
 
+type KMSConfig struct {
+	RequiredEnvVars []string
+}
+
+var envVarConfigForKMS = map[string]map[string]KMSConfig{
+	HashicorpVault: {
+		TokenAuth:      {RequiredEnvVars: []string{"VAULT_ADDR", "VAULT_TOKEN"}},
+		KubernetesAuth: {RequiredEnvVars: []string{"VAULT_ADDR", "VAULT_AUTH_METHOD", "VAULT_AUTH_KUBERNETES_ROLE"}},
+		AppRoleAuth:    {RequiredEnvVars: []string{"VAULT_ADDR", "VAULT_AUTH_METHOD", "VAULT_APPROLE_ROLE_ID", "VAULT_APPROLE_SECRET_ID"}},
+	},
+	Azure: {
+		"default": {RequiredEnvVars: []string{"AZURE_VAULT_URL", "AZURE_TENANT_ID", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET"}},
+	},
+	Aws: {
+		"default": {RequiredEnvVars: []string{"AWS_REGION", "AWS_ACCESS_KEY", "AWS_SECRET_KEY"}},
+	},
+}
+
+// getEnvVarsForKMSAuthentication return all the environment variable used to authenticate KMS objects
+func getEnvVarsForKMSAuthentication(KMSObjectType, authMethod string) (map[string]string, error) {
+	data := make(map[string]string)
+
+	authConfigs, exists := envVarConfigForKMS[KMSObjectType]
+	if !exists {
+		return nil, fmt.Errorf("unknown KMSObjectType: %s", KMSObjectType)
+	}
+
+	config, methodExists := authConfigs[authMethod]
+	if !methodExists {
+		return nil, fmt.Errorf("unknown authentication method: %s for KMSObjectType: %s", authMethod, KMSObjectType)
+	}
+
+	for _, env := range config.RequiredEnvVars {
+		value := os.Getenv(env)
+		if value == "" {
+			return nil, fmt.Errorf("environment variable %s is not set", env)
+		}
+		data[env] = value
+	}
+	return data, nil
+}
+
+// CreateKMSSecret creates a Kubernetes secret with the provided data
+func CreateKMSSecret(KMSObjectType, authMethod, name, namespace string) error {
+	log.Infof("Creating secret %s in namespace %s for KMS object %s using authentication method %s", name, namespace, KMSObjectType, authMethod)
+
+	data, err := getEnvVarsForKMSAuthentication(KMSObjectType, authMethod)
+	if err != nil {
+		return fmt.Errorf("failed to get environment variables for KMS authentication: %v", err)
+	}
+
+	secretObj := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		StringData: data,
+		Type:       corev1.SecretTypeOpaque,
+	}
+
+	log.Infof("Creating Kubernetes secret %s", name)
+	_, err = core.Instance().CreateSecret(secretObj)
+	if err != nil {
+		return fmt.Errorf("failed to create Kubernetes secret: %v", err)
+	}
+
+	return nil
+}
 func InitInstanceWithParams(params InitParams) {
 	var err error
 	var token string

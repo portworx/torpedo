@@ -907,6 +907,10 @@ spec:
       value: "${NODEPOOL_MAX_SURGE}"
     - name: NODEPOOL_NODE_DRAIN_GRACE_PERIOD
       value: "${NODEPOOL_NODE_DRAIN_GRACE_PERIOD}"
+    - name: VAULT_ADDR
+      value: "${VAULT_ADDR}"
+    - name: VAULT_TOKEN
+      value: "${VAULT_TOKEN}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
