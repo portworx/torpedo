@@ -8769,7 +8769,7 @@ func TriggerCsiSnapShot(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		if !isCsiVolumeSnapshotClassExist {
 			log.InfoD("Creating csi volume snapshot class")
 			snapShotClassName := PureSnapShotClass + time.Now().Format("01-02-15h04m05s")
-			if volSnapshotClass, err = Inst().S.CreateCsiSnapshotClass(snapShotClassName, "Delete"); err != nil {
+			if volSnapshotClass, err = Inst().S.CreateCsiSnapshotClass(snapShotClassName, "Delete", "false"); err != nil {
 				log.Errorf("Create volume snapshot class failed with error: [%v]", err)
 				UpdateOutcome(event, err)
 			}
@@ -14846,7 +14846,7 @@ func TriggerFadaSimultaneousSnapshots(contexts *[]*scheduler.Context, recordChan
 		if !isCsiVolumeSnapshotClassExist && Inst().S.String() != openshift.SchedName {
 			log.InfoD("Creating csi volume snapshot class")
 			snapShotClassName = PureSnapShotClass + time.Now().Format("01-02-15h04m05s")
-			if volSnapshotClass, err = Inst().S.CreateCsiSnapshotClass(snapShotClassName, "Delete"); err != nil {
+			if volSnapshotClass, err = Inst().S.CreateCsiSnapshotClass(snapShotClassName, "Delete", "false"); err != nil {
 				log.Errorf("Create volume snapshot class failed with error: [%v]", err)
 				UpdateOutcome(event, err)
 			}
@@ -16419,7 +16419,7 @@ func TriggerGenericColdAddDiskToKubevirtVM(contexts *[]*scheduler.Context, recor
 	})
 }
 
-//TriggerKVDBNodePXStopAndStart, Stops PX on KVDB node and make sure the stopped node is no longer a KVDB member
+// TriggerKVDBNodePXStopAndStart, Stops PX on KVDB node and make sure the stopped node is no longer a KVDB member
 func TriggerKVDBNodePXStopAndStart(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	defer endLongevityTest()

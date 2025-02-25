@@ -8656,18 +8656,21 @@ func (k *K8s) restoreCsiSnapshot(
 }
 
 // CreateCsiSnapshotClass creates csi volume snapshot class
-func (k *K8s) CreateCsiSnapshotClass(snapClassName string, deleionPolicy string) (*volsnapv1.VolumeSnapshotClass, error) {
+func (k *K8s) CreateCsiSnapshotClass(snapClassName string, deleionPolicy string, defaultClass string) (*volsnapv1.VolumeSnapshotClass, error) {
 	return k.CreateCSISnapshotClass(scheduler.CSISnapshotClassCreateRequest{
 		SnapClassName:  snapClassName,
 		DeletionPolicy: deleionPolicy,
-	})
+	}, defaultClass)
 }
 
-func (k *K8s) CreateCSISnapshotClass(snapshotClassCreateRequest scheduler.CSISnapshotClassCreateRequest) (*volsnapv1.VolumeSnapshotClass, error) {
+func (k *K8s) CreateCSISnapshotClass(snapshotClassCreateRequest scheduler.CSISnapshotClassCreateRequest, defaultClass string) (*volsnapv1.VolumeSnapshotClass, error) {
 	var err error
+	if defaultClass == "" {
+		defaultClass = "flase"
+	}
 	var annotation = make(map[string]string)
 	var volumeSnapClass *volsnapv1.VolumeSnapshotClass
-	annotation["snapshot.storage.kubernetes.io/is-default-class"] = "true"
+	annotation["snapshot.storage.kubernetes.io/is-default-class"] = defaultClass
 
 	v1obj := metav1.ObjectMeta{
 		Name:        snapshotClassCreateRequest.SnapClassName,

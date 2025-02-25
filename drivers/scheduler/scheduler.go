@@ -427,10 +427,10 @@ type Driver interface {
 
 	// CreateCsiSnapshotClass create csi snapshot class
 	// Deprecated, please use function below
-	CreateCsiSnapshotClass(snapClassName string, deleionPolicy string) (*volsnapv1.VolumeSnapshotClass, error)
+	CreateCsiSnapshotClass(snapClassName string, deleionPolicy string, defaultClass string) (*volsnapv1.VolumeSnapshotClass, error)
 
 	// CreateCSISnapshotClass create csi snapshot class
-	CreateCSISnapshotClass(snapshotClassCreateRequest CSISnapshotClassCreateRequest) (*volsnapv1.VolumeSnapshotClass, error)
+	CreateCSISnapshotClass(snapshotClassCreateRequest CSISnapshotClassCreateRequest, defaultClass string) (*volsnapv1.VolumeSnapshotClass, error)
 
 	// CreateVolumeSnapshotClasses creates a volume snapshot class
 	CreateVolumeSnapshotClasses(snapClassName string, provisioner string, isDefault bool, deletePolicy string) (*volsnapv1.VolumeSnapshotClass, error)

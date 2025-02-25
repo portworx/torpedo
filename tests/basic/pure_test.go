@@ -6044,7 +6044,7 @@ var _ = Describe("{CreateCsiSnapshotsforFADAandDelete}", Label("p0", "positive",
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			snapShotClassName := PureSnapShotClass
-			volSnapshotClass, err = Inst().S.CreateCsiSnapshotClass(snapShotClassName, "Delete")
+			volSnapshotClass, err = Inst().S.CreateCsiSnapshotClass(snapShotClassName, "Delete", "false")
 			if err != nil {
 				isSnapshotClassExists := strings.Contains(err.Error(), "already exists")
 				dash.VerifyFatal(isSnapshotClassExists, true, "Failed to create volume snapshot class")
@@ -9402,7 +9402,7 @@ var _ = Describe("{CreatePodsUsingClonewithMT}", func() {
 			log.FailOnError(err, fmt.Sprintf("Failed to create deployment [%v] ", deploymentNameOutsideRealm))
 			_, err = CreateNginxWorkload("fada-pvc-normal", 1, deploymentNameNormal, nsNormal, storageClassNameNormal)
 			log.FailOnError(err, fmt.Sprintf("Failed to create deployment [%v] ", deploymentNameNormal))
-			volSnapshotClass, err := Inst().S.CreateCsiSnapshotClass(snapShotClassName, "Delete")
+			volSnapshotClass, err := Inst().S.CreateCsiSnapshotClass(snapShotClassName, "Delete", "false")
 			if err != nil {
 				if strings.Contains(err.Error(), "default snapshot class") {
 					snapShotClassName, err = GetDefaultSnapshotClass()
@@ -9745,7 +9745,7 @@ var _ = Describe("{DeployedApplicationsInMultipleTenants}", func() {
 		Step(stepLog, func() {
 			log.InfoD(itLog)
 			snapShotClassName := PureSnapShotClass
-			volSnapshotClass, err = Inst().S.CreateCsiSnapshotClass(snapShotClassName, "Delete")
+			volSnapshotClass, err = Inst().S.CreateCsiSnapshotClass(snapShotClassName, "Delete", "false")
 			if err != nil {
 				isSnapshotClassExists := strings.Contains(err.Error(), "already exists")
 				dash.VerifyFatal(isSnapshotClassExists, true, "Failed to create volume snapshot class")

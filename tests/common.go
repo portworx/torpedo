@@ -1846,7 +1846,7 @@ func ValidateCSISnapshotAndRestore(ctx *scheduler.Context, errChan ...*chan erro
 		var err error
 		timestamp := strconv.Itoa(int(time.Now().Unix()))
 		snapShotClassName := PureSnapShotClass + "-" + timestamp
-		if _, err := Inst().S.CreateCsiSnapshotClass(snapShotClassName, "Delete"); err != nil {
+		if _, err := Inst().S.CreateCsiSnapshotClass(snapShotClassName, "Delete", "false"); err != nil {
 			log.Errorf("Create volume snapshot class failed with error: [%v]", err)
 			expect(err).NotTo(haveOccurred(), "failed to create snapshot class")
 		}
@@ -1937,7 +1937,7 @@ func ValidatePureVolumeLargeNumOfClones(ctx *scheduler.Context, errChan ...*chan
 		var err error
 		timestamp := strconv.Itoa(int(time.Now().Unix()))
 		snapShotClassName := PureSnapShotClass + "." + timestamp
-		if _, err := Inst().S.CreateCsiSnapshotClass(snapShotClassName, "Delete"); err != nil {
+		if _, err := Inst().S.CreateCsiSnapshotClass(snapShotClassName, "Delete", "false"); err != nil {
 			log.Errorf("Create volume snapshot class failed with error: [%v]", err)
 			expect(err).NotTo(haveOccurred(), "failed to create snapshot class")
 		}

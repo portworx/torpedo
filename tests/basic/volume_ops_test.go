@@ -1578,7 +1578,7 @@ var _ = Describe("{CSIOnlyTestCloudSnapshot}", func() {
 				SnapClassName:  snapShotClassName,
 				DeletionPolicy: "Delete",
 				Parameters:     map[string]string{"csi.openstorage.org/snapshot-type": "cloud"},
-			})
+			}, "false")
 			if err != nil {
 				isSnapshotClassExists := strings.Contains(err.Error(), "already exists")
 				dash.VerifyFatal(isSnapshotClassExists, true, "Check if snapshot exists")
@@ -6127,7 +6127,7 @@ func createVolumeSnapshotClass(snapShotClassName string, params map[string]strin
 		SnapClassName:  snapShotClassName,
 		DeletionPolicy: "Delete",
 		Parameters:     params,
-	})
+	}, "false")
 	if err != nil {
 		isSnapshotClassExists := strings.Contains(err.Error(), "already exists")
 		dash.VerifyFatal(isSnapshotClassExists, true, "Check if snapshot class exists")

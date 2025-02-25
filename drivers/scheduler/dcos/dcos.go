@@ -41,7 +41,7 @@ type dcos struct {
 	volDriverName string
 }
 
-func (d *dcos) CreateCSISnapshotClass(snapshotClassCreateRequest scheduler.CSISnapshotClassCreateRequest) (*volsnapv1.VolumeSnapshotClass, error) {
+func (d *dcos) CreateCSISnapshotClass(snapshotClassCreateRequest scheduler.CSISnapshotClassCreateRequest, defaultClass string) (*volsnapv1.VolumeSnapshotClass, error) {
 	//CreateCsiSnapshotClass is not supported
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -1003,7 +1003,7 @@ func (d *dcos) ValidateTopologyLabel(ctx *scheduler.Context) error {
 	}
 }
 
-func (d *dcos) CreateCsiSnapshotClass(snapClassName string, deleionPolicy string) (*volsnapv1.VolumeSnapshotClass, error) {
+func (d *dcos) CreateCsiSnapshotClass(snapClassName string, deleionPolicy string, defaultClass string) (*volsnapv1.VolumeSnapshotClass, error) {
 	//CreateCsiSnapshotClass is not supported
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
