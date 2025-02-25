@@ -2975,18 +2975,31 @@ func (d *portworx) WaitForKVDBToBeHealthy(n node.Node, retryInterval time.Durati
 
 func (d *portworx) WaitDriverDownOnNode(n node.Node) error {
 	t := func() (interface{}, bool, error) {
-
+		nodeDownErrs := []string{"connection refused", "i/o timeout"}
+	addrLoop:
 		for _, addr := range n.Addresses {
 			err := d.testAndSetEndpointUsingNodeIP(addr)
-			if (err == nil || !strings.Contains(err.Error(), "connect: connection refused")) && (err == nil || !strings.Contains(err.Error(), "i/o timeout")) {
-				return "", true, &ErrFailedToWaitForPx{
-					Node:  n,
-					Cause: "px is not yet down on node",
+			if err != nil {
+				for _, nodeDownErr := range nodeDownErrs {
+					if strings.Contains(err.Error(), nodeDownErr) {
+						log.Infof("Node %s addr %s is down as expected: %v", n.Name, addr, err)
+						continue addrLoop
+					}
 				}
 			}
-			log.Warn(err.Error())
+			msg := ""
+			if err == nil {
+				msg = fmt.Sprintf("PX on node [%s] is not yet down: addr %s is still up", n.Name, addr)
+			} else {
+				msg = fmt.Sprintf("PX on node [%s] is not yet down: testing addr %s returned an unexptected error: %v",
+					n.Name, addr, err)
+			}
+			log.Warnf(msg)
+			return "", true, &ErrFailedToWaitForPx{
+				Node:  n,
+				Cause: msg,
+			}
 		}
-
 		log.Infof("PX on node [%s] is now down.", n.Name)
 		return "", false, nil
 	}
