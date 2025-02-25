@@ -9283,6 +9283,12 @@ func TriggerValidateDeviceMapperCleanup(contexts *[]*scheduler.Context, recordCh
 			UpdateOutcome(event, err)
 		}
 
+		kvdbNodes, err := GetAllKvdbNodes()
+		if err != nil {
+			log.Error(err.Error())
+			UpdateOutcome(event, err)
+		}
+
 		for _, n := range node.GetStorageDriverNodes() {
 			log.InfoD("Validating the node: %v", n.Name)
 			expectedDevMapperCount := 0
@@ -9290,6 +9296,14 @@ func TriggerValidateDeviceMapperCleanup(contexts *[]*scheduler.Context, recordCh
 			if err != nil {
 				log.Error(err.Error())
 				UpdateOutcome(event, err)
+			}
+
+			// Increasing the count by one if node is KVDB node
+			for _, kvdbNode := range kvdbNodes {
+				if kvdbNode.ID == n.Id {
+					pureVolAttachedMap[n.Name] += 1
+					break
+				}
 			}
 
 			if storageNode != nil {
