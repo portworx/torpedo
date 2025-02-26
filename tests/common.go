@@ -9975,6 +9975,9 @@ func ExitNodesFromMaintenanceMode() error {
 // GetPoolsDetailsOnNode returns all pools present in the Nodes
 func GetPoolsDetailsOnNode(n *node.Node) ([]*opsapi.StoragePool, error) {
 	var poolDetails []*opsapi.StoragePool
+	if n.VolDriverNodeID == "" {
+		return nil, fmt.Errorf("node does not have volume drive id")
+	}
 
 	// Refreshing Node Driver to make sure all changes done to the nodes are refreshed
 	err := Inst().V.RefreshDriverEndpoints()
@@ -9984,11 +9987,16 @@ func GetPoolsDetailsOnNode(n *node.Node) ([]*opsapi.StoragePool, error) {
 	// updating the node info after refresh
 
 	stDriverNodes := node.GetStorageDriverNodes()
+
 	for _, stDriverNode := range stDriverNodes {
 		if stDriverNode.VolDriverNodeID == n.VolDriverNodeID {
 			n = &stDriverNode
 			break
 		}
+	}
+
+	if n == nil {
+		return nil, fmt.Errorf("node not found")
 	}
 
 	if node.IsStorageNode(*n) == false {

@@ -1305,6 +1305,18 @@ var _ = Describe("{PoolAddDriveVolResize}", Label("p0", "positive", "pool_ops", 
 		}
 		volSelected, err := GetVolumeWithMinimumSize(contexts, 2)
 		log.FailOnError(err, "error identifying volume")
+		currRep, err := Inst().V.GetReplicationFactor(volSelected)
+		log.FailOnError(err, fmt.Sprintf("err getting repl factor for  vol : %s", volSelected.Name))
+		opts := volume.Options{
+			ValidateReplicationUpdateTimeout: replicationUpdateTimeout,
+		}
+		newRep := currRep
+		if currRep == 3 {
+			newRep = currRep - 1
+			err = Inst().V.SetReplicationFactor(volSelected, newRep, nil, nil, true, opts)
+			log.FailOnError(err, fmt.Sprintf("err setting repl factor  to %d for  vol : %s", newRep, volSelected.Name))
+		}
+
 		appVol, err := Inst().V.InspectVolume(volSelected.ID)
 		log.FailOnError(err, fmt.Sprintf("err inspecting vol : %s", volSelected.ID))
 		volNodes := appVol.ReplicaSets[0].Nodes
@@ -1354,17 +1366,6 @@ var _ = Describe("{PoolAddDriveVolResize}", Label("p0", "positive", "pool_ops", 
 		stepLog = "Expand volume to the expanded pool"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			currRep, err := Inst().V.GetReplicationFactor(volSelected)
-			log.FailOnError(err, fmt.Sprintf("err getting repl factor for  vol : %s", volSelected.Name))
-			opts := volume.Options{
-				ValidateReplicationUpdateTimeout: replicationUpdateTimeout,
-			}
-			newRep := currRep
-			if currRep == 3 {
-				newRep = currRep - 1
-				err = Inst().V.SetReplicationFactor(volSelected, newRep, nil, nil, true, opts)
-				log.FailOnError(err, fmt.Sprintf("err setting repl factor  to %d for  vol : %s", newRep, volSelected.Name))
-			}
 			log.InfoD(fmt.Sprintf("setting repl factor  to %d for  vol : %s", newRep+1, volSelected.Name))
 			err = Inst().V.SetReplicationFactor(volSelected, newRep+1, []string{stNode.Id}, []string{selectedPool.Uuid}, true, opts)
 			log.FailOnError(err, fmt.Sprintf("err setting repl factor  to %d for  vol : %s", newRep+1, volSelected.Name))

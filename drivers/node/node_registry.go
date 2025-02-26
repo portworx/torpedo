@@ -106,7 +106,7 @@ func GetStorageDriverNodes() []Node {
 
 // IsStorageNode returns true if the node is a storage node, false otherwise
 func IsStorageNode(n Node) bool {
-	return len(n.Pools) > 0
+	return n.Pools != nil && len(n.Pools) > 0
 }
 
 // GetStorageNodes gets all the nodes with non-empty StoragePools

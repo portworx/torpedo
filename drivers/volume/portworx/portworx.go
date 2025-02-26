@@ -3629,7 +3629,6 @@ func (d *portworx) testAndSetEndpoint(endpoint string, sdkport, apiport int32) e
 	} else {
 		return err
 	}
-	log.Infof("Using %v as endpoint for portworx volume driver", pxEndpoint)
 
 	return nil
 }
@@ -4788,7 +4787,6 @@ func (d *portworx) GetKvdbMembers(n node.Node) (map[string]*torpedovolume.Metada
 		url = netutil.MakeURL("http://", endpoint, int(pxdRestPort))
 	}
 	// TODO replace by sdk call whenever it is available
-	log.Debugf("Url to call %v", url)
 	c, err := client.NewClient(url, "", "")
 	if err != nil {
 		return nil, err
