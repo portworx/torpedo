@@ -5006,7 +5006,7 @@ var _ = Describe("{StorageFullPoolResize}", Label("p0", "positive", "px_ops", "p
 func storageFullPoolExpansion(testName string) {
 
 	operation := api.SdkStoragePool_RESIZE_TYPE_AUTO
-	if testName == "StorageFullPoolResize" {
+	if testName == "StorageFullPoolResize" || testName == "StorageFullPoolResizeWithPxRestart" {
 		operation = api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK
 	}
 	if testName == "StorageFullPoolAddDisk" {
@@ -5276,6 +5276,7 @@ func storageFullPoolExpansion(testName string) {
 	log.FailOnError(err, "error getting pool with UUID [%s]", offlinePoolUUID)
 
 	var expandedExpectedPoolSize uint64
+	stepLog = fmt.Sprintf("Perform pool expansion on [%s]", selectedPool.Uuid)
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
 		expandedExpectedPoolSize = (selectedPool.TotalSize / units.GiB) * 2
@@ -5286,6 +5287,26 @@ func storageFullPoolExpansion(testName string) {
 		err = Inst().V.ExpandPool(selectedPool.Uuid, operation, expandedExpectedPoolSize, true)
 		dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 	})
+
+	if testName == strings.ToLower("StorageFullPoolResizeWithPxRestart") {
+		sleepTime := rand.Intn(100) + 1
+		time.Sleep(time.Second * (time.Duration(sleepTime)))
+		stepLog = fmt.Sprintf("Restart Portworx after [%d] seconds", sleepTime)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := Inst().N.Systemctl(*selectedNode, "portworx.service", node.SystemctlOpts{
+				Action: "restart",
+				ConnectionOpts: node.ConnectionOpts{
+					Timeout:         5 * time.Minute,
+					TimeBeforeRetry: 10 * time.Second,
+				}})
+			log.FailOnError(err, fmt.Sprintf("restart portworx failed on node [%v]", selectedNode.Name))
+			log.Info("portworx restart succeed")
+			err = Inst().V.WaitDriverUpOnNode(*selectedNode, Inst().DriverStartTimeout)
+			log.FailOnError(err, fmt.Sprintf("failed to wait for driver up on node [%v]", selectedNode.Name))
+
+		})
+	}
 	stepLog = fmt.Sprintf("Ensure that pool %s expansion is successful", selectedPool.Uuid)
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
@@ -15517,6 +15538,32 @@ var _ = Describe("{StorageFullPoolResizeWithPxkill}", Label("p0", "staging", "po
 	})
 })
 
+var _ = Describe("{StorageFullPoolResizeWithPxRestart}", Label("p0", "staging", "positive", "px_ops", "pool_ops", "PoolExpand", "ResizeDisk", "Throttling"), func() {
+
+	/*
+			step1: Deploy apps to do IOs
+			step2: feed p1 size GB I/O on the volume
+			step3: Wait for the pool to become full
+			step4: Expand pool with resize disk option
+		    step5: With some random delay force restart the portworx
+			step6: Check if pool is successfully expanded and apps are running.
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("StorageFullPoolResizeWithPxRestart", "Feed a pool full, then expand the pool using resize-disk with restart px ", nil, testrailID)
+	})
+	var contexts = make([]*scheduler.Context, 0)
+	stepLog := "Create vols and make pool full and resize disk and px restart"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		storageFullPoolExpansion("StorageFullPoolResizeWithPxRestart")
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
 var _ = Describe("{HAIncreaseMetadataPoolExpandAddDisk}", Label("p0", "positive", "px_vol_ops", "pool_ops", "PoolExpand", "HA_Increase_Decrease"), func() {
 	/*
 		https://purestorage.atlassian.net/browse/HAZEL-1025
