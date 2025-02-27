@@ -1,0 +1,52 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: volume-secrets
+type: Opaque
+data:
+  vdbench-secret: dmRiZW5jaCBzaGFyZWR2NCByb2NrcyEK
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: vdbench-sc-sharedv4
+provisioner: kubernetes.io/portworx-volume
+parameters:
+  placement_strategy: repl-affinity-vps
+  repl: "2"
+  io_profile: "db_remote"
+  sharedv4: "true"
+  nodiscard: "true"
+  mount_options: "nodiscard=true"
+  sharedv4_svc_type: ""
+  journal: "true"
+allowVolumeExpansion: true
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: vdbench-pvc-enc-sharedv4
+  annotations:
+    px/secret-name: volume-secrets
+    px/secret-namespace: "_NAMESPACE_"
+    px/secret-key: vdbench-secret
+    px/secure: "true"
+spec:
+  storageClassName: vdbench-sc-sharedv4
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 50Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: vdbench-pvc-output-sv4
+spec:
+  storageClassName: vdbench-sc-sharedv4
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi

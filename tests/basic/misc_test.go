@@ -6028,3 +6028,207 @@ var _ = Describe("{StopPXOnKVDBNodeAndNewKVDBNodeWillBeUp}", Label("staging", "p
 	})
 
 })
+
+var _ = Describe("{KVDBFailoverEnsureIOContinuity}", Label("staging", "kvdb_ops", "p1", "negative"), func() {
+	/*
+	   Ticket id: https://purestorage.atlassian.net/browse/HAZEL-1058
+	   Prepare a 7 node px cluster with internal kvdb set.
+	   Let's assume node 1,2 and 3 are internal kvdb nodes.
+	   Create a volume with repl-2 on nodes 5 and 6.
+	   Mount volume and start IOs on the volume.
+	   Reboot internal kvdb nodes that is node 1, 2 and 3 one by one.
+	   validate the IO continunity
+	*/
+
+	var testrailID = 0
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("KVDBFailoverEnsureWriteContinuity", "Verify kvdb-loss with internal-kvdb with repl-2, sharedv4 volume on non-kvdb nodes.", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+		log.InfoD("Started Torpedo test for KVDB failover write continuity.")
+	})
+	var (
+		contexts             []*scheduler.Context
+		kvdbNode_details     []node.Node
+		NonKvdbMemberNodes   []node.Node
+		iopsVolumes          []*volume.Volume
+		selectednonKvdbNodes []node.Node
+		NonKvdbNodeLabels    = map[string]string{"node-type": "replvps"}
+	)
+
+	stepLog := "Deploy the application in non-KVDB nodes, shut down all KVDB nodes, and validate the application functionality"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		log.InfoD("Retrieving the list of all storage nodes in the cluster.")
+		storagenodes := node.GetStorageNodes()
+		log.Infof("Retrieved all storage nodes [%v]", storagenodes)
+		appList := Inst().AppList
+		cleanup := func() {
+			DestroyApps(contexts, nil)
+			Inst().AppList = appList
+			log.InfoD("Removing the label 'node-type' from the non-KVDB nodes.")
+			for _, non_kvdbnode := range selectednonKvdbNodes {
+				log.Infof("Removing label from non-KVDB node %s", non_kvdbnode.Name)
+				err := Inst().S.RemoveLabelOnNode(non_kvdbnode, "node-type")
+				log.FailOnError(err, "Failed to remove label [%s: %s] on node : [%v]", "node-type", "replvps", non_kvdbnode.Name)
+			}
+			DestroyApps(contexts, nil)
+
+		}
+		defer cleanup()
+
+		log.InfoD("Fetching KVDB nodes from the cluster.")
+		kvdbNodes, err := GetAllKvdbNodes()
+		log.FailOnError(err, "Unable to retrieve KVDB nodes.")
+		for _, kvdbNode := range kvdbNodes {
+			nodeInfo, err := node.GetNodeDetailsByNodeID(kvdbNode.ID)
+			log.FailOnError(err, fmt.Sprintf("Unable to get details for KVDB node ID: %s", kvdbNode.ID))
+			kvdbNode_details = append(kvdbNode_details, nodeInfo)
+		}
+		log.Infof("KVDB node details retrieved: %v", kvdbNode_details)
+		stepLog = "Identifying non-KVDB nodes in the cluster"
+		Step(stepLog, func() {
+			kvdbNodesMap := make(map[string]bool)
+			for _, kvdbnode := range kvdbNode_details {
+				kvdbNodesMap[kvdbnode.GetId()] = true
+			}
+			for _, nonkvdbmembernode := range storagenodes {
+				if _, exists := kvdbNodesMap[nonkvdbmembernode.GetId()]; !exists {
+					NonKvdbMemberNodes = append(NonKvdbMemberNodes, nonkvdbmembernode)
+				}
+			}
+			log.Infof("Selected non-KVDB nodes: %v", NonKvdbMemberNodes)
+		})
+		stepLog := "Assigning labels to selected non-KVDB nodes and deploying the application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			selectednonKvdbNodes = NonKvdbMemberNodes[:2]
+			log.Infof("Selecting the first two non-KVDB nodes for deploying the application. Selected nodes: %v", selectednonKvdbNodes)
+			stepLog = "Deploy an app and validate"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for key, value := range NonKvdbNodeLabels {
+					for _, non_kvdbnode := range selectednonKvdbNodes {
+						err = Inst().S.AddLabelOnNode(non_kvdbnode, key, value)
+						log.FailOnError(err, "error adding label on node [%s]", non_kvdbnode.Name)
+					}
+				}
+				taskName := "nonkvdbnode"
+				namespace := fmt.Sprintf("%s-%d", taskName, time.Now().Unix())
+				context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+					AppKeys:            []string{"vdbench-sharedv4-repl-vps"},
+					CsiAppKeys:         []string{"vdbench-sharedv4-repl-vps"},
+					StorageProvisioner: fmt.Sprintf("%v", portworx.PortworxCsi),
+					Labels:             NonKvdbNodeLabels,
+					Nodes:              selectednonKvdbNodes,
+					Namespace:          namespace,
+				})
+				log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+				contexts = append(contexts, context...)
+
+			})
+
+		})
+		ValidateApplications(contexts)
+		stepLog = "Checking the IO progress for volumes and verifying if they are correctly attached to the selected non-KVDB nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Infof("Waiting for 1 minute to monitor IO progress for volumes.")
+			time.Sleep(1 * time.Minute)
+			for _, eachContext := range contexts {
+				log.Infof("Retrieving volumes for context %v", eachContext.App.Key)
+				vols, err := Inst().S.GetVolumes(eachContext)
+				log.FailOnError(err, "Failed to retrieve volumes for app %s", eachContext.App.Key)
+				log.Infof("Volumes in the cluster: %v", vols)
+				log.Infof("Checking if the volumes are attached to the selected non-KVDB nodes")
+				for _, eachVol := range vols {
+					volumeAttached := false
+					for _, nonKvdbNode := range selectednonKvdbNodes {
+						log.Infof("Checking attachment for volume %v on non-KVDB node %v", eachVol.Name, nonKvdbNode.Name)
+						pxVol, err := Inst().V.InspectVolume(eachVol.ID)
+						log.FailOnError(err, "Unable to inspect the volume in the cluster")
+						log.Infof("Volume inspect status", pxVol)
+						volExists, err := Inst().V.IsVolumeAttachedOnNode(pxVol, nonKvdbNode)
+						log.FailOnError(err, "Error occurred while verifying attachment for volume %v on node %v", eachVol.Name, nonKvdbNode.Name)
+						if volExists {
+							log.Infof("Volume %v is successfully attached to non-KVDB node %v", eachVol.ID, nonKvdbNode.Name)
+							volumeAttached = true
+							break
+						}
+					}
+					if !volumeAttached {
+						err := fmt.Errorf("volume %v is not attached to any of the selected non-KVDB nodes", eachVol.Name)
+						log.FailOnError(err, "Error occurred while verifying volume attachment on non-KVDB nodes")
+					}
+					isIOsInProgress, err := Inst().V.IsIOsInProgressForTheVolume(&node.GetStorageNodes()[0], eachVol.ID)
+					log.FailOnError(err, "Unable to check IO status for volume: %v", eachVol.ID)
+					if isIOsInProgress {
+						iopsVolumes = append(iopsVolumes, eachVol)
+						log.Infof("Volume %v has IO running.", eachVol.Name)
+					}
+				}
+			}
+			log.Infof("List of volumes with IO running: %v", iopsVolumes)
+		})
+
+		stepLog = "Rebooting KVDB nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, nodeToReboot := range kvdbNode_details {
+				log.Infof("Rebooting KVDB node %v", nodeToReboot.Name)
+				err = Inst().N.RebootNode(nodeToReboot,
+					node.RebootNodeOpts{
+						Force: true,
+						ConnectionOpts: node.ConnectionOpts{
+							Timeout:         defaultCommandTimeout,
+							TimeBeforeRetry: defaultCommandRetry,
+						},
+					})
+				log.FailOnError(err, "Failed to reboot KVDB node %v", nodeToReboot.Name)
+				nodeReadyStatus := func() (interface{}, bool, error) {
+					err := Inst().S.IsNodeReady(nodeToReboot)
+					if err != nil {
+						return "", true, err
+					}
+					return "", false, nil
+				}
+
+				log.Infof("Waiting for node %v to come back online.", nodeToReboot.Name)
+				_, err = task.DoRetryWithTimeout(nodeReadyStatus, 10*time.Minute, 30*time.Second)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %v", nodeToReboot.Name))
+			}
+		})
+		stepLog = "Verifying IO progress after kvdbnodereboot"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, v := range iopsVolumes {
+				log.Infof("Verifying IO progress for volume %v after kvdbnodereboot.", v.Name)
+				isIOsInProgress := func() (interface{}, bool, error) {
+					isIOsInProgress, err := Inst().V.IsIOsInProgressForTheVolume(&storagenodes[0], v.ID)
+					if err != nil {
+						return nil, true, fmt.Errorf("Error while checking IO progress for volume [%v]: %v", v.ID, err)
+					}
+
+					if isIOsInProgress {
+						return nil, true, nil
+					} else {
+						return nil, false, nil
+					}
+				}
+				_, err := task.DoRetryWithTimeout(isIOsInProgress, 5*time.Minute, 30*time.Second)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verify IO running on the volume %v after kvdbreboot.", v.Name))
+			}
+		})
+		stepLog = "Validating application state after kvdb node reboot"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			ValidateApplications(contexts)
+		})
+	})
+	JustAfterEach(func() {
+		log.InfoD("Ending Torpedo test for KVDB failover write continuity.")
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
