@@ -15118,3 +15118,21 @@ func WaitForNamespaceDeletion(namespaces []string) error {
 	}
 	return nil
 }
+
+func VerifyStatefulSetCount(statefulSetName, namespace string, readyPodCount int, podStatusTimeout, podStatusRetryTime time.Duration) error {
+	checkPodReadyStatus := func() (interface{}, bool, error) {
+		statefulSet, err := apps.Instance().GetStatefulSet(statefulSetName, namespace)
+		if err != nil {
+			return "", true, err
+		}
+		if statefulSet.Status.ReadyReplicas == int32(readyPodCount) {
+			return "", true, fmt.Errorf("expected at least %d ready replicas but got %d", readyPodCount, statefulSet.Status.ReadyReplicas)
+		}
+		return "", false, nil
+	}
+	_, err := task.DoRetryWithTimeout(checkPodReadyStatus, podStatusTimeout, podStatusRetryTime)
+	if err != nil {
+		return fmt.Errorf("failed to reach the desired number of ready replicas for statefulset %s: %v", statefulSetName, err)
+	}
+	return nil
+}

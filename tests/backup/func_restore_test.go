@@ -138,6 +138,8 @@ var _ = Describe("{TestRestoreResilienceToKeycloakScale}", Label(TestCaseLabelsM
 			dash.VerifyFatal(err, nil, "failed to get Px-Backup namespace")
 			err = ScaleStatefulSetReplicas(KeyCloakStateFulSet, pxbNamespace, scaledDownReplicaCount, 0, PodStatusTimeOut, PodStatusRetryTime)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Scale of: %s with scale count: %d", KeyCloakStateFulSet, scaledDownReplicaCount))
+			err = VerifyStatefulSetCount(KeyCloakStateFulSet, pxbNamespace, 0, PodStatusTimeOut, PodStatusRetryTime)
+			dash.VerifyFatal(err, nil, "Verify scale count after scale down to 0")
 		})
 
 		// 7. Scale up pxcentral-keycloak to actual state
