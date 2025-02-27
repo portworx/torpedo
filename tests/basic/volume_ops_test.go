@@ -7019,6 +7019,152 @@ var _ = Describe("{ValidateVolumeResizeInParallelWithPXKill}", Label("p0", "stag
 	})
 })
 
+var _ = Describe("{ValidateFastpathIOParallelSnapshot}", Label("staging", "p0", "positive", "px_ops"), func() {
+	/*
+	   1. Schedule Fastpath app
+	   2. Create 100 snapshots of a volume with IO in progress and verify it is successful
+	*/
+	var (
+		contexts         []*scheduler.Context
+		volumeSelected   *volume.Volume
+		latestSnapshot   *storkv1.ScheduledVolumeSnapshotStatus
+		appVolumes       []*volume.Volume
+		retain, interval int
+		policyName       string
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("ValidateFastpathIOParallelSnapshot", "Verify test completes with FastPath IO and parallel snapshot", nil, 0)
+	})
+
+	itLog := "Verify test completes with FastPath IO and parallel snapshot"
+	It(itLog, func() {
+		stepLog = "Create local snapshot schedule"
+
+		applist := Inst().AppList
+		defer func() {
+			Inst().AppList = applist
+		}()
+
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			isDMthin, err := IsDMthin()
+			dash.VerifyFatal(err, nil, "error verifying if set up is DMTHIN enabled")
+			dash.VerifyFatal(isDMthin, true, "DMThin/PX-Storev2 is not enabled on underlaying PX cluster. Skipping `ValidateFastpathIOParallelSnapshot` test.")
+
+			policyName = "intervalpolicy"
+			log.Infof("create schedule policy %s", policyName)
+			schedPolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
+			if err != nil {
+				retain = 8
+				interval = 1
+				log.InfoD("Creating a interval schedule policy %v with interval %v minutes", policyName, interval)
+				schedPolicy = &storkv1.SchedulePolicy{
+					ObjectMeta: meta_v1.ObjectMeta{
+						Name: policyName,
+					},
+					Policy: storkv1.SchedulePolicyItem{
+						Interval: &storkv1.IntervalPolicy{
+							Retain:          storkv1.Retain(retain),
+							IntervalMinutes: interval,
+						},
+					}}
+				_, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
+				log.FailOnError(err, fmt.Sprintf("error creating a SchedulePolicy [%s]", policyName))
+				log.Infof("Created a interval schedule policy %s", policyName)
+			}
+		})
+
+		//delete the schedule policy
+		defer func() {
+			err = storkops.Instance().DeleteSchedulePolicy(policyName)
+			log.FailOnError(err, fmt.Sprintf("error deleting a SchedulePolicy [%s]", policyName))
+			log.Infof("Deleted the interval schedule policy %s", policyName)
+		}()
+
+		stepLog := "Schedule fio fastpath app"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			Inst().AppList = []string{"fio-fastpath"}
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("fio-fastpath-%d", i))...)
+			}
+			log.InfoD("Scheduling fio fastpath app succeed")
+			ValidateApplications(contexts)
+		})
+		defer appsValidateAndDestroy(contexts)
+
+		stepLog = "Verify that local snap status and wait for new snapshot"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				appNamespace := ctx.App.Key + "-" + ctx.UID
+				log.Infof("Namespace: %v", appNamespace)
+				stepLog = fmt.Sprintf("Getting app volumes for volume %s", ctx.App.Key)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					appVolumes, err = Inst().S.GetVolumes(ctx)
+					log.FailOnError(err, "error getting volumes for [%s]", ctx.App.Key)
+
+					dash.VerifyFatal(len(appVolumes) >= 1, true, "There should be atleast one volume to proceed with taking snapshot")
+				})
+				log.Infof("Got volume count : %v", len(appVolumes))
+
+				for _, v := range appVolumes {
+					isIOsInProgress, err := Inst().V.IsIOsInProgressForTheVolume(&node.GetStorageNodes()[0], v.ID)
+					log.FailOnError(err, fmt.Sprintf("error in getting the IO status for the volume %s", v.ID))
+
+					if isIOsInProgress {
+						volumeSelected = v
+					}
+				}
+				log.InfoD("Volume selected for taking screenshot is %s ", volumeSelected.Name)
+				snapshotScheduleName := volumeSelected.Name + "-interval-schedule"
+				log.InfoD("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, volumeSelected.Name)
+
+				snapShotCounter := 0
+				for snapShotCounter < 100 {
+					// Polling for the new snapshot
+					_, err = task.DoRetryWithTimeout(func() (interface{}, bool, error) {
+						var newSnapShot *storkv1.ScheduledVolumeSnapshotStatus
+						resp, err := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
+						if err != nil {
+							return nil, false, fmt.Errorf("error getting snapshot schedule for %s, volume:%s in namespace %s", snapshotScheduleName, volumeSelected.Name, volumeSelected.Namespace)
+						}
+						if len(resp.Status.Items) == 0 {
+							return nil, true, fmt.Errorf("waiting for new snapshot schedules for %s, volume:%s in namespace %s", snapshotScheduleName, volumeSelected.Name, volumeSelected.Namespace)
+						}
+
+						// Find the latest snapshot
+						for _, item := range resp.Status.Items {
+							for _, status := range item {
+								if latestSnapshot == nil || status.CreationTimestamp.Time.After(latestSnapshot.CreationTimestamp.Time) {
+									newSnapShot = status
+									latestSnapshot = status
+								}
+							}
+						}
+
+						if newSnapShot != nil {
+							return latestSnapshot, false, nil
+						}
+						return nil, true, fmt.Errorf("latest snapshot not found")
+					}, time.Duration(15*interval)*defaultCommandTimeout, 30*time.Second)
+					log.FailOnError(err, "Failed to get a latest snapshot")
+					log.Infof("Volume snap %d :  %s taken at %v", snapShotCounter, latestSnapshot.Name, latestSnapshot.CreationTimestamp)
+					snapShotCounter++
+				}
+			}
+		})
+	})
+
+	AfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
 // Restore volume from trashcan when one of the replica where volume resides is down.
 var _ = Describe("{RestoreVolumeFromTrashWithReplicaDown}", Label("p0", "positive", "pure_ops", "px_vol_ops", "px_ops", "node_reboot", "trashcan", "staging"), func() {
 	/*
