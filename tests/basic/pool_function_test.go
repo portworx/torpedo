@@ -4196,3 +4196,100 @@ var _ = Describe("{DMthinIncrementalPoolExpand}", Label("p1", "positive", "pool_
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{ValidateVolumeCreationWhenPoolOffline}", Label("staging", "p0", "positive", "px_vol_ops", "pool_ops"), func() {
+	/*
+		https://purestorage.atlassian.net/browse/HAZEL-999
+		1. Deploy application with IO
+		2. Wait for pool full/offline
+		3. volume creation should fail on the node where the pool is offline
+	*/
+
+	var (
+		volumeName      = fmt.Sprintf("offlinepool-%d", time.Now().Unix())
+		selectedNode    *node.Node
+		secondReplNode  node.Node
+		stNodes         []node.Node
+		offlinePoolUuid string
+		volSize         = 50
+		haLevel         = 1
+		applist         = Inst().AppList
+		contexts        []*scheduler.Context
+	)
+	JustBeforeEach(func() {
+		StartTorpedoTest("ValidateVolumeCreationWhenPoolOffline", "Verify volume create fails on the node where the pool is offline", nil, 0)
+	})
+
+	stepLog := "Verify volume create fails on the node where the pool is offline"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+
+		cleanup := func() {
+			log.InfoD("Performing cleanup")
+			DestroyApps(contexts, nil)
+			Inst().AppList = applist
+
+			err = RemoveLabelsAllNodes(k8s.NodeType, true, false)
+			log.FailOnError(err, "error removing label on node ")
+		}
+		defer cleanup()
+
+		stepLog = "Add label on the selected storage node and Schedule application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			err = RemoveLabelsAllNodes(k8s.NodeType, true, false)
+			log.FailOnError(err, "error removing label on node ")
+
+			selectedNode = GetNodeWithLeastSize()
+			stNodes = node.GetStorageNodes()
+			for _, stNode := range stNodes {
+				if stNode.Name != selectedNode.Name {
+					secondReplNode = stNode
+				}
+			}
+
+			err = Inst().S.AddLabelOnNode(*selectedNode, k8s.NodeType, k8s.FastpathNodeType)
+			log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedNode.Name))
+			err = Inst().S.AddLabelOnNode(secondReplNode, k8s.NodeType, k8s.FastpathNodeType)
+			log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", secondReplNode.Name))
+
+			Inst().AppList = []string{"fio-fastpath"}
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pooloffline-%d", i))...)
+			}
+			ValidateApplications(contexts)
+		})
+
+		stepLog = "Wait for pool offline state"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			err = WaitForPoolOffline(*selectedNode)
+			log.FailOnError(err, fmt.Sprintf("Failed to make node %s storage down", selectedNode.Name))
+
+			poolsStatus, err := Inst().V.GetNodePoolsStatus(*selectedNode)
+			log.FailOnError(err, "error getting pool status on node %s", selectedNode.Name)
+
+			for i, s := range poolsStatus {
+				if s == "Offline" {
+					offlinePoolUuid = i
+					break
+				}
+			}
+			dash.VerifyFatal(poolsStatus[offlinePoolUuid], "Offline", fmt.Sprintf("verify status for the pool %s, current status %v", offlinePoolUuid, poolsStatus[offlinePoolUuid]))
+		})
+
+		stepLog = "Create volume while pool is in offline"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			_, err := CreateAndAttachFPVolume(*selectedNode, volumeName, offlinePoolUuid, volSize, haLevel, false)
+			dash.VerifyFatal(strings.Contains(err.Error(), "Failed to create volume"), true, "Verify volume creation should fail while pool is offline")
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
