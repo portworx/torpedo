@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-version"
-
 	pxutil "github.com/pure-px/px-operator/drivers/storage/portworx/util"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
@@ -8782,7 +8781,7 @@ func WaitForCsiSnapToBeReadyWithTimeout(snapName string, namespace string, timeo
 		if snap, err = k8sExternalsnap.GetSnapshot(snapName, namespace); err != nil {
 			return "", true, err
 		}
-		if snap.Status == nil || !*snap.Status.ReadyToUse {
+		if snap != nil && snap.Status == nil || snap.Status.ReadyToUse == nil || !*snap.Status.ReadyToUse {
 			contentName := "notavailable"
 			if snap.Status != nil && snap.Status.BoundVolumeSnapshotContentName != nil {
 				contentName = *snap.Status.BoundVolumeSnapshotContentName
@@ -8953,16 +8952,23 @@ func (k *K8s) CreateCsiSnapshot(name string, namespace string, class string, pvc
 		Spec:       spec,
 	}
 	log.Infof("Creating snapshot : %v", name)
-	if snapshot, err = k8sExternalsnap.CreateSnapshot(&snap); err != nil {
-		return nil, &scheduler.ErrFailedToCreateSnapshot{
+	snapshot, err = k8sExternalsnap.CreateSnapshot(&snap)
+	if err != nil {
+		return snapshot, &scheduler.ErrFailedToCreateSnapshot{
 			PvcName: pvc,
 			Cause:   err,
 		}
 	}
 	if err = WaitForCsiSnapToBeReady(snapshot.Name, namespace); err != nil {
-		return nil, &scheduler.ErrFailedToCreateSnapshot{
+		return snapshot, &scheduler.ErrFailedToCreateSnapshot{
 			PvcName: pvc,
 			Cause:   fmt.Errorf("snapshot with name [%s] is not ready. Error: %v", snapshot.Name, err),
+		}
+	}
+	snapshot, err = k8sExternalsnap.GetSnapshot(snapshot.Name, namespace)
+	if err != nil {
+		return snapshot, &scheduler.ErrFailedToGetSnapShot{
+			Cause: fmt.Sprintf("failed to get snapshot: [%s] in namespace: [%s]. Err: %v", snapshot.Name, namespace, err),
 		}
 	}
 	return snapshot, nil

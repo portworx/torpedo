@@ -344,6 +344,9 @@ var cloudsnapMap = make(map[string]map[*volume.Volume]*storkv1.ScheduledVolumeSn
 var cloudSnapStartTime time.Time
 var localSnapStartTime time.Time
 
+// snapShotClassName  for FADA CSI snapshot
+var snapShotClassName string
+
 // Counter is a thread-safe generic counter for keys of a comparable type
 type Counter[K comparable] struct {
 	sync.RWMutex
@@ -8768,7 +8771,7 @@ func TriggerCsiSnapShot(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		log.InfoD(stepLog)
 		if !isCsiVolumeSnapshotClassExist {
 			log.InfoD("Creating csi volume snapshot class")
-			snapShotClassName := PureSnapShotClass + time.Now().Format("01-02-15h04m05s")
+			snapShotClassName = PureSnapShotClass + time.Now().Format("01-02-15h04m05s")
 			if volSnapshotClass, err = Inst().S.CreateCsiSnapshotClass(snapShotClassName, "Delete", "false"); err != nil {
 				log.Errorf("Create volume snapshot class failed with error: [%v]", err)
 				UpdateOutcome(event, err)
@@ -14821,7 +14824,6 @@ func TriggerPxCSIFadaAttachLimit(contexts *[]*scheduler.Context, recordChan *cha
 // TriggerFadaSimultaneousSnapshots takes simultaneous snapshots of the volumes and validates snapshot
 func TriggerFadaSimultaneousSnapshots(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	var err error
-	var snapShotClassName string
 
 	defer ginkgo.GinkgoRecover()
 	defer endLongevityTest()
@@ -14837,12 +14839,6 @@ func TriggerFadaSimultaneousSnapshots(contexts *[]*scheduler.Context, recordChan
 		Outcome: []error{},
 	}
 
-	defer func() {
-		deleteFADALabelsToNode()
-		event.End = time.Now().Format(time.RFC1123)
-		*recordChan <- event
-	}()
-
 	setMetrics(*event)
 
 	stepLog := "Create and Validate simultaneous snapshots for FA DA volumes"
@@ -14857,7 +14853,7 @@ func TriggerFadaSimultaneousSnapshots(contexts *[]*scheduler.Context, recordChan
 		snapCountPerThread := 50
 		snapCountPerVolumes := 0
 
-		if !isCsiVolumeSnapshotClassExist && Inst().S.String() != openshift.SchedName {
+		if !isCsiVolumeSnapshotClassExist {
 			log.InfoD("Creating csi volume snapshot class")
 			snapShotClassName = PureSnapShotClass + time.Now().Format("01-02-15h04m05s")
 			if volSnapshotClass, err = Inst().S.CreateCsiSnapshotClass(snapShotClassName, "Delete", "false"); err != nil {
@@ -14866,8 +14862,6 @@ func TriggerFadaSimultaneousSnapshots(contexts *[]*scheduler.Context, recordChan
 			}
 			log.InfoD("Successfully created volume snapshot class: %v", volSnapshotClass.Name)
 			isCsiVolumeSnapshotClassExist = true
-		} else if Inst().S.String() == openshift.SchedName {
-			snapShotClassName = PureSnapShotClass
 		}
 
 		// Collecting volume across all app specs
@@ -14912,7 +14906,7 @@ func TriggerFadaSimultaneousSnapshots(contexts *[]*scheduler.Context, recordChan
 					for _, vol := range volList {
 						for x := 0; x < snapCountPerVolumes; x++ {
 							snapName := fmt.Sprintf("snap-%s-%d", vol.Name, x)
-							log.Debugf("Creating snapshot: [%s] for volume : [%s]", snapName, vol.Name)
+							log.Debugf("Creating snapshot: [%s] for volume : [%s] in namespace: [%s]", snapName, vol.Name, vol.Namespace)
 							snapshot, err := Inst().S.CreateCsiSnapshot(snapName, vol.Namespace, snapShotClassName, vol.Name, false)
 							if err != nil {
 								UpdateOutcome(event, err)
@@ -14928,7 +14922,7 @@ func TriggerFadaSimultaneousSnapshots(contexts *[]*scheduler.Context, recordChan
 			log.Infof("Waiting for 15 minutes")
 			time.Sleep(15 * time.Minute)
 		})
-		stepLog = "Validating snapshots for app volumes"
+		stepLog = "Validating snapshots for App volumes"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			var snapwg sync.WaitGroup
@@ -14944,6 +14938,11 @@ func TriggerFadaSimultaneousSnapshots(contexts *[]*scheduler.Context, recordChan
 							UpdateOutcome(event, err)
 						}
 						for _, snapInfo := range snapList {
+							if snapInfo == nil || vol == nil {
+								log.Errorf("Snapshot info: [%v] or volume: [%v] is nil", snapInfo, vol)
+								UpdateOutcome(event, err)
+								continue
+							}
 							log.Debugf("Validating snapshots: [%s] a volume: [%s]", snapInfo.Name, vol.Name)
 							err = Inst().S.ValidateCsiSnap(vol.Name, vol.Namespace, *snapInfo)
 							if err != nil {
@@ -14978,6 +14977,11 @@ func TriggerFadaSimultaneousSnapshots(contexts *[]*scheduler.Context, recordChan
 								UpdateOutcome(event, err)
 							}
 							for _, snapInfo := range snapList {
+								if snapInfo == nil || vol == nil {
+									log.Errorf("Snapshot info: [%v] or volume: [%v] is nil for delete volumes", snapInfo, vol)
+									UpdateOutcome(event, err)
+									continue
+								}
 								log.Debugf("Deleting snapshots: [%s] a volume: [%s]", snapInfo.Name, vol.Name)
 								err = Inst().S.DeleteCsiSnapshot((*contexts)[0], snapInfo.Name, vol.Namespace)
 								if err != nil {
