@@ -67,6 +67,10 @@ if [ -n "$FOCUS_TESTS" ]; then
     FOCUS_ARG="--focus={$focusRegex}"
 fi
 
+if [ -n "$LABEL_FILTER" ]; then
+    FOCUS_ARG="--label-filter=$LABEL_FILTER"
+fi
+
 if [ -z "${UPGRADE_ENDPOINT_URL}" ]; then
     UPGRADE_ENDPOINT_URL=""
 fi
