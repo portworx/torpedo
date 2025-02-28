@@ -4484,6 +4484,7 @@ func (k *K8s) appendVolForPVC(vols []*volume.Volume, pvc *v1.PersistentVolumeCla
 	}
 	_, err = task.DoRetryWithTimeout(validatePVC, 5*time.Minute, 30*time.Second)
 	if err != nil {
+		log.Debugf("%#v", pvc)
 		return nil, err
 	}
 

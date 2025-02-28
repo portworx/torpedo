@@ -1059,10 +1059,14 @@ func waitForPoolToBeResized(expectedSize uint64, poolIDToResize string, isJourna
 			log.InfoD(fmt.Sprintf("------Printing the px logs on the node:%s ----------", n.Name))
 			PrintCommandOutput("journalctl -lu portworx* -n 200 --no-pager ", *n)
 			log.InfoD(fmt.Sprintf("------Finished Printing the px logs on the node:%s ----------", n.Name))
+		} else {
+			//Wait for the driver to come up for handling bug https://purestorage.atlassian.net/browse/PWX-42284
+			err = Inst().V.WaitDriverUpOnNode(*n, defaultTimeout)
 		}
 	} else {
 		log.Warnf("error getting node for pool uuid [%s]. Cause: %v", poolIDToResize, terr)
 	}
+
 	return err
 }
 
@@ -5277,6 +5281,9 @@ func storageFullPoolExpansion(testName string) {
 	log.FailOnError(err, "error getting pool with UUID [%s]", offlinePoolUUID)
 
 	var expandedExpectedPoolSize uint64
+	//Handle the case where the px will restart due to https://purestorage.atlassian.net/browse/PWX-34819
+	err = Inst().V.WaitDriverUpOnNode(*selectedNode, defaultTimeout)
+	log.FailOnError(err, "error waiting for vol driver to be up on node [%s]", selectedNode.Name)
 	stepLog = fmt.Sprintf("Perform pool expansion on [%s]", selectedPool.Uuid)
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
