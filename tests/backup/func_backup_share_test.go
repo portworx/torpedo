@@ -3054,6 +3054,7 @@ var _ = Describe("{ClusterBackupShareWithExistingBackupsWithViewRestorableAndFul
 	backupLocationMap := make(map[string]string)
 	backupNames := make([]string, 0)
 	secondarybackupNames := make([]string, 0)
+	restoreNames = make([]string, 0)
 
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("VerifyClusterBackupShareWithExistingBackupsWithViewRestorableAndFullAccessFromMultipleBackupLocations",
@@ -3215,7 +3216,7 @@ var _ = Describe("{ClusterBackupShareWithExistingBackupsWithViewRestorableAndFul
 			log.FailOnError(err, "Fetching user [%s] ctx", thirdUserName)
 			bkVar := 0
 			// Start Restore and confirm that user cannot restore
-			for _, backupName = range backupNames {
+			for _, backupName := range backupNames {
 				bkVar++
 				ctx, err := backup.GetAdminCtxFromSecret()
 				Inst().Dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
@@ -3226,7 +3227,6 @@ var _ = Describe("{ClusterBackupShareWithExistingBackupsWithViewRestorableAndFul
 				Inst().Dash.VerifyFatal(err, nil, "Getting destination cluster UID")
 				backupDriver := Inst().Backup
 				restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-				restoreNames = append(restoreNames, restoreName)
 				Inst().Dash.VerifyFatal(err, nil, "Getting destination cluster UID")
 				log.InfoD("Validating if user [%s] with access [%v] can restore and delete backup %s or not", thirdUserName, BackupAccessKeyValue[1], backupName)
 				err = CreateRestoreWithValidation(userCtx, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, appContextsToBackup)
@@ -3355,7 +3355,6 @@ var _ = Describe("{ClusterBackupShareWithExistingBackupsWithViewRestorableAndFul
 				Inst().Dash.VerifyFatal(err, nil, "Getting destination cluster UID")
 				backupDriver := Inst().Backup
 				restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-				restoreNames = append(restoreNames, restoreName)
 				err = CreateRestoreWithValidation(userCtx, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, appContextsToBackup)
 				log.Infof("The expected error returned is %v", err)
 				Inst().Dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to restore backup") ||
@@ -3397,7 +3396,6 @@ var _ = Describe("{ClusterBackupShareWithExistingBackupsWithViewRestorableAndFul
 				Inst().Dash.VerifyFatal(err, nil, "Getting destination cluster UID")
 				backupDriver := Inst().Backup
 				restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-				restoreNames = append(restoreNames, restoreName)
 				err = CreateRestoreWithValidation(userCtx, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, destClusterUid, BackupOrgID, appContextsToBackup)
 				log.Infof("The expected error returned is %v", err)
 				Inst().Dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to restore backup") ||
@@ -3425,32 +3423,10 @@ var _ = Describe("{ClusterBackupShareWithExistingBackupsWithViewRestorableAndFul
 		DestroyApps(scheduledAppContexts, opts)
 
 		// Clean the all user created
-		var wg sync.WaitGroup
-		log.Infof("Cleaning up users")
-		for _, userName := range allInfraAdminUsers {
-			wg.Add(1)
-			go func(userName string) {
-				defer GinkgoRecover()
-				defer wg.Done()
-				err := backup.DeleteUser(userName)
-				log.FailOnError(err, "Error deleting user %v", userName)
-			}(userName)
-		}
-		for _, userName := range allNormalUsers {
-			wg.Add(1)
-			go func(userName string) {
-				defer GinkgoRecover()
-				defer wg.Done()
-				err := backup.DeleteUser(userName)
-				log.FailOnError(err, "Error deleting user %v", userName)
-			}(userName)
-		}
-		wg.Wait()
 
-		// Clean up the all group created
-		log.Infof("Cleaning up groups")
-		err := backup.DeleteGroup(group1)
-		log.FailOnError(err, "Error deleting user %v", group1)
+		log.Infof("Cleaning up users")
+		err := CleanupAllUserAndGroups()
+		dash.VerifySafely(err, nil, "Verifying cleanup all user and groups")
 
 		// Clean up the cluster
 		ctx, err := backup.GetAdminCtxFromSecret()
