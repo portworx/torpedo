@@ -6072,7 +6072,6 @@ var _ = Describe("{KVDBFailoverEnsureIOContinuity}", Label("staging", "kvdb_ops"
 				err := Inst().S.RemoveLabelOnNode(non_kvdbnode, "node-type")
 				log.FailOnError(err, "Failed to remove label [%s: %s] on node : [%v]", "node-type", "replvps", non_kvdbnode.Name)
 			}
-			DestroyApps(contexts, nil)
 
 		}
 		defer cleanup()
@@ -6232,3 +6231,204 @@ var _ = Describe("{KVDBFailoverEnsureIOContinuity}", Label("staging", "kvdb_ops"
 	})
 })
 
+var _ = Describe("{AddMetadataDriveWithKVDBNodeDown}", Label("staging", "p0", "negative", "kvdb_ops"), func() {
+	/*
+		ticket id: https://purestorage.atlassian.net/browse/HAZEL-1562
+		Prerequsites:
+		    At least two storageless nodes are required to run this test.
+		step1: create 5 node cluster with all kvdb node are running
+		step2: Stop Px one of the kvdb member node
+		step3: Add drive on storeless node
+		step4: verify able add drive and validate storeless node is convert to storage node
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("AddMetadataDriveWithKVDBNodeDown", "Reboot the kvdb node and add the drive on storegelessnode", nil, 0)
+	})
+	var contexts []*scheduler.Context
+	itLog := "Add a drive while one of the KVDB member nodes is down"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		var (
+			nodeSelected     node.Node
+			kvdbNodesIDs     []string
+			kvdbNode_details []node.Node
+			selectedKvdbNode node.Node
+		)
+		storagelessNode := node.GetStorageLessNodes()
+		log.InfoD("Checking number of storageless nodes: %d", len(storagelessNode))
+		if len(storagelessNode) == 0 {
+			Skip("At least one storageless nodes are required to run this test!...")
+		}
+		stepLog = "Schedule application"
+		Step(stepLog, func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("runflat-%d", i))...)
+			}
+		})
+		ValidateApplications(contexts)
+		log.InfoD("Selecting a random storage node")
+		storageNodes := node.GetStorageNodes()
+		stNode := GetRandomNode(storageNodes)
+		log.InfoD("Selected storage node: %s", stNode.Name)
+		stepLog = "Get KVDB node details"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			kvdbMembers, err := Inst().V.GetKvdbMembers(stNode)
+			log.FailOnError(err, "Error getting KVDB members")
+			log.InfoD("Retrieved KVDB members: %+v", kvdbMembers)
+			for _, n := range kvdbMembers {
+				kvdbNodesIDs = append(kvdbNodesIDs, n.Name)
+			}
+		})
+		stepLog = "Check KVDB members are healthy"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			getKVDBNodes, err := GetAllKvdbNodes()
+			log.FailOnError(err, "Unable to get kvdb nodes")
+			healthyCount := 0
+			for _, each := range getKVDBNodes {
+				if each.IsHealthy == true {
+					healthyCount++
+				}
+			}
+			dash.VerifyFatal(healthyCount == 3, true, fmt.Sprintf("verify kvdb members are healthy. Healthy count: %d, Expected: 3", healthyCount))
+		})
+
+		stepLog = "Randomly select KVDB node for px down"
+		Step(stepLog, func() {
+			for _, kvdbNode := range kvdbNodesIDs {
+				nodeInfo, err := node.GetNodeDetailsByNodeID(kvdbNode)
+				log.FailOnError(err, fmt.Sprintf("Unable to get details for KVDB node ID: %s", kvdbNode))
+				kvdbNode_details = append(kvdbNode_details, nodeInfo)
+			}
+			selectedKvdbNode = GetRandomNode(kvdbNode_details)
+			log.InfoD("Randomly selected KVDB node for PX stop: %s", selectedKvdbNode)
+			StopVolDriverAndWait([]node.Node{selectedKvdbNode})
+			log.InfoD("PX service successfully stopped on node: %v", selectedKvdbNode)
+		})
+		stepLog := "Check the KVDB node: verify if one node is down"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			checkKVDBQuorum := func() (interface{}, bool, error) {
+				getKVDBNodes, err := GetAllKvdbNodes()
+				if err != nil {
+					return nil, true, fmt.Errorf("unable to get KVDB nodes: %w", err)
+				}
+				log.Infof("KVDB node details: %v", getKVDBNodes)
+				for _, each := range getKVDBNodes {
+					if each.IsHealthy == false {
+						log.Infof("KVDB node is down. Node details: %v", each)
+						return nil, false, nil
+					}
+				}
+				log.Infof("KVDB node is still healthy. Retrying...")
+				return nil, true, nil
+			}
+			_, err := task.DoRetryWithTimeout(checkKVDBQuorum, 5*time.Minute, 30*time.Second)
+			log.FailOnError(err, "Error occurred while checking KVDB quorum")
+		})
+
+		nodeSelected = storagelessNode[0]
+		log.InfoD("Randomly selected storageless node : %s", nodeSelected.Name)
+
+		stepLog = "Check if the node has a metadata disk (DMTHIN cluster) or add a data drive (BTRFS cluster)"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.InfoD("Check if the cluster is DMTHIN")
+			isDmthin, _ := IsDMthin()
+			if isDmthin {
+				isDedicatedMetadataDiskExist := false
+				path, err := getMetaDataDiskPath(nodeSelected)
+				log.FailOnError(err, "Failed to get metadata disk path")
+				if path != "" {
+					log.InfoD("Metadata disk already exists: %v", path)
+					isDedicatedMetadataDiskExist = true
+				}
+				if !isDedicatedMetadataDiskExist {
+					driveSpecs, err := GetCloudDriveDeviceSpecs()
+					log.FailOnError(err, "Error getting cloud drive specs")
+					deviceSpec := driveSpecs[0]
+					deviceSpecParams := strings.Split(deviceSpec, ",")
+					paramsArr := make([]string, 0)
+					for _, param := range deviceSpecParams {
+						if strings.Contains(param, "size") {
+							paramsArr = append(paramsArr, fmt.Sprintf("size=%d,", 70))
+						} else {
+							paramsArr = append(paramsArr, param)
+						}
+					}
+					deviceSpec = strings.Join(paramsArr, ",")
+					newdevicespec := deviceSpec + " --metadata"
+					log.InfoD("No metadata disk found. Adding metadata disk...")
+					err = Inst().V.AddCloudDrive(&nodeSelected, newdevicespec, -1)
+					log.FailOnError(err, "Failed to add metadata device on node: %s", nodeSelected.Name)
+					log.InfoD("Metadata disk successfully added on node [%s]", nodeSelected.Hostname)
+					path, err = getMetaDataDiskPath(nodeSelected)
+					log.FailOnError(err, "Failed to get metadata disk path after addition")
+					if path == "" {
+						log.FailOnError(fmt.Errorf("metadata device not added"), "metadata device not added")
+					}
+					log.InfoD("Metadata device path from pxctl : %v", path)
+				}
+			} else {
+				log.InfoD("Cluster is not DMTHIN, skipping metadata disk addition.")
+			}
+			driveSpecs, err := GetCloudDriveDeviceSpecs()
+			log.FailOnError(err, "Error getting cloud drive specs")
+			deviceSpec := driveSpecs[0]
+			deviceSpecParams := strings.Split(deviceSpec, ",")
+			paramsArr := make([]string, 0)
+			for _, param := range deviceSpecParams {
+				if strings.Contains(param, "size") {
+					paramsArr = append(paramsArr, fmt.Sprintf("size=%d,", 70))
+				} else {
+					paramsArr = append(paramsArr, param)
+				}
+			}
+			newSpec := strings.Join(paramsArr, ",")
+			log.InfoD("Attempting to add a regular data drive of size  to node [%s]", nodeSelected.Name)
+			err = Inst().V.AddCloudDrive(&nodeSelected, newSpec, -1)
+			dash.VerifyFatal(err, nil, "Drive was not added successfully")
+			log.InfoD("Successfully added a new data drive of size to node [%s] (DMTHIN or Non-DMTHIN cluster)", nodeSelected.Name)
+		})
+
+		stepLog = "Starting Portworx on stopped node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			StartVolDriverAndWait([]node.Node{selectedKvdbNode})
+			log.Infof("Successfully start the portworx :[%v]", selectedKvdbNode)
+		})
+
+		stepLog = "Verify storageless node is converted to a storage node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Info("Refresh the driver endpoints")
+			err = Inst().S.RefreshNodeRegistry()
+			log.FailOnError(err, "error refreshing node registry")
+			err = Inst().V.RefreshDriverEndpoints()
+			log.FailOnError(err, "error refreshing storage drive endpoints")
+			storageNodesAfterstoragelessnodejoin := node.GetStorageNodes()
+			log.InfoD("Current storage nodes: %+v", storageNodesAfterstoragelessnodejoin)
+			found := false
+			for _, nodeID := range storageNodesAfterstoragelessnodejoin {
+				if nodeID.Id == nodeSelected.Id {
+					found = true
+					break
+				}
+			}
+			dash.VerifyFatal(found, true, fmt.Sprintf("Storageless node with ID %s should be converted to a storage node.", nodeSelected.Id))
+			log.InfoD("Storageless node with ID %s is successfully converted to a storage node.", nodeSelected.Id)
+		})
+		stepLog = "Destroy application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			DestroyApps(contexts, nil)
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+
+})
