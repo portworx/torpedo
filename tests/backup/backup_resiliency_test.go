@@ -3657,7 +3657,7 @@ var _ = Describe("{UninstallPxBackupAndRestoreFromTheBackup}", Label(TestCaseLab
 
 		valuesMap, err := ParseValuesFromFile("values1")
 		log.FailOnError(err, "Failed to parse values file")
-		_, err = InstallPxBackup(LatestPxBackupVersion, DefaultPxBackupHelmBranch, namespace, valuesMap)
+		_, err = InstallPxBackup(LatestPxBackupVersion, DefaultPxBackupHelmBranch, namespace, valuesMap, false)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Installing PX-Backup with release %s", "px-central"))
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Installing PX-Backup with release %s on %s", releaseName, DestinationClusterName))
 	})
@@ -3696,6 +3696,9 @@ var _ = Describe("{UninstallPxBackupAndRestoreFromTheBackup}", Label(TestCaseLab
 		})
 
 		Step("Creating a backup of PX-Backup namespace", func() {
+			log.InfoD("Switching context to destination cluster for backup")
+			err := SetDestinationKubeConfig()
+			dash.VerifyFatal(err, nil, "Switching to destination cluster context")
 			pxBackupNamespace, err = backup.GetPxBackupNamespace()
 			log.FailOnError(err, "Unable to fetch px-backup namespace")
 			log.InfoD("px backup namespace from destination cluster: %s", pxBackupNamespace)
@@ -3705,10 +3708,6 @@ var _ = Describe("{UninstallPxBackupAndRestoreFromTheBackup}", Label(TestCaseLab
 			if backupLocationUID == "" {
 				dash.VerifyFatal(fmt.Errorf("Backup location UID is empty"), nil, "Backup location validation failed")
 			}
-
-			log.InfoD("Switching context to destination cluster for backup")
-			err := SetDestinationKubeConfig()
-			dash.VerifyFatal(err, nil, "Switching to destination cluster context")
 
 			err = CreateBackup(backupName, DestinationClusterName, bkpLocationName, backupLocationUID, []string{pxBackupNamespace}, nil, BackupOrgID, destClusterUid, "", "", "", "", ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Created backup [%s] of namespace [%s]", backupName, pxBackupNamespace))

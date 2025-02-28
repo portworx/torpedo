@@ -13261,8 +13261,13 @@ func CreateDocRegistrySecret(namespace string) error {
 }
 
 // InstallPxBackup installs Px-Backup through helm and waits for all the pods to be ready
-func InstallPxBackup(version, branch, namespace string, vals map[string]interface{}) (*release.Release, error) {
-
+// initialiseBackupDriver should be set to false if we do not need to get fresh backup driver for new backup instance. By default, it is set to true
+// initialiseBackupDriver parameter is used in cases where we have deployed new backup instance on another cluster but do not want to use it as backup driver for backup operations
+func InstallPxBackup(version, branch, namespace string, vals map[string]interface{}, initialiseBackupDriver ...bool) (*release.Release, error) {
+	newBackupDriver := true
+	if len(initialiseBackupDriver) > 0 {
+		newBackupDriver = initialiseBackupDriver[0]
+	}
 	clusterProvider := os.Getenv("CLUSTER_PROVIDER")
 
 	if !(clusterProvider == "vanilla" ||
@@ -13354,24 +13359,24 @@ func InstallPxBackup(version, branch, namespace string, vals map[string]interfac
 		int(duration.Minutes())%60,
 		int(duration.Seconds())%60,
 	)
+	if newBackupDriver {
+		// Refresh admin password
+		if err = RefreshAdminPassword(); err != nil {
+			return rel, err
+		}
 
-	// Refresh admin password
-	if err = RefreshAdminPassword(); err != nil {
-		return rel, err
+		//Initialize backup driver
+		if err = initBackupDriver(); err != nil {
+			return rel, err
+		}
+
+		// Log final installed version
+		installedVersion, err := GetPxBackupVersionSemVer()
+		if err != nil {
+			return rel, err
+		}
+		log.InfoD("Px-Backup installation complete. Version: %s", installedVersion)
 	}
-
-	// Initialize backup driver
-	if err = initBackupDriver(); err != nil {
-		return rel, err
-	}
-
-	// Log final installed version
-	installedVersion, err := GetPxBackupVersionSemVer()
-	if err != nil {
-		return rel, err
-	}
-	log.InfoD("Px-Backup installation complete. Version: %s", installedVersion)
-
 	return rel, nil
 }
 
@@ -13490,7 +13495,7 @@ func installPxBackupChart(
 // waitForPostInstallHookJob polls until the post-install hook job has succeeded or times out.
 func waitForPostInstallHookJob(namespace string) error {
 	// Retry settings can be adjusted as needed
-	const timeout = 20 * time.Minute
+	const timeout = 30 * time.Minute
 	const interval = 30 * time.Second
 
 	check := func() (interface{}, bool, error) {
