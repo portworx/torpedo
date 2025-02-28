@@ -3501,12 +3501,8 @@ var _ = Describe("{ClusterBackupShareWithAnotherUserHavingSameClusterNameOfItsOw
 		labelSelectors = make(map[string]string)
 		backupLocationMap = make(map[string]string)
 		backupNames = make([]string, 0)
-		firstUserNameCtx, err = backup.GetNonAdminCtx(firstUserName, CommonPassword)
-		log.FailOnError(err, "Fetching firstUserName User context")
 		ctx, err = backup.GetAdminCtxFromSecret()
 		Inst().Dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
-		secondUserNameCtx, err = backup.GetNonAdminCtx(secondUserName, CommonPassword)
-		log.FailOnError(err, "Fetching secondUserName User context")
 
 		log.InfoD("Deploy applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
@@ -3534,12 +3530,17 @@ var _ = Describe("{ClusterBackupShareWithAnotherUserHavingSameClusterNameOfItsOw
 			role := backup.InfrastructureOwner
 			allInfraAdminUsers = CreateUsers(2)
 			//Assign Infra Admin Role to both users
-			firstUserName = allInfraAdminUsers[0]
-			secondUserName = allInfraAdminUsers[1]
 			for _, userName := range allInfraAdminUsers {
 				err := backup.AddRoleToUser(userName, role, fmt.Sprintf("Adding %v role to %s", role, userName))
 				log.FailOnError(err, "Failed to add role for user - %s", userName)
 			}
+			firstUserName = allInfraAdminUsers[0]
+			firstUserNameCtx, err = backup.GetNonAdminCtx(firstUserName, CommonPassword)
+			log.FailOnError(err, "Fetching firstUserName User context")
+
+			secondUserName = allInfraAdminUsers[1]
+			secondUserNameCtx, err = backup.GetNonAdminCtx(secondUserName, CommonPassword)
+			log.FailOnError(err, "Fetching secondUserName User context")
 		})
 
 		//4.Step-Creating Backup Location Cloud setting in firstUserName User Context
