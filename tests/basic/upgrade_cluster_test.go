@@ -229,6 +229,11 @@ var _ = Describe("{UpgradeCluster}", Label("p0", "positive", "node_ops", "Upgrad
 
 			})
 
+			Step("validating csi translation annotations on in-tree pvs", func() {
+				err := ValidateInTreeToCSIPvAnnotations()
+				log.FailOnError(err, "Failed to validate in tree pv migrations")
+			})
+
 			dash.VerifySafely(mError, nil, "validate no parallel upgrade of nodes")
 
 			Step("validate all apps after upgrade", func() {

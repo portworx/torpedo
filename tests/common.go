@@ -257,6 +257,8 @@ var (
 	PDBValidationMinOpVersion, _ = version.NewVersion("24.1.0-")
 	// ParallelUpgradeMinOpVersion specifies the minimum operator version that supports smart and parallel upgrades
 	ParallelUpgradeMinOpVersion, _ = version.NewVersion("24.2.0-")
+	// PVMigrationMinimumOpVersion specifies the minimum operator version that supports in tree pv migrations
+	PVMigrationMinimumOpVersion, _ = version.NewVersion("24.2.3-")
 	// ParallelUpgradePxVersion specifies minimum portworx version that supports parallel upgrade
 	ParallelUpgradeMinPxVersion, _ = version.NewVersion("3.1.2")
 )
@@ -573,6 +575,14 @@ const (
 	MaxHaLevel = int64(3)
 	// MaxNumSnapshots is a maximum number of snapshots
 	MaxNumSnapshots = int64(64)
+)
+
+const (
+	AuthSecretNameAnnotation                     = "openstorage.io/auth-secret-name"
+	AuthSecretNamespaceAnnotation                = "openstorage.io/auth-secret-namespace"
+	ProvisionerDeletionSecretNameAnnotation      = "volume.kubernetes.io/provisioner-deletion-secret-name"
+	ProvisionerDeletionSecretNamespaceAnnotation = "volume.kubernetes.io/provisioner-deletion-secret-namespace"
+	SecurityPXUserTokenSecretName                = "px-user-token"
 )
 
 var (
@@ -17303,6 +17313,92 @@ func CreateNFSBackupLocationCustomAddress(name string, uid string, orgID string,
 			return err
 		}
 	}
+	return nil
+}
+
+func ValidateInTreeToCSIPvAnnotations() error {
+	opver, err := optest.GetPxOperatorVersion()
+	if !opver.GreaterThanOrEqual(PVMigrationMinimumOpVersion) {
+		log.Info("Operator not supported for pv migration. Skipping pv migration annotation validations....")
+		return nil
+	}
+
+	stc, err := Inst().V.GetDriver()
+	if err != nil {
+		return fmt.Errorf("failed to get StorageCluster [%s] from namespace [%s], Err: %v", stc.Name, stc.Namespace, err.Error())
+	}
+
+	if stc.Spec.Security == nil || !stc.Spec.Security.Enabled || stc.Spec.Security.Auth == nil || stc.Spec.Security.Auth.GuestAccess == nil || *(stc.Spec.Security.Auth.GuestAccess) != opcorev1.GuestRoleDisabled {
+		log.Infof("StorageCluster [%s] does not have auth enabled or guest access disabled. Skipping pv migration annotation validations...", stc.Name)
+		return nil
+	}
+
+	log.Infof("Security is enabled, and GuestAccess is disabled on the StorageCluster %s. Validating PVs migration annotations...", stc.Name)
+	// List all PersistentVolumes
+	pv_list, err := core.Instance().GetPersistentVolumes()
+	if err != nil {
+		return fmt.Errorf("failed to list PersistentVolumes, Err: %v", err)
+	}
+
+	for _, pv := range pv_list.Items {
+		if pv.Annotations["pv.kubernetes.io/provisioned-by"] == "kubernetes.io/portworx-volume" {
+			authSecretName, okAuthSecretName := pv.Annotations[AuthSecretNameAnnotation]
+			authSecretNamespace, okAuthSecretNamespace := pv.Annotations[AuthSecretNamespaceAnnotation]
+			provisionerDeletionSecretName, okProvisionerDeletionSecretName := pv.Annotations[ProvisionerDeletionSecretNameAnnotation]
+			provisionerDeletionSecretNamespace, okProvisionerDeletionSecretNamespace := pv.Annotations[ProvisionerDeletionSecretNamespaceAnnotation]
+
+			// First validate if the necessary annotations are present in the PV
+			if !okAuthSecretName || !okAuthSecretNamespace || !okProvisionerDeletionSecretName || !okProvisionerDeletionSecretNamespace {
+				return fmt.Errorf("expected annotations %s, %s, %s, %s to be present in the PV %s, but not found", AuthSecretNameAnnotation, AuthSecretNamespaceAnnotation, ProvisionerDeletionSecretNameAnnotation, ProvisionerDeletionSecretNamespaceAnnotation, pv.Name)
+			}
+
+			// If annotations are present then validate its values
+			// Step1: Check if PV's associated StorageClass has annotations, if yes same should be copied to PV
+			sc, err := k8sStorage.Instance().GetStorageClass(pv.Spec.StorageClassName)
+			if err != nil {
+				return fmt.Errorf("failed to get StorageClass [%s], Err: %v", pv.Spec.StorageClassName, err.Error())
+			}
+			scSecretName, okScSecretName := sc.Parameters[AuthSecretNameAnnotation]
+			scSecretNamespace, okScSecretNamespace := sc.Parameters[AuthSecretNamespaceAnnotation]
+			if okScSecretName && okScSecretNamespace {
+				if scSecretName != authSecretName || scSecretNamespace != authSecretNamespace || scSecretName != provisionerDeletionSecretName || scSecretNamespace != provisionerDeletionSecretNamespace {
+					return fmt.Errorf("expected annotations for secretName, secretNamespace, provisionerDeletionSecretName, provisionerDeletionSecretNamespace same as StorageClass [%s]: %s , %s; but found: %s, %s, %s, %s", sc.Name, scSecretName, scSecretNamespace, authSecretName, authSecretNamespace, provisionerDeletionSecretName, provisionerDeletionSecretNamespace)
+				} else {
+					log.Infof("Found all the required csi compatible annotations on in-tree pv : %v", pv.Name)
+					continue
+				}
+			}
+			log.Infof("StorageClass [%s] does not have necessary annotations, checking PVC", sc.Name)
+
+			// Step2: If StorageClass does not have annotations, then validate if PV has annotations from PVC if present
+			if pv.Spec.ClaimRef != nil {
+				pvc, err := core.Instance().GetPersistentVolumeClaim(pv.Spec.ClaimRef.Namespace, pv.Spec.ClaimRef.Name)
+				if err != nil {
+					return fmt.Errorf("failed to get PersistentVolumeClaim [%s] from namespace [%s], Err: %v", pv.Spec.ClaimRef.Name, pv.Spec.ClaimRef.Namespace, err.Error())
+				}
+				pvcSecretName, okPvcSecretName := pvc.Annotations[AuthSecretNameAnnotation]
+				pvcSecretNamespace, okPvcSecretNamespace := pvc.Annotations[AuthSecretNamespaceAnnotation]
+				if okPvcSecretName && okPvcSecretNamespace {
+					if pvcSecretName != authSecretName || pvcSecretNamespace != authSecretNamespace || pvcSecretName != provisionerDeletionSecretName || pvcSecretNamespace != provisionerDeletionSecretNamespace {
+						return fmt.Errorf("expected annotations for secretName, secretNamespace, provisionerDeletionSecretName, provisionerDeletionSecretNamespace same as PVC [%s]: %s , %s; but found: %s, %s, %s, %s", pvc.Name, pvcSecretName, pvcSecretNamespace, authSecretName, authSecretNamespace, provisionerDeletionSecretName, provisionerDeletionSecretNamespace)
+					} else {
+						log.Infof("Found all the required csi compatible annotations on in-tree pv : %v", pv.Name)
+						continue
+					}
+				}
+
+			}
+			log.Infof("PVC does not have necessary annotations, falling back to default values")
+
+			// Step3: If PVC does not have annotations, then validate if PV has annotations are same as default values
+			if authSecretName != SecurityPXUserTokenSecretName || authSecretNamespace != stc.Namespace || provisionerDeletionSecretName != SecurityPXUserTokenSecretName || provisionerDeletionSecretNamespace != stc.Namespace {
+				return fmt.Errorf("expected annotations for secretName, secretNamespace, provisionerDeletionSecretName, provisionerDeletionSecretNamespace to be same as default values:  %s, %s, but found: %s, %s, %s, %s", SecurityPXUserTokenSecretName, stc.Namespace, AuthSecretNameAnnotation, AuthSecretNamespaceAnnotation, ProvisionerDeletionSecretNameAnnotation, ProvisionerDeletionSecretNamespaceAnnotation)
+			}
+			log.Infof("Found all the required csi compatible annotations on in-tree pv : %v", pv.Name)
+
+		}
+	}
+
 	return nil
 }
 
