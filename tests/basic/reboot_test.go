@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/libopenstorage/openstorage/api"
@@ -548,6 +549,104 @@ var _ = Describe("{NodeWipeWithNodeReboot}", Label("p1", "negative", "node_ops",
 
 		})
 	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{NodeRebootAndVerifyClusterOperational}", Label("p1", "negative", "node_ops", "px_ops", "error_injection", "multiple_node_reboot"), func() {
+	/*
+		https://purestorage.atlassian.net/browse/HAZEL-994
+		1. Reboot more than half storage nodes
+		2. Check px status
+		3. Set timeout and wait until apps are running
+	*/
+	var (
+		contexts      []*scheduler.Context
+		wg            sync.WaitGroup
+		rebootedNodes chan node.Node
+	)
+
+	BeforeEach(func() {
+		StartTorpedoTest("NodeRebootAndVerifyClusterOperational", "Verify cluster becomes operational automatically after restarting majority of nodes at once", nil, 0)
+	})
+
+	ItLog := "NodeRebootAndVerifyClusterOperational"
+	It(ItLog, func() {
+		stepLog := "Schedule apps"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			contexts = scheduleApps()
+			log.Info("schedule app succeed")
+			ValidateApplications(contexts)
+		})
+		defer DestroyApps(contexts, nil)
+
+		nodes := node.GetStorageDriverNodes()
+		n := len(nodes)
+		noOfNodesToReboot := (n / 2) + 1
+		rebootErrChan := make(chan error, noOfNodesToReboot)
+		rebootedNodes = make(chan node.Node, noOfNodesToReboot)
+		stepLog = "reboot majority nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < noOfNodesToReboot; i++ {
+				wg.Add(1)
+				go func(i int) {
+					defer wg.Done()
+					defer GinkgoRecover()
+					err = Inst().N.RebootNodeAndWait(nodes[i])
+					if err != nil {
+						err = fmt.Errorf("Failed to reboot node %s and wait till it is up . err - %v", nodes[i], err)
+						rebootErrChan <- err
+						return
+					}
+					log.Infof("node %s reboot succeed", nodes[i].Id)
+					rebootedNodes <- nodes[i]
+				}(i)
+			}
+		})
+
+		wg.Wait()
+		close(rebootErrChan)
+		close(rebootedNodes)
+
+		for err := range rebootErrChan {
+			log.FailOnError(err, "node reboot failed")
+		}
+
+		stepLog = "Verify Px Status"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for node := range rebootedNodes {
+				pxReady := false
+				waitTime := time.Duration(5 * time.Minute)
+				for waitStartTime := time.Now(); time.Since(waitStartTime) < waitTime; time.Sleep(30 * time.Second) {
+					status, err := Inst().V.GetPxctlStatus(node)
+					log.FailOnError(err, fmt.Sprintf("failed to get pxctl status on node [%s]", node.Name))
+					if status == api.Status_STATUS_OK.String() {
+						pxReady = true
+					}
+				}
+				dash.VerifyFatal(pxReady, true, fmt.Sprintf("verify px status"))
+			}
+		})
+
+		stepLog = "Validate apps"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				ctxErrChan := make(chan error, 50)
+				ctx.ReadinessTimeout = appReadinessTimeout //setting context timeout for apps to be up after restarting majority nodes
+				ValidateContext(ctx, &ctxErrChan)
+				for err := range ctxErrChan {
+					log.FailOnError(err, "app validation failed for app %s", ctx.App.Key)
+				}
+			}
+		})
+	})
+
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
