@@ -10444,6 +10444,138 @@ func ExitPoolMaintenance(stNode node.Node) error {
 	return nil
 }
 
+// EvacuateDeleteAndValidatePool deletes pool with given ID in the given node
+func EvacuateDeleteAndValidatePool(stNode node.Node, poolIDToDelete string, retry bool, markedPoolsForDeletion *sync.Map) (err error) {
+	isPureBackend := false
+	validateMultipath := []string{}
+	if IsPureCluster() {
+		isPureBackend = true
+	}
+
+	if isPureBackend {
+		// if pure backend , we get the list of all multipath devices used while creating the pool
+		// later check if those multipath devices are still exist post deleting the pool
+		multipathDevBeforeDelete, err := GetMultipathDeviceOnPool(&stNode)
+		log.Infof("Multipath devices before deletion: %v", multipathDevBeforeDelete)
+		log.FailOnError(err, fmt.Sprintf("Failed to get list of Multipath devices on Node [%v]", stNode.Name))
+		validateMultipath = multipathDevBeforeDelete[poolIDToDelete]
+	}
+
+	poolsBfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+	if err != nil {
+		return fmt.Errorf("error getting pools, Err: %v", err)
+	}
+	log.Infof("Pools before deletion: %v", poolsBfr)
+
+	poolsMap, err := Inst().V.GetPoolDrives(&stNode)
+	if err != nil {
+		return fmt.Errorf("error getting pool drive from the node [%s],Err: %v", stNode.Name, err)
+	}
+
+	log.InfoD(fmt.Sprintf("Delete poolID %s on node [%s/%s]", poolIDToDelete, stNode.VolDriverNodeID, stNode.Name))
+
+	// Moving repls on the node before deletion
+
+	nodeVols, err := GetVolumesOnNode(stNode.VolDriverNodeID)
+	if err != nil {
+		return fmt.Errorf("error getting volumes node [%s],Err: %v ", stNode.Name, err)
+	}
+
+	for _, vol := range nodeVols {
+		newReplicaNode, replicaErr := findValidReplicaNode(vol, markedPoolsForDeletion, 5)
+		log.Infof("New Replica node is [%s]", newReplicaNode)
+		if replicaErr != nil {
+			return fmt.Errorf("error getting replica node for volume [%s],Err: %v ", vol, replicaErr)
+		}
+
+		moveErr := MoveReplica(vol, stNode.VolDriverNodeID, newReplicaNode)
+		if moveErr != nil {
+			return fmt.Errorf("error moving vol [%s] replica from node [%s] to node [%s],Err: %v ", vol, stNode.VolDriverNodeID, newReplicaNode, moveErr)
+		}
+	}
+
+	// Enter maintenance mode
+	if err = EnterPoolMaintenance(stNode); err != nil {
+		return fmt.Errorf("failed to enter pool maintenance on node [%s], Err: %v", stNode.Name, err)
+	}
+
+	// Delete the pool
+	if err = Inst().V.DeletePool(stNode, poolIDToDelete, retry); err != nil {
+		return fmt.Errorf("failed to delete pool [%s] on node [%s], Err: %v", poolIDToDelete, stNode.Name, err)
+	}
+
+	// Exit maintenance mode
+	exitErr := ExitPoolMaintenance(stNode)
+	if exitErr != nil && !strings.Contains(exitErr.Error(), "not in pool maintenance mode") {
+		if err != nil {
+			// Append exitErr to existing error
+			return fmt.Errorf("%v; additionally failed to exit pool maintenance: %v", err, exitErr)
+		}
+		return exitErr // No previous error, return exitErr directly
+	}
+
+	poolsAfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+	if err != nil {
+		return fmt.Errorf("error getting pools after pool deletion, Err: %v", err)
+	}
+	log.Infof("Pools after deletion: %v", poolsAfr)
+
+	if len(poolsBfr) <= len(poolsAfr) {
+		return fmt.Errorf("pool count not matching after pool deletion. Pools before deletion:%d, pools after deletion %d", len(poolsBfr), len(poolsAfr))
+	}
+
+	poolsMap, err = Inst().V.GetPoolDrives(&stNode)
+	if err != nil {
+		return fmt.Errorf("error getting pool drive from the node [%s] after pool deletion, Err: %v", stNode.Name, err)
+	}
+	if _, ok := poolsMap[poolIDToDelete]; ok {
+		return fmt.Errorf("pool [%s] still exists on the node [%s]", poolIDToDelete, stNode.Name)
+	}
+
+	if isPureBackend {
+		// Reboot the node to ensure all multipath devices are deleted
+		err = Inst().N.RebootNodeAndWait(stNode)
+		if err != nil {
+			return fmt.Errorf("failed to reboot node [%s], Err: %v", stNode.Name, err)
+		}
+		// Get list of all multipath devices after deleting the pool
+		allMultipathDev, err := GetMultipathDeviceIDsOnNode(&stNode)
+		log.Infof("All multipath devices on the node: %v", allMultipathDev)
+		if err != nil {
+			return fmt.Errorf("failed to get multipath devices on Node [%v], Err: %v", stNode.Name, err)
+		}
+		for _, eachMultipath := range allMultipathDev {
+			for _, validateEach := range validateMultipath {
+				if validateEach == eachMultipath {
+					return fmt.Errorf("multipath device [%v] did not delete on Deleting Pool", validateEach)
+				}
+			}
+		}
+	}
+
+	log.Infof("Validation multipath list: %v", validateMultipath)
+	return nil
+}
+
+// Helper function to find a valid replica node
+func findValidReplicaNode(vol string, markedPoolsForDeletion *sync.Map, maxRetries int) (string, error) {
+	retries := 0
+	for retries < maxRetries {
+		newReplicaNode, err := GetNodeIdToMoveReplica(vol)
+		if err != nil {
+			return "", fmt.Errorf("error getting replica node for volume [%s], Err: %v", vol, err)
+		}
+
+		if _, ok := markedPoolsForDeletion.Load(newReplicaNode); !ok {
+			return newReplicaNode, nil
+		}
+
+		retries++
+		log.Warnf("Replica node [%s] is marked for deletion, retrying... (attempt %d)", newReplicaNode, retries)
+	}
+	return "", fmt.Errorf("failed to find a valid replica node for volume [%s] after %d retries", vol, maxRetries)
+}
+
 // DeleteGivenPoolInNode deletes pool with given ID in the given node
 func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string, retry bool) (err error) {
 

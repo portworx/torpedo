@@ -12039,3 +12039,885 @@ var _ = Describe("{PXValidationWithIPTablesBlockAndNodeRestart}", Label("staging
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{EvacuateVolumesAndDeletePool}", Label("p0", "positive", "node_ops", "pure_ops", "pool_ops"), func() {
+	/*
+		https://purestorage.atlassian.net/browse/PTX-27918
+		1. Get a PX node with in not KVDB node
+		2. Deploy fio pod on non KVDB node
+		3. Get a storage pool with active I/O to evacuate & delete
+	*/
+
+	var (
+		contexts []*scheduler.Context
+		pool     *api.StoragePool
+		poolID   string
+		// We store the pool IDs marked for deletion: key=nodeID, value=poolID
+		markedPoolsForDeletion sync.Map
+		podNode                *node.Node
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("EvacuateVolumesAndDeletePool",
+			"Evacuate volumes from a pool, delete the pool, and verify FA volume deletion", nil, 0)
+	})
+
+	It("Evacuate volumes from pool, delete pool, and verify volume eviction", func() {
+		stepLog = "Get a PX node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pxNodes, err := GetStorageNodes()
+			log.FailOnError(err, "Unable to get the storage nodes")
+			for _, n := range pxNodes {
+				kvdbFlag, err := IsKVDBNode(n)
+				log.FailOnError(err, "Failed to check if node is kvdb node")
+				if !kvdbFlag {
+					podNode = &n
+					break
+				}
+			}
+			log.FailOnError(err, "No non-KVDB Storage node found")
+		})
+
+		appList := Inst().AppList
+		Inst().AppList = []string{"fio"}
+
+		stepLog = "Deploy fio pod on non KVDB node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().S.AddLabelOnNode(*podNode, "apptype", "fio")
+			taskName := "evacuate-vol" + Inst().InstanceID
+			context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+				AppKeys: Inst().AppList,
+				Nodes:   []node.Node{*podNode},
+				Labels:  map[string]string{"apptype": "fio"},
+			})
+			log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+			contexts = append(contexts, context...)
+			ValidateApplications(contexts)
+		})
+
+		// Get a storage pool with active I/O to evacuate
+		stepLog := "Get a storage pool with active I/O to evacuate"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pool, err = GetPoolWithIOsInGivenNode(*podNode, contexts, api.SdkStoragePool_RESIZE_TYPE_AUTO, 0)
+			log.FailOnError(err, "Failed to get pool with I/Os")
+			poolID = pool.GetUuid()
+			log.Infof("Pool ID selected for evacuation: %v", poolID)
+			dash.VerifyFatal(poolID != "", true, "Verify a valid pool ID was returned")
+		})
+
+		// Evacuate (if applicable) & delete the pool
+		stepLog = "Evacuate and delete the pool from the node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			poolID = fmt.Sprintf("%d", pool.GetID())
+			markedPoolsForDeletion.Store(podNode.Id, poolID)
+			defer markedPoolsForDeletion.Delete(poolID)
+			deleteErr := EvacuateDeleteAndValidatePool(*podNode, poolID, true, &markedPoolsForDeletion)
+			log.Errorf("Error Evacutating, Deleting & Validating Pool Deletion - ERROR [%v]", deleteErr)
+			dash.VerifyFatal(deleteErr == nil, true,
+				fmt.Sprintf("Validate successful pool deletion for pool [%s] on node [%s]? ", poolID, podNode.Name))
+		})
+		// Cleanup steps moved to the end to restore test setup
+		log.InfoD("Restoring original setup after test execution")
+
+		DestroyApps(contexts, nil)
+
+		// Remove fio label from node
+		err = Inst().S.RemoveLabelOnNode(*podNode, "apptype")
+		log.FailOnError(err, fmt.Sprintf("Error removing label apptype=fio on node [%s]", podNode.Name))
+
+		// Restore AppList
+		Inst().AppList = appList
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{CreateAndDeleteMultipleStoragePoolsInParallel}", Label("p0", "positive", "px_ops", "pool_ops"), func() {
+	/*
+		https://purestorage.atlassian.net/browse/PTX-27918
+		1. Identify all nodes in the cluster.
+		2. In parallel, add multiple cloud drives (each resulting in a new pool) to every node.
+		3. Validate the newly created pools.
+		4. In parallel, delete the newly created pools.
+		5. Validate successful deletion.
+	*/
+
+	var (
+		nodes    []node.Node
+		contexts []*scheduler.Context
+
+		// We store newly created pool IDs: key=nodeName, value=[]string of pool IDs
+		newPools         sync.Map
+		existingPoolsMap = make(map[string]map[string]bool)
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("CreateAndDeleteMultipleStoragePoolsInParallel",
+			"Create and delete multiple storage pools on all nodes in parallel", nil, 0)
+
+		nodes = node.GetStorageDriverNodes()
+		if len(nodes) == 0 {
+			Skip("No storage driver nodes found")
+		}
+
+		for _, n := range nodes {
+			if node.IsStorageNode(n) {
+				poolsBefore, err := GetPoolsDetailsOnNode(&n)
+				log.FailOnError(err, "Error getting existing pools on node [%s]", n.Name)
+
+				// Store existing pool IDs in a map (set)
+				existingPoolIDs := make(map[string]bool)
+				for _, p := range poolsBefore {
+					existingPoolIDs[fmt.Sprintf("%d", p.GetID())] = true
+				}
+				existingPoolsMap[n.Name] = existingPoolIDs
+			}
+		}
+	})
+
+	It("in parallel, create multiple pools on all nodes, then delete them", func() {
+		numberOfPoolsToCreate := 1
+
+		// --- Parallel creation ---
+		stepLog := "In parallel, add multiple pools on each node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			errChan := make(chan error, len(nodes))
+			var wg sync.WaitGroup
+			var mu sync.Mutex
+
+			batchSize := len(nodes) / 2
+			if batchSize == 0 { // Handle cases where only one node exists
+				batchSize = 1
+			}
+
+			log.InfoD("Total Nodes: %d, Batch Size: %d", len(nodes), batchSize)
+
+			// Function to process nodes in batches
+			processNodes := func(start, end int) {
+				log.Infof("Processing nodes [%d:%d]", start, end)
+				for i := start; i < end; i++ {
+					nodeObj := nodes[i]
+					wg.Add(1)
+					go func(nodeObj node.Node) {
+						defer GinkgoRecover()
+						defer wg.Done()
+
+						// 1) Call your existing function to create new pools
+						err := addNewPools(nodeObj, numberOfPoolsToCreate, &mu)
+						if err != nil {
+							errChan <- fmt.Errorf("error adding new pool on node [%s]: %v", nodeObj.Name, err)
+							return
+						}
+
+						// 2) Now retrieve the updated pool list
+						updatedPools, err := GetPoolsDetailsOnNode(&nodeObj)
+						if err != nil {
+							errChan <- fmt.Errorf("error getting updated pools on node [%s]: %v", nodeObj.Name, err)
+							return
+						}
+
+						// Track ONLY newly created pools by comparing with previous state
+						var createdIDs []string
+						existingPoolIDs := existingPoolsMap[nodeObj.Name] // Get pre-existing pool set
+
+						for _, p := range updatedPools {
+							poolID := fmt.Sprintf("%d", p.GetID())
+							if !existingPoolIDs[poolID] { // If pool ID was NOT in the previous state, it's new
+								createdIDs = append(createdIDs, poolID)
+							}
+						}
+
+						// Store only the new pools for this node
+						newPools.Store(nodeObj.Name, createdIDs)
+
+					}(nodeObj)
+				}
+
+				wg.Wait() // Wait for all goroutines in the batch to complete
+			}
+
+			// Process first batch of nodes
+			processNodes(0, batchSize)
+
+			// Process second batch of nodes
+			processNodes(batchSize, len(nodes))
+
+			close(errChan)
+			// Check for any errors
+			var errs []error
+			for err := range errChan {
+				if err != nil {
+					errs = append(errs, err)
+				}
+			}
+
+			// If we collected any errors, fail the test
+			if len(errs) > 0 {
+				// You can choose how to log/return here. For instance:
+				combinedErrMsg := "Encountered errors while adding new pools:\n"
+				for _, e := range errs {
+					combinedErrMsg += fmt.Sprintf("  - %v\n", e)
+				}
+				log.FailOnError(fmt.Errorf(combinedErrMsg), "Pool Creation Test Failed")
+			}
+		})
+
+		// --- Validate creation ---
+		stepLog = "Validate newly created pools on each node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			newPools.Range(func(key, value interface{}) bool {
+				nodeName := key.(string)
+				poolIDs, _ := newPools.Load(nodeName)
+
+				poolID := poolIDs.([]string)[0] // Always 1 pool per node
+
+				nodeObj, err := node.GetNodeByName(nodeName)
+				if err != nil {
+					log.Errorf("Failed to get node with name [%s]: %v", nodeName, err)
+					return false
+				}
+
+				if poolID == "" {
+					log.Warnf("No pools found for node [%s], skipping", nodeName)
+					return false
+				}
+
+				// convert poolID to int
+				poolIDInt, err := strconv.Atoi(poolID)
+				if err != nil {
+					log.FailOnError(err, "Failed to convert pool ID [%s] to int", poolID)
+					return false
+				}
+
+				// get pool with id on given node
+				_, err = GetPoolObjFromPoolIdOnNode(&nodeObj, poolIDInt)
+
+				if err != nil {
+					log.FailOnError(err, "Failed to get pool with ID [%d] on node [%s]", poolIDInt, nodeName)
+					return false
+				}
+				return true
+			})
+		})
+
+		// --- Parallel deletion ---
+		stepLog = "In parallel, delete all newly created pools on each node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			newPoolsCount := 0
+			newPools.Range(func(_, _ interface{}) bool {
+				newPoolsCount++
+				return true
+			})
+
+			batchSize := newPoolsCount / 2
+			if batchSize == 0 { // Handle cases where only one node exists
+				batchSize = 1
+			}
+
+			log.InfoD("Total Nodes: %d, Batch Size: %d", newPoolsCount, batchSize)
+
+			var wg sync.WaitGroup
+			errChan := make(chan error, newPoolsCount) // Buffered channel to avoid deadlocks
+
+			nodesList := make([]*node.Node, 0)
+			newPools.Range(func(key, _ interface{}) bool {
+				nodeName := key.(string)
+
+				// Find the matching node object
+				for _, n := range nodes {
+					if n.Name == nodeName {
+						nodesList = append(nodesList, &n)
+						break
+					}
+				}
+				return true
+			})
+
+			// Function to process nodes in batches
+			processNodes := func(start, end int) {
+				log.Infof("Processing nodes [%d:%d]", start, end)
+				for i := start; i < end; i++ {
+					nodeObj := nodesList[i]
+
+					wg.Add(1)
+					go func(nodeObj *node.Node) {
+						defer GinkgoRecover()
+						defer wg.Done()
+
+						poolIDs, _ := newPools.Load(nodeObj.Name)
+						if poolIDs == nil {
+							log.Warnf("No pools found for node [%s], skipping", nodeObj.Name)
+							return
+						}
+
+						poolID := poolIDs.([]string)[0] // Always 1 pool per node
+
+						// Ensure PX is stable before pool deletion
+						err := Inst().V.WaitForPxPodsToBeUp(*nodeObj)
+						if err != nil {
+							log.Errorf("PX is not ready on node [%s] before deleting pool [%s]: %v", nodeObj.Name, poolID, err)
+							errChan <- fmt.Errorf("error waiting for PX to stabilize on node [%s]: %v", nodeObj.Name, err)
+							return
+						}
+
+						log.InfoD("Deleting pool [%s] on node [%s]", poolID, nodeObj.Name)
+						err = DeletePoolAndValidate(*nodeObj, poolID)
+						if err != nil {
+							log.Errorf("Failed to delete pool [%s] on node [%s]: %v", poolID, nodeObj.Name, err)
+							errChan <- fmt.Errorf("error deleting pool on node [%s]: %v", nodeObj.Name, err)
+							return
+						}
+
+						// Wait for PX to stabilize after pool deletion
+						err = Inst().V.WaitDriverUpOnNode(*nodeObj, 15*time.Minute)
+						if err != nil {
+							log.Errorf("PX is not ready on node [%s] after deleting pool [%s]: %v", nodeObj.Name, poolID, err)
+							errChan <- fmt.Errorf("error waiting for PX to stabilize on node [%s]: %v", nodeObj.Name, err)
+							return
+						}
+
+					}(nodeObj)
+				}
+				wg.Wait() // Wait for all goroutines in the batch to complete
+			}
+
+			// Process first batch of nodes
+			processNodes(0, batchSize)
+
+			// Process second batch of nodes
+			processNodes(batchSize, len(nodesList))
+
+			close(errChan)
+			// Check for any errors
+			var errs []error
+			for err := range errChan {
+				if err != nil {
+					errs = append(errs, err)
+				}
+			}
+
+			// If we collected any errors, fail the test
+			if len(errs) > 0 {
+				// You can choose how to log/return here. For instance:
+				combinedErrMsg := "Encountered errors while deleting new pools:\n"
+				for _, e := range errs {
+					combinedErrMsg += fmt.Sprintf("  - %v\n", e)
+				}
+				log.FailOnError(fmt.Errorf(combinedErrMsg), "Pool Deletion Test Failed")
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{CreateAndDeletePoolsWithInterruptions}", Label("p0", "positive", "px_ops", "pool_ops", "node_ops", "interruptions"), func() {
+	/*
+		https://purestorage.atlassian.net/browse/PTX-27918
+		1. Identify all nodes.
+		2. In parallel, add multiple cloud drives (thus creating multiple pools).
+		3. Validate the newly created pools.
+		4. In parallel, restart PX on all these nodes.
+		5. In parallel, delete the newly created pools.
+		6. Validate successful deletion of pools.
+	*/
+	var (
+		nodes            []node.Node
+		contexts         []*scheduler.Context
+		newPools         sync.Map // Stores newly created pool IDs: key=nodeName, value=[]string of pool IDs
+		wg               sync.WaitGroup
+		existingPoolsMap = make(map[string]map[string]bool)
+	)
+	const numberOfPoolsToCreate = 1
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("CreateAndDeleteMultiplePoolsWithInterruptionsInParallel",
+			"Create multiple pools on nodes with parallel interruptions (PX restarts), then delete them in parallel.", nil, 0)
+
+		nodes = node.GetStorageDriverNodes()
+		if len(nodes) == 0 {
+			Skip("No storage driver nodes found")
+		}
+
+		for _, n := range nodes {
+			if node.IsStorageNode(n) {
+				poolsBefore, err := GetPoolsDetailsOnNode(&n)
+				log.FailOnError(err, "Error getting existing pools on node [%s]", n.Name)
+
+				// Store existing pool IDs in a map (set)
+				existingPoolIDs := make(map[string]bool)
+				for _, p := range poolsBefore {
+					existingPoolIDs[fmt.Sprintf("%d", p.GetID())] = true
+				}
+				existingPoolsMap[n.Name] = existingPoolIDs
+			}
+		}
+	})
+
+	It("Create multiple pools in parallel, interrupt by PX restart in parallel, delete pools in parallel", func() {
+		// Parallel creation of multiple pools on each node
+		stepLog := "In parallel, add multiple pools on each node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			errChan := make(chan error, len(nodes))
+			var mu sync.Mutex
+			batchSize := len(nodes) / 2
+			if batchSize == 0 { // Handle cases where only one node exists
+				batchSize = 1
+			}
+
+			log.InfoD("Total Nodes: %d, Batch Size: %d", len(nodes), batchSize)
+
+			isDMThin, err := IsDMthin()
+			if err != nil {
+				log.Errorf("Failed to check if the cluster is DM thin: %v", err)
+				errChan <- fmt.Errorf("error checking if the cluster is DM thin: %v", err)
+				return
+			}
+
+			if isDMThin {
+				for _, n := range nodes {
+					err := AddMetadataDisk(n)
+					if err != nil {
+						errChan <- fmt.Errorf("error while adding metadata disk on node %s: %v", n.Name, err)
+						return
+					}
+				}
+			}
+
+			// Function to process nodes in batches
+			processNodes := func(start, end int, mu *sync.Mutex) {
+				log.Infof("Processing nodes [%d:%d]", start, end)
+				for i := start; i < end; i++ {
+					nodeObj := nodes[i]
+					wg.Add(1)
+
+					go func(n node.Node) {
+						defer wg.Done()
+						defer GinkgoRecover()
+						var (
+							currentSize uint64
+						)
+
+						currentSize = 200
+						if numberOfPoolsToCreate == 0 {
+							return
+						}
+
+						// Get the device specifications for the cloud drives
+						driveSpecs, err := GetCloudDriveDeviceSpecs()
+						if err != nil {
+							errChan <- fmt.Errorf("error getting cloud drive device specs: %v", err)
+							return
+						}
+						deviceSpec := driveSpecs[0]
+						deviceSpecParams := strings.Split(deviceSpec, ",")
+						paramsArr := make([]string, 0)
+
+						// Extract parameters without size specification
+						for _, param := range deviceSpecParams {
+							if !strings.Contains(param, "size") {
+								paramsArr = append(paramsArr, param)
+							}
+						}
+
+						i := 0
+						// Start adding pools with interruptions
+						for i < numberOfPoolsToCreate {
+							newParams := make([]string, 0)
+							newParams = append(newParams, paramsArr...)
+							newSize := currentSize + 4
+							currentSize = newSize
+							newParams = append(newParams, fmt.Sprintf("size=%d,", newSize))
+							newSpec := strings.Join(newParams, ",")
+
+							// Add the cloud drive and validate
+							if err := Inst().V.AddCloudDrive(&n, newSpec, -1); err != nil {
+								log.Errorf("Add cloud drive failed on node %s, err: %v", n.Name, err)
+								errChan <- fmt.Errorf("error adding cloud drive on node %s: %v", n.Name, err)
+								return
+							}
+							// Random delay in seconds
+							sleepTime := rand.Intn(60-1) + 1
+							time.Sleep(time.Second * time.Duration(sleepTime))
+
+							err := injectInterruption(n, "pool_creation")
+							if err != nil {
+								log.Errorf("Error injecting interruption during pool creation on node %s: %v", n.Name, err)
+								errChan <- fmt.Errorf("error injecting interruption during pool creation on node %s: %v", n.Name, err)
+							}
+
+							err = Inst().V.WaitDriverUpOnNode(n, 15*time.Minute)
+							if err != nil {
+								log.Errorf("Error waiting for PX driver to be up on node %s: %v", n.Name, err)
+								errChan <- fmt.Errorf("error waiting for PX driver to be up on node %s: %v", n.Name, err)
+							}
+
+							mu.Lock()
+							err = Inst().V.RefreshDriverEndpoints()
+							if err != nil {
+								log.Errorf("Error refreshing driver endpoints on node %s: %v", n.Name, err)
+								errChan <- fmt.Errorf("error refreshing driver endpoints on node %s: %v", n.Name, err)
+								return
+							}
+							mu.Unlock()
+
+							log.InfoD("Validate pool rebalance after drive add on node %s", n.Name)
+							if err = ValidateDriveRebalance(n); err != nil {
+								log.Errorf("Error validating drive rebalance on node %s: %v", n.Name, err)
+								errChan <- fmt.Errorf("error validating drive rebalance on node %s: %v", n.Name, err)
+								return
+							}
+							i += 1
+						}
+
+						// Random delay in seconds
+						sleepTime := rand.Intn(90-30) + 30
+						time.Sleep(time.Second * time.Duration(sleepTime))
+
+						updatedPools, err := GetPoolsDetailsOnNode(&nodeObj)
+						if err != nil {
+							log.Errorf("Error getting updated pools on node [%s]: %v", nodeObj.Name, err)
+							errChan <- fmt.Errorf("error getting updated pools on node [%s]: %v", nodeObj.Name, err)
+							return
+						}
+
+						// Track ONLY newly created pools by comparing with previous state
+						var createdIDs []string
+						existingPoolIDs := existingPoolsMap[n.Name] // Get pre-existing pool set
+
+						for _, p := range updatedPools {
+							poolID := fmt.Sprintf("%d", p.GetID())
+							if !existingPoolIDs[poolID] { // If pool ID was NOT in the previous state, it's new
+								createdIDs = append(createdIDs, poolID)
+							}
+						}
+
+						// Store only the new pools for this node
+						newPools.Store(n.Name, createdIDs)
+					}(nodeObj)
+				}
+				wg.Wait() // Wait for all goroutines in the batch to complete
+			}
+
+			// Process first batch of nodes
+			processNodes(0, batchSize, &mu)
+
+			// Process second batch of nodes
+			processNodes(batchSize, len(nodes), &mu)
+
+			close(errChan)
+			// Check for any errors
+			var errs []error
+			for err := range errChan {
+				if err != nil {
+					errs = append(errs, err)
+				}
+			}
+
+			// If we collected any errors, fail the test
+			if len(errs) > 0 {
+				// You can choose how to log/return here. For instance:
+				combinedErrMsg := "Encountered errors while adding new pools:\n"
+				for _, e := range errs {
+					combinedErrMsg += fmt.Sprintf("  - %v\n", e)
+				}
+				log.FailOnError(fmt.Errorf(combinedErrMsg), "")
+			}
+		})
+
+		// Validate creation
+		stepLog = "Validate newly created pools on each node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			isEmpty := false
+			newPools.Range(func(_, _ interface{}) bool {
+				isEmpty = true
+				return false
+			})
+
+			if isEmpty {
+				dash.VerifyFatal(isEmpty, true, "Verify new pools were created?")
+				return
+			}
+
+			newPools.Range(func(key, value interface{}) bool {
+				nodeName := key.(string)
+				poolIDs, _ := newPools.Load(nodeName)
+
+				nodeObj, err := node.GetNodeByName(nodeName)
+				if err != nil {
+					log.Errorf("Failed to get node with name [%s]: %v", nodeName, err)
+					return false
+				}
+
+				poolID := poolIDs.([]string)[0] // Always 1 pool per node
+
+				if poolID == "" {
+					log.Warnf("No pools found for node [%s], skipping", nodeName)
+					return false
+				}
+
+				// convert poolID to int
+				poolIDInt, err := strconv.Atoi(poolID)
+				if err != nil {
+					log.FailOnError(err, "Failed to convert poolID [%s] to int", poolID)
+					return false
+				}
+
+				// get pool with id on given node
+				_, err = GetPoolObjFromPoolIdOnNode(&nodeObj, poolIDInt)
+
+				if err != nil {
+					log.FailOnError(err, "Failed to get pool with ID [%d] on node [%s]", poolIDInt, nodeName)
+					return false
+				}
+				return true
+			})
+		})
+
+		// In parallel, delete newly created pools
+		stepLog = "In parallel, delete all newly created pools on each node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			errChan := make(chan error, len(nodes))
+
+			newPoolsCount := 0
+			newPools.Range(func(_, _ interface{}) bool {
+				newPoolsCount++
+				return true
+			})
+
+			batchSize := newPoolsCount / 2
+			if batchSize == 0 { // Handle cases where only one node exists
+				batchSize = 1
+			}
+
+			log.InfoD("Total Nodes: %d, Batch Size: %d", newPoolsCount, batchSize)
+
+			nodesList := make([]*node.Node, 0)
+			newPools.Range(func(key, _ interface{}) bool {
+				nodeName := key.(string)
+
+				// Find the matching node object
+				for _, n := range nodes {
+					if n.Name == nodeName {
+						nodesList = append(nodesList, &n)
+						break
+					}
+				}
+				return true
+			})
+
+			// Function to process nodes in batches
+			processNodes := func(start, end int) {
+				log.Infof("Processing nodes [%d:%d]", start, end)
+
+				for i := start; i < end; i++ {
+					nodeObj := nodesList[i]
+					var isPureBackend = false
+					var validateMultipath = []string{}
+					wg.Add(1)
+
+					go func(nodeObj *node.Node) {
+						defer GinkgoRecover()
+						defer wg.Done()
+
+						poolIDs, _ := newPools.Load(nodeObj.Name)
+						if poolIDs == nil {
+							log.Warnf("No pools found for node [%s], skipping", nodeObj.Name)
+							return
+						}
+
+						poolID := poolIDs.([]string)[0] // Always 1 pool per node
+
+						if IsPureCluster() {
+							isPureBackend = true
+						}
+
+						if isPureBackend {
+							// If pure backend, get the list of all multipath devices used while creating the pool
+							// Later check if those multipath devices still exist after deleting the pool
+							multipathDevBeforeDelete, err := GetMultipathDeviceOnPool(nodeObj)
+							if err != nil {
+								log.Errorf("Error getting multipath devices on node [%s]: %v", nodeObj.Name, err)
+								return
+							}
+							validateMultipath = multipathDevBeforeDelete[poolID]
+						}
+
+						_, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+						if err != nil {
+							log.Errorf("Error getting storage pools on node [%s]: %v", nodeObj.Name, err)
+							return
+						}
+
+						_, err = Inst().V.GetPoolDrives(nodeObj)
+						if err != nil {
+							log.Errorf("Error getting pool drives on node [%s]: %v", nodeObj.Name, err)
+							return
+						}
+
+						log.InfoD(fmt.Sprintf("Delete poolID %s on node [%s/%s]", poolID, nodeObj.VolDriverNodeID, nodeObj.Name))
+
+						err = DeleteGivenPoolInNode(*nodeObj, poolID, true)
+						if err != nil {
+							log.Errorf("Error deleting pool [%s] in the node [%s]: %v", poolID, nodeObj.Name, err)
+							errChan <- fmt.Errorf("error deleting pool [%s] in the node [%s]: %v", poolID, nodeObj.Name, err)
+							return
+						}
+
+						// Random delay in secs
+						sleepTime := rand.Intn(60-1) + 1
+						time.Sleep(time.Second * time.Duration(sleepTime))
+
+						err = injectInterruption(*nodeObj, "pool_deletion")
+						if err != nil {
+							log.Errorf("Error injecting interruption during pool deletion on node %s: %v", nodeObj.Name, err)
+							errChan <- fmt.Errorf("error injecting interruption during pool deletion on node %s: %v", nodeObj.Name, err)
+							return
+						}
+
+						err = Inst().V.WaitForPxPodsToBeUp(*nodeObj)
+						if err != nil {
+							log.Errorf("Error waiting for PX pods to be up on node %s: %v", nodeObj.Name, err)
+							errChan <- fmt.Errorf("error waiting for PX pods to be up on node %s: %v", nodeObj.Name, err)
+							return
+						}
+
+						if isPureBackend {
+							// Get list of all Multipath devices after deleting the pool
+							allMultipathDev, err := GetMultipathDeviceIDsOnNode(nodeObj)
+							if err != nil {
+								log.Errorf("Error getting multipath devices on node [%s]: %v", nodeObj.Name, err)
+								errChan <- fmt.Errorf("error getting multipath devices on node [%s]: %v", nodeObj.Name, err)
+								return
+							}
+							for _, eachMultipath := range allMultipathDev {
+								for _, validateEach := range validateMultipath {
+									if validateEach == eachMultipath {
+										log.Errorf("Multipath device [%s] still exists after deleting the pool [%s] on node [%s]", eachMultipath, poolID, nodeObj.Name)
+										errChan <- fmt.Errorf("multipath device [%s] still exists after deleting the pool [%s] on node [%s]", eachMultipath, poolID, nodeObj.Name)
+										return
+									}
+								}
+							}
+						}
+
+					}(nodeObj)
+				}
+				wg.Wait()
+			}
+
+			// Process first batch of nodes
+			processNodes(0, batchSize)
+
+			// Process second batch of nodes
+			processNodes(batchSize, len(nodesList))
+
+			close(errChan)
+			// Check for any errors
+			var errs []error
+			for err := range errChan {
+				if err != nil {
+					errs = append(errs, err)
+				}
+			}
+
+			// If we collected any errors, fail the test
+			if len(errs) > 0 {
+				// You can choose how to log/return here. For instance:
+				combinedErrMsg := "Encountered errors while deleting new pools:\n"
+				for _, e := range errs {
+					combinedErrMsg += fmt.Sprintf("  - %v\n", e)
+				}
+				log.FailOnError(fmt.Errorf(combinedErrMsg), "")
+			}
+		})
+
+		// Validate successful deletion
+		stepLog = "Validate that all newly created pools have been deleted"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			newPools.Range(func(key, value interface{}) bool {
+				nodeName := key.(string)
+				poolIDs, _ := newPools.Load(nodeName)
+
+				nodeObj, err := node.GetNodeByName(nodeName)
+				if err != nil {
+					log.FailOnError(err, "Failed to get node with name [%s]", nodeName)
+					return false
+				}
+
+				poolID := poolIDs.([]string)[0] // Always 1 pool per node
+
+				if poolID == "" {
+					log.Warnf("No pools found for node [%s], skipping", nodeName)
+					return false
+				}
+
+				// convert poolID to int
+				poolIDInt, err := strconv.Atoi(poolID)
+				if err != nil {
+					log.FailOnError(err, "Failed to convert poolID [%s] to int", poolID)
+					return false
+				}
+
+				// get pool with id on given node and it should throw error and pool shoudl be nil
+				pool, err := GetPoolObjFromPoolIdOnNode(&nodeObj, poolIDInt)
+				if err == nil || pool != nil {
+					log.FailOnError(err, "Failed to get pool with ID [%d] on node [%s]", poolIDInt, nodeName)
+					return false
+				}
+				return true
+			})
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+func injectInterruption(nodeObj node.Node, stage string) error {
+	// Randomly select one of the three actions
+	interruptAction := rand.Intn(3)
+
+	switch interruptAction {
+	case 0:
+		// PX restart
+		log.InfoD("Stage: [%s] - Restarting PX on node [%s]", stage, nodeObj.Name)
+		err := Inst().V.RestartDriver(nodeObj, nil)
+		return err
+
+	case 1:
+		// Node reboot
+		log.InfoD("Stage: [%s] - Rebooting node [%s]", stage, nodeObj.Name)
+		err := Inst().N.RebootNodeAndWait(nodeObj)
+		return err
+
+	case 2:
+		// Kill PX
+		log.InfoD("Stage: [%s] - Killing PX on node [%s]", stage, nodeObj.Name)
+		err := Inst().V.KillPXDaemon([]node.Node{nodeObj}, nil)
+		return err
+	}
+
+	return nil
+}

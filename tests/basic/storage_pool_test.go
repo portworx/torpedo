@@ -6725,7 +6725,7 @@ var _ = Describe("{PoolResizeSameSize}", Label("p1", "positive", "pool_ops", "Po
 	})
 })
 
-func addNewPools(n node.Node, numPools int) error {
+func addNewPools(n node.Node, numPools int, mu ...*sync.Mutex) error {
 
 	if numPools == 0 {
 		return nil
@@ -6765,8 +6765,16 @@ func addNewPools(n node.Node, numPools int) error {
 		if err := Inst().V.AddCloudDrive(&n, newSpec, -1); err != nil {
 			return fmt.Errorf("add cloud drive failed on node %s, err: %v", n.Name, err)
 		}
+
+		if len(mu) > 0 {
+			mu[0].Lock()
+		}
 		err = Inst().V.RefreshDriverEndpoints()
 		log.FailOnError(err, "error refreshing driver end points")
+
+		if len(mu) > 0 {
+			mu[0].Unlock()
+		}
 
 		log.InfoD("Validate pool rebalance after drive add on node %s", n.Name)
 		if err = ValidateDriveRebalance(n); err != nil {
