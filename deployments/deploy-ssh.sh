@@ -586,7 +586,7 @@ spec:
             "--torpedo-job-type=$TORPEDO_JOB_TYPE",
             "--torpedo-skip-system-checks=$TORPEDO_SKIP_SYSTEM_CHECKS",
             "--fa-secret=${FA_SECRET}",
-	    "--user-managed-cert-manager=${USER_MANAGED_CERT_MANAGER}"
+	    "--user-managed-cert-manager=${USER_MANAGED_CERT_MANAGER}",
             "$APP_DESTROY_TIMEOUT_ARG",
             "$SCALE_APP_TIMEOUT_ARG",
     ]
