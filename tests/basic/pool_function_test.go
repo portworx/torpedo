@@ -4293,3 +4293,272 @@ var _ = Describe("{ValidateVolumeCreationWhenPoolOffline}", Label("staging", "p0
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{DMthinDeletePoolInErrorState}", Label("p1", "negative", "pool_ops", "pure_ops", "staging"), func() {
+	/*
+	   Create pools in error state and delete the error pool. Deletion should be successful.
+	   JIRA ID :https://purestorage.atlassian.net/browse/HAZEL-1554
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("DMthinDeletePoolInErrorState", "Validate deletion of a pool in error state on a node", nil, 0)
+	})
+	var (
+		contexts         []*scheduler.Context
+		selectedNode     *node.Node
+		poolUUID         string
+		selectedPool     *api.StoragePool
+		poolOriginalSize uint64
+		poolSizeInGiB    uint64
+		busInfoMap       = make(map[string]string)
+	)
+
+	stepLog := "DMthinDeletePoolInErrorState"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		isDMthin, err := IsDMthin()
+		log.FailOnError(err, "Failed to check if the cluster is DMTHIN")
+		if !isDMthin {
+			Skip("Cluster is not DMTHIN so skipping the test")
+		}
+
+		stepLog = "Schedule apps"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("dmthinerrpooldelete-%d", i))...)
+			}
+			ValidateApplications(contexts)
+		})
+		defer appsValidateAndDestroy(contexts)
+
+		stepLog = "Select a node with running IO on the cluster"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			// Get Pool with running IO on the cluster
+			poolUUID = pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_AUTO, 0)
+			log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
+
+			// Get Node Details of the Pool with IO
+			selectedNode, err = GetNodeWithGivenPoolID(poolUUID)
+			log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
+			log.InfoD("Pool with UUID [%v] present in Node [%v]", poolUUID, selectedNode.Name)
+		})
+
+		poolIDSelected, err := GetPoolIDFromPoolUUID(poolUUID)
+		log.FailOnError(err, fmt.Sprintf("failed to get pool id for the pool [%s]", poolUUID))
+
+		stepLog = "Yank the drive of the pool"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			selectedPool, err = GetStoragePoolByUUID(poolUUID)
+			log.FailOnError(err, fmt.Sprintf("error getting pool having UUID %v", poolUUID))
+			log.Infof("selected pool id: [%v]", selectedPool.GetID())
+
+			poolOriginalSize = selectedPool.GetTotalSize()
+			poolSizeInGiB = poolOriginalSize / units.GiB
+			log.Infof("Pools size in GB: [%v]", poolSizeInGiB)
+
+			drvM, err := Inst().V.GetPoolDrives(selectedNode)
+			log.FailOnError(err, fmt.Sprintf("error getting pools drives on node %s", selectedNode.Name))
+			log.Infof("DriverMap: %v", drvM)
+
+			driveDetail, ok := drvM[fmt.Sprint(poolIDSelected)]
+			dash.VerifyFatal(ok, true, fmt.Sprintf("Got drive details fro node [%s], [%v]", selectedNode.Name, driveDetail))
+			log.Infof("drive of the pool: [%v]", driveDetail)
+			for _, drive := range driveDetail {
+				var deviceList []string
+				driveName := drive.Device
+				log.Infof("drive name : %v", driveName)
+
+				// Check if the drive is a mapper type and get all the devices to yank
+				if strings.HasPrefix(driveName, "/dev/mapper/") {
+					cmd := fmt.Sprintf("multipath -ll %v | grep -oE 'sd[a-z]+' | sort -u | awk '{print \"/dev/\" $1}'", driveName)
+					// Execute the command and check the alerts of type POOL
+					out, err := Inst().N.RunCommandWithNoRetry(*selectedNode, cmd, node.ConnectionOpts{
+						Timeout:         2 * time.Minute,
+						TimeBeforeRetry: 10 * time.Second,
+					})
+					log.FailOnError(err, "Unable to run the multipath command")
+					outLines := strings.Split(out, "\n")
+					for _, l := range outLines {
+						if strings.HasPrefix(l, "/dev") {
+							deviceList = append(deviceList, l)
+						}
+					}
+				} else {
+					deviceList = append(deviceList, driveName)
+				}
+				log.Infof("The device List is [%v]", deviceList)
+				for _, dv := range deviceList {
+					deviceName := strings.TrimPrefix(dv, "/dev/")
+					log.Infof("Device Name: [%v]", deviceName)
+					busID, err := Inst().N.YankDrive(*selectedNode, deviceName, node.ConnectionOpts{
+						Timeout:         dfDefaultTimeout,
+						TimeBeforeRetry: dfDefaultRetryInterval,
+					})
+					log.FailOnError(err, "Failed to yank drive %s", driveName)
+					busInfoMap[dv] = busID
+				}
+			}
+
+			// wait for 2 minutes for node to reflect the drive changes
+			log.Infof("waiting for 2 minutes for node to reflect the drive changes")
+			time.Sleep(2 * time.Minute)
+		})
+
+		stepLog = "Recover the yanked Drive"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for k, v := range busInfoMap {
+				err = Inst().N.RecoverDrive(*selectedNode, k, v, node.ConnectionOpts{
+					Timeout:         driveFailTimeout,
+					TimeBeforeRetry: dfDefaultRetryInterval,
+				})
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verify drive %s recovery init", k))
+			}
+
+			log.Infof("waiting for 1 minute for node to reflect the drive changes")
+			time.Sleep(60 * time.Second)
+		})
+
+		// wait until pool goes in error state by checking if px is storage down
+		stepLog = "Check the status of px"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			t := func() (interface{}, bool, error) {
+				status, err := Inst().V.GetPxctlStatus(*selectedNode)
+				if err != nil {
+					return nil, true, fmt.Errorf("failed to get pxctl status on node [%s]", selectedNode.Name)
+				}
+				// Retry until px storage is down
+				if status == api.Status_STATUS_STORAGE_DOWN.String() {
+					log.Infof("Current px status [%v]", status)
+					return nil, false, nil
+				}
+				return nil, true, fmt.Errorf("expected status [%s] but got [%s]", api.Status_STATUS_STORAGE_DOWN.String(), status)
+			}
+			_, err := task.DoRetryWithTimeout(t, 30*time.Minute, 30*time.Second)
+			log.FailOnError(err, fmt.Sprintf("failed to get pxctl status on node [%s]", selectedNode.Name))
+
+			poolsStatus, err := Inst().V.GetNodePoolsStatus(*selectedNode)
+			dash.VerifyFatal(poolsStatus[poolUUID] == "InitFailed", true, "Is pool in error state(InitErr)?")
+			log.Infof("Pool status map: %v", poolsStatus)
+		})
+
+		stepLog = "Delete the error pool"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			// Moving repls on the node before deletion
+			nodeVols, err := GetVolumesOnNode(selectedNode.VolDriverNodeID)
+			log.FailOnError(err, "error getting volumes node [%s],Err: %v ", selectedNode.Name, err)
+
+			for _, vol := range nodeVols {
+				newReplicaNode, replicaErr := GetNodeIdToMoveReplica(vol)
+				log.FailOnError(replicaErr, "error getting replica node for volume [%s]", vol)
+				log.Infof("New Replica node is [%s]", newReplicaNode)
+
+				moveErr := MoveReplica(vol, selectedNode.VolDriverNodeID, newReplicaNode)
+				log.FailOnError(moveErr, "error moving vol [%s] replica from node [%s] to node [%s]", vol, selectedNode.VolDriverNodeID, newReplicaNode)
+			}
+
+			// Entering pool maintenance for deletion
+			log.InfoD(fmt.Sprintf("Entering pool maintenance mode on node [%s]", selectedNode.Name))
+			err = Inst().V.EnterPoolMaintenance(*selectedNode)
+			log.FailOnError(err, fmt.Sprintf("failed to enter node [%s] in maintenance mode", selectedNode.Name))
+			status, err := Inst().V.GetNodeStatus(*selectedNode)
+			log.FailOnError(err, "error getting node status for node [%s]", selectedNode.Name)
+			log.InfoD(fmt.Sprintf("Node %s status %s", selectedNode.Name, status.String()))
+
+			defer func() {
+				// Exit pool Maintenance
+				log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node [%s]", selectedNode.Name))
+				err = Inst().V.ExitPoolMaintenance(*selectedNode)
+				log.FailOnError(err, "failed to exit pool maintenance mode on node [%s]", selectedNode.Name)
+			}()
+
+			// Deleting the pool
+			log.InfoD(fmt.Sprintf("Deleting the pool with id : [%v] on node [%s]", poolIDSelected, selectedNode.Name))
+			err = Inst().V.DeletePool(*selectedNode, strconv.Itoa(int(poolIDSelected)), true)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deletion of error pool succeeded on node [%v]", selectedNode.Name))
+		})
+
+		stepLog := "start node maintenance cycle to bring pools online"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.InfoD(fmt.Sprintf("Performing node maintenance cycle on node [%s]", selectedNode.Name))
+			err = Inst().V.RecoverDriver(*selectedNode)
+			log.FailOnError(err, fmt.Sprintf("error performing maintenance cycle on node [%s]", selectedNode.Name))
+
+			err = Inst().V.WaitDriverUpOnNode(*selectedNode, 5*time.Minute)
+			dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after maintenance cycle on node [%s]", selectedNode.Name))
+
+			err := WaitForPoolStatusToUpdate(*selectedNode, "Online")
+			dash.VerifyFatal(err, nil, "Pool is now Online")
+		})
+
+		poolsBfrAddDrive, err := GetPoolsDetailsOnNode(selectedNode)
+		log.FailOnError(err, "Failed to get Pool Details from Node [%v]", selectedNode.Name)
+		log.InfoD("List of Pools present in the node [%v]", poolsBfrAddDrive)
+
+		stepLog = "Create pool with original size"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.InfoD("original size of the pool [%d] is [%d] GiB", poolIDSelected, poolSizeInGiB)
+
+			//Get cloudrive spec
+			driveSpecs, err := GetCloudDriveDeviceSpecs()
+			log.FailOnError(err, "Error getting cloud drive specs")
+
+			deviceSpec := driveSpecs[0]
+			deviceSpecParams := strings.Split(deviceSpec, ",")
+			paramsArr := make([]string, 0)
+			for _, param := range deviceSpecParams {
+				if strings.Contains(param, "size") {
+					paramsArr = append(paramsArr, fmt.Sprintf("size=%d", poolSizeInGiB))
+				} else {
+					paramsArr = append(paramsArr, param)
+				}
+			}
+			//drive spec generated from actual cloudrive spec
+			newSpec := strings.Join(paramsArr, ",")
+
+			stepLog = "Add drive to create newpool"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+
+				// wait 3 minutes for pool status to update
+				log.Infof("waiting for 3 minutes for pool status to get updated")
+				time.Sleep(3 * time.Minute)
+
+				err = Inst().V.AddCloudDrive(selectedNode, newSpec, -1)
+				log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", selectedNode.Name))
+			})
+
+			// wait for 2 minutes for pools changes to get reflected
+			log.Infof("waiting for 2 minutes for pools changes to get reflected")
+			time.Sleep(2 * time.Minute)
+			poolsAfterAddDrive, err := GetPoolsDetailsOnNode(selectedNode)
+			log.FailOnError(err, "Failed to get Pool Details from Node [%v]", selectedNode.Name)
+			log.InfoD("List of Pools present in the node after add drive [%v]", poolsAfterAddDrive)
+			dash.VerifyFatal(len(poolsAfterAddDrive) > len(poolsBfrAddDrive), true, fmt.Sprintf("verify pool is added successfully?"))
+		})
+
+		stepLog = "verify the Px status and pool status"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pxReady := Inst().V.IsPxReadyOnNode(*selectedNode)
+			dash.VerifyFatal(pxReady, true, "expected px status to be up")
+
+			err := WaitForPoolStatusToUpdate(*selectedNode, "Online")
+			dash.VerifyFatal(err, nil, "Pool is Online")
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
