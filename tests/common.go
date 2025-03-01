@@ -9860,9 +9860,7 @@ func GetPoolExpansionEligibility(stNode *node.Node, expandType opsapi.SdkStorage
 
 	log.Infof("Node %s has total drives %d", stNode.Name, currentNodeDrives)
 	eligibilityMap[stNode.Id] = true
-	if currentNodeDrives == maxCloudDrives {
-		eligibilityMap[stNode.Id] = false
-	}
+
 	nodePoolStatus, err := Inst().V.GetNodePoolsStatus(*stNode)
 	if err != nil {
 		return nil, err
@@ -9877,31 +9875,34 @@ func GetPoolExpansionEligibility(stNode *node.Node, expandType opsapi.SdkStorage
 		if nodePoolStatus[pool.Uuid] == "Offline" {
 			eligibilityMap[pool.Uuid] = false
 		} else {
+			baseDiskSizeInGib := d[0].SizeInGib
+			poolSize := uint64(0)
+			for _, drive := range d {
+				poolSize += drive.SizeInGib
+			}
+			if targetIncrementInGiB == 0 {
+				targetIncrementInGiB = baseDiskSizeInGib
+			}
+			targetSizeGiB := poolSize + targetIncrementInGiB
+			roundUpValue := func(toRound uint64) uint64 {
+				if toRound%10 == 0 {
+					return toRound
+				}
+				rs := (10 - toRound%10) + toRound
+				return rs
+			}
+			targetSizeGiB = roundUpValue(targetSizeGiB)
+			expectedPoolDrivesAfterExpansion := int(math.Ceil(float64(targetSizeGiB) / float64(baseDiskSizeInGib)))
 			if expandType == opsapi.SdkStoragePool_RESIZE_TYPE_ADD_DISK {
+				if currentNodeDrives == maxCloudDrives {
+					eligibilityMap[stNode.Id] = false
+					return eligibilityMap, nil
+				}
 				if len(d) == POOL_MAX_CLOUD_DRIVES {
 					log.Infof("pool %s has reached max drives", pool.Uuid)
 					eligibilityMap[pool.Uuid] = false
 				} else {
-					baseDiskSizeInGib := d[0].SizeInGib
-					poolSize := uint64(0)
-					for _, drive := range d {
-						poolSize += drive.SizeInGib
-					}
-					if targetIncrementInGiB == 0 {
-						targetIncrementInGiB = baseDiskSizeInGib
-					}
-					targetSizeGiB := poolSize + targetIncrementInGiB
-					roundUpValue := func(toRound uint64) uint64 {
 
-						if toRound%10 == 0 {
-							return toRound
-						}
-						rs := (10 - toRound%10) + toRound
-						return rs
-
-					}
-					targetSizeGiB = roundUpValue(targetSizeGiB)
-					expectedPoolDrivesAfterExpansion := int(math.Ceil(float64(targetSizeGiB) / float64(baseDiskSizeInGib)))
 					log.Infof("Expected pool drives after expansion for pool [%s] from [%d] to [%d] is [%d]", pool.Uuid, poolSize, targetSizeGiB, expectedPoolDrivesAfterExpansion)
 					if expectedPoolDrivesAfterExpansion > POOL_MAX_CLOUD_DRIVES {
 						log.Infof("pool %s will reach max drives if expanded to size [%v] using add-drive", pool.Uuid, targetSizeGiB)
@@ -9916,6 +9917,20 @@ func GetPoolExpansionEligibility(stNode *node.Node, expandType opsapi.SdkStorage
 						}
 					}
 				}
+			} else {
+
+				isDmthinCluster, err := IsDMthin()
+				log.FailOnError(err, "Failed to check if DMthin enabled")
+				// Marking the expected size to be 20TiB
+				expectedSize := ((2048 * 1024 * 1024 * 1024 * 1024) / units.TiB) * 10
+				if IsEksCluster() || isDmthinCluster {
+					// Marking the expected size to be 15TiB
+					expectedSize = (15 * 1024 * 1024 * 1024 * 1024 * 1024) / units.TiB
+				}
+				if targetSizeGiB > uint64(expectedSize) {
+					eligibilityMap[pool.Uuid] = false
+				}
+
 			}
 		}
 	}
@@ -17596,6 +17611,7 @@ func WaitForSnapshotClassGotDeleted(snapShotClassName string) error {
 		return err
 	}
 	return nil
+
 }
 
 func WriteIOUntilVolumeFull(volName, mountPath string, selectedNode node.Node, size int64) (string, error) {

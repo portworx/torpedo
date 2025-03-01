@@ -25,7 +25,7 @@ spec:
               memory: 256Mi
               cpu: 100m
           command: ["./bench_runner.sh"]
-          args: ["Standard", "600", "$(POD_NAME)", "output/$(POD_NAME)"]
+          args: ["Basic", "600", "$(POD_NAME)", "output/$(POD_NAME)"]
           env:
             - name: POD_NAME
               valueFrom:
