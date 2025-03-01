@@ -17597,3 +17597,109 @@ func WaitForSnapshotClassGotDeleted(snapShotClassName string) error {
 	}
 	return nil
 }
+
+func WriteIOUntilVolumeFull(volName, mountPath string, selectedNode node.Node, size int64) (string, error) {
+	log.Infof("Writing IO to the volume %s on mount path %s", volName, mountPath)
+
+	var poolUUID string
+	count := 0
+	writeIO := func() (interface{}, bool, error) {
+		count++
+		writeCmd := fmt.Sprintf("dd if=/dev/urandom of=%v/file_%d bs=%vM count=50", mountPath, count, size)
+		cmdConnectionOpts := node.ConnectionOpts{
+			Timeout:         15 * time.Second,
+			TimeBeforeRetry: 5 * time.Second,
+			Sudo:            true,
+		}
+
+		poolsStatus, err := Inst().V.GetNodePoolsStatus(selectedNode)
+		if err != nil {
+			log.Errorf("Failed to get pool status on node %s: %v", selectedNode.Name, err)
+			return nil, true, err
+		}
+
+		for uuid, status := range poolsStatus {
+			if status == "Offline" {
+				poolUUID = uuid
+				return nil, false, nil
+			}
+		}
+
+		log.Infof("Running command: %s on node: %s", writeCmd, selectedNode.Name)
+		_, err = Inst().N.RunCommandWithNoRetry(selectedNode, writeCmd, cmdConnectionOpts)
+		if err != nil {
+			log.Errorf("Failed to execute write command on node %s: %v", selectedNode.Name, err)
+			return nil, true, err
+		}
+
+		log.Infof("No pool is offline on node %s", selectedNode.Name)
+		return nil, true, fmt.Errorf("no pool is offline on the node %s", selectedNode.Name)
+	}
+
+	_, err := task.DoRetryWithTimeout(writeIO, 360*time.Minute, 30*time.Second)
+	if err != nil {
+		log.Errorf("Failed to write IO until volume full on node %s: %v", selectedNode.Name, err)
+		return "", err
+	}
+
+	log.Infof("IO writing completed, offline pool UUID: %s", poolUUID)
+	return poolUUID, nil
+}
+
+func FastpathVolumeReplStatus(n node.Node, volumeID string) (string, error) {
+
+	cmd := fmt.Sprintf("pxctl volume inspect %s | grep \"Replication Status\"", volumeID)
+	output, err := Inst().N.RunCommand(n, cmd, node.ConnectionOpts{
+		Timeout:         1 * time.Minute,
+		TimeBeforeRetry: 5 * time.Second,
+		Sudo:            true,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	output = strings.Split(strings.TrimSpace(output), ":")[1]
+	return strings.TrimSpace(output), nil
+}
+
+func CreateClusterSecret(n node.Node, name, secretKey string) error {
+	log.Infof("Creating Cluster wide secret")
+	isVsphereSecretExists := false
+
+	namespace, err := Inst().V.GetVolumeDriverNamespace()
+	log.FailOnError(err, "failed to get volume driver namespace")
+
+	if _, err := k8sCore.GetSecret(name, namespace); err == nil {
+		isVsphereSecretExists = true
+	}
+
+	if !isVsphereSecretExists {
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+			},
+			StringData: map[string]string{
+				secretKey: name,
+			},
+			Type: corev1.SecretTypeOpaque,
+		}
+		_, err = k8sCore.CreateSecret(secret)
+		if err != nil {
+			return err
+		}
+		log.Infof("Cluster wide secret successfully created")
+
+		cmd := fmt.Sprintf("yes | /opt/pwx/bin/pxctl secrets set-cluster-key --secret %v --overwrite", secretKey)
+		_, err = Inst().N.RunCommand(n, cmd, node.ConnectionOpts{
+			Timeout:         1 * time.Minute,
+			TimeBeforeRetry: 5 * time.Second,
+			Sudo:            true,
+		})
+		if err != nil {
+			return err
+		}
+	}
+	log.Infof("Cluster wide secret %v already exists", name)
+	return nil
+}

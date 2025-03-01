@@ -54,6 +54,7 @@ import (
 	storageApi "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -12921,3 +12922,147 @@ func injectInterruption(nodeObj node.Node, stage string) error {
 
 	return nil
 }
+
+var _ = Describe("{ValidateFastpathEncryptVolumeDetachWhenPoolOffline}", Label("staging", "p1", "pure_ops", "negative", "error_injection"), func() {
+	/*
+		   https://purestorage.atlassian.net/browse/HAZEL-1559
+
+			1. Create a Fastpath secure volume, attach it, and verify that it is mounted and Fastpath Active.
+			2. Perform IO operations on the volume.
+			3. Verify that the pool is offline and the volume is not in quorum.
+			4. Ensure that detaching and deleting the volume is successful.
+	*/
+
+	var (
+		volumeName      = fmt.Sprintf("fpsecure-%d", time.Now().Unix())
+		volumeId        string
+		volume          *opsapi.Volume
+		selectedPool    string
+		selectedStNode  *node.Node
+		mountPath       string
+		offlinePoolUuid string
+		poolSizeInGiB   uint64
+		volSize         = 50
+		haLevel         = 1
+		contexts        []*scheduler.Context
+	)
+	JustBeforeEach(func() {
+		StartTorpedoTest("ValidateFastpathEncryptVolumeDetachWhenPoolOffline", "Create a pool and fast path encrypt volume and make pool offline. validate volume is detachable after pool offline", nil, 0)
+
+		isDmthin, err := IsDMthin()
+		log.FailOnError(err, "Failed to check if the cluster is DMTHIN")
+		if !isDmthin {
+			Skip("Cluster is not DMTHIN so skipping the test")
+		}
+	})
+
+	stepLog := "Create a pool and fast path encrypt volume and make pool offline. validate volume is detachable after pool offline"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+
+		cleanup := func() {
+			log.InfoD("Performing cleanup")
+			err = Inst().S.RemoveLabelOnNode(*selectedStNode, k8s.NodeType)
+			log.FailOnError(err, "error removing label on node [%s]", selectedStNode.Name)
+			DestroyApps(contexts, nil)
+		}
+		defer cleanup()
+
+		stepLog = "Select a storage node and create cluster wide secret for secure volume"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			stNodes := node.GetStorageNodes()
+			dash.VerifyFatal(len(stNodes) > 0, true, fmt.Sprintf("Validate cluster has storage nodes"))
+
+			selectedPoolDetail, err := GetPoolWithLeastSize()
+			log.FailOnError(err, "error getting pool with least size")
+			selectedPool = selectedPoolDetail.Uuid
+			poolOriginalSize := selectedPoolDetail.GetTotalSize()
+			poolSizeInGiB = poolOriginalSize / units.GiB
+
+			selectedStNode, err = GetNodeWithGivenPoolID(selectedPool)
+			log.FailOnError(err, "error getting node with pool id %s", selectedPool)
+
+			// Remove if node-type label is set before the test
+			err = RemoveLabelsAllNodes(k8s.NodeType, true, false)
+			log.FailOnError(err, "error removing label on node ")
+
+			err = CreateClusterSecret(*selectedStNode, "px-vol-encryption", "cluster-wide-secret-key")
+			if err != nil && !k8serrors.IsAlreadyExists(err) {
+				log.FailOnError(err, "Failed to create cluster wide secret for secure volume")
+			}
+		})
+
+		stepLog = "Schedule application and Add label on the selected storage node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			var err error
+			err = Inst().S.AddLabelOnNode(*selectedStNode, k8s.NodeType, k8s.FastpathNodeType)
+			log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedStNode.Name))
+			Inst().AppList = []string{"fio-fastpath-repl1"}
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("fastpath-%d", i))...)
+			}
+			ValidateApplications(contexts)
+		})
+
+		stepLog = fmt.Sprintf("create, attach and mount fast path secure volume [%v]", volumeName)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			volSize = int(poolSizeInGiB + 50)
+			volumeId, err = CreateAndAttachFPVolume(*selectedStNode, volumeName, selectedPool, volSize, haLevel, true)
+			log.FailOnError(err, fmt.Sprintf("Failed to create or attach volume [%v]", volumeName))
+
+			mountPath = fmt.Sprintf("/var/lib/osd/mounts/%s", volumeName)
+			err = MountOrUnmountVolume(mountPath, volumeName, *selectedStNode, true)
+			log.FailOnError(err, fmt.Sprintf("Failed to mount volume [%v]", volumeName))
+			log.InfoD("volume [%s] mounted [%v]", volumeName, mountPath)
+
+			volume, err = Inst().V.InspectVolume(volumeId)
+			log.FailOnError(err, "Failed to inspect volume %v", volumeId)
+
+			err = FastpathVolumeValidation(volume, opsapi.FastpathStatus_FASTPATH_ACTIVE)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Validate %v has active fastpath volume", volume.Id))
+		})
+
+		stepLog = fmt.Sprintf("Perform IOs on the volume [%v] and verify pool is offline, volume is not in quorum", volumeName)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			offlinePoolUuid, err = WriteIOUntilVolumeFull(volumeName, mountPath, *selectedStNode, 20)
+			log.FailOnError(err, "Failed to perform IOs on volume [%v]", volumeName)
+			log.InfoD("IOs done on volume [%s]", volumeName)
+
+			poolsStatus, err := Inst().V.GetNodePoolsStatus(*selectedStNode)
+			log.FailOnError(err, "error getting pool status on node %s", selectedStNode.Name)
+			dash.VerifyFatal(poolsStatus[offlinePoolUuid], "Offline", fmt.Sprintf("verify status for the pool %s, current status %v", offlinePoolUuid, poolsStatus[offlinePoolUuid]))
+
+			rplStatus, err := FastpathVolumeReplStatus(*selectedStNode, volume.Id)
+			log.FailOnError(err, "failed to run command on node %s", selectedStNode.Name)
+			dash.VerifyFatal(rplStatus, "Not in quorum", fmt.Sprintf("Verify status for the volume %v, Expected status is: Not in quorum, Current status is: %v", volume.Id, rplStatus))
+
+			log.Infof("Waiting a few minutes for the I/O operations to complete on the volume [%s]", volumeName)
+			time.Sleep(3 * time.Minute)
+
+		})
+
+		stepLog = "validate the volume is detachable and deletable"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			err = AttachOrDetachVolume(volumeName, *selectedStNode, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verify volume [%v] detached successfully", volumeName))
+
+			err = Inst().V.DeleteVolume(volume.Id)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verify volume [%v] deleted successfully", volumeName))
+
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
