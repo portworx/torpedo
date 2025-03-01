@@ -1338,13 +1338,10 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options sch
 
 	for _, appSpec := range app.SpecList {
 		t := func() (interface{}, bool, error) {
-			startTime := time.Now()
 			obj, err := k.createVirtualMachineObjects(appSpec, ns, app)
 			if err != nil {
 				return nil, true, err
 			}
-			duration := time.Since(startTime)
-			log.Infof("Total time taken to clone disk and bringing up VM is [%.2f]seconds ", duration)
 			return obj, false, nil
 		}
 		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
@@ -5824,6 +5821,7 @@ func (k *K8s) createVirtualMachineObjects(
 ) (interface{}, error) {
 	isPVCcloned := false
 	if obj, ok := spec.(*kubevirtv1.VirtualMachine); ok {
+		startTime := time.Now()
 		if source, exists := obj.Annotations["pvc.source"]; exists {
 			if source == "cloned" {
 				isPVCcloned = true
@@ -5896,6 +5894,8 @@ func (k *K8s) createVirtualMachineObjects(
 				return nil, true, fmt.Errorf("waiting for VM [%s] in namespace [%s] to be ready", obj.Name, obj.Namespace)
 			}
 			_, err = task.DoRetryWithTimeout(t, cdiImageImportTimeout, cdiImageImportRetry)
+			duration := time.Since(startTime)
+			log.Infof("Total time taken to clone disk and bringing up VM is [%v]seconds ", int(duration.Seconds()))
 			return vm, nil
 		}
 	}

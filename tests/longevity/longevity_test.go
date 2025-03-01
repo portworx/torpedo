@@ -76,6 +76,7 @@ var _ = Describe("{Longevity}", func() {
 			for triggerType, triggerFunc := range triggerFunctions {
 				log.InfoD("Registering trigger: [%v]", triggerType)
 				go testTrigger(&wg, &contexts, triggerType, triggerFunc, &triggerLock, &triggerEventsChan)
+				go MonitorVMStatus()
 				wg.Add(1)
 			}
 		})
@@ -467,4 +468,83 @@ func testTrigger(wg *sync.WaitGroup,
 		time.Sleep(controlLoopSleepTime)
 	}
 	os.Exit(0)
+}
+
+func MonitorVMStatus() {
+	var (
+		prevVMStatusMap    = make(map[string]string)
+		currentVMStatusMap = make(map[string]string)
+		vmStatusCountMap   = make(map[string]int) // Map storing the repeated non running status count
+		timeInterval       int
+		initialised        bool
+	)
+	retryDelay := 1 * time.Minute
+	for {
+		select {
+		case <-StopLongevityChan:
+			log.Infof("Recieved stop signal. Exiting VM status monitoring")
+			return
+		default:
+			log.Infof(" Started VM monitoring  ")
+			vms, err := GetAllVMsFromAllNamespaces()
+			if err != nil {
+				log.Warnf("Failed to get VMs from all namespaces")
+				time.Sleep(retryDelay)
+				continue
+			}
+
+			if len(vms) == 0 {
+				log.Warnf("No VMs found")
+				time.Sleep(retryDelay)
+				continue
+			}
+			log.Infof("Total number of VMs found : [%v]", len(vms))
+
+			if !initialised {
+				for _, vm := range vms {
+					vmKey := fmt.Sprintf("%v/%v", vm.Namespace, vm.Name)
+					prevVMStatusMap[vmKey] = string(vm.Status.PrintableStatus)
+				}
+				initialised = true
+			}
+
+			//After 5 mins of time interval VM status would be checked agian
+			log.Infof("Sleeping for 5 minutes before checking VM status again")
+			timeInterval = 5
+			time.Sleep(time.Duration(timeInterval) * time.Minute)
+
+			for _, vm := range vms {
+				vmKey := fmt.Sprintf("%v/%v", vm.Namespace, vm.Name)
+				currentVMStatusMap[vmKey] = string(vm.Status.PrintableStatus)
+
+				if prevStatus, vmPresent := prevVMStatusMap[vmKey]; vmPresent {
+					if currentVMStatusMap[vmKey] != "Running" {
+						log.Infof("Found VM [%v] in namespace [%v],which is not in running state, Status : [%v]", vm.Name, vm.Namespace, currentVMStatusMap[vmKey])
+						if currentVMStatusMap[vmKey] == prevStatus {
+							// VM has been in the same non-running state
+							vmStatusCountMap[vmKey]++
+							if vmStatusCountMap[vmKey] >= 3 {
+								log.Warnf("VM [%v] in namespace [%v] has been in [%v] state for 15 minutes",
+									vm.Name, vm.Namespace, currentVMStatusMap[vmKey])
+							}
+						} else {
+							// Status changed, reset counter
+							vmStatusCountMap[vmKey] = 1
+						}
+					} else {
+						// VM is running, reset count
+						vmStatusCountMap[vmKey] = 0
+					}
+				} else {
+					// New VM detected, initialize its tracking
+					vmStatusCountMap[vmKey] = 0
+				}
+			}
+
+			// Copy currentVMStatusMap to prevVMStatusMap
+			for vmKey, status := range currentVMStatusMap {
+				prevVMStatusMap[vmKey] = status
+			}
+		}
+	}
 }

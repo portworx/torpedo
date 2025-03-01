@@ -2703,3 +2703,35 @@ func GenericColdPlugDataVolumesToKubevirtVM(vm kubevirtv1.VirtualMachine, number
 	}
 	return true, nil
 }
+
+func GenericGatherInitialUptimeAndNode(vm kubevirtv1.VirtualMachine) (map[string]time.Duration, map[string]string, error) {
+	initialUptime := make(map[string]time.Duration)
+	initialNodeName := make(map[string]string)
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func(vm kubevirtv1.VirtualMachine) {
+		defer GinkgoRecover()
+		defer wg.Done()
+
+		uptime, err := GetVMUptime(vm)
+		if LogAndReturnIfErr(err, "Failed to get uptime from VM %s: %v", vm.Name, err) {
+			return
+		}
+		nodeName, err := GetNodeOfVM(vm)
+		if LogAndReturnIfErr(err, "Failed to get node of VM %s: %v", vm.Name, err) {
+			return
+		}
+		mu.Lock()
+		initialUptime[fmt.Sprintf("%s/%s", vm.Namespace, vm.Name)] = uptime
+		initialNodeName[fmt.Sprintf("%s/%s", vm.Namespace, vm.Name)] = nodeName
+		mu.Unlock()
+
+	}(vm)
+	wg.Wait()
+	if aggregatedErr := ValidateForErrors(); aggregatedErr != nil {
+		return nil, nil, aggregatedErr
+	}
+	return initialUptime, initialNodeName, nil
+}
