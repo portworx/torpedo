@@ -1059,9 +1059,6 @@ func waitForPoolToBeResized(expectedSize uint64, poolIDToResize string, isJourna
 			log.InfoD(fmt.Sprintf("------Printing the px logs on the node:%s ----------", n.Name))
 			PrintCommandOutput("journalctl -lu portworx* -n 200 --no-pager ", *n)
 			log.InfoD(fmt.Sprintf("------Finished Printing the px logs on the node:%s ----------", n.Name))
-		} else {
-			//Wait for the driver to come up for handling bug https://purestorage.atlassian.net/browse/PWX-42284
-			err = Inst().V.WaitDriverUpOnNode(*n, defaultTimeout)
 		}
 	} else {
 		log.Warnf("error getting node for pool uuid [%s]. Cause: %v", poolIDToResize, terr)
@@ -1978,6 +1975,8 @@ var _ = Describe("{PoolResizeDiskDiff}", Label("p1", "positive", "pool_ops", "po
 
 			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using resize-disk", selectedPool.Uuid, selectedNode.Name))
+			//Wait for the driver to come up for handling bug https://purestorage.atlassian.net/browse/PWX-42284
+			err = Inst().V.WaitDriverUpOnNode(selectedNode, defaultTimeout)
 		})
 
 		stepLog = fmt.Sprintf("Expanding pool  2nd time on node %s and pool UUID: %s using resize-disk", selectedNode.Name, selectedPool.Uuid)
@@ -1992,6 +1991,8 @@ var _ = Describe("{PoolResizeDiskDiff}", Label("p1", "positive", "pool_ops", "po
 
 			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using resize-disk", selectedPool.Uuid, selectedNode.Name))
+			//Wait for the driver to come up for handling bug https://purestorage.atlassian.net/browse/PWX-42284
+			err = Inst().V.WaitDriverUpOnNode(selectedNode, defaultTimeout)
 		})
 
 		stepLog = fmt.Sprintf("Expanding pool 3rd time on node %s and pool UUID: %s using resize-disk", selectedNode.Name, selectedPool.Uuid)
@@ -2006,6 +2007,8 @@ var _ = Describe("{PoolResizeDiskDiff}", Label("p1", "positive", "pool_ops", "po
 
 			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using resize-disk", selectedPool.Uuid, selectedNode.Name))
+			//Wait for the driver to come up for handling bug https://purestorage.atlassian.net/browse/PWX-42284
+			err = Inst().V.WaitDriverUpOnNode(selectedNode, defaultTimeout)
 		})
 		appsValidateAndDestroy(contexts)
 
