@@ -6432,3 +6432,140 @@ var _ = Describe("{AddMetadataDriveWithKVDBNodeDown}", Label("staging", "p0", "n
 	})
 
 })
+
+var _ = Describe("{AddDriveOnStorageLessNodeAndReboot}", Label("staging", "p0", "negative", "AddDrive"), func() {
+	/*
+		ticket id: https://purestorage.atlassian.net/browse/HAZEL-1026
+		Prerequsites:
+		At least one storageless nodes are required to run this test.
+		step1: Add drive on storageless node
+		step2: verfiy storageless node areconvert to storage node
+		step3: Reboot that node
+		step4: verify still it's drive is there
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("AddDriveOnStorageLessNodeAndReboot", "Add the drive on storegelessnode and reboot the node", nil, 0)
+	})
+
+	itLog := "Add the drive on storegelessnode and reboot the node"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		var (
+			nodeSelected node.Node
+		)
+		storagelessNode := node.GetStorageLessNodes()
+		log.InfoD("Checking number of storageless nodes: %d", len(storagelessNode))
+		if len(storagelessNode) == 0 {
+			Skip("At least one storageless nodes are required to run this test!...")
+		}
+		log.InfoD("Selecting a random storage node")
+		nodeSelected = GetRandomNode(storagelessNode)
+		log.InfoD("Selected storageless node: %s", nodeSelected)
+		stepLog := "Check if the node has a metadata disk (DMTHIN cluster) or add a data drive (BTRFS cluster)"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.InfoD("Check if the cluster is DMTHIN")
+			isDmthin, _ := IsDMthin()
+			if isDmthin {
+				isDedicatedMetadataDiskExist := false
+				path, err := getMetaDataDiskPath(nodeSelected)
+				log.FailOnError(err, "Failed to get metadata disk path")
+				if path != "" {
+					log.InfoD("Metadata disk already exists: %v", path)
+					isDedicatedMetadataDiskExist = true
+				}
+				if !isDedicatedMetadataDiskExist {
+					driveSpecs, err := GetCloudDriveDeviceSpecs()
+					log.FailOnError(err, "Error getting cloud drive specs")
+					deviceSpec := driveSpecs[0]
+					newdevicespec := deviceSpec + " --metadata"
+					log.InfoD("No metadata disk found. Adding metadata disk...")
+					err = Inst().V.AddCloudDrive(&nodeSelected, newdevicespec, -1)
+					log.FailOnError(err, "Failed to add metadata device on node: %s", nodeSelected.Name)
+					log.InfoD("Metadata disk successfully added on node [%s]", nodeSelected.Hostname)
+					path, err = getMetaDataDiskPath(nodeSelected)
+					log.FailOnError(err, "Failed to get metadata disk path after addition")
+				}
+			} else {
+				log.InfoD("Cluster is not DMTHIN, skipping metadata disk addition.")
+			}
+			driveSpecs, err := GetCloudDriveDeviceSpecs()
+			log.FailOnError(err, "Error getting cloud drive specs")
+			deviceSpec := driveSpecs[0]
+			deviceSpecParams := strings.Split(deviceSpec, ",")
+			paramsArr := make([]string, 0)
+			for _, param := range deviceSpecParams {
+				if strings.Contains(param, "size") {
+					paramsArr = append(paramsArr, fmt.Sprintf("size=%d,", 70))
+				} else {
+					paramsArr = append(paramsArr, param)
+				}
+			}
+			newSpec := strings.Join(paramsArr, ",")
+			log.InfoD("Attempting to add a regular data drive of size  to node [%s]", nodeSelected.Name)
+			err = Inst().V.AddCloudDrive(&nodeSelected, newSpec, -1)
+			dash.VerifyFatal(err, nil, "Drive was not added successfully")
+			log.InfoD("Successfully added a new data drive of size to node [%s] (DMTHIN or Non-DMTHIN cluster)", nodeSelected.Name)
+		})
+
+		stepLog = "Verify storageless node is converted to a storage node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Info("Refresh the driver endpoints")
+			err = Inst().S.RefreshNodeRegistry()
+			log.FailOnError(err, "error refreshing node registry")
+			err = Inst().V.RefreshDriverEndpoints()
+			log.FailOnError(err, "error refreshing storage drive endpoints")
+			storageNodesAfterstoragelessnodejoin := node.GetStorageNodes()
+			log.InfoD("Current storage nodes: %+v", storageNodesAfterstoragelessnodejoin)
+			found := false
+			for _, nodeID := range storageNodesAfterstoragelessnodejoin {
+				if nodeID.Id == nodeSelected.Id {
+					found = true
+					break
+				}
+			}
+			dash.VerifyFatal(found, true, fmt.Sprintf("Storageless node with ID %s should be converted to a storage node.", nodeSelected.Id))
+			log.InfoD("Storageless node with ID %s is successfully converted to a storage node.", nodeSelected.Id)
+		})
+		stepLog = "Reboot the node selected"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := Inst().N.RebootNode(nodeSelected,
+				node.RebootNodeOpts{
+					Force: true,
+					ConnectionOpts: node.ConnectionOpts{
+						Timeout:         defaultCommandTimeout,
+						TimeBeforeRetry: defaultCommandRetry,
+					},
+				})
+			log.FailOnError(err, "Failed to reboot node %v", nodeSelected.Name)
+		})
+
+		stepLog = "Verify the drive is still present on the storageless node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Info("Refresh the driver endpoints")
+			err = Inst().S.RefreshNodeRegistry()
+			log.FailOnError(err, "error refreshing node registry")
+			err = Inst().V.RefreshDriverEndpoints()
+			log.FailOnError(err, "error refreshing storage drive endpoints")
+			storageNodesAfterstoragelessnodejoin := node.GetStorageNodes()
+			log.InfoD("Current storage nodes: %+v", storageNodesAfterstoragelessnodejoin)
+			found := false
+			for _, nodeID := range storageNodesAfterstoragelessnodejoin {
+				if nodeID.Id == nodeSelected.Id {
+					found = true
+					break
+				}
+			}
+			dash.VerifyFatal(found, true, fmt.Sprintf("Storageless node with ID %s should be converted to a storage node.", nodeSelected.Id))
+			log.InfoD("Storageless node with ID %s is still a storage node.", nodeSelected.Id)
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+
+})
