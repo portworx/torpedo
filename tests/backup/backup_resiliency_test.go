@@ -3743,6 +3743,8 @@ var _ = Describe("{UninstallPxBackupAndRestoreFromTheBackup}", Label(TestCaseLab
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		err = k8sStorage.DeleteStorageClass(scName)
 		log.Warnf("Deleting storage class %s returned: %v", scName, err)
+		err := SetSourceKubeConfig()
+		log.FailOnError(err, "Switching back to source cluster context")
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 
 	})
