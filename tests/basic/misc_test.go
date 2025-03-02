@@ -6740,3 +6740,277 @@ var _ = Describe("{VerifyFstrimWithPoolExpandAndScheduledFstrim}", Label("stagin
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{ValidateKVDBFailoverWithClustersScaleDown}", Label("staging", "p0", "negative", "error_injection", "node_ops"), func() {
+
+	/*
+			  https://purestorage.atlassian.net/browse/HAZEL-1034
+			   1) Start 9 nodes cluster with 5 storage, 4 storageless nodes. Label 4  all storageless nodes with 'px/metadata-node=true'
+			   2)Label kvdb nodes px/metadata-node=true'/remaining nodes with px/metadata-node=falses
+		       3) Scale down cluster to 8 nodes such that kvdb failover happens
+		       4) Verify kvdb drives get attached to the new node and cluster is healthy
+	*/
+
+	var (
+		testrailID               = 0
+		runID                    int
+		contexts                 []*scheduler.Context
+		storageNodes             []node.Node
+		storageLessNodes         []node.Node
+		storageLessNodesIds      []string
+		selectedNode             node.Node
+		nonKvdbNodesStorageNodes []node.Node
+		Kvdb_Nodes               []KvdbNode
+	)
+	JustBeforeEach(func() {
+		StartTorpedoTest("ValidateKVDBFailoverWithClustersScaleDown", "Deploy setup with 5 storage and 4 storageless nodes, label 4 nodes with px/metadata-node=true, scale down, and verify", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	stepLog := "Label storageless nodes as px/metadata-node=true, label KVDB nodes as px/metadata-node=true, and other nodes as px/metadata-node=false."
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		cleanup := func() {
+			log.Info("Executing cleanup tasks")
+			allNodes := node.GetStorageDriverNodes()
+			for _, n := range allNodes {
+				err = Inst().S.IsNodeReady(n)
+				if err != nil {
+					log.InfoD("Powering on node [%s]", n.Name)
+					err := Inst().N.PowerOnVM(n)
+					log.FailOnError(err, "error powering on node [%s]", n.Name)
+				}
+				err = Inst().V.WaitDriverUpOnNode(n, 15*time.Minute)
+				log.FailOnError(err, "error while waiting for driver up on node %s", n.Name)
+			}
+			if len(storageLessNodes) > 0 {
+				for _, node := range storageLessNodes {
+					err := Inst().S.RemoveLabelOnNode(node, "px/metadata-node")
+					log.FailOnError(err, "Failed to remove label  'px/metadata-node=true' from node [%s]", node)
+					log.Infof("Successfully removed label from node [%s]", node)
+				}
+			}
+			if len(Kvdb_Nodes) > 0 {
+				for _, kvdbnode := range Kvdb_Nodes {
+					nodeDetails, err := node.GetNodeDetailsByNodeID(kvdbnode.ID)
+					err = Inst().S.RemoveLabelOnNode(nodeDetails, "px/metadata-node")
+					log.FailOnError(err, "Failed to remove label  'px/metadata-node=true' from node [%s]", nodeDetails)
+					log.Infof("Successfully removed label from node [%s]", nodeDetails)
+				}
+				for _, nonkvdbnode := range nonKvdbNodesStorageNodes {
+					err = Inst().S.RemoveLabelOnNode(nonkvdbnode, "px/metadata-node")
+					log.FailOnError(err, "Failed to remove label  'px/metadata-node=false' from node [%s]", nonkvdbnode)
+					log.Infof("Successfully removed label from node [%s]", nonkvdbnode)
+				}
+			}
+
+		}
+		defer cleanup()
+		stepLog = "Validate cluster has at least one storage-less node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			storageNodes = node.GetStorageNodes()
+			selectedNode = GetRandomNode(storageNodes)
+			log.InfoD("Check if the cluster has at least one storage-less node before proceeding")
+			storageLessNodes = node.GetStorageLessNodes()
+			if len(storageLessNodes) == 0 {
+				log.InfoD("Skipping the test as it required atleast one storage less node")
+				Skip("Skipping the test as it required atleast one storage less node")
+			}
+			for _, n := range storageLessNodes {
+				storageLessNodesIds = append(storageLessNodesIds, n.Name)
+			}
+		})
+		Kvdb_Nodes, err = GetAllKvdbNodes()
+		log.FailOnError(err, "Failed to get kvdbnodes")
+		stepLog = "Getting non KVDB nodes in the cluster"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			kvdbNodeMap := make(map[string]bool)
+			for _, kvdbNode := range Kvdb_Nodes {
+				kvdbNodeMap[kvdbNode.ID] = true
+			}
+			for _, storageNode := range storageNodes {
+				if _, exists := kvdbNodeMap[storageNode.Id]; !exists {
+					nonKvdbNodesStorageNodes = append(nonKvdbNodesStorageNodes, storageNode)
+				}
+			}
+			log.Infof("Storage nodes not part of KVDB cluster: [%v]", nonKvdbNodesStorageNodes)
+
+		})
+
+		stepLog = "Label storage less nodes with px/metadata-node=true and restart the px on those nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, storage_less_node := range storageLessNodes {
+				err := Inst().S.AddLabelOnNode(storage_less_node, "px/metadata-node", "true")
+				log.FailOnError(err, "Failed to add label 'px/metadata-node=true' to node [%s]", storage_less_node)
+				log.Info("Stop the volume driver and wait for it to stop completely")
+				StopVolDriverAndWait([]node.Node{storage_less_node})
+				log.InfoD("PX service successfully stopped on node: %v", storage_less_node)
+				log.Infof("Restarting PX on node: %v", storage_less_node)
+				err = Inst().V.StartDriver(storage_less_node)
+				log.FailOnError(err, "error starting driver on node %s", storage_less_node)
+				err = Inst().V.WaitDriverUpOnNode(storage_less_node, 10*time.Minute)
+				log.FailOnError(err, "error while waiting for driver up on node %s", storage_less_node.Name)
+				log.Infof("Successfully restart the portworx :[%v]", storage_less_node.Name)
+			}
+
+		})
+		stepLog = "Label kvdbs nodes with px/metadata-node=true and restart the px on those nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, kvdbNode := range Kvdb_Nodes {
+				nodeDetails, err := node.GetNodeDetailsByNodeID(kvdbNode.ID)
+				log.FailOnError(err, "Unable to get nodedetails")
+				err = Inst().S.AddLabelOnNode(nodeDetails, "px/metadata-node", "true")
+				log.FailOnError(err, "Failed to add label 'px/metadata-node=true' to node [%s]", nodeDetails)
+				log.Info("Stop the volume driver and wait for it to stop completely")
+				StopVolDriverAndWait([]node.Node{nodeDetails})
+				log.InfoD("PX service successfully stopped on node: %v", nodeDetails)
+				log.Infof("Restarting PX on node: %v", nodeDetails)
+				err = Inst().V.StartDriver(nodeDetails)
+				log.FailOnError(err, "error starting driver on node %s", nodeDetails)
+				err = Inst().V.WaitDriverUpOnNode(nodeDetails, 10*time.Minute)
+				log.FailOnError(err, "error while waiting for driver up on node %s", nodeDetails)
+				log.Infof("Successfully restart the portworx :[%v]", nodeDetails.Name)
+			}
+
+		})
+		stepLog = "Label Non kvdb storage nodes with px/metadata-node=falses and restart the px on those nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, non_kvdb_node_storage_node := range nonKvdbNodesStorageNodes {
+				err := Inst().S.AddLabelOnNode(non_kvdb_node_storage_node, "px/metadata-node", "false")
+				log.FailOnError(err, "Failed to add label 'px/metadata-node=falses' to node [%s]", non_kvdb_node_storage_node)
+				log.Info("Stop the volume driver and wait for it to stop completely")
+				StopVolDriverAndWait([]node.Node{non_kvdb_node_storage_node})
+				log.InfoD("PX service successfully stopped on node: %v", non_kvdb_node_storage_node)
+				log.Infof("Restarting PX on node: %v", non_kvdb_node_storage_node)
+				err = Inst().V.StartDriver(non_kvdb_node_storage_node)
+				log.FailOnError(err, "error starting driver on node %s", non_kvdb_node_storage_node)
+				err = Inst().V.WaitDriverUpOnNode(non_kvdb_node_storage_node, 10*time.Minute)
+				log.FailOnError(err, "error while waiting for driver up on node %s", non_kvdb_node_storage_node)
+				log.Infof("Successfully restart the portworx :[%v]", non_kvdb_node_storage_node.Name)
+			}
+
+		})
+
+		stepLog = "Scale down the storage node in cluster"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			selectedKVDBNode := Kvdb_Nodes[0]
+			selectedNode, err = node.GetNodeDetailsByNodeID(selectedKVDBNode.ID)
+
+			namespace, err := Inst().S.GetPortworxNamespace()
+			log.FailOnError(err, "error getting the portworx namespace")
+
+			pxOperator := operator.Instance()
+			stcList, err := pxOperator.ListStorageClusters(namespace)
+			log.FailOnError(err, "error listing the storage clusters for the namespace %s", namespace)
+
+			stc, err := pxOperator.GetStorageCluster(stcList.Items[0].Name, stcList.Items[0].Namespace)
+			log.FailOnError(err, "error getting the storage cluster %s", stcList.Items[0].Name)
+			pxCloudDriveConfigMap, err := Inst().S.GetPXCloudDriveConfigMap(stc)
+			log.FailOnError(err, "error getting the PX cloud drive config map")
+
+			err = Inst().N.DetachDrivesFromVM(selectedNode.Name, pxCloudDriveConfigMap)
+			log.FailOnError(err, "error detaching the drives from the node %s", selectedNode.Name)
+			time.Sleep(1 * time.Minute)
+			err = Inst().V.RefreshDriverEndpoints()
+			log.FailOnError(err, "error refreshing the driver endpoints")
+			log.InfoD("Powering off the node [%s]", selectedNode.Name)
+			err = Inst().N.PowerOffVM(selectedNode)
+			log.FailOnError(err, "error powering off node [%s]", selectedNode.Name)
+			log.Infof("Waiting 10 mins to power off the VM [%s]", selectedNode.Name)
+			time.Sleep(10 * time.Minute)
+		})
+		stepLog := "Verified storageless node only joined in kvdb members"
+		Step(stepLog, func() {
+			checkKVDBQuorum := func() (interface{}, bool, error) {
+				healthyCount := 0
+				getKVDBNodes, err := GetAllKvdbNodes()
+				if err != nil {
+					return nil, true, fmt.Errorf("unable to get KVDB nodes: %w", err)
+				}
+				log.Infof("KVDB node details: %v", getKVDBNodes)
+				for _, each := range getKVDBNodes {
+					if each.IsHealthy == true {
+						healthyCount++
+					}
+				}
+				if healthyCount == 3 {
+					log.Infof("KVDB quorum intact. Healthy count: %d, Expected: 2s", healthyCount)
+					return getKVDBNodes, false, nil
+				}
+				log.Errorf("KVDB quorum lost. Healthy count: %d, Expected: 3. Retrying...", healthyCount)
+				return nil, true, fmt.Errorf("quorum lost. Healthy count: %d, Expected: 3", healthyCount)
+			}
+			_, err := task.DoRetryWithTimeout(checkKVDBQuorum, 20*time.Minute, 1*time.Minute)
+			log.FailOnError(err, "Unable to get KVDB nodes")
+			getKVDBNodes, err := GetAllKvdbNodes()
+			log.Infof("KVDB node details: %v", getKVDBNodes)
+			getKVDBNodes, err = GetAllKvdbNodes()
+			log.FailOnError(err, "Unable to get KVDB nodes")
+			kvdbNodeMap := make(map[string]bool)
+			for _, kvdbNode := range getKVDBNodes {
+				kvdbNodeMap[kvdbNode.ID] = true
+				log.Infof("KVDB member found: NodeID [%s]", kvdbNode.ID)
+			}
+			found := false
+			for _, storageLessNode := range storageLessNodes {
+				log.Infof("Checking storage-less node [%s]", storageLessNode.Id)
+				if _, exists := kvdbNodeMap[storageLessNode.Id]; exists {
+					found = true
+					log.Infof("Storage-less Node [%s] is a KVDB member.", storageLessNode.Id)
+					break
+				}
+			}
+			dash.VerifyFatal(found, true, "Is Storage less node is part of the kvdb member?")
+
+		})
+
+		stepLog = "Powering on the shutdown node and waiting for the driver to come down node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.InfoD("Powering on node [%s]", selectedNode.Name)
+			err := Inst().N.PowerOnVM(selectedNode)
+			log.FailOnError(err, "error powering on node [%s]", selectedNode.Name)
+
+			log.Infof("Waiting 10 mins to power on the VM [%s]", selectedNode.Name)
+			time.Sleep(10 * time.Minute)
+			stNode, err := node.GetNodeByName(selectedNode.Name)
+			log.FailOnError(err, "error getting the node [%s]", selectedNode.Name)
+			err = Inst().V.WaitDriverUpOnNode(stNode, 10*time.Minute)
+			log.FailOnError(err, "error while waiting for driver up on node %s", selectedNode.Name)
+			log.Infof("Node powered on successfully after storage less to storage node transition")
+
+			err = Inst().S.RefreshNodeRegistry()
+			log.FailOnError(err, "error refreshing the node registry")
+			log.Infof("Refreshed the node registry Successfully")
+
+			err = Inst().V.RefreshDriverEndpoints()
+			log.FailOnError(err, "error refreshing the driver endpoints")
+			log.Infof("Refreshed the driver endpoints Successfully")
+		})
+
+		stepLog = "Verify all KVDB nodes are running and cluster in a healthy state"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			storageNodes := node.GetStorageNodes()
+			kvdbMembers, err := Inst().V.GetKvdbMembers(storageNodes[0])
+			log.FailOnError(err, "Failed to retrieve KVDB members list")
+
+			err = kvdbutils.ValidateKVDBMembers(kvdbMembers)
+			log.FailOnError(err, "Failed to validate KVDB members")
+
+			output, err := runCmd("pxctl status", storageNodes[0])
+			log.FailOnError(err, "Failed to execute pxctl status on node: %v", storageNodes[0].Name)
+			dash.VerifyFatal(!strings.Contains(output, "Warning"), true, "Output contains warnings. Is the cluster healthy?")
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
