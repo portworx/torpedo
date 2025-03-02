@@ -718,7 +718,7 @@ const (
 	// Triggers VM start and stop
 	KubevirtVMStartAndStop = "kubevirtVMStartAndStop"
 
-	//Inject network delays
+	// Inject network delays
 	InjectNetworkDelay = "injectNetworkDelay"
 
 	// PowerOffAllKvdbVMs power-off all KVDB VMs node in px-lite cluster
@@ -739,7 +739,7 @@ const (
 	// PowerOffNBy2PlusOneNodes power off N/2 + 1 in px-csi cluster
 	PowerOffNBy2PlusOneNodes = "powerOffNBy2PlusOneNodes"
 
-	//Add Hot Pluggable Disk to kubevirt VM and then live migrate
+	// Add Hot Pluggable Disk to kubevirt VM and then live migrate
 	AddHotPlugDiskToVMAndLiveMigrate = "addHotPlugDiskToVMAndLiveMigrate"
 
 	// Bring down the node with max storage drives associated with it, verify the drives and pools on the new node.
@@ -748,13 +748,13 @@ const (
 	// AsyncDR node restart on source runs Async DR migration between two clusters with px restart
 	AsyncDRNodeRestartSource = "asyncdrnoderestartsource"
 
-	//Add Hot Pluggable Disk to all kubevirt VM and then live migrate
+	// Add Hot Pluggable Disk to all kubevirt VM and then live migrate
 	AddHotPlugDiskToAllVMAndLiveMigrate = "addHotPlugDiskToallVMAndLiveMigrate"
 
 	// AsyncDR node restart on destination runs Async DR migration between two clusters with px restart
 	AsyncDRNodeRestartDestination = "asyncdrnoderestartdestination"
 
-	//Generic Kubevirt VM live migration event handles already existing VMs as well
+	// Generic Kubevirt VM live migration event handles already existing VMs as well
 	GenericKubevirtVMLiveMigration = "genericKubevirtVMLiveMigration"
 
 	// AsyncDR node restart on source runs Async DR migration between two clusters with px restart
@@ -763,10 +763,10 @@ const (
 	// Cold add disk to kubevirt VM
 	ColdAddDiskToKubevirtVM = "coldAddDiskToKubevirtVM"
 
-	//Adds Hot pluggable disk to Kubevirt VM including existing VMs
+	// Adds Hot pluggable disk to Kubevirt VM including existing VMs
 	GenericHotPluggableDiskToKubevirtVM = "genericHotPluggableDiskToKubevirtVM"
 
-	//Add Cold pluggable disk to kubevirt VM including exisiting VMs
+	// Add Cold pluggable disk to kubevirt VM including exisiting VMs
 	GenericColdAddDiskToKubevirtVM = "genericColdAddDiskToKubevirtVM"
 
 	// KVDBNodePXStopAndStart trigger to Stop PX on KVDB node
@@ -8498,6 +8498,28 @@ func TriggerRelaxedReclaim(contexts *[]*scheduler.Context, recordChan *chan *Eve
 	updateMetrics(*event)
 }
 
+// Checks if any VMs present on Node and if so, live migrates all VMs to other nodes
+func checkIfVMsExistInNodeAndLiveMigrateAllVMs(nodeToDecomm node.Node) (migrated bool, vmFound bool, err error) {
+	vms, err := GetAllVMsOnNode(nodeToDecomm)
+	if err != nil {
+		log.Infof("Failed to get VMs on node [%s], Error : [%v]", nodeToDecomm.Name, err)
+		return false, false, err // Actual error
+	}
+	if len(vms) == 0 {
+		log.Warnf("Found no VMs on node [%v]", nodeToDecomm.Name)
+		return false, false, nil
+	}
+	for _, vm := range vms {
+		err = GenericStartAndWaitForVMMigration(vm, ctxt.TODO())
+		if err != nil {
+			log.Warnf("Failed to migrate VM [%s] in namespace [%v], Error : [%v]", vm.Name, vm.Namespace, err)
+			return false, true, err // VMs found, but migration failed
+		}
+	}
+	log.Infof("Successfully migrated all VMs from node [%s]", nodeToDecomm.Name)
+	return true, true, nil // VMs found, and migration succeeded
+}
+
 // TriggerNodeDecommission decommission the node for the PX cluster
 func TriggerNodeDecommission(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
@@ -8531,6 +8553,24 @@ func TriggerNodeDecommission(contexts *[]*scheduler.Context, recordChan *chan *E
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			nodeContexts, err := GetContextsOnNode(contexts, &nodeToDecomm)
+
+			// Check if any VMs are present on the node. If so,  live migrate those VMs to other nodes
+			migrated, vmFound, err := checkIfVMsExistInNodeAndLiveMigrateAllVMs(nodeToDecomm)
+			if vmFound {
+				if migrated {
+					log.InfoD("Successfully completed all VM migrations")
+				} else {
+					log.InfoD("Migration of one or more VMs failed on node [%s]", nodeToDecomm.Name)
+				}
+			} else {
+				log.InfoD("No KubeVirt VMs present on node [%s]", nodeToDecomm.Name)
+			}
+			if err != nil {
+				log.Infof("Failed to migrate KubeVirt VMs, err: [%v]", err)
+				UpdateOutcome(event, err)
+				return
+			}
+
 			var suspendedScheds []*storkapi.VolumeSnapshotSchedule
 			defer func() {
 				if len(suspendedScheds) > 0 {
@@ -16334,7 +16374,7 @@ func TriggerGenericHotPluggableDiskToKubevirtVM(contexts *[]*scheduler.Context, 
 
 				isHotPlugged, err := GenericHotPlugDataVolumesToKubevirtVM(selectedVM, numberOfVolumes, "50Gi", string(volumeMode), false)
 				vmHotAddDiskCount[selectedVM.Name]++
-
+				
 				log.Infof("For selected VM [%v], the number of Hot pluggable disks count is [%v]", selectedVM.Name, vmHotAddDiskCount[selectedVM.Name])
 				log.FailOnError(err, "Failed to add Hot pluggable disk to KubeVirt VM")
 				dash.VerifyFatal(isHotPlugged, true, "Successfully added Hot pluggable disk to KubeVirt VM ?")

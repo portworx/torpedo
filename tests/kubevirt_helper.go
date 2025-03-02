@@ -2410,7 +2410,7 @@ func GenericStartAndWaitForVMMigration(vm kubevirtv1.VirtualMachine, ctx context
 	time.Sleep(10 * time.Second)
 
 	duration := time.Since(startTime)
-	log.Infof("VM migration for VM [%v] in namespace [%v] is completed in [%.2f] seconds", vm, vm.Namespace, duration)
+	log.Infof("VM migration for VM [%v] in namespace [%v] is completed in [%v] seconds",vm,vm.Namespace,int(duration.Seconds()))
 
 	//Validate Migration
 	err = ValidateVMMigration(vm, nodeName)
@@ -2734,4 +2734,46 @@ func GenericGatherInitialUptimeAndNode(vm kubevirtv1.VirtualMachine) (map[string
 		return nil, nil, aggregatedErr
 	}
 	return initialUptime, initialNodeName, nil
+}
+
+func GetAllVMsOnNode(node node.Node) ([]kubevirtv1.VirtualMachine, error) {
+	//getting kubevirt pods
+	var vmList []kubevirtv1.VirtualMachine
+	vmPods, err := core.Instance().GetPodsByNode(node.Name, "")
+	if err != nil {
+		log.Warnf("Failed to get pods on node :[%v]", node.Name)
+		return nil, err
+	}
+	for _, vmPod := range vmPods.Items {
+		if strings.HasPrefix(vmPod.Name, "virt-launcher") {
+			log.Infof("Found VMPod with prefix virt-launcher :[%v]", vmPod.Name)
+			nameSpace := vmPod.Namespace
+			//getting all VMs and filtering VMs based on node name
+			vms, err := kubevirtdy.Instance().ListVirtualMachines(context1.TODO(), nameSpace, metav1.ListOptions{})
+			if err != nil {
+				log.Infof("Failed to get VM from namespace : [%v]", nameSpace)
+				return nil, err
+			}
+			for _, vm := range vms {
+				vmi, err := kubevirt.Instance().GetVirtualMachineInstance(context1.TODO(), vm.Name, vm.NameSpace)
+				if err != nil {
+					log.Infof("Failed to get VirtulMachine Instance from VM : [%v]", vm.Name)
+					return nil, err
+				}
+				//fitering VM based on node name ""
+				if vmi.Status.NodeName == node.Name {
+					vm, err := k8sKubevirt.GetVirtualMachine(vmi.Name, vmi.Namespace)
+					if err != nil {
+						return nil, err
+					}
+					vmList = append(vmList, *vm)
+				}
+			}
+		}
+	}
+	if len(vmList) == 0 {
+		log.Warnf("Found no VMs on node [%v]", node.Name)
+	}
+	log.Infof("Number of VMs [%v] found on node [%v]", len(vmList), node.Name)
+	return vmList, nil
 }
