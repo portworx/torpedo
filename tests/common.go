@@ -56,6 +56,7 @@ import (
 	"github.com/pborman/uuid"
 	"github.com/sirupsen/logrus"
 	tektoncdv1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
+	_ "istio.io/client-go/pkg/apis/security/v1"
 
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	opsapi "github.com/libopenstorage/openstorage/api"

@@ -3664,7 +3664,7 @@ type AttachedDiskInitializeParams struct {
 
 	// ProvisionedThroughput: Indicates how much throughput to provision for
 	// the disk. This sets the number of throughput mb per second that the
-	// disk can handle. Values must be between 1 and 7,124.
+	// disk can handle. Values must greater than or equal to 1.
 	ProvisionedThroughput int64 `json:"provisionedThroughput,omitempty,string"`
 
 	// ReplicaZones: Required for each regional disk associated with the
@@ -8143,7 +8143,11 @@ type Binding struct {
 	Members []string `json:"members,omitempty"`
 
 	// Role: Role that is assigned to the list of `members`, or principals.
-	// For example, `roles/viewer`, `roles/editor`, or `roles/owner`.
+	// For example, `roles/viewer`, `roles/editor`, or `roles/owner`. For an
+	// overview of the IAM roles and permissions, see the IAM documentation
+	// (https://cloud.google.com/iam/docs/roles-overview). For a list of the
+	// available pre-defined roles, see here
+	// (https://cloud.google.com/iam/docs/understanding-roles).
 	Role string `json:"role,omitempty"`
 
 	// ForceSendFields is a list of field names (e.g. "BindingId") to
@@ -8699,6 +8703,7 @@ type Commitment struct {
 	//   "GRAPHICS_OPTIMIZED"
 	//   "MEMORY_OPTIMIZED"
 	//   "MEMORY_OPTIMIZED_M3"
+	//   "STORAGE_OPTIMIZED_Z3"
 	//   "TYPE_UNSPECIFIED"
 	Type string `json:"type,omitempty"`
 
@@ -9367,6 +9372,7 @@ type ConfidentialInstanceConfig struct {
 	//   "SEV" - AMD Secure Encrypted Virtualization.
 	//   "SEV_SNP" - AMD Secure Encrypted Virtualization - Secure Nested
 	// Paging.
+	//   "TDX" - Intel Trust Domain eXtension.
 	ConfidentialInstanceType string `json:"confidentialInstanceType,omitempty"`
 
 	// EnableConfidentialCompute: Defines whether the instance should have
@@ -10034,7 +10040,7 @@ type Disk struct {
 
 	// ProvisionedThroughput: Indicates how much throughput to provision for
 	// the disk. This sets the number of throughput mb per second that the
-	// disk can handle. Values must be between 1 and 7,124.
+	// disk can handle. Values must be greater than or equal to 1.
 	ProvisionedThroughput int64 `json:"provisionedThroughput,omitempty,string"`
 
 	// Region: [Output Only] URL of the region where the disk resides. Only
@@ -14057,15 +14063,13 @@ type ForwardingRule struct {
 	// protocol requires allPorts be set to true.
 	AllPorts bool `json:"allPorts,omitempty"`
 
-	// AllowGlobalAccess: This field is used along with the backend_service
-	// field for internal load balancing or with the target field for
-	// internal TargetInstance. If set to true, clients can access the
-	// internal passthrough Network Load Balancers, the regional internal
-	// Application Load Balancer, and the regional internal proxy Network
-	// Load Balancer from all regions. If false, only allows access from the
-	// local region the load balancer is located at. Note that for
-	// INTERNAL_MANAGED forwarding rules, this field cannot be changed after
-	// the forwarding rule is created.
+	// AllowGlobalAccess: If set to true, clients can access the internal
+	// passthrough Network Load Balancers, the regional internal Application
+	// Load Balancer, and the regional internal proxy Network Load Balancer
+	// from all regions. If false, only allows access from the local region
+	// the load balancer is located at. Note that for INTERNAL_MANAGED
+	// forwarding rules, this field cannot be changed after the forwarding
+	// rule is created.
 	AllowGlobalAccess bool `json:"allowGlobalAccess,omitempty"`
 
 	// AllowPscGlobalAccess: This is used in PSC consumer ForwardingRule to
@@ -16391,8 +16395,8 @@ type GuestOsFeature struct {
 	// commas to separate values. Set to one or more of the following
 	// values: - VIRTIO_SCSI_MULTIQUEUE - WINDOWS - MULTI_IP_SUBNET -
 	// UEFI_COMPATIBLE - GVNIC - SEV_CAPABLE - SUSPEND_RESUME_COMPATIBLE -
-	// SEV_LIVE_MIGRATABLE - SEV_SNP_CAPABLE - IDPF For more information,
-	// see Enabling guest operating system features.
+	// SEV_LIVE_MIGRATABLE - SEV_SNP_CAPABLE - TDX_CAPABLE - IDPF For more
+	// information, see Enabling guest operating system features.
 	//
 	// Possible values:
 	//   "FEATURE_TYPE_UNSPECIFIED"
@@ -16404,6 +16408,7 @@ type GuestOsFeature struct {
 	//   "SEV_LIVE_MIGRATABLE"
 	//   "SEV_LIVE_MIGRATABLE_V2"
 	//   "SEV_SNP_CAPABLE"
+	//   "TDX_CAPABLE"
 	//   "UEFI_COMPATIBLE"
 	//   "VIRTIO_SCSI_MULTIQUEUE"
 	//   "WINDOWS"
@@ -16778,6 +16783,19 @@ type HealthCheck struct {
 
 	// SelfLink: [Output Only] Server-defined URL for the resource.
 	SelfLink string `json:"selfLink,omitempty"`
+
+	// SourceRegions: The list of cloud regions from which health checks are
+	// performed. If any regions are specified, then exactly 3 regions
+	// should be specified. The region names must be valid names of GCP
+	// regions. This can only be set for global health check. If this list
+	// is non-empty, then there are restrictions on what other health check
+	// fields are supported and what other resources can use this health
+	// check: - SSL, HTTP2, and GRPC protocols are not supported. - The TCP
+	// request field is not supported. - The proxyHeader field for HTTP,
+	// HTTPS, and TCP is not supported. - The checkIntervalSec field must be
+	// at least 30. - The health check cannot be used with BackendService
+	// nor with managed instance group auto-healing.
+	SourceRegions []string `json:"sourceRegions,omitempty"`
 
 	SslHealthCheck *SSLHealthCheck `json:"sslHealthCheck,omitempty"`
 
@@ -22143,10 +22161,21 @@ func (s *InstanceGroupManagerResizeRequest) MarshalJSON() ([]byte, error) {
 type InstanceGroupManagerResizeRequestStatus struct {
 	// Error: [Output only] Fatal errors encountered during the queueing or
 	// provisioning phases of the ResizeRequest that caused the transition
-	// to the FAILED state. As a contrary to the last_attempt errors, this
-	// field is final and errors are never removed from here, as the RR is
-	// not going to retry.
+	// to the FAILED state. Contrary to the last_attempt errors, this field
+	// is final and errors are never removed from here, as the ResizeRequest
+	// is not going to retry.
 	Error *InstanceGroupManagerResizeRequestStatusError `json:"error,omitempty"`
+
+	// LastAttempt: [Output only] Information about the last attempt to
+	// fulfill the request. The value is temporary since the ResizeRequest
+	// can retry, as long as it's still active and the last attempt value
+	// can either be cleared or replaced with a different error. Since
+	// ResizeRequest retries infrequently, the value may be stale and no
+	// longer show an active problem. The value is cleared when
+	// ResizeRequest transitions to the final state (becomes inactive). If
+	// the final state is FAILED the error describing it will be storred in
+	// the "error" field only.
+	LastAttempt *InstanceGroupManagerResizeRequestStatusLastAttempt `json:"lastAttempt,omitempty"`
 
 	// ForceSendFields is a list of field names (e.g. "Error") to
 	// unconditionally include in API requests. By default, fields with
@@ -22173,9 +22202,10 @@ func (s *InstanceGroupManagerResizeRequestStatus) MarshalJSON() ([]byte, error) 
 
 // InstanceGroupManagerResizeRequestStatusError: [Output only] Fatal
 // errors encountered during the queueing or provisioning phases of the
-// ResizeRequest that caused the transition to the FAILED state. As a
-// contrary to the last_attempt errors, this field is final and errors
-// are never removed from here, as the RR is not going to retry.
+// ResizeRequest that caused the transition to the FAILED state.
+// Contrary to the last_attempt errors, this field is final and errors
+// are never removed from here, as the ResizeRequest is not going to
+// retry.
 type InstanceGroupManagerResizeRequestStatusError struct {
 	// Errors: [Output Only] The array of errors encountered while
 	// processing this operation.
@@ -22273,6 +22303,136 @@ type InstanceGroupManagerResizeRequestStatusErrorErrorsErrorDetails struct {
 
 func (s *InstanceGroupManagerResizeRequestStatusErrorErrorsErrorDetails) MarshalJSON() ([]byte, error) {
 	type NoMethod InstanceGroupManagerResizeRequestStatusErrorErrorsErrorDetails
+	raw := NoMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
+}
+
+type InstanceGroupManagerResizeRequestStatusLastAttempt struct {
+	// Error: Errors that prevented the ResizeRequest to be fulfilled.
+	Error *InstanceGroupManagerResizeRequestStatusLastAttemptError `json:"error,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "Error") to
+	// unconditionally include in API requests. By default, fields with
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+
+	// NullFields is a list of field names (e.g. "Error") to include in API
+	// requests with the JSON null value. By default, fields with empty
+	// values are omitted from API requests. However, any field with an
+	// empty value appearing in NullFields will be sent to the server as
+	// null. It is an error if a field in this list has a non-empty value.
+	// This may be used to include null fields in Patch requests.
+	NullFields []string `json:"-"`
+}
+
+func (s *InstanceGroupManagerResizeRequestStatusLastAttempt) MarshalJSON() ([]byte, error) {
+	type NoMethod InstanceGroupManagerResizeRequestStatusLastAttempt
+	raw := NoMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
+}
+
+// InstanceGroupManagerResizeRequestStatusLastAttemptError: Errors that
+// prevented the ResizeRequest to be fulfilled.
+type InstanceGroupManagerResizeRequestStatusLastAttemptError struct {
+	// Errors: [Output Only] The array of errors encountered while
+	// processing this operation.
+	Errors []*InstanceGroupManagerResizeRequestStatusLastAttemptErrorErrors `json:"errors,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "Errors") to
+	// unconditionally include in API requests. By default, fields with
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+
+	// NullFields is a list of field names (e.g. "Errors") to include in API
+	// requests with the JSON null value. By default, fields with empty
+	// values are omitted from API requests. However, any field with an
+	// empty value appearing in NullFields will be sent to the server as
+	// null. It is an error if a field in this list has a non-empty value.
+	// This may be used to include null fields in Patch requests.
+	NullFields []string `json:"-"`
+}
+
+func (s *InstanceGroupManagerResizeRequestStatusLastAttemptError) MarshalJSON() ([]byte, error) {
+	type NoMethod InstanceGroupManagerResizeRequestStatusLastAttemptError
+	raw := NoMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
+}
+
+type InstanceGroupManagerResizeRequestStatusLastAttemptErrorErrors struct {
+	// Code: [Output Only] The error type identifier for this error.
+	Code string `json:"code,omitempty"`
+
+	// ErrorDetails: [Output Only] An optional list of messages that contain
+	// the error details. There is a set of defined message types to use for
+	// providing details.The syntax depends on the error code. For example,
+	// QuotaExceededInfo will have details when the error code is
+	// QUOTA_EXCEEDED.
+	ErrorDetails []*InstanceGroupManagerResizeRequestStatusLastAttemptErrorErrorsErrorDetails `json:"errorDetails,omitempty"`
+
+	// Location: [Output Only] Indicates the field in the request that
+	// caused the error. This property is optional.
+	Location string `json:"location,omitempty"`
+
+	// Message: [Output Only] An optional, human-readable error message.
+	Message string `json:"message,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "Code") to
+	// unconditionally include in API requests. By default, fields with
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+
+	// NullFields is a list of field names (e.g. "Code") to include in API
+	// requests with the JSON null value. By default, fields with empty
+	// values are omitted from API requests. However, any field with an
+	// empty value appearing in NullFields will be sent to the server as
+	// null. It is an error if a field in this list has a non-empty value.
+	// This may be used to include null fields in Patch requests.
+	NullFields []string `json:"-"`
+}
+
+func (s *InstanceGroupManagerResizeRequestStatusLastAttemptErrorErrors) MarshalJSON() ([]byte, error) {
+	type NoMethod InstanceGroupManagerResizeRequestStatusLastAttemptErrorErrors
+	raw := NoMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
+}
+
+type InstanceGroupManagerResizeRequestStatusLastAttemptErrorErrorsErrorDetails struct {
+	ErrorInfo *ErrorInfo `json:"errorInfo,omitempty"`
+
+	Help *Help `json:"help,omitempty"`
+
+	LocalizedMessage *LocalizedMessage `json:"localizedMessage,omitempty"`
+
+	QuotaInfo *QuotaExceededInfo `json:"quotaInfo,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "ErrorInfo") to
+	// unconditionally include in API requests. By default, fields with
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+
+	// NullFields is a list of field names (e.g. "ErrorInfo") to include in
+	// API requests with the JSON null value. By default, fields with empty
+	// values are omitted from API requests. However, any field with an
+	// empty value appearing in NullFields will be sent to the server as
+	// null. It is an error if a field in this list has a non-empty value.
+	// This may be used to include null fields in Patch requests.
+	NullFields []string `json:"-"`
+}
+
+func (s *InstanceGroupManagerResizeRequestStatusLastAttemptErrorErrorsErrorDetails) MarshalJSON() ([]byte, error) {
+	type NoMethod InstanceGroupManagerResizeRequestStatusLastAttemptErrorErrorsErrorDetails
 	raw := NoMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
 }
@@ -34327,30 +34487,45 @@ type NetworkEndpoint struct {
 	// Annotations: Metadata defined as annotations on the network endpoint.
 	Annotations map[string]string `json:"annotations,omitempty"`
 
+	// ClientPort: Represents the port number to which PSC consumer sends
+	// packets. Only valid for network endpoint groups created with
+	// CLIENT_PORT_PER_ENDPOINT mapping mode.
+	ClientPort int64 `json:"clientPort,omitempty"`
+
 	// Fqdn: Optional fully qualified domain name of network endpoint. This
 	// can only be specified when NetworkEndpointGroup.network_endpoint_type
 	// is NON_GCP_FQDN_PORT.
 	Fqdn string `json:"fqdn,omitempty"`
 
-	// Instance: The name for a specific VM instance that the IP address
-	// belongs to. This is required for network endpoints of type
+	// Instance: The name or a URL of VM instance of this network endpoint.
+	// This field is required for network endpoints of type GCE_VM_IP and
 	// GCE_VM_IP_PORT. The instance must be in the same zone of network
-	// endpoint group. The name must be 1-63 characters long, and comply
-	// with RFC1035.
+	// endpoint group (for zonal NEGs) or in the zone within the region of
+	// the NEG (for regional NEGs). If the ipAddress is specified, it must
+	// belongs to the VM instance. The name must be 1-63 characters long,
+	// and comply with RFC1035 or be a valid URL pointing to an existing
+	// instance.
 	Instance string `json:"instance,omitempty"`
 
 	// IpAddress: Optional IPv4 address of network endpoint. The IP address
 	// must belong to a VM in Compute Engine (either the primary IP or as
 	// part of an aliased IP range). If the IP address is not specified,
 	// then the primary IP address for the VM instance in the network that
-	// the network endpoint group belongs to will be used.
+	// the network endpoint group belongs to will be used. This field is
+	// redundant and need not be set for network endpoints of type
+	// GCE_VM_IP. If set, it must be set to the primary internal IP address
+	// of the attached VM instance that matches the subnetwork of the NEG.
+	// The primary internal IP address from any NIC of a multi-NIC VM
+	// instance can be added to a NEG as long as it matches the NEG
+	// subnetwork.
 	IpAddress string `json:"ipAddress,omitempty"`
 
 	// Ipv6Address: Optional IPv6 address of network endpoint.
 	Ipv6Address string `json:"ipv6Address,omitempty"`
 
 	// Port: Optional port number of network endpoint. If not specified, the
-	// defaultPort for the network endpoint group will be used.
+	// defaultPort for the network endpoint group will be used. This field
+	// can not be set for network endpoints of type GCE_VM_IP.
 	Port int64 `json:"port,omitempty"`
 
 	// ForceSendFields is a list of field names (e.g. "Annotations") to
@@ -34386,16 +34561,26 @@ type NetworkEndpointGroup struct {
 	// group.
 	Annotations map[string]string `json:"annotations,omitempty"`
 
-	// AppEngine: Only valid when networkEndpointType is "SERVERLESS". Only
+	// AppEngine: Only valid when networkEndpointType is SERVERLESS. Only
 	// one of cloudRun, appEngine or cloudFunction may be set.
 	AppEngine *NetworkEndpointGroupAppEngine `json:"appEngine,omitempty"`
 
-	// CloudFunction: Only valid when networkEndpointType is "SERVERLESS".
+	// ClientPortMappingMode: Only valid when networkEndpointType is
+	// GCE_VM_IP_PORT and the NEG is regional.
+	//
+	// Possible values:
+	//   "CLIENT_PORT_PER_ENDPOINT" - For each endpoint there is exactly one
+	// client port.
+	//   "PORT_MAPPING_DISABLED" - NEG should not be used for mapping client
+	// port to destination.
+	ClientPortMappingMode string `json:"clientPortMappingMode,omitempty"`
+
+	// CloudFunction: Only valid when networkEndpointType is SERVERLESS.
 	// Only one of cloudRun, appEngine or cloudFunction may be set.
 	CloudFunction *NetworkEndpointGroupCloudFunction `json:"cloudFunction,omitempty"`
 
-	// CloudRun: Only valid when networkEndpointType is "SERVERLESS". Only
-	// one of cloudRun, appEngine or cloudFunction may be set.
+	// CloudRun: Only valid when networkEndpointType is SERVERLESS. Only one
+	// of cloudRun, appEngine or cloudFunction may be set.
 	CloudRun *NetworkEndpointGroupCloudRun `json:"cloudRun,omitempty"`
 
 	// CreationTimestamp: [Output Only] Creation timestamp in RFC3339 text
@@ -34403,7 +34588,9 @@ type NetworkEndpointGroup struct {
 	CreationTimestamp string `json:"creationTimestamp,omitempty"`
 
 	// DefaultPort: The default port used if the port number is not
-	// specified in the network endpoint.
+	// specified in the network endpoint. If the network endpoint type is
+	// either GCE_VM_IP, SERVERLESS or PRIVATE_SERVICE_CONNECT, this field
+	// must not be specified.
 	DefaultPort int64 `json:"defaultPort,omitempty"`
 
 	// Description: An optional description of this resource. Provide this
@@ -34433,7 +34620,7 @@ type NetworkEndpointGroup struct {
 	Name string `json:"name,omitempty"`
 
 	// Network: The URL of the network to which all network endpoints in the
-	// NEG belong. Uses "default" project network if unspecified.
+	// NEG belong. Uses default project network if unspecified.
 	Network string `json:"network,omitempty"`
 
 	// NetworkEndpointType: Type of network endpoints in this network
@@ -34464,7 +34651,7 @@ type NetworkEndpointGroup struct {
 	// PscTargetService: The target service url used to set up private
 	// service connection to a Google API or a PSC Producer Service
 	// Attachment. An example value is:
-	// "asia-northeast3-cloudkms.googleapis.com"
+	// asia-northeast3-cloudkms.googleapis.com
 	PscTargetService string `json:"pscTargetService,omitempty"`
 
 	// Region: [Output Only] The URL of the region where the network
@@ -34475,7 +34662,7 @@ type NetworkEndpointGroup struct {
 	SelfLink string `json:"selfLink,omitempty"`
 
 	// ServerlessDeployment: Only valid when networkEndpointType is
-	// "SERVERLESS". Only one of cloudRun, appEngine, cloudFunction or
+	// SERVERLESS. Only one of cloudRun, appEngine, cloudFunction or
 	// serverlessDeployment may be set.
 	ServerlessDeployment *NetworkEndpointGroupServerlessDeployment `json:"serverlessDeployment,omitempty"`
 
@@ -34722,24 +34909,23 @@ func (s *NetworkEndpointGroupAggregatedListWarningData) MarshalJSON() ([]byte, e
 // located in the same region as the Serverless NEG.
 type NetworkEndpointGroupAppEngine struct {
 	// Service: Optional serving service. The service name is case-sensitive
-	// and must be 1-63 characters long. Example value: "default",
-	// "my-service".
+	// and must be 1-63 characters long. Example value: default, my-service.
 	Service string `json:"service,omitempty"`
 
-	// UrlMask: A template to parse service and version fields from a
+	// UrlMask: An URL mask is one of the main components of the Cloud
+	// Function. A template to parse service and version fields from a
 	// request URL. URL mask allows for routing to multiple App Engine
 	// services without having to create multiple Network Endpoint Groups
 	// and backend services. For example, the request URLs
-	// "foo1-dot-appname.appspot.com/v1" and
-	// "foo1-dot-appname.appspot.com/v2" can be backed by the same
-	// Serverless NEG with URL mask
-	// "<service>-dot-appname.appspot.com/<version>". The URL mask will
-	// parse them to { service = "foo1", version = "v1" } and { service =
-	// "foo1", version = "v2" } respectively.
+	// foo1-dot-appname.appspot.com/v1 and foo1-dot-appname.appspot.com/v2
+	// can be backed by the same Serverless NEG with URL mask
+	// <service>-dot-appname.appspot.com/<version>. The URL mask will parse
+	// them to { service = "foo1", version = "v1" } and { service = "foo1",
+	// version = "v2" } respectively.
 	UrlMask string `json:"urlMask,omitempty"`
 
 	// Version: Optional serving version. The version name is case-sensitive
-	// and must be 1-100 characters long. Example value: "v1", "v2".
+	// and must be 1-100 characters long. Example value: v1, v2.
 	Version string `json:"version,omitempty"`
 
 	// ForceSendFields is a list of field names (e.g. "Service") to
@@ -34772,16 +34958,17 @@ func (s *NetworkEndpointGroupAppEngine) MarshalJSON() ([]byte, error) {
 type NetworkEndpointGroupCloudFunction struct {
 	// Function: A user-defined name of the Cloud Function. The function
 	// name is case-sensitive and must be 1-63 characters long. Example
-	// value: "func1".
+	// value: func1.
 	Function string `json:"function,omitempty"`
 
-	// UrlMask: A template to parse function field from a request URL. URL
+	// UrlMask: An URL mask is one of the main components of the Cloud
+	// Function. A template to parse function field from a request URL. URL
 	// mask allows for routing to multiple Cloud Functions without having to
 	// create multiple Network Endpoint Groups and backend services. For
-	// example, request URLs " mydomain.com/function1" and
-	// "mydomain.com/function2" can be backed by the same Serverless NEG
-	// with URL mask "/<function>". The URL mask will parse them to {
-	// function = "function1" } and { function = "function2" } respectively.
+	// example, request URLs mydomain.com/function1 and
+	// mydomain.com/function2 can be backed by the same Serverless NEG with
+	// URL mask /<function>. The URL mask will parse them to { function =
+	// "function1" } and { function = "function2" } respectively.
 	UrlMask string `json:"urlMask,omitempty"`
 
 	// ForceSendFields is a list of field names (e.g. "Function") to
@@ -34824,12 +35011,13 @@ type NetworkEndpointGroupCloudRun struct {
 	// "revision-0010".
 	Tag string `json:"tag,omitempty"`
 
-	// UrlMask: A template to parse <service> and <tag> fields from a
+	// UrlMask: An URL mask is one of the main components of the Cloud
+	// Function. A template to parse <service> and <tag> fields from a
 	// request URL. URL mask allows for routing to multiple Run services
 	// without having to create multiple network endpoint groups and backend
-	// services. For example, request URLs "foo1.domain.com/bar1" and
-	// "foo1.domain.com/bar2" can be backed by the same Serverless Network
-	// Endpoint Group (NEG) with URL mask "<tag>.domain.com/<service>". The
+	// services. For example, request URLs foo1.domain.com/bar1 and
+	// foo1.domain.com/bar2 can be backed by the same Serverless Network
+	// Endpoint Group (NEG) with URL mask <tag>.domain.com/<service>. The
 	// URL mask will parse them to { service="bar1", tag="foo1" } and {
 	// service="bar2", tag="foo2" } respectively.
 	UrlMask string `json:"urlMask,omitempty"`
@@ -34861,13 +35049,14 @@ func (s *NetworkEndpointGroupCloudRun) MarshalJSON() ([]byte, error) {
 // fields for network endpoint group.
 type NetworkEndpointGroupLbNetworkEndpointGroup struct {
 	// DefaultPort: The default port used if the port number is not
-	// specified in the network endpoint. [Deprecated] This field is
-	// deprecated.
+	// specified in the network endpoint. If the network endpoint type is
+	// either GCE_VM_IP, SERVERLESS or PRIVATE_SERVICE_CONNECT, this field
+	// must not be specified. [Deprecated] This field is deprecated.
 	DefaultPort int64 `json:"defaultPort,omitempty"`
 
 	// Network: The URL of the network to which all network endpoints in the
-	// NEG belong. Uses "default" project network if unspecified.
-	// [Deprecated] This field is deprecated.
+	// NEG belong. Uses default project network if unspecified. [Deprecated]
+	// This field is deprecated.
 	Network string `json:"network,omitempty"`
 
 	// Subnetwork: Optional URL of the subnetwork to which all network
@@ -35160,7 +35349,8 @@ type NetworkEndpointGroupServerlessDeployment struct {
 	// Functions: The function name 4. Cloud Run: The service name
 	Resource string `json:"resource,omitempty"`
 
-	// UrlMask: A template to parse platform-specific fields from a request
+	// UrlMask: An URL mask is one of the main components of the Cloud
+	// Function. A template to parse platform-specific fields from a request
 	// URL. URL mask allows for routing to multiple resources on the same
 	// serverless platform without having to create multiple Network
 	// Endpoint Groups and backend resources. The fields parsed by this
@@ -41915,6 +42105,18 @@ func (s *PreservedStatePreservedNetworkIpIpAddress) MarshalJSON() ([]byte, error
 // resources in a Google Cloud Platform environment. For more
 // information, read about the Resource Hierarchy.
 type Project struct {
+	// CloudArmorTier: [Output Only] The Cloud Armor tier for this project.
+	// It can be one of the following values: CA_STANDARD,
+	// CA_ENTERPRISE_PAYGO. If this field is not specified, it is assumed to
+	// be CA_STANDARD.
+	//
+	// Possible values:
+	//   "CA_ENTERPRISE_ANNUAL" - Enterprise tier protection billed
+	// annually.
+	//   "CA_ENTERPRISE_PAYGO" - Enterprise tier protection billed monthly.
+	//   "CA_STANDARD" - Standard protection.
+	CloudArmorTier string `json:"cloudArmorTier,omitempty"`
+
 	// CommonInstanceMetadata: Metadata key/value pairs available to all
 	// instances contained in this project. See Custom metadata for more
 	// information.
@@ -42007,19 +42209,18 @@ type Project struct {
 	// server.
 	googleapi.ServerResponse `json:"-"`
 
-	// ForceSendFields is a list of field names (e.g.
-	// "CommonInstanceMetadata") to unconditionally include in API requests.
-	// By default, fields with empty or default values are omitted from API
-	// requests. However, any non-pointer, non-interface field appearing in
-	// ForceSendFields will be sent to the server regardless of whether the
-	// field is empty or not. This may be used to include empty fields in
-	// Patch requests.
+	// ForceSendFields is a list of field names (e.g. "CloudArmorTier") to
+	// unconditionally include in API requests. By default, fields with
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
-	// NullFields is a list of field names (e.g. "CommonInstanceMetadata")
-	// to include in API requests with the JSON null value. By default,
-	// fields with empty values are omitted from API requests. However, any
-	// field with an empty value appearing in NullFields will be sent to the
+	// NullFields is a list of field names (e.g. "CloudArmorTier") to
+	// include in API requests with the JSON null value. By default, fields
+	// with empty values are omitted from API requests. However, any field
+	// with an empty value appearing in NullFields will be sent to the
 	// server as null. It is an error if a field in this list has a
 	// non-empty value. This may be used to include null fields in Patch
 	// requests.
@@ -42156,6 +42357,40 @@ type ProjectsListXpnHostsRequest struct {
 
 func (s *ProjectsListXpnHostsRequest) MarshalJSON() ([]byte, error) {
 	type NoMethod ProjectsListXpnHostsRequest
+	raw := NoMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
+}
+
+type ProjectsSetCloudArmorTierRequest struct {
+	// CloudArmorTier: Managed protection tier to be set.
+	//
+	// Possible values:
+	//   "CA_ENTERPRISE_ANNUAL" - Enterprise tier protection billed
+	// annually.
+	//   "CA_ENTERPRISE_PAYGO" - Enterprise tier protection billed monthly.
+	//   "CA_STANDARD" - Standard protection.
+	CloudArmorTier string `json:"cloudArmorTier,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "CloudArmorTier") to
+	// unconditionally include in API requests. By default, fields with
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+
+	// NullFields is a list of field names (e.g. "CloudArmorTier") to
+	// include in API requests with the JSON null value. By default, fields
+	// with empty values are omitted from API requests. However, any field
+	// with an empty value appearing in NullFields will be sent to the
+	// server as null. It is an error if a field in this list has a
+	// non-empty value. This may be used to include null fields in Patch
+	// requests.
+	NullFields []string `json:"-"`
+}
+
+func (s *ProjectsSetCloudArmorTierRequest) MarshalJSON() ([]byte, error) {
+	type NoMethod ProjectsSetCloudArmorTierRequest
 	raw := NoMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
 }
@@ -43392,6 +43627,7 @@ type Quota struct {
 	//   "COMMITTED_NVIDIA_V100_GPUS"
 	//   "COMMITTED_T2A_CPUS"
 	//   "COMMITTED_T2D_CPUS"
+	//   "COMMITTED_Z3_CPUS"
 	//   "CPUS" - Guest CPUs
 	//   "CPUS_ALL_REGIONS"
 	//   "DISKS_TOTAL_GB"
@@ -46292,11 +46528,12 @@ type Reservation struct {
 	CreationTimestamp string `json:"creationTimestamp,omitempty"`
 
 	// DeleteAfterDuration: Duration time relative to reservation creation
-	// when GCE will automatically delete this resource.
+	// when Compute Engine will automatically delete this resource.
 	DeleteAfterDuration *Duration `json:"deleteAfterDuration,omitempty"`
 
 	// DeleteAtTime: Absolute time in future when the reservation will be
-	// auto-deleted by GCE. Timestamp is represented in RFC3339 text format.
+	// auto-deleted by Compute Engine. Timestamp is represented in RFC3339
+	// text format.
 	DeleteAtTime string `json:"deleteAtTime,omitempty"`
 
 	// Description: An optional description of this resource. Provide this
@@ -51203,6 +51440,8 @@ type Scheduling struct {
 	// restarted outside the window of maintenance events.
 	OnHostMaintenance string `json:"onHostMaintenance,omitempty"`
 
+	OnInstanceStopAction *SchedulingOnInstanceStopAction `json:"onInstanceStopAction,omitempty"`
+
 	// Preemptible: Defines whether the instance is preemptible. This can
 	// only be set during instance creation or while the instance is stopped
 	// and therefore, in a `TERMINATED` state. See Instance Life Cycle for
@@ -51283,6 +51522,39 @@ type SchedulingNodeAffinity struct {
 
 func (s *SchedulingNodeAffinity) MarshalJSON() ([]byte, error) {
 	type NoMethod SchedulingNodeAffinity
+	raw := NoMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
+}
+
+// SchedulingOnInstanceStopAction: Defines the behaviour for instances
+// with the instance_termination_action STOP.
+type SchedulingOnInstanceStopAction struct {
+	// DiscardLocalSsd: If true, the contents of any attached Local SSD
+	// disks will be discarded else, the Local SSD data will be preserved
+	// when the instance is stopped at the end of the run
+	// duration/termination time.
+	DiscardLocalSsd bool `json:"discardLocalSsd,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "DiscardLocalSsd") to
+	// unconditionally include in API requests. By default, fields with
+	// empty or default values are omitted from API requests. However, any
+	// non-pointer, non-interface field appearing in ForceSendFields will be
+	// sent to the server regardless of whether the field is empty or not.
+	// This may be used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+
+	// NullFields is a list of field names (e.g. "DiscardLocalSsd") to
+	// include in API requests with the JSON null value. By default, fields
+	// with empty values are omitted from API requests. However, any field
+	// with an empty value appearing in NullFields will be sent to the
+	// server as null. It is an error if a field in this list has a
+	// non-empty value. This may be used to include null fields in Patch
+	// requests.
+	NullFields []string `json:"-"`
+}
+
+func (s *SchedulingOnInstanceStopAction) MarshalJSON() ([]byte, error) {
+	type NoMethod SchedulingOnInstanceStopAction
 	raw := NoMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
 }
@@ -53764,6 +54036,19 @@ type ServiceAttachment struct {
 	// by this service attachment.
 	ProducerForwardingRule string `json:"producerForwardingRule,omitempty"`
 
+	// PropagatedConnectionLimit: The number of consumer Network
+	// Connectivity Center spokes that connected Private Service Connect
+	// endpoints can be propagated to. This limit lets a service producer
+	// indirectly limit how many propagated Private Service Connect
+	// connections can be established to the producer's service attachment.
+	// If the connection preference of the service attachment is
+	// ACCEPT_MANUAL, the limit applies to each project or network that is
+	// listed in the consumer accept list. If the connection preference of
+	// the service attachment is ACCEPT_AUTOMATIC, the limit applies to each
+	// project that contains a connected endpoint. If unspecified, the
+	// default propagated connection limit is 250.
+	PropagatedConnectionLimit int64 `json:"propagatedConnectionLimit,omitempty"`
+
 	// PscServiceAttachmentId: [Output Only] An 128-bit global unique ID of
 	// the PSC service attachment.
 	PscServiceAttachmentId *Uint128 `json:"pscServiceAttachmentId,omitempty"`
@@ -54032,6 +54317,11 @@ type ServiceAttachmentConnectedEndpoint struct {
 
 	// Endpoint: The url of a connected endpoint.
 	Endpoint string `json:"endpoint,omitempty"`
+
+	// PropagatedConnectionCount: The number of consumer Network
+	// Connectivity Center spokes that the connected Private Service Connect
+	// endpoint has propagated to.
+	PropagatedConnectionCount int64 `json:"propagatedConnectionCount,omitempty"`
 
 	// PscConnectionId: The PSC connection id of the connected endpoint.
 	PscConnectionId uint64 `json:"pscConnectionId,omitempty,string"`
@@ -68205,7 +68495,9 @@ type AcceleratorTypesAggregatedListCall struct {
 	header_      http.Header
 }
 
-// AggregatedList: Retrieves an aggregated list of accelerator types.
+// AggregatedList: Retrieves an aggregated list of accelerator types. To
+// prevent failure, Google recommends that you set the
+// `returnPartialSuccess` parameter to `true`.
 //
 // - project: Project ID for this request.
 func (r *AcceleratorTypesService) AggregatedList(project string) *AcceleratorTypesAggregatedListCall {
@@ -68303,14 +68595,18 @@ func (c *AcceleratorTypesAggregatedListCall) PageToken(pageToken string) *Accele
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *AcceleratorTypesAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *AcceleratorTypesAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *AcceleratorTypesAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *AcceleratorTypesAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -68415,7 +68711,7 @@ func (c *AcceleratorTypesAggregatedListCall) Do(opts ...googleapi.CallOption) (*
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves an aggregated list of accelerator types.",
+	//   "description": "Retrieves an aggregated list of accelerator types. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/acceleratorTypes",
 	//   "httpMethod": "GET",
 	//   "id": "compute.acceleratorTypes.aggregatedList",
@@ -68459,11 +68755,12 @@ func (c *AcceleratorTypesAggregatedListCall) Do(opts ...googleapi.CallOption) (*
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -68775,7 +69072,9 @@ func (c *AcceleratorTypesListCall) PageToken(pageToken string) *AcceleratorTypes
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *AcceleratorTypesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *AcceleratorTypesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -68921,7 +69220,7 @@ func (c *AcceleratorTypesListCall) Do(opts ...googleapi.CallOption) (*Accelerato
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
@@ -68978,7 +69277,9 @@ type AddressesAggregatedListCall struct {
 	header_      http.Header
 }
 
-// AggregatedList: Retrieves an aggregated list of addresses.
+// AggregatedList: Retrieves an aggregated list of addresses. To prevent
+// failure, Google recommends that you set the `returnPartialSuccess`
+// parameter to `true`.
 //
 // - project: Project ID for this request.
 func (r *AddressesService) AggregatedList(project string) *AddressesAggregatedListCall {
@@ -69076,14 +69377,18 @@ func (c *AddressesAggregatedListCall) PageToken(pageToken string) *AddressesAggr
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *AddressesAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *AddressesAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *AddressesAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *AddressesAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -69188,7 +69493,7 @@ func (c *AddressesAggregatedListCall) Do(opts ...googleapi.CallOption) (*Address
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves an aggregated list of addresses.",
+	//   "description": "Retrieves an aggregated list of addresses. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/addresses",
 	//   "httpMethod": "GET",
 	//   "id": "compute.addresses.aggregatedList",
@@ -69232,11 +69537,12 @@ func (c *AddressesAggregatedListCall) Do(opts ...googleapi.CallOption) (*Address
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -69903,7 +70209,9 @@ func (c *AddressesListCall) PageToken(pageToken string) *AddressesListCall {
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *AddressesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *AddressesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -70056,7 +70364,7 @@ func (c *AddressesListCall) Do(opts ...googleapi.CallOption) (*AddressList, erro
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -70652,7 +70960,9 @@ type AutoscalersAggregatedListCall struct {
 	header_      http.Header
 }
 
-// AggregatedList: Retrieves an aggregated list of autoscalers.
+// AggregatedList: Retrieves an aggregated list of autoscalers. To
+// prevent failure, Google recommends that you set the
+// `returnPartialSuccess` parameter to `true`.
 //
 // - project: Project ID for this request.
 func (r *AutoscalersService) AggregatedList(project string) *AutoscalersAggregatedListCall {
@@ -70750,14 +71060,18 @@ func (c *AutoscalersAggregatedListCall) PageToken(pageToken string) *Autoscalers
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *AutoscalersAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *AutoscalersAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *AutoscalersAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *AutoscalersAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -70862,7 +71176,7 @@ func (c *AutoscalersAggregatedListCall) Do(opts ...googleapi.CallOption) (*Autos
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves an aggregated list of autoscalers.",
+	//   "description": "Retrieves an aggregated list of autoscalers. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/autoscalers",
 	//   "httpMethod": "GET",
 	//   "id": "compute.autoscalers.aggregatedList",
@@ -70906,11 +71220,12 @@ func (c *AutoscalersAggregatedListCall) Do(opts ...googleapi.CallOption) (*Autos
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -71577,7 +71892,9 @@ func (c *AutoscalersListCall) PageToken(pageToken string) *AutoscalersListCall {
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *AutoscalersListCall) ReturnPartialSuccess(returnPartialSuccess bool) *AutoscalersListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -71723,7 +72040,7 @@ func (c *AutoscalersListCall) Do(opts ...googleapi.CallOption) (*AutoscalerList,
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
@@ -73434,7 +73751,9 @@ func (c *BackendBucketsListCall) PageToken(pageToken string) *BackendBucketsList
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *BackendBucketsListCall) ReturnPartialSuccess(returnPartialSuccess bool) *BackendBucketsListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -73578,7 +73897,7 @@ func (c *BackendBucketsListCall) Do(opts ...googleapi.CallOption) (*BackendBucke
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -74651,7 +74970,9 @@ type BackendServicesAggregatedListCall struct {
 }
 
 // AggregatedList: Retrieves the list of all BackendService resources,
-// regional and global, available to the specified project.
+// regional and global, available to the specified project. To prevent
+// failure, Google recommends that you set the `returnPartialSuccess`
+// parameter to `true`.
 //
 // - project: Name of the project scoping this request.
 func (r *BackendServicesService) AggregatedList(project string) *BackendServicesAggregatedListCall {
@@ -74749,14 +75070,18 @@ func (c *BackendServicesAggregatedListCall) PageToken(pageToken string) *Backend
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *BackendServicesAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *BackendServicesAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *BackendServicesAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *BackendServicesAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -74861,7 +75186,7 @@ func (c *BackendServicesAggregatedListCall) Do(opts ...googleapi.CallOption) (*B
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves the list of all BackendService resources, regional and global, available to the specified project.",
+	//   "description": "Retrieves the list of all BackendService resources, regional and global, available to the specified project. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/backendServices",
 	//   "httpMethod": "GET",
 	//   "id": "compute.backendServices.aggregatedList",
@@ -74905,11 +75230,12 @@ func (c *BackendServicesAggregatedListCall) Do(opts ...googleapi.CallOption) (*B
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -76046,7 +76372,9 @@ func (c *BackendServicesListCall) PageToken(pageToken string) *BackendServicesLi
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *BackendServicesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *BackendServicesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -76190,7 +76518,7 @@ func (c *BackendServicesListCall) Do(opts ...googleapi.CallOption) (*BackendServ
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -76326,7 +76654,9 @@ func (c *BackendServicesListUsableCall) PageToken(pageToken string) *BackendServ
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *BackendServicesListUsableCall) ReturnPartialSuccess(returnPartialSuccess bool) *BackendServicesListUsableCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -76470,7 +76800,7 @@ func (c *BackendServicesListUsableCall) Do(opts ...googleapi.CallOption) (*Backe
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -77546,7 +77876,9 @@ type DiskTypesAggregatedListCall struct {
 	header_      http.Header
 }
 
-// AggregatedList: Retrieves an aggregated list of disk types.
+// AggregatedList: Retrieves an aggregated list of disk types. To
+// prevent failure, Google recommends that you set the
+// `returnPartialSuccess` parameter to `true`.
 //
 // - project: Project ID for this request.
 func (r *DiskTypesService) AggregatedList(project string) *DiskTypesAggregatedListCall {
@@ -77644,14 +77976,18 @@ func (c *DiskTypesAggregatedListCall) PageToken(pageToken string) *DiskTypesAggr
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *DiskTypesAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *DiskTypesAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *DiskTypesAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *DiskTypesAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -77756,7 +78092,7 @@ func (c *DiskTypesAggregatedListCall) Do(opts ...googleapi.CallOption) (*DiskTyp
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves an aggregated list of disk types.",
+	//   "description": "Retrieves an aggregated list of disk types. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/diskTypes",
 	//   "httpMethod": "GET",
 	//   "id": "compute.diskTypes.aggregatedList",
@@ -77800,11 +78136,12 @@ func (c *DiskTypesAggregatedListCall) Do(opts ...googleapi.CallOption) (*DiskTyp
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -78116,7 +78453,9 @@ func (c *DiskTypesListCall) PageToken(pageToken string) *DiskTypesListCall {
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *DiskTypesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *DiskTypesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -78262,7 +78601,7 @@ func (c *DiskTypesListCall) Do(opts ...googleapi.CallOption) (*DiskTypeList, err
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
@@ -78509,7 +78848,9 @@ type DisksAggregatedListCall struct {
 	header_      http.Header
 }
 
-// AggregatedList: Retrieves an aggregated list of persistent disks.
+// AggregatedList: Retrieves an aggregated list of persistent disks. To
+// prevent failure, Google recommends that you set the
+// `returnPartialSuccess` parameter to `true`.
 //
 // - project: Project ID for this request.
 func (r *DisksService) AggregatedList(project string) *DisksAggregatedListCall {
@@ -78607,14 +78948,18 @@ func (c *DisksAggregatedListCall) PageToken(pageToken string) *DisksAggregatedLi
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *DisksAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *DisksAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *DisksAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *DisksAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -78719,7 +79064,7 @@ func (c *DisksAggregatedListCall) Do(opts ...googleapi.CallOption) (*DiskAggrega
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves an aggregated list of persistent disks.",
+	//   "description": "Retrieves an aggregated list of persistent disks. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/disks",
 	//   "httpMethod": "GET",
 	//   "id": "compute.disks.aggregatedList",
@@ -78763,11 +79108,12 @@ func (c *DisksAggregatedListCall) Do(opts ...googleapi.CallOption) (*DiskAggrega
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -80018,7 +80364,9 @@ func (c *DisksListCall) PageToken(pageToken string) *DisksListCall {
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *DisksListCall) ReturnPartialSuccess(returnPartialSuccess bool) *DisksListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -80164,7 +80512,7 @@ func (c *DisksListCall) Do(opts ...googleapi.CallOption) (*DiskList, error) {
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
@@ -82464,7 +82812,9 @@ func (c *ExternalVpnGatewaysListCall) PageToken(pageToken string) *ExternalVpnGa
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *ExternalVpnGatewaysListCall) ReturnPartialSuccess(returnPartialSuccess bool) *ExternalVpnGatewaysListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -82608,7 +82958,7 @@ func (c *ExternalVpnGatewaysListCall) Do(opts ...googleapi.CallOption) (*Externa
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -84521,7 +84871,9 @@ func (c *FirewallPoliciesListCall) ParentId(parentId string) *FirewallPoliciesLi
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *FirewallPoliciesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *FirewallPoliciesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -84657,7 +85009,7 @@ func (c *FirewallPoliciesListCall) Do(opts ...googleapi.CallOption) (*FirewallPo
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -86564,7 +86916,9 @@ func (c *FirewallsListCall) PageToken(pageToken string) *FirewallsListCall {
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *FirewallsListCall) ReturnPartialSuccess(returnPartialSuccess bool) *FirewallsListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -86708,7 +87062,7 @@ func (c *FirewallsListCall) Do(opts ...googleapi.CallOption) (*FirewallList, err
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -87272,7 +87626,9 @@ type ForwardingRulesAggregatedListCall struct {
 	header_      http.Header
 }
 
-// AggregatedList: Retrieves an aggregated list of forwarding rules.
+// AggregatedList: Retrieves an aggregated list of forwarding rules. To
+// prevent failure, Google recommends that you set the
+// `returnPartialSuccess` parameter to `true`.
 //
 // - project: Project ID for this request.
 func (r *ForwardingRulesService) AggregatedList(project string) *ForwardingRulesAggregatedListCall {
@@ -87370,14 +87726,18 @@ func (c *ForwardingRulesAggregatedListCall) PageToken(pageToken string) *Forward
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *ForwardingRulesAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *ForwardingRulesAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *ForwardingRulesAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *ForwardingRulesAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -87482,7 +87842,7 @@ func (c *ForwardingRulesAggregatedListCall) Do(opts ...googleapi.CallOption) (*F
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves an aggregated list of forwarding rules.",
+	//   "description": "Retrieves an aggregated list of forwarding rules. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/forwardingRules",
 	//   "httpMethod": "GET",
 	//   "id": "compute.forwardingRules.aggregatedList",
@@ -87526,11 +87886,12 @@ func (c *ForwardingRulesAggregatedListCall) Do(opts ...googleapi.CallOption) (*F
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -88197,7 +88558,9 @@ func (c *ForwardingRulesListCall) PageToken(pageToken string) *ForwardingRulesLi
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *ForwardingRulesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *ForwardingRulesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -88350,7 +88713,7 @@ func (c *ForwardingRulesListCall) Do(opts ...googleapi.CallOption) (*ForwardingR
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -89140,6 +89503,8 @@ type FutureReservationsAggregatedListCall struct {
 }
 
 // AggregatedList: Retrieves an aggregated list of future reservations.
+// To prevent failure, Google recommends that you set the
+// `returnPartialSuccess` parameter to `true`.
 //
 // - project: Project ID for this request.
 func (r *FutureReservationsService) AggregatedList(project string) *FutureReservationsAggregatedListCall {
@@ -89237,14 +89602,18 @@ func (c *FutureReservationsAggregatedListCall) PageToken(pageToken string) *Futu
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *FutureReservationsAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *FutureReservationsAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *FutureReservationsAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *FutureReservationsAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -89351,7 +89720,7 @@ func (c *FutureReservationsAggregatedListCall) Do(opts ...googleapi.CallOption) 
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves an aggregated list of future reservations.",
+	//   "description": "Retrieves an aggregated list of future reservations. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/futureReservations",
 	//   "httpMethod": "GET",
 	//   "id": "compute.futureReservations.aggregatedList",
@@ -89395,11 +89764,12 @@ func (c *FutureReservationsAggregatedListCall) Do(opts ...googleapi.CallOption) 
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -90244,7 +90614,9 @@ func (c *FutureReservationsListCall) PageToken(pageToken string) *FutureReservat
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *FutureReservationsListCall) ReturnPartialSuccess(returnPartialSuccess bool) *FutureReservationsListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -90390,7 +90762,7 @@ func (c *FutureReservationsListCall) Do(opts ...googleapi.CallOption) (*FutureRe
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
@@ -91234,7 +91606,9 @@ func (c *GlobalAddressesListCall) PageToken(pageToken string) *GlobalAddressesLi
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *GlobalAddressesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *GlobalAddressesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -91378,7 +91752,7 @@ func (c *GlobalAddressesListCall) Do(opts ...googleapi.CallOption) (*AddressList
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -92496,7 +92870,9 @@ func (c *GlobalForwardingRulesListCall) PageToken(pageToken string) *GlobalForwa
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *GlobalForwardingRulesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *GlobalForwardingRulesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -92640,7 +93016,7 @@ func (c *GlobalForwardingRulesListCall) Do(opts ...googleapi.CallOption) (*Forwa
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -94293,7 +94669,9 @@ func (c *GlobalNetworkEndpointGroupsListCall) PageToken(pageToken string) *Globa
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *GlobalNetworkEndpointGroupsListCall) ReturnPartialSuccess(returnPartialSuccess bool) *GlobalNetworkEndpointGroupsListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -94437,7 +94815,7 @@ func (c *GlobalNetworkEndpointGroupsListCall) Do(opts ...googleapi.CallOption) (
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -94577,7 +94955,9 @@ func (c *GlobalNetworkEndpointGroupsListNetworkEndpointsCall) PageToken(pageToke
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *GlobalNetworkEndpointGroupsListNetworkEndpointsCall) ReturnPartialSuccess(returnPartialSuccess bool) *GlobalNetworkEndpointGroupsListNetworkEndpointsCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -94718,7 +95098,7 @@ func (c *GlobalNetworkEndpointGroupsListNetworkEndpointsCall) Do(opts ...googlea
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -94768,7 +95148,9 @@ type GlobalOperationsAggregatedListCall struct {
 	header_      http.Header
 }
 
-// AggregatedList: Retrieves an aggregated list of all operations.
+// AggregatedList: Retrieves an aggregated list of all operations. To
+// prevent failure, Google recommends that you set the
+// `returnPartialSuccess` parameter to `true`.
 //
 // - project: Project ID for this request.
 func (r *GlobalOperationsService) AggregatedList(project string) *GlobalOperationsAggregatedListCall {
@@ -94866,14 +95248,18 @@ func (c *GlobalOperationsAggregatedListCall) PageToken(pageToken string) *Global
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *GlobalOperationsAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *GlobalOperationsAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *GlobalOperationsAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *GlobalOperationsAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -94978,7 +95364,7 @@ func (c *GlobalOperationsAggregatedListCall) Do(opts ...googleapi.CallOption) (*
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves an aggregated list of all operations.",
+	//   "description": "Retrieves an aggregated list of all operations. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/operations",
 	//   "httpMethod": "GET",
 	//   "id": "compute.globalOperations.aggregatedList",
@@ -95022,11 +95408,12 @@ func (c *GlobalOperationsAggregatedListCall) Do(opts ...googleapi.CallOption) (*
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -95440,7 +95827,9 @@ func (c *GlobalOperationsListCall) PageToken(pageToken string) *GlobalOperations
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *GlobalOperationsListCall) ReturnPartialSuccess(returnPartialSuccess bool) *GlobalOperationsListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -95584,7 +95973,7 @@ func (c *GlobalOperationsListCall) Do(opts ...googleapi.CallOption) (*OperationL
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -96158,7 +96547,9 @@ func (c *GlobalOrganizationOperationsListCall) ParentId(parentId string) *Global
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *GlobalOrganizationOperationsListCall) ReturnPartialSuccess(returnPartialSuccess bool) *GlobalOrganizationOperationsListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -96294,7 +96685,7 @@ func (c *GlobalOrganizationOperationsListCall) Do(opts ...googleapi.CallOption) 
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -96922,7 +97313,9 @@ func (c *GlobalPublicDelegatedPrefixesListCall) PageToken(pageToken string) *Glo
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *GlobalPublicDelegatedPrefixesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *GlobalPublicDelegatedPrefixesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -97066,7 +97459,7 @@ func (c *GlobalPublicDelegatedPrefixesListCall) Do(opts ...googleapi.CallOption)
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -97296,7 +97689,9 @@ type HealthChecksAggregatedListCall struct {
 }
 
 // AggregatedList: Retrieves the list of all HealthCheck resources,
-// regional and global, available to the specified project.
+// regional and global, available to the specified project. To prevent
+// failure, Google recommends that you set the `returnPartialSuccess`
+// parameter to `true`.
 //
 // - project: Name of the project scoping this request.
 func (r *HealthChecksService) AggregatedList(project string) *HealthChecksAggregatedListCall {
@@ -97394,14 +97789,18 @@ func (c *HealthChecksAggregatedListCall) PageToken(pageToken string) *HealthChec
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *HealthChecksAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *HealthChecksAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *HealthChecksAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *HealthChecksAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -97506,7 +97905,7 @@ func (c *HealthChecksAggregatedListCall) Do(opts ...googleapi.CallOption) (*Heal
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves the list of all HealthCheck resources, regional and global, available to the specified project.",
+	//   "description": "Retrieves the list of all HealthCheck resources, regional and global, available to the specified project. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/healthChecks",
 	//   "httpMethod": "GET",
 	//   "id": "compute.healthChecks.aggregatedList",
@@ -97550,11 +97949,12 @@ func (c *HealthChecksAggregatedListCall) Do(opts ...googleapi.CallOption) (*Heal
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -98182,7 +98582,9 @@ func (c *HealthChecksListCall) PageToken(pageToken string) *HealthChecksListCall
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *HealthChecksListCall) ReturnPartialSuccess(returnPartialSuccess bool) *HealthChecksListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -98326,7 +98728,7 @@ func (c *HealthChecksListCall) Do(opts ...googleapi.CallOption) (*HealthCheckLis
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -99465,7 +99867,9 @@ func (c *HttpHealthChecksListCall) PageToken(pageToken string) *HttpHealthChecks
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *HttpHealthChecksListCall) ReturnPartialSuccess(returnPartialSuccess bool) *HttpHealthChecksListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -99609,7 +100013,7 @@ func (c *HttpHealthChecksListCall) Do(opts ...googleapi.CallOption) (*HttpHealth
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -100748,7 +101152,9 @@ func (c *HttpsHealthChecksListCall) PageToken(pageToken string) *HttpsHealthChec
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *HttpsHealthChecksListCall) ReturnPartialSuccess(returnPartialSuccess bool) *HttpsHealthChecksListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -100892,7 +101298,7 @@ func (c *HttpsHealthChecksListCall) Do(opts ...googleapi.CallOption) (*HttpsHeal
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -102738,7 +103144,9 @@ func (c *ImagesListCall) PageToken(pageToken string) *ImagesListCall {
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *ImagesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *ImagesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -102882,7 +103290,7 @@ func (c *ImagesListCall) Do(opts ...googleapi.CallOption) (*ImageList, error) {
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -104435,7 +104843,9 @@ func (c *InstanceGroupManagerResizeRequestsListCall) PageToken(pageToken string)
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *InstanceGroupManagerResizeRequestsListCall) ReturnPartialSuccess(returnPartialSuccess bool) *InstanceGroupManagerResizeRequestsListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -104591,7 +105001,7 @@ func (c *InstanceGroupManagerResizeRequestsListCall) Do(opts ...googleapi.CallOp
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
@@ -104847,7 +105257,8 @@ type InstanceGroupManagersAggregatedListCall struct {
 }
 
 // AggregatedList: Retrieves the list of managed instance groups and
-// groups them by zone.
+// groups them by zone. To prevent failure, Google recommends that you
+// set the `returnPartialSuccess` parameter to `true`.
 //
 // - project: Project ID for this request.
 func (r *InstanceGroupManagersService) AggregatedList(project string) *InstanceGroupManagersAggregatedListCall {
@@ -104945,14 +105356,18 @@ func (c *InstanceGroupManagersAggregatedListCall) PageToken(pageToken string) *I
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *InstanceGroupManagersAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *InstanceGroupManagersAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *InstanceGroupManagersAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *InstanceGroupManagersAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -105058,7 +105473,7 @@ func (c *InstanceGroupManagersAggregatedListCall) Do(opts ...googleapi.CallOptio
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves the list of managed instance groups and groups them by zone.",
+	//   "description": "Retrieves the list of managed instance groups and groups them by zone. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/instanceGroupManagers",
 	//   "httpMethod": "GET",
 	//   "id": "compute.instanceGroupManagers.aggregatedList",
@@ -105102,11 +105517,12 @@ func (c *InstanceGroupManagersAggregatedListCall) Do(opts ...googleapi.CallOptio
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -106511,7 +106927,9 @@ func (c *InstanceGroupManagersListCall) PageToken(pageToken string) *InstanceGro
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *InstanceGroupManagersListCall) ReturnPartialSuccess(returnPartialSuccess bool) *InstanceGroupManagersListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -106657,7 +107075,7 @@ func (c *InstanceGroupManagersListCall) Do(opts ...googleapi.CallOption) (*Insta
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
@@ -106810,7 +107228,9 @@ func (c *InstanceGroupManagersListErrorsCall) PageToken(pageToken string) *Insta
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *InstanceGroupManagersListErrorsCall) ReturnPartialSuccess(returnPartialSuccess bool) *InstanceGroupManagersListErrorsCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -106965,7 +107385,7 @@ func (c *InstanceGroupManagersListErrorsCall) Do(opts ...googleapi.CallOption) (
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
@@ -107120,7 +107540,9 @@ func (c *InstanceGroupManagersListManagedInstancesCall) PageToken(pageToken stri
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *InstanceGroupManagersListManagedInstancesCall) ReturnPartialSuccess(returnPartialSuccess bool) *InstanceGroupManagersListManagedInstancesCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -107263,7 +107685,7 @@ func (c *InstanceGroupManagersListManagedInstancesCall) Do(opts ...googleapi.Cal
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
@@ -107413,7 +107835,9 @@ func (c *InstanceGroupManagersListPerInstanceConfigsCall) PageToken(pageToken st
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *InstanceGroupManagersListPerInstanceConfigsCall) ReturnPartialSuccess(returnPartialSuccess bool) *InstanceGroupManagersListPerInstanceConfigsCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -107558,7 +107982,7 @@ func (c *InstanceGroupManagersListPerInstanceConfigsCall) Do(opts ...googleapi.C
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
@@ -110735,7 +111159,8 @@ type InstanceGroupsAggregatedListCall struct {
 }
 
 // AggregatedList: Retrieves the list of instance groups and sorts them
-// by zone.
+// by zone. To prevent failure, Google recommends that you set the
+// `returnPartialSuccess` parameter to `true`.
 //
 // - project: Project ID for this request.
 func (r *InstanceGroupsService) AggregatedList(project string) *InstanceGroupsAggregatedListCall {
@@ -110833,14 +111258,18 @@ func (c *InstanceGroupsAggregatedListCall) PageToken(pageToken string) *Instance
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *InstanceGroupsAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *InstanceGroupsAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *InstanceGroupsAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *InstanceGroupsAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -110945,7 +111374,7 @@ func (c *InstanceGroupsAggregatedListCall) Do(opts ...googleapi.CallOption) (*In
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves the list of instance groups and sorts them by zone.",
+	//   "description": "Retrieves the list of instance groups and sorts them by zone. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/instanceGroups",
 	//   "httpMethod": "GET",
 	//   "id": "compute.instanceGroups.aggregatedList",
@@ -110989,11 +111418,12 @@ func (c *InstanceGroupsAggregatedListCall) Do(opts ...googleapi.CallOption) (*In
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -111663,7 +112093,9 @@ func (c *InstanceGroupsListCall) PageToken(pageToken string) *InstanceGroupsList
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *InstanceGroupsListCall) ReturnPartialSuccess(returnPartialSuccess bool) *InstanceGroupsListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -111809,7 +112241,7 @@ func (c *InstanceGroupsListCall) Do(opts ...googleapi.CallOption) (*InstanceGrou
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
@@ -111961,7 +112393,9 @@ func (c *InstanceGroupsListInstancesCall) PageToken(pageToken string) *InstanceG
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *InstanceGroupsListInstancesCall) ReturnPartialSuccess(returnPartialSuccess bool) *InstanceGroupsListInstancesCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -112107,7 +112541,7 @@ func (c *InstanceGroupsListInstancesCall) Do(opts ...googleapi.CallOption) (*Ins
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
@@ -113063,6 +113497,8 @@ type InstanceTemplatesAggregatedListCall struct {
 
 // AggregatedList: Retrieves the list of all InstanceTemplates
 // resources, regional and global, available to the specified project.
+// To prevent failure, Google recommends that you set the
+// `returnPartialSuccess` parameter to `true`.
 //
 // - project: Name of the project scoping this request.
 func (r *InstanceTemplatesService) AggregatedList(project string) *InstanceTemplatesAggregatedListCall {
@@ -113160,14 +113596,18 @@ func (c *InstanceTemplatesAggregatedListCall) PageToken(pageToken string) *Insta
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *InstanceTemplatesAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *InstanceTemplatesAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *InstanceTemplatesAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *InstanceTemplatesAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -113272,7 +113712,7 @@ func (c *InstanceTemplatesAggregatedListCall) Do(opts ...googleapi.CallOption) (
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves the list of all InstanceTemplates resources, regional and global, available to the specified project.",
+	//   "description": "Retrieves the list of all InstanceTemplates resources, regional and global, available to the specified project. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/instanceTemplates",
 	//   "httpMethod": "GET",
 	//   "id": "compute.instanceTemplates.aggregatedList",
@@ -113316,11 +113756,12 @@ func (c *InstanceTemplatesAggregatedListCall) Do(opts ...googleapi.CallOption) (
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -114127,7 +114568,9 @@ func (c *InstanceTemplatesListCall) PageToken(pageToken string) *InstanceTemplat
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *InstanceTemplatesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *InstanceTemplatesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -114271,7 +114714,7 @@ func (c *InstanceTemplatesListCall) Do(opts ...googleapi.CallOption) (*InstanceT
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -115026,7 +115469,8 @@ type InstancesAggregatedListCall struct {
 // AggregatedList: Retrieves an aggregated list of all of the instances
 // in your project across all regions and zones. The performance of this
 // method degrades when a filter is specified on a project that has a
-// very large number of instances.
+// very large number of instances. To prevent failure, Google recommends
+// that you set the `returnPartialSuccess` parameter to `true`.
 //
 // - project: Project ID for this request.
 func (r *InstancesService) AggregatedList(project string) *InstancesAggregatedListCall {
@@ -115124,14 +115568,18 @@ func (c *InstancesAggregatedListCall) PageToken(pageToken string) *InstancesAggr
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *InstancesAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *InstancesAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *InstancesAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *InstancesAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -115236,7 +115684,7 @@ func (c *InstancesAggregatedListCall) Do(opts ...googleapi.CallOption) (*Instanc
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves an aggregated list of all of the instances in your project across all regions and zones. The performance of this method degrades when a filter is specified on a project that has a very large number of instances.",
+	//   "description": "Retrieves an aggregated list of all of the instances in your project across all regions and zones. The performance of this method degrades when a filter is specified on a project that has a very large number of instances. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/instances",
 	//   "httpMethod": "GET",
 	//   "id": "compute.instances.aggregatedList",
@@ -115280,11 +115728,12 @@ func (c *InstancesAggregatedListCall) Do(opts ...googleapi.CallOption) (*Instanc
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -118054,7 +118503,9 @@ func (c *InstancesListCall) PageToken(pageToken string) *InstancesListCall {
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *InstancesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *InstancesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -118200,7 +118651,7 @@ func (c *InstancesListCall) Do(opts ...googleapi.CallOption) (*InstanceList, err
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
@@ -118353,7 +118804,9 @@ func (c *InstancesListReferrersCall) PageToken(pageToken string) *InstancesListR
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *InstancesListReferrersCall) ReturnPartialSuccess(returnPartialSuccess bool) *InstancesListReferrersCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -118508,7 +118961,7 @@ func (c *InstancesListReferrersCall) Do(opts ...googleapi.CallOption) (*Instance
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
@@ -124631,7 +125084,9 @@ type InstantSnapshotsAggregatedListCall struct {
 	header_      http.Header
 }
 
-// AggregatedList: Retrieves an aggregated list of instantSnapshots.
+// AggregatedList: Retrieves an aggregated list of instantSnapshots. To
+// prevent failure, Google recommends that you set the
+// `returnPartialSuccess` parameter to `true`.
 //
 // - project: Project ID for this request.
 func (r *InstantSnapshotsService) AggregatedList(project string) *InstantSnapshotsAggregatedListCall {
@@ -124729,14 +125184,18 @@ func (c *InstantSnapshotsAggregatedListCall) PageToken(pageToken string) *Instan
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *InstantSnapshotsAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *InstantSnapshotsAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *InstantSnapshotsAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *InstantSnapshotsAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -124841,7 +125300,7 @@ func (c *InstantSnapshotsAggregatedListCall) Do(opts ...googleapi.CallOption) (*
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves an aggregated list of instantSnapshots.",
+	//   "description": "Retrieves an aggregated list of instantSnapshots. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/instantSnapshots",
 	//   "httpMethod": "GET",
 	//   "id": "compute.instantSnapshots.aggregatedList",
@@ -124885,11 +125344,12 @@ func (c *InstantSnapshotsAggregatedListCall) Do(opts ...googleapi.CallOption) (*
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -125747,7 +126207,9 @@ func (c *InstantSnapshotsListCall) PageToken(pageToken string) *InstantSnapshots
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *InstantSnapshotsListCall) ReturnPartialSuccess(returnPartialSuccess bool) *InstantSnapshotsListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -125893,7 +126355,7 @@ func (c *InstantSnapshotsListCall) Do(opts ...googleapi.CallOption) (*InstantSna
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
@@ -126477,7 +126939,8 @@ type InterconnectAttachmentsAggregatedListCall struct {
 }
 
 // AggregatedList: Retrieves an aggregated list of interconnect
-// attachments.
+// attachments. To prevent failure, Google recommends that you set the
+// `returnPartialSuccess` parameter to `true`.
 //
 // - project: Project ID for this request.
 func (r *InterconnectAttachmentsService) AggregatedList(project string) *InterconnectAttachmentsAggregatedListCall {
@@ -126575,14 +127038,18 @@ func (c *InterconnectAttachmentsAggregatedListCall) PageToken(pageToken string) 
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *InterconnectAttachmentsAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *InterconnectAttachmentsAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *InterconnectAttachmentsAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *InterconnectAttachmentsAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -126688,7 +127155,7 @@ func (c *InterconnectAttachmentsAggregatedListCall) Do(opts ...googleapi.CallOpt
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves an aggregated list of interconnect attachments.",
+	//   "description": "Retrieves an aggregated list of interconnect attachments. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/interconnectAttachments",
 	//   "httpMethod": "GET",
 	//   "id": "compute.interconnectAttachments.aggregatedList",
@@ -126732,11 +127199,12 @@ func (c *InterconnectAttachmentsAggregatedListCall) Do(opts ...googleapi.CallOpt
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -127417,7 +127885,9 @@ func (c *InterconnectAttachmentsListCall) PageToken(pageToken string) *Interconn
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *InterconnectAttachmentsListCall) ReturnPartialSuccess(returnPartialSuccess bool) *InterconnectAttachmentsListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -127570,7 +128040,7 @@ func (c *InterconnectAttachmentsListCall) Do(opts ...googleapi.CallOption) (*Int
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -128417,7 +128887,9 @@ func (c *InterconnectLocationsListCall) PageToken(pageToken string) *Interconnec
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *InterconnectLocationsListCall) ReturnPartialSuccess(returnPartialSuccess bool) *InterconnectLocationsListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -128561,7 +129033,7 @@ func (c *InterconnectLocationsListCall) Do(opts ...googleapi.CallOption) (*Inter
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -128860,7 +129332,9 @@ func (c *InterconnectRemoteLocationsListCall) PageToken(pageToken string) *Inter
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *InterconnectRemoteLocationsListCall) ReturnPartialSuccess(returnPartialSuccess bool) *InterconnectRemoteLocationsListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -129004,7 +129478,7 @@ func (c *InterconnectRemoteLocationsListCall) Do(opts ...googleapi.CallOption) (
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -129960,7 +130434,9 @@ func (c *InterconnectsListCall) PageToken(pageToken string) *InterconnectsListCa
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *InterconnectsListCall) ReturnPartialSuccess(returnPartialSuccess bool) *InterconnectsListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -130104,7 +130580,7 @@ func (c *InterconnectsListCall) Do(opts ...googleapi.CallOption) (*InterconnectL
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -131734,7 +132210,9 @@ func (c *LicensesListCall) PageToken(pageToken string) *LicensesListCall {
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *LicensesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *LicensesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -131878,7 +132356,7 @@ func (c *LicensesListCall) Do(opts ...googleapi.CallOption) (*LicensesListRespon
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -133012,7 +133490,9 @@ func (c *MachineImagesListCall) PageToken(pageToken string) *MachineImagesListCa
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *MachineImagesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *MachineImagesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -133156,7 +133636,7 @@ func (c *MachineImagesListCall) Do(opts ...googleapi.CallOption) (*MachineImageL
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -133519,7 +133999,9 @@ type MachineTypesAggregatedListCall struct {
 	header_      http.Header
 }
 
-// AggregatedList: Retrieves an aggregated list of machine types.
+// AggregatedList: Retrieves an aggregated list of machine types. To
+// prevent failure, Google recommends that you set the
+// `returnPartialSuccess` parameter to `true`.
 //
 // - project: Project ID for this request.
 func (r *MachineTypesService) AggregatedList(project string) *MachineTypesAggregatedListCall {
@@ -133617,14 +134099,18 @@ func (c *MachineTypesAggregatedListCall) PageToken(pageToken string) *MachineTyp
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *MachineTypesAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *MachineTypesAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *MachineTypesAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *MachineTypesAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -133729,7 +134215,7 @@ func (c *MachineTypesAggregatedListCall) Do(opts ...googleapi.CallOption) (*Mach
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves an aggregated list of machine types.",
+	//   "description": "Retrieves an aggregated list of machine types. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/machineTypes",
 	//   "httpMethod": "GET",
 	//   "id": "compute.machineTypes.aggregatedList",
@@ -133773,11 +134259,12 @@ func (c *MachineTypesAggregatedListCall) Do(opts ...googleapi.CallOption) (*Mach
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -134089,7 +134576,9 @@ func (c *MachineTypesListCall) PageToken(pageToken string) *MachineTypesListCall
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *MachineTypesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *MachineTypesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -134235,7 +134724,7 @@ func (c *MachineTypesListCall) Do(opts ...googleapi.CallOption) (*MachineTypeLis
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
@@ -134294,6 +134783,8 @@ type NetworkAttachmentsAggregatedListCall struct {
 
 // AggregatedList: Retrieves the list of all NetworkAttachment
 // resources, regional and global, available to the specified project.
+// To prevent failure, Google recommends that you set the
+// `returnPartialSuccess` parameter to `true`.
 //
 // - project: Project ID for this request.
 func (r *NetworkAttachmentsService) AggregatedList(project string) *NetworkAttachmentsAggregatedListCall {
@@ -134391,14 +134882,18 @@ func (c *NetworkAttachmentsAggregatedListCall) PageToken(pageToken string) *Netw
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *NetworkAttachmentsAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *NetworkAttachmentsAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *NetworkAttachmentsAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *NetworkAttachmentsAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -134503,7 +134998,7 @@ func (c *NetworkAttachmentsAggregatedListCall) Do(opts ...googleapi.CallOption) 
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves the list of all NetworkAttachment resources, regional and global, available to the specified project.",
+	//   "description": "Retrieves the list of all NetworkAttachment resources, regional and global, available to the specified project. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/networkAttachments",
 	//   "httpMethod": "GET",
 	//   "id": "compute.networkAttachments.aggregatedList",
@@ -134547,11 +135042,12 @@ func (c *NetworkAttachmentsAggregatedListCall) Do(opts ...googleapi.CallOption) 
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -135408,7 +135904,9 @@ func (c *NetworkAttachmentsListCall) PageToken(pageToken string) *NetworkAttachm
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *NetworkAttachmentsListCall) ReturnPartialSuccess(returnPartialSuccess bool) *NetworkAttachmentsListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -135561,7 +136059,7 @@ func (c *NetworkAttachmentsListCall) Do(opts ...googleapi.CallOption) (*NetworkA
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -136140,7 +136638,9 @@ type NetworkEdgeSecurityServicesAggregatedListCall struct {
 }
 
 // AggregatedList: Retrieves the list of all NetworkEdgeSecurityService
-// resources available to the specified project.
+// resources available to the specified project. To prevent failure,
+// Google recommends that you set the `returnPartialSuccess` parameter
+// to `true`.
 //
 // - project: Name of the project scoping this request.
 func (r *NetworkEdgeSecurityServicesService) AggregatedList(project string) *NetworkEdgeSecurityServicesAggregatedListCall {
@@ -136238,14 +136738,18 @@ func (c *NetworkEdgeSecurityServicesAggregatedListCall) PageToken(pageToken stri
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *NetworkEdgeSecurityServicesAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *NetworkEdgeSecurityServicesAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *NetworkEdgeSecurityServicesAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *NetworkEdgeSecurityServicesAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -136352,7 +136856,7 @@ func (c *NetworkEdgeSecurityServicesAggregatedListCall) Do(opts ...googleapi.Cal
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves the list of all NetworkEdgeSecurityService resources available to the specified project.",
+	//   "description": "Retrieves the list of all NetworkEdgeSecurityService resources available to the specified project. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/networkEdgeSecurityServices",
 	//   "httpMethod": "GET",
 	//   "id": "compute.networkEdgeSecurityServices.aggregatedList",
@@ -136396,11 +136900,12 @@ func (c *NetworkEdgeSecurityServicesAggregatedListCall) Do(opts ...googleapi.Cal
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -137207,7 +137712,8 @@ type NetworkEndpointGroupsAggregatedListCall struct {
 }
 
 // AggregatedList: Retrieves the list of network endpoint groups and
-// sorts them by zone.
+// sorts them by zone. To prevent failure, Google recommends that you
+// set the `returnPartialSuccess` parameter to `true`.
 //
 // - project: Project ID for this request.
 func (r *NetworkEndpointGroupsService) AggregatedList(project string) *NetworkEndpointGroupsAggregatedListCall {
@@ -137305,14 +137811,18 @@ func (c *NetworkEndpointGroupsAggregatedListCall) PageToken(pageToken string) *N
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *NetworkEndpointGroupsAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *NetworkEndpointGroupsAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *NetworkEndpointGroupsAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *NetworkEndpointGroupsAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -137418,7 +137928,7 @@ func (c *NetworkEndpointGroupsAggregatedListCall) Do(opts ...googleapi.CallOptio
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves the list of network endpoint groups and sorts them by zone.",
+	//   "description": "Retrieves the list of network endpoint groups and sorts them by zone. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/networkEndpointGroups",
 	//   "httpMethod": "GET",
 	//   "id": "compute.networkEndpointGroups.aggregatedList",
@@ -137462,11 +137972,12 @@ func (c *NetworkEndpointGroupsAggregatedListCall) Do(opts ...googleapi.CallOptio
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -138516,7 +139027,9 @@ func (c *NetworkEndpointGroupsListCall) PageToken(pageToken string) *NetworkEndp
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *NetworkEndpointGroupsListCall) ReturnPartialSuccess(returnPartialSuccess bool) *NetworkEndpointGroupsListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -138662,7 +139175,7 @@ func (c *NetworkEndpointGroupsListCall) Do(opts ...googleapi.CallOption) (*Netwo
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
@@ -138814,7 +139327,9 @@ func (c *NetworkEndpointGroupsListNetworkEndpointsCall) PageToken(pageToken stri
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *NetworkEndpointGroupsListNetworkEndpointsCall) ReturnPartialSuccess(returnPartialSuccess bool) *NetworkEndpointGroupsListNetworkEndpointsCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -138962,7 +139477,7 @@ func (c *NetworkEndpointGroupsListNetworkEndpointsCall) Do(opts ...googleapi.Cal
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
@@ -140864,7 +141379,9 @@ func (c *NetworkFirewallPoliciesListCall) PageToken(pageToken string) *NetworkFi
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *NetworkFirewallPoliciesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *NetworkFirewallPoliciesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -141008,7 +141525,7 @@ func (c *NetworkFirewallPoliciesListCall) Do(opts ...googleapi.CallOption) (*Fir
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -143010,7 +143527,9 @@ func (c *NetworksListCall) PageToken(pageToken string) *NetworksListCall {
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *NetworksListCall) ReturnPartialSuccess(returnPartialSuccess bool) *NetworksListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -143154,7 +143673,7 @@ func (c *NetworksListCall) Do(opts ...googleapi.CallOption) (*NetworkList, error
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -143320,7 +143839,9 @@ func (c *NetworksListPeeringRoutesCall) Region(region string) *NetworksListPeeri
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *NetworksListPeeringRoutesCall) ReturnPartialSuccess(returnPartialSuccess bool) *NetworksListPeeringRoutesCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -143496,7 +144017,7 @@ func (c *NetworksListPeeringRoutesCall) Do(opts ...googleapi.CallOption) (*Excha
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -144593,7 +145114,9 @@ type NodeGroupsAggregatedListCall struct {
 }
 
 // AggregatedList: Retrieves an aggregated list of node groups. Note:
-// use nodeGroups.listNodes for more details about each group.
+// use nodeGroups.listNodes for more details about each group. To
+// prevent failure, Google recommends that you set the
+// `returnPartialSuccess` parameter to `true`.
 //
 // - project: Project ID for this request.
 func (r *NodeGroupsService) AggregatedList(project string) *NodeGroupsAggregatedListCall {
@@ -144691,14 +145214,18 @@ func (c *NodeGroupsAggregatedListCall) PageToken(pageToken string) *NodeGroupsAg
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *NodeGroupsAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *NodeGroupsAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *NodeGroupsAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *NodeGroupsAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -144803,7 +145330,7 @@ func (c *NodeGroupsAggregatedListCall) Do(opts ...googleapi.CallOption) (*NodeGr
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves an aggregated list of node groups. Note: use nodeGroups.listNodes for more details about each group.",
+	//   "description": "Retrieves an aggregated list of node groups. Note: use nodeGroups.listNodes for more details about each group. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/nodeGroups",
 	//   "httpMethod": "GET",
 	//   "id": "compute.nodeGroups.aggregatedList",
@@ -144847,11 +145374,12 @@ func (c *NodeGroupsAggregatedListCall) Do(opts ...googleapi.CallOption) (*NodeGr
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -145906,7 +146434,9 @@ func (c *NodeGroupsListCall) PageToken(pageToken string) *NodeGroupsListCall {
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *NodeGroupsListCall) ReturnPartialSuccess(returnPartialSuccess bool) *NodeGroupsListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -146052,7 +146582,7 @@ func (c *NodeGroupsListCall) Do(opts ...googleapi.CallOption) (*NodeGroupList, e
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
@@ -146200,7 +146730,9 @@ func (c *NodeGroupsListNodesCall) PageToken(pageToken string) *NodeGroupsListNod
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *NodeGroupsListNodesCall) ReturnPartialSuccess(returnPartialSuccess bool) *NodeGroupsListNodesCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -146342,7 +146874,7 @@ func (c *NodeGroupsListNodesCall) Do(opts ...googleapi.CallOption) (*NodeGroupsL
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
@@ -147491,7 +148023,9 @@ type NodeTemplatesAggregatedListCall struct {
 	header_      http.Header
 }
 
-// AggregatedList: Retrieves an aggregated list of node templates.
+// AggregatedList: Retrieves an aggregated list of node templates. To
+// prevent failure, Google recommends that you set the
+// `returnPartialSuccess` parameter to `true`.
 //
 // - project: Project ID for this request.
 func (r *NodeTemplatesService) AggregatedList(project string) *NodeTemplatesAggregatedListCall {
@@ -147589,14 +148123,18 @@ func (c *NodeTemplatesAggregatedListCall) PageToken(pageToken string) *NodeTempl
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *NodeTemplatesAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *NodeTemplatesAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *NodeTemplatesAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *NodeTemplatesAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -147701,7 +148239,7 @@ func (c *NodeTemplatesAggregatedListCall) Do(opts ...googleapi.CallOption) (*Nod
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves an aggregated list of node templates.",
+	//   "description": "Retrieves an aggregated list of node templates. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/nodeTemplates",
 	//   "httpMethod": "GET",
 	//   "id": "compute.nodeTemplates.aggregatedList",
@@ -147745,11 +148283,12 @@ func (c *NodeTemplatesAggregatedListCall) Do(opts ...googleapi.CallOption) (*Nod
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -148602,7 +149141,9 @@ func (c *NodeTemplatesListCall) PageToken(pageToken string) *NodeTemplatesListCa
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *NodeTemplatesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *NodeTemplatesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -148755,7 +149296,7 @@ func (c *NodeTemplatesListCall) Do(opts ...googleapi.CallOption) (*NodeTemplateL
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -149142,7 +149683,9 @@ type NodeTypesAggregatedListCall struct {
 	header_      http.Header
 }
 
-// AggregatedList: Retrieves an aggregated list of node types.
+// AggregatedList: Retrieves an aggregated list of node types. To
+// prevent failure, Google recommends that you set the
+// `returnPartialSuccess` parameter to `true`.
 //
 // - project: Project ID for this request.
 func (r *NodeTypesService) AggregatedList(project string) *NodeTypesAggregatedListCall {
@@ -149240,14 +149783,18 @@ func (c *NodeTypesAggregatedListCall) PageToken(pageToken string) *NodeTypesAggr
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *NodeTypesAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *NodeTypesAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *NodeTypesAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *NodeTypesAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -149352,7 +149899,7 @@ func (c *NodeTypesAggregatedListCall) Do(opts ...googleapi.CallOption) (*NodeTyp
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves an aggregated list of node types.",
+	//   "description": "Retrieves an aggregated list of node types. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/nodeTypes",
 	//   "httpMethod": "GET",
 	//   "id": "compute.nodeTypes.aggregatedList",
@@ -149396,11 +149943,12 @@ func (c *NodeTypesAggregatedListCall) Do(opts ...googleapi.CallOption) (*NodeTyp
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -149712,7 +150260,9 @@ func (c *NodeTypesListCall) PageToken(pageToken string) *NodeTypesListCall {
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *NodeTypesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *NodeTypesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -149858,7 +150408,7 @@ func (c *NodeTypesListCall) Do(opts ...googleapi.CallOption) (*NodeTypeList, err
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
@@ -151302,7 +151852,9 @@ func (c *OrganizationSecurityPoliciesListCall) ParentId(parentId string) *Organi
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *OrganizationSecurityPoliciesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *OrganizationSecurityPoliciesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -151438,7 +151990,7 @@ func (c *OrganizationSecurityPoliciesListCall) Do(opts ...googleapi.CallOption) 
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -152477,7 +153029,9 @@ type PacketMirroringsAggregatedListCall struct {
 	header_      http.Header
 }
 
-// AggregatedList: Retrieves an aggregated list of packetMirrorings.
+// AggregatedList: Retrieves an aggregated list of packetMirrorings. To
+// prevent failure, Google recommends that you set the
+// `returnPartialSuccess` parameter to `true`.
 //
 // - project: Project ID for this request.
 func (r *PacketMirroringsService) AggregatedList(project string) *PacketMirroringsAggregatedListCall {
@@ -152575,14 +153129,18 @@ func (c *PacketMirroringsAggregatedListCall) PageToken(pageToken string) *Packet
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *PacketMirroringsAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *PacketMirroringsAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *PacketMirroringsAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *PacketMirroringsAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -152687,7 +153245,7 @@ func (c *PacketMirroringsAggregatedListCall) Do(opts ...googleapi.CallOption) (*
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves an aggregated list of packetMirrorings.",
+	//   "description": "Retrieves an aggregated list of packetMirrorings. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/packetMirrorings",
 	//   "httpMethod": "GET",
 	//   "id": "compute.packetMirrorings.aggregatedList",
@@ -152731,11 +153289,12 @@ func (c *PacketMirroringsAggregatedListCall) Do(opts ...googleapi.CallOption) (*
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -153402,7 +153961,9 @@ func (c *PacketMirroringsListCall) PageToken(pageToken string) *PacketMirrorings
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *PacketMirroringsListCall) ReturnPartialSuccess(returnPartialSuccess bool) *PacketMirroringsListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -153555,7 +154116,7 @@ func (c *PacketMirroringsListCall) Do(opts ...googleapi.CallOption) (*PacketMirr
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -154992,7 +155553,9 @@ func (c *ProjectsGetXpnResourcesCall) PageToken(pageToken string) *ProjectsGetXp
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *ProjectsGetXpnResourcesCall) ReturnPartialSuccess(returnPartialSuccess bool) *ProjectsGetXpnResourcesCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -155136,7 +155699,7 @@ func (c *ProjectsGetXpnResourcesCall) Do(opts ...googleapi.CallOption) (*Project
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -155272,7 +155835,9 @@ func (c *ProjectsListXpnHostsCall) PageToken(pageToken string) *ProjectsListXpnH
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *ProjectsListXpnHostsCall) ReturnPartialSuccess(returnPartialSuccess bool) *ProjectsListXpnHostsCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -155408,7 +155973,7 @@ func (c *ProjectsListXpnHostsCall) Do(opts ...googleapi.CallOption) (*XpnHostLis
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -155773,6 +156338,173 @@ func (c *ProjectsMoveInstanceCall) Do(opts ...googleapi.CallOption) (*Operation,
 	//   "path": "projects/{project}/moveInstance",
 	//   "request": {
 	//     "$ref": "InstanceMoveRequest"
+	//   },
+	//   "response": {
+	//     "$ref": "Operation"
+	//   },
+	//   "scopes": [
+	//     "https://www.googleapis.com/auth/cloud-platform",
+	//     "https://www.googleapis.com/auth/compute"
+	//   ]
+	// }
+
+}
+
+// method id "compute.projects.setCloudArmorTier":
+
+type ProjectsSetCloudArmorTierCall struct {
+	s                                *Service
+	project                          string
+	projectssetcloudarmortierrequest *ProjectsSetCloudArmorTierRequest
+	urlParams_                       gensupport.URLParams
+	ctx_                             context.Context
+	header_                          http.Header
+}
+
+// SetCloudArmorTier: Sets the Cloud Armor tier of the project. To set
+// ENTERPRISE or above the billing account of the project must be
+// subscribed to Cloud Armor Enterprise. See Subscribing to Cloud Armor
+// Enterprise for more information.
+//
+// - project: Project ID for this request.
+func (r *ProjectsService) SetCloudArmorTier(project string, projectssetcloudarmortierrequest *ProjectsSetCloudArmorTierRequest) *ProjectsSetCloudArmorTierCall {
+	c := &ProjectsSetCloudArmorTierCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.project = project
+	c.projectssetcloudarmortierrequest = projectssetcloudarmortierrequest
+	return c
+}
+
+// RequestId sets the optional parameter "requestId": An optional
+// request ID to identify requests. Specify a unique request ID so that
+// if you must retry your request, the server will know to ignore the
+// request if it has already been completed. For example, consider a
+// situation where you make an initial request and the request times
+// out. If you make the request again with the same request ID, the
+// server can check if original operation with the same request ID was
+// received, and if so, will ignore the second request. This prevents
+// clients from accidentally creating duplicate commitments. The request
+// ID must be a valid UUID with the exception that zero UUID is not
+// supported ( 00000000-0000-0000-0000-000000000000).
+func (c *ProjectsSetCloudArmorTierCall) RequestId(requestId string) *ProjectsSetCloudArmorTierCall {
+	c.urlParams_.Set("requestId", requestId)
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
+// for more information.
+func (c *ProjectsSetCloudArmorTierCall) Fields(s ...googleapi.Field) *ProjectsSetCloudArmorTierCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// Context sets the context to be used in this call's Do method. Any
+// pending HTTP request will be aborted if the provided context is
+// canceled.
+func (c *ProjectsSetCloudArmorTierCall) Context(ctx context.Context) *ProjectsSetCloudArmorTierCall {
+	c.ctx_ = ctx
+	return c
+}
+
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *ProjectsSetCloudArmorTierCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
+func (c *ProjectsSetCloudArmorTierCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("x-goog-api-client", "gl-go/"+gensupport.GoVersion()+" gdcl/"+internal.Version)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	var body io.Reader = nil
+	body, err := googleapi.WithoutDataWrapper.JSONReader(c.projectssetcloudarmortierrequest)
+	if err != nil {
+		return nil, err
+	}
+	reqHeaders.Set("Content-Type", "application/json")
+	c.urlParams_.Set("alt", alt)
+	c.urlParams_.Set("prettyPrint", "false")
+	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{project}/setCloudArmorTier")
+	urls += "?" + c.urlParams_.Encode()
+	req, err := http.NewRequest("POST", urls, body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header = reqHeaders
+	googleapi.Expand(req.URL, map[string]string{
+		"project": c.project,
+	})
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "compute.projects.setCloudArmorTier" call.
+// Exactly one of *Operation or error will be non-nil. Any non-2xx
+// status code is an error. Response headers are in either
+// *Operation.ServerResponse.Header or (if a response was returned at
+// all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
+// to check whether the returned error was because
+// http.StatusNotModified was returned.
+func (c *ProjectsSetCloudArmorTierCall) Do(opts ...googleapi.CallOption) (*Operation, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if res != nil && res.StatusCode == http.StatusNotModified {
+		if res.Body != nil {
+			res.Body.Close()
+		}
+		return nil, gensupport.WrapError(&googleapi.Error{
+			Code:   res.StatusCode,
+			Header: res.Header,
+		})
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return nil, gensupport.WrapError(err)
+	}
+	ret := &Operation{
+		ServerResponse: googleapi.ServerResponse{
+			Header:         res.Header,
+			HTTPStatusCode: res.StatusCode,
+		},
+	}
+	target := &ret
+	if err := gensupport.DecodeResponse(target, res); err != nil {
+		return nil, err
+	}
+	return ret, nil
+	// {
+	//   "description": "Sets the Cloud Armor tier of the project. To set ENTERPRISE or above the billing account of the project must be subscribed to Cloud Armor Enterprise. See Subscribing to Cloud Armor Enterprise for more information.",
+	//   "flatPath": "projects/{project}/setCloudArmorTier",
+	//   "httpMethod": "POST",
+	//   "id": "compute.projects.setCloudArmorTier",
+	//   "parameterOrder": [
+	//     "project"
+	//   ],
+	//   "parameters": {
+	//     "project": {
+	//       "description": "Project ID for this request.",
+	//       "location": "path",
+	//       "pattern": "(?:(?:[-a-z0-9]{1,63}\\.)*(?:[a-z](?:[-a-z0-9]{0,61}[a-z0-9])?):)?(?:[0-9]{1,19}|(?:[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?))",
+	//       "required": true,
+	//       "type": "string"
+	//     },
+	//     "requestId": {
+	//       "description": "An optional request ID to identify requests. Specify a unique request ID so that if you must retry your request, the server will know to ignore the request if it has already been completed. For example, consider a situation where you make an initial request and the request times out. If you make the request again with the same request ID, the server can check if original operation with the same request ID was received, and if so, will ignore the second request. This prevents clients from accidentally creating duplicate commitments. The request ID must be a valid UUID with the exception that zero UUID is not supported ( 00000000-0000-0000-0000-000000000000).",
+	//       "location": "query",
+	//       "type": "string"
+	//     }
+	//   },
+	//   "path": "projects/{project}/setCloudArmorTier",
+	//   "request": {
+	//     "$ref": "ProjectsSetCloudArmorTierRequest"
 	//   },
 	//   "response": {
 	//     "$ref": "Operation"
@@ -157209,7 +157941,9 @@ func (c *PublicAdvertisedPrefixesListCall) PageToken(pageToken string) *PublicAd
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *PublicAdvertisedPrefixesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *PublicAdvertisedPrefixesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -157353,7 +158087,7 @@ func (c *PublicAdvertisedPrefixesListCall) Do(opts ...googleapi.CallOption) (*Pu
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -157749,7 +158483,9 @@ type PublicDelegatedPrefixesAggregatedListCall struct {
 }
 
 // AggregatedList: Lists all PublicDelegatedPrefix resources owned by
-// the specific project across all scopes.
+// the specific project across all scopes. To prevent failure, Google
+// recommends that you set the `returnPartialSuccess` parameter to
+// `true`.
 //
 // - project: Name of the project scoping this request.
 func (r *PublicDelegatedPrefixesService) AggregatedList(project string) *PublicDelegatedPrefixesAggregatedListCall {
@@ -157847,14 +158583,18 @@ func (c *PublicDelegatedPrefixesAggregatedListCall) PageToken(pageToken string) 
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *PublicDelegatedPrefixesAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *PublicDelegatedPrefixesAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *PublicDelegatedPrefixesAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *PublicDelegatedPrefixesAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -157960,7 +158700,7 @@ func (c *PublicDelegatedPrefixesAggregatedListCall) Do(opts ...googleapi.CallOpt
 	}
 	return ret, nil
 	// {
-	//   "description": "Lists all PublicDelegatedPrefix resources owned by the specific project across all scopes.",
+	//   "description": "Lists all PublicDelegatedPrefix resources owned by the specific project across all scopes. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/publicDelegatedPrefixes",
 	//   "httpMethod": "GET",
 	//   "id": "compute.publicDelegatedPrefixes.aggregatedList",
@@ -158004,11 +158744,12 @@ func (c *PublicDelegatedPrefixesAggregatedListCall) Do(opts ...googleapi.CallOpt
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -158859,7 +159600,9 @@ func (c *PublicDelegatedPrefixesListCall) PageToken(pageToken string) *PublicDel
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *PublicDelegatedPrefixesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *PublicDelegatedPrefixesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -159012,7 +159755,7 @@ func (c *PublicDelegatedPrefixesListCall) Do(opts ...googleapi.CallOption) (*Pub
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -160048,7 +160791,9 @@ func (c *RegionAutoscalersListCall) PageToken(pageToken string) *RegionAutoscale
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *RegionAutoscalersListCall) ReturnPartialSuccess(returnPartialSuccess bool) *RegionAutoscalersListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -160201,7 +160946,7 @@ func (c *RegionAutoscalersListCall) Do(opts ...googleapi.CallOption) (*RegionAut
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -161773,7 +162518,9 @@ func (c *RegionBackendServicesListCall) PageToken(pageToken string) *RegionBacke
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *RegionBackendServicesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *RegionBackendServicesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -161926,7 +162673,7 @@ func (c *RegionBackendServicesListCall) Do(opts ...googleapi.CallOption) (*Backe
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -162066,7 +162813,9 @@ func (c *RegionBackendServicesListUsableCall) PageToken(pageToken string) *Regio
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *RegionBackendServicesListUsableCall) ReturnPartialSuccess(returnPartialSuccess bool) *RegionBackendServicesListUsableCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -162218,7 +162967,7 @@ func (c *RegionBackendServicesListUsableCall) Do(opts ...googleapi.CallOption) (
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -163177,7 +163926,8 @@ type RegionCommitmentsAggregatedListCall struct {
 }
 
 // AggregatedList: Retrieves an aggregated list of commitments by
-// region.
+// region. To prevent failure, Google recommends that you set the
+// `returnPartialSuccess` parameter to `true`.
 //
 // - project: Project ID for this request.
 func (r *RegionCommitmentsService) AggregatedList(project string) *RegionCommitmentsAggregatedListCall {
@@ -163275,14 +164025,18 @@ func (c *RegionCommitmentsAggregatedListCall) PageToken(pageToken string) *Regio
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *RegionCommitmentsAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *RegionCommitmentsAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *RegionCommitmentsAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *RegionCommitmentsAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -163387,7 +164141,7 @@ func (c *RegionCommitmentsAggregatedListCall) Do(opts ...googleapi.CallOption) (
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves an aggregated list of commitments by region.",
+	//   "description": "Retrieves an aggregated list of commitments by region. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/commitments",
 	//   "httpMethod": "GET",
 	//   "id": "compute.regionCommitments.aggregatedList",
@@ -163431,11 +164185,12 @@ func (c *RegionCommitmentsAggregatedListCall) Do(opts ...googleapi.CallOption) (
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -163924,7 +164679,9 @@ func (c *RegionCommitmentsListCall) PageToken(pageToken string) *RegionCommitmen
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *RegionCommitmentsListCall) ReturnPartialSuccess(returnPartialSuccess bool) *RegionCommitmentsListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -164077,7 +164834,7 @@ func (c *RegionCommitmentsListCall) Do(opts ...googleapi.CallOption) (*Commitmen
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -164963,7 +165720,9 @@ func (c *RegionDiskTypesListCall) PageToken(pageToken string) *RegionDiskTypesLi
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *RegionDiskTypesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *RegionDiskTypesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -165116,7 +165875,7 @@ func (c *RegionDiskTypesListCall) Do(opts ...googleapi.CallOption) (*RegionDiskT
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -166539,7 +167298,9 @@ func (c *RegionDisksListCall) PageToken(pageToken string) *RegionDisksListCall {
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *RegionDisksListCall) ReturnPartialSuccess(returnPartialSuccess bool) *RegionDisksListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -166692,7 +167453,7 @@ func (c *RegionDisksListCall) Do(opts ...googleapi.CallOption) (*DiskList, error
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -169022,7 +169783,9 @@ func (c *RegionHealthCheckServicesListCall) PageToken(pageToken string) *RegionH
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *RegionHealthCheckServicesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *RegionHealthCheckServicesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -169175,7 +169938,7 @@ func (c *RegionHealthCheckServicesListCall) Do(opts ...googleapi.CallOption) (*H
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -170200,7 +170963,9 @@ func (c *RegionHealthChecksListCall) PageToken(pageToken string) *RegionHealthCh
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *RegionHealthChecksListCall) ReturnPartialSuccess(returnPartialSuccess bool) *RegionHealthChecksListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -170353,7 +171118,7 @@ func (c *RegionHealthChecksListCall) Do(opts ...googleapi.CallOption) (*HealthCh
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -172496,7 +173261,9 @@ func (c *RegionInstanceGroupManagersListCall) PageToken(pageToken string) *Regio
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *RegionInstanceGroupManagersListCall) ReturnPartialSuccess(returnPartialSuccess bool) *RegionInstanceGroupManagersListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -172648,7 +173415,7 @@ func (c *RegionInstanceGroupManagersListCall) Do(opts ...googleapi.CallOption) (
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -172795,7 +173562,9 @@ func (c *RegionInstanceGroupManagersListErrorsCall) PageToken(pageToken string) 
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *RegionInstanceGroupManagersListErrorsCall) ReturnPartialSuccess(returnPartialSuccess bool) *RegionInstanceGroupManagersListErrorsCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -172957,7 +173726,7 @@ func (c *RegionInstanceGroupManagersListErrorsCall) Do(opts ...googleapi.CallOpt
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -173102,7 +173871,9 @@ func (c *RegionInstanceGroupManagersListManagedInstancesCall) PageToken(pageToke
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *RegionInstanceGroupManagersListManagedInstancesCall) ReturnPartialSuccess(returnPartialSuccess bool) *RegionInstanceGroupManagersListManagedInstancesCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -173251,7 +174022,7 @@ func (c *RegionInstanceGroupManagersListManagedInstancesCall) Do(opts ...googlea
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -173395,7 +174166,9 @@ func (c *RegionInstanceGroupManagersListPerInstanceConfigsCall) PageToken(pageTo
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *RegionInstanceGroupManagersListPerInstanceConfigsCall) ReturnPartialSuccess(returnPartialSuccess bool) *RegionInstanceGroupManagersListPerInstanceConfigsCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -173544,7 +174317,7 @@ func (c *RegionInstanceGroupManagersListPerInstanceConfigsCall) Do(opts ...googl
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -176760,7 +177533,9 @@ func (c *RegionInstanceGroupsListCall) PageToken(pageToken string) *RegionInstan
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *RegionInstanceGroupsListCall) ReturnPartialSuccess(returnPartialSuccess bool) *RegionInstanceGroupsListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -176912,7 +177687,7 @@ func (c *RegionInstanceGroupsListCall) Do(opts ...googleapi.CallOption) (*Region
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -177059,7 +177834,9 @@ func (c *RegionInstanceGroupsListInstancesCall) PageToken(pageToken string) *Reg
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *RegionInstanceGroupsListInstancesCall) ReturnPartialSuccess(returnPartialSuccess bool) *RegionInstanceGroupsListInstancesCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -177212,7 +177989,7 @@ func (c *RegionInstanceGroupsListInstancesCall) Do(opts ...googleapi.CallOption)
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -178240,7 +179017,9 @@ func (c *RegionInstanceTemplatesListCall) PageToken(pageToken string) *RegionIns
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *RegionInstanceTemplatesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *RegionInstanceTemplatesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -178393,7 +179172,7 @@ func (c *RegionInstanceTemplatesListCall) Do(opts ...googleapi.CallOption) (*Ins
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -179427,7 +180206,9 @@ func (c *RegionInstantSnapshotsListCall) PageToken(pageToken string) *RegionInst
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *RegionInstantSnapshotsListCall) ReturnPartialSuccess(returnPartialSuccess bool) *RegionInstantSnapshotsListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -179580,7 +180361,7 @@ func (c *RegionInstantSnapshotsListCall) Do(opts ...googleapi.CallOption) (*Inst
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -181157,7 +181938,9 @@ func (c *RegionNetworkEndpointGroupsListCall) PageToken(pageToken string) *Regio
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *RegionNetworkEndpointGroupsListCall) ReturnPartialSuccess(returnPartialSuccess bool) *RegionNetworkEndpointGroupsListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -181309,7 +182092,7 @@ func (c *RegionNetworkEndpointGroupsListCall) Do(opts ...googleapi.CallOption) (
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -181453,7 +182236,9 @@ func (c *RegionNetworkEndpointGroupsListNetworkEndpointsCall) PageToken(pageToke
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *RegionNetworkEndpointGroupsListNetworkEndpointsCall) ReturnPartialSuccess(returnPartialSuccess bool) *RegionNetworkEndpointGroupsListNetworkEndpointsCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -181602,7 +182387,7 @@ func (c *RegionNetworkEndpointGroupsListNetworkEndpointsCall) Do(opts ...googlea
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -183609,7 +184394,9 @@ func (c *RegionNetworkFirewallPoliciesListCall) PageToken(pageToken string) *Reg
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *RegionNetworkFirewallPoliciesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *RegionNetworkFirewallPoliciesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -183762,7 +184549,7 @@ func (c *RegionNetworkFirewallPoliciesListCall) Do(opts ...googleapi.CallOption)
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -185540,7 +186327,9 @@ func (c *RegionNotificationEndpointsListCall) PageToken(pageToken string) *Regio
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *RegionNotificationEndpointsListCall) ReturnPartialSuccess(returnPartialSuccess bool) *RegionNotificationEndpointsListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -185693,7 +186482,7 @@ func (c *RegionNotificationEndpointsListCall) Do(opts ...googleapi.CallOption) (
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -186302,7 +187091,9 @@ func (c *RegionOperationsListCall) PageToken(pageToken string) *RegionOperations
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *RegionOperationsListCall) ReturnPartialSuccess(returnPartialSuccess bool) *RegionOperationsListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -186455,7 +187246,7 @@ func (c *RegionOperationsListCall) Do(opts ...googleapi.CallOption) (*OperationL
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -187668,7 +188459,9 @@ func (c *RegionSecurityPoliciesListCall) PageToken(pageToken string) *RegionSecu
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *RegionSecurityPoliciesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *RegionSecurityPoliciesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -187821,7 +188614,7 @@ func (c *RegionSecurityPoliciesListCall) Do(opts ...googleapi.CallOption) (*Secu
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -189071,7 +189864,9 @@ func (c *RegionSslCertificatesListCall) PageToken(pageToken string) *RegionSslCe
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *RegionSslCertificatesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *RegionSslCertificatesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -189224,7 +190019,7 @@ func (c *RegionSslCertificatesListCall) Do(opts ...googleapi.CallOption) (*SslCe
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -190062,7 +190857,9 @@ func (c *RegionSslPoliciesListCall) PageToken(pageToken string) *RegionSslPolici
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *RegionSslPoliciesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *RegionSslPoliciesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -190215,7 +191012,7 @@ func (c *RegionSslPoliciesListCall) Do(opts ...googleapi.CallOption) (*SslPolici
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -190354,7 +191151,9 @@ func (c *RegionSslPoliciesListAvailableFeaturesCall) PageToken(pageToken string)
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *RegionSslPoliciesListAvailableFeaturesCall) ReturnPartialSuccess(returnPartialSuccess bool) *RegionSslPoliciesListAvailableFeaturesCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -190509,7 +191308,7 @@ func (c *RegionSslPoliciesListAvailableFeaturesCall) Do(opts ...googleapi.CallOp
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -191513,7 +192312,9 @@ func (c *RegionTargetHttpProxiesListCall) PageToken(pageToken string) *RegionTar
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *RegionTargetHttpProxiesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *RegionTargetHttpProxiesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -191666,7 +192467,7 @@ func (c *RegionTargetHttpProxiesListCall) Do(opts ...googleapi.CallOption) (*Tar
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -192690,7 +193491,9 @@ func (c *RegionTargetHttpsProxiesListCall) PageToken(pageToken string) *RegionTa
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *RegionTargetHttpsProxiesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *RegionTargetHttpsProxiesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -192843,7 +193646,7 @@ func (c *RegionTargetHttpsProxiesListCall) Do(opts ...googleapi.CallOption) (*Ta
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -194246,7 +195049,9 @@ func (c *RegionTargetTcpProxiesListCall) PageToken(pageToken string) *RegionTarg
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *RegionTargetTcpProxiesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *RegionTargetTcpProxiesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -194399,7 +195204,7 @@ func (c *RegionTargetTcpProxiesListCall) Do(opts ...googleapi.CallOption) (*Targ
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -195398,7 +196203,9 @@ func (c *RegionUrlMapsListCall) PageToken(pageToken string) *RegionUrlMapsListCa
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *RegionUrlMapsListCall) ReturnPartialSuccess(returnPartialSuccess bool) *RegionUrlMapsListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -195551,7 +196358,7 @@ func (c *RegionUrlMapsListCall) Do(opts ...googleapi.CallOption) (*UrlMapList, e
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -196389,7 +197196,9 @@ func (c *RegionZonesListCall) PageToken(pageToken string) *RegionZonesListCall {
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *RegionZonesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *RegionZonesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -196542,7 +197351,7 @@ func (c *RegionZonesListCall) Do(opts ...googleapi.CallOption) (*ZoneList, error
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -196852,7 +197661,9 @@ func (c *RegionsListCall) PageToken(pageToken string) *RegionsListCall {
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *RegionsListCall) ReturnPartialSuccess(returnPartialSuccess bool) *RegionsListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -196996,7 +197807,7 @@ func (c *RegionsListCall) Do(opts ...googleapi.CallOption) (*RegionList, error) 
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -197046,7 +197857,9 @@ type ReservationsAggregatedListCall struct {
 	header_      http.Header
 }
 
-// AggregatedList: Retrieves an aggregated list of reservations.
+// AggregatedList: Retrieves an aggregated list of reservations. To
+// prevent failure, Google recommends that you set the
+// `returnPartialSuccess` parameter to `true`.
 //
 // - project: Project ID for this request.
 func (r *ReservationsService) AggregatedList(project string) *ReservationsAggregatedListCall {
@@ -197144,14 +197957,18 @@ func (c *ReservationsAggregatedListCall) PageToken(pageToken string) *Reservatio
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *ReservationsAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *ReservationsAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *ReservationsAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *ReservationsAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -197256,7 +198073,7 @@ func (c *ReservationsAggregatedListCall) Do(opts ...googleapi.CallOption) (*Rese
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves an aggregated list of reservations.",
+	//   "description": "Retrieves an aggregated list of reservations. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/reservations",
 	//   "httpMethod": "GET",
 	//   "id": "compute.reservations.aggregatedList",
@@ -197300,11 +198117,12 @@ func (c *ReservationsAggregatedListCall) Do(opts ...googleapi.CallOption) (*Rese
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -198157,7 +198975,9 @@ func (c *ReservationsListCall) PageToken(pageToken string) *ReservationsListCall
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *ReservationsListCall) ReturnPartialSuccess(returnPartialSuccess bool) *ReservationsListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -198303,7 +199123,7 @@ func (c *ReservationsListCall) Do(opts ...googleapi.CallOption) (*ReservationLis
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
@@ -199099,7 +199919,9 @@ type ResourcePoliciesAggregatedListCall struct {
 	header_      http.Header
 }
 
-// AggregatedList: Retrieves an aggregated list of resource policies.
+// AggregatedList: Retrieves an aggregated list of resource policies. To
+// prevent failure, Google recommends that you set the
+// `returnPartialSuccess` parameter to `true`.
 //
 // - project: Project ID for this request.
 func (r *ResourcePoliciesService) AggregatedList(project string) *ResourcePoliciesAggregatedListCall {
@@ -199197,14 +200019,18 @@ func (c *ResourcePoliciesAggregatedListCall) PageToken(pageToken string) *Resour
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *ResourcePoliciesAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *ResourcePoliciesAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *ResourcePoliciesAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *ResourcePoliciesAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -199309,7 +200135,7 @@ func (c *ResourcePoliciesAggregatedListCall) Do(opts ...googleapi.CallOption) (*
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves an aggregated list of resource policies.",
+	//   "description": "Retrieves an aggregated list of resource policies. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/resourcePolicies",
 	//   "httpMethod": "GET",
 	//   "id": "compute.resourcePolicies.aggregatedList",
@@ -199353,11 +200179,12 @@ func (c *ResourcePoliciesAggregatedListCall) Do(opts ...googleapi.CallOption) (*
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -200209,7 +201036,9 @@ func (c *ResourcePoliciesListCall) PageToken(pageToken string) *ResourcePolicies
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *ResourcePoliciesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *ResourcePoliciesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -200362,7 +201191,7 @@ func (c *ResourcePoliciesListCall) Do(opts ...googleapi.CallOption) (*ResourcePo
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -200950,7 +201779,9 @@ type RoutersAggregatedListCall struct {
 	header_      http.Header
 }
 
-// AggregatedList: Retrieves an aggregated list of routers.
+// AggregatedList: Retrieves an aggregated list of routers. To prevent
+// failure, Google recommends that you set the `returnPartialSuccess`
+// parameter to `true`.
 //
 // - project: Project ID for this request.
 func (r *RoutersService) AggregatedList(project string) *RoutersAggregatedListCall {
@@ -201048,14 +201879,18 @@ func (c *RoutersAggregatedListCall) PageToken(pageToken string) *RoutersAggregat
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *RoutersAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *RoutersAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *RoutersAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *RoutersAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -201160,7 +201995,7 @@ func (c *RoutersAggregatedListCall) Do(opts ...googleapi.CallOption) (*RouterAgg
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves an aggregated list of routers.",
+	//   "description": "Retrieves an aggregated list of routers. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/routers",
 	//   "httpMethod": "GET",
 	//   "id": "compute.routers.aggregatedList",
@@ -201204,11 +202039,12 @@ func (c *RoutersAggregatedListCall) Do(opts ...googleapi.CallOption) (*RouterAgg
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -201896,7 +202732,9 @@ func (c *RoutersGetNatMappingInfoCall) PageToken(pageToken string) *RoutersGetNa
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *RoutersGetNatMappingInfoCall) ReturnPartialSuccess(returnPartialSuccess bool) *RoutersGetNatMappingInfoCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -202056,7 +202894,7 @@ func (c *RoutersGetNatMappingInfoCall) Do(opts ...googleapi.CallOption) (*VmEndp
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
@@ -202552,7 +203390,9 @@ func (c *RoutersListCall) PageToken(pageToken string) *RoutersListCall {
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *RoutersListCall) ReturnPartialSuccess(returnPartialSuccess bool) *RoutersListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -202705,7 +203545,7 @@ func (c *RoutersListCall) Do(opts ...googleapi.CallOption) (*RouterList, error) 
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -204053,7 +204893,9 @@ func (c *RoutesListCall) PageToken(pageToken string) *RoutesListCall {
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *RoutesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *RoutesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -204197,7 +205039,7 @@ func (c *RoutesListCall) Do(opts ...googleapi.CallOption) (*RouteList, error) {
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -204572,7 +205414,9 @@ type SecurityPoliciesAggregatedListCall struct {
 }
 
 // AggregatedList: Retrieves the list of all SecurityPolicy resources,
-// regional and global, available to the specified project.
+// regional and global, available to the specified project. To prevent
+// failure, Google recommends that you set the `returnPartialSuccess`
+// parameter to `true`.
 //
 // - project: Name of the project scoping this request.
 func (r *SecurityPoliciesService) AggregatedList(project string) *SecurityPoliciesAggregatedListCall {
@@ -204670,14 +205514,18 @@ func (c *SecurityPoliciesAggregatedListCall) PageToken(pageToken string) *Securi
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *SecurityPoliciesAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *SecurityPoliciesAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *SecurityPoliciesAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *SecurityPoliciesAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -204782,7 +205630,7 @@ func (c *SecurityPoliciesAggregatedListCall) Do(opts ...googleapi.CallOption) (*
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves the list of all SecurityPolicy resources, regional and global, available to the specified project.",
+	//   "description": "Retrieves the list of all SecurityPolicy resources, regional and global, available to the specified project. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/securityPolicies",
 	//   "httpMethod": "GET",
 	//   "id": "compute.securityPolicies.aggregatedList",
@@ -204826,11 +205674,12 @@ func (c *SecurityPoliciesAggregatedListCall) Do(opts ...googleapi.CallOption) (*
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -205645,7 +206494,9 @@ func (c *SecurityPoliciesListCall) PageToken(pageToken string) *SecurityPolicies
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *SecurityPoliciesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *SecurityPoliciesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -205789,7 +206640,7 @@ func (c *SecurityPoliciesListCall) Do(opts ...googleapi.CallOption) (*SecurityPo
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -205925,7 +206776,9 @@ func (c *SecurityPoliciesListPreconfiguredExpressionSetsCall) PageToken(pageToke
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *SecurityPoliciesListPreconfiguredExpressionSetsCall) ReturnPartialSuccess(returnPartialSuccess bool) *SecurityPoliciesListPreconfiguredExpressionSetsCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -206072,7 +206925,7 @@ func (c *SecurityPoliciesListPreconfiguredExpressionSetsCall) Do(opts ...googlea
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -206962,6 +207815,8 @@ type ServiceAttachmentsAggregatedListCall struct {
 
 // AggregatedList: Retrieves the list of all ServiceAttachment
 // resources, regional and global, available to the specified project.
+// To prevent failure, Google recommends that you set the
+// `returnPartialSuccess` parameter to `true`.
 //
 // - project: Name of the project scoping this request.
 func (r *ServiceAttachmentsService) AggregatedList(project string) *ServiceAttachmentsAggregatedListCall {
@@ -207059,14 +207914,18 @@ func (c *ServiceAttachmentsAggregatedListCall) PageToken(pageToken string) *Serv
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *ServiceAttachmentsAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *ServiceAttachmentsAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *ServiceAttachmentsAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *ServiceAttachmentsAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -207171,7 +208030,7 @@ func (c *ServiceAttachmentsAggregatedListCall) Do(opts ...googleapi.CallOption) 
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves the list of all ServiceAttachment resources, regional and global, available to the specified project.",
+	//   "description": "Retrieves the list of all ServiceAttachment resources, regional and global, available to the specified project. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/serviceAttachments",
 	//   "httpMethod": "GET",
 	//   "id": "compute.serviceAttachments.aggregatedList",
@@ -207215,11 +208074,12 @@ func (c *ServiceAttachmentsAggregatedListCall) Do(opts ...googleapi.CallOption) 
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -208074,7 +208934,9 @@ func (c *ServiceAttachmentsListCall) PageToken(pageToken string) *ServiceAttachm
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *ServiceAttachmentsListCall) ReturnPartialSuccess(returnPartialSuccess bool) *ServiceAttachmentsListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -208227,7 +209089,7 @@ func (c *ServiceAttachmentsListCall) Do(opts ...googleapi.CallOption) (*ServiceA
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -209889,7 +210751,9 @@ func (c *SnapshotsListCall) PageToken(pageToken string) *SnapshotsListCall {
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *SnapshotsListCall) ReturnPartialSuccess(returnPartialSuccess bool) *SnapshotsListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -210033,7 +210897,7 @@ func (c *SnapshotsListCall) Do(opts ...googleapi.CallOption) (*SnapshotList, err
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -210553,7 +211417,9 @@ type SslCertificatesAggregatedListCall struct {
 }
 
 // AggregatedList: Retrieves the list of all SslCertificate resources,
-// regional and global, available to the specified project.
+// regional and global, available to the specified project. To prevent
+// failure, Google recommends that you set the `returnPartialSuccess`
+// parameter to `true`.
 //
 // - project: Name of the project scoping this request.
 func (r *SslCertificatesService) AggregatedList(project string) *SslCertificatesAggregatedListCall {
@@ -210651,14 +211517,18 @@ func (c *SslCertificatesAggregatedListCall) PageToken(pageToken string) *SslCert
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *SslCertificatesAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *SslCertificatesAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *SslCertificatesAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *SslCertificatesAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -210763,7 +211633,7 @@ func (c *SslCertificatesAggregatedListCall) Do(opts ...googleapi.CallOption) (*S
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves the list of all SslCertificate resources, regional and global, available to the specified project.",
+	//   "description": "Retrieves the list of all SslCertificate resources, regional and global, available to the specified project. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/sslCertificates",
 	//   "httpMethod": "GET",
 	//   "id": "compute.sslCertificates.aggregatedList",
@@ -210807,11 +211677,12 @@ func (c *SslCertificatesAggregatedListCall) Do(opts ...googleapi.CallOption) (*S
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -211439,7 +212310,9 @@ func (c *SslCertificatesListCall) PageToken(pageToken string) *SslCertificatesLi
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *SslCertificatesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *SslCertificatesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -211583,7 +212456,7 @@ func (c *SslCertificatesListCall) Do(opts ...googleapi.CallOption) (*SslCertific
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -211791,7 +212664,9 @@ type SslPoliciesAggregatedListCall struct {
 }
 
 // AggregatedList: Retrieves the list of all SslPolicy resources,
-// regional and global, available to the specified project.
+// regional and global, available to the specified project. To prevent
+// failure, Google recommends that you set the `returnPartialSuccess`
+// parameter to `true`.
 //
 // - project: Name of the project scoping this request.
 func (r *SslPoliciesService) AggregatedList(project string) *SslPoliciesAggregatedListCall {
@@ -211889,14 +212764,18 @@ func (c *SslPoliciesAggregatedListCall) PageToken(pageToken string) *SslPolicies
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *SslPoliciesAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *SslPoliciesAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *SslPoliciesAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *SslPoliciesAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -212001,7 +212880,7 @@ func (c *SslPoliciesAggregatedListCall) Do(opts ...googleapi.CallOption) (*SslPo
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves the list of all SslPolicy resources, regional and global, available to the specified project.",
+	//   "description": "Retrieves the list of all SslPolicy resources, regional and global, available to the specified project. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/sslPolicies",
 	//   "httpMethod": "GET",
 	//   "id": "compute.sslPolicies.aggregatedList",
@@ -212045,11 +212924,12 @@ func (c *SslPoliciesAggregatedListCall) Do(opts ...googleapi.CallOption) (*SslPo
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -212679,7 +213559,9 @@ func (c *SslPoliciesListCall) PageToken(pageToken string) *SslPoliciesListCall {
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *SslPoliciesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *SslPoliciesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -212823,7 +213705,7 @@ func (c *SslPoliciesListCall) Do(opts ...googleapi.CallOption) (*SslPoliciesList
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -212959,7 +213841,9 @@ func (c *SslPoliciesListAvailableFeaturesCall) PageToken(pageToken string) *SslP
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *SslPoliciesListAvailableFeaturesCall) ReturnPartialSuccess(returnPartialSuccess bool) *SslPoliciesListAvailableFeaturesCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -213105,7 +213989,7 @@ func (c *SslPoliciesListAvailableFeaturesCall) Do(opts ...googleapi.CallOption) 
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -213468,7 +214352,9 @@ type SubnetworksAggregatedListCall struct {
 	header_      http.Header
 }
 
-// AggregatedList: Retrieves an aggregated list of subnetworks.
+// AggregatedList: Retrieves an aggregated list of subnetworks. To
+// prevent failure, Google recommends that you set the
+// `returnPartialSuccess` parameter to `true`.
 //
 // - project: Project ID for this request.
 func (r *SubnetworksService) AggregatedList(project string) *SubnetworksAggregatedListCall {
@@ -213566,14 +214452,18 @@ func (c *SubnetworksAggregatedListCall) PageToken(pageToken string) *Subnetworks
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *SubnetworksAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *SubnetworksAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *SubnetworksAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *SubnetworksAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -213678,7 +214568,7 @@ func (c *SubnetworksAggregatedListCall) Do(opts ...googleapi.CallOption) (*Subne
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves an aggregated list of subnetworks.",
+	//   "description": "Retrieves an aggregated list of subnetworks. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/subnetworks",
 	//   "httpMethod": "GET",
 	//   "id": "compute.subnetworks.aggregatedList",
@@ -213722,11 +214612,12 @@ func (c *SubnetworksAggregatedListCall) Do(opts ...googleapi.CallOption) (*Subne
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -214768,7 +215659,9 @@ func (c *SubnetworksListCall) PageToken(pageToken string) *SubnetworksListCall {
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *SubnetworksListCall) ReturnPartialSuccess(returnPartialSuccess bool) *SubnetworksListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -214921,7 +215814,7 @@ func (c *SubnetworksListCall) Do(opts ...googleapi.CallOption) (*SubnetworkList,
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -215057,7 +215950,9 @@ func (c *SubnetworksListUsableCall) PageToken(pageToken string) *SubnetworksList
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *SubnetworksListUsableCall) ReturnPartialSuccess(returnPartialSuccess bool) *SubnetworksListUsableCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -215210,7 +216105,7 @@ func (c *SubnetworksListUsableCall) Do(opts ...googleapi.CallOption) (*UsableSub
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
@@ -216581,7 +217476,9 @@ func (c *TargetGrpcProxiesListCall) PageToken(pageToken string) *TargetGrpcProxi
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *TargetGrpcProxiesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *TargetGrpcProxiesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -216725,7 +217622,7 @@ func (c *TargetGrpcProxiesListCall) Do(opts ...googleapi.CallOption) (*TargetGrp
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -217111,7 +218008,9 @@ type TargetHttpProxiesAggregatedListCall struct {
 }
 
 // AggregatedList: Retrieves the list of all TargetHttpProxy resources,
-// regional and global, available to the specified project.
+// regional and global, available to the specified project. To prevent
+// failure, Google recommends that you set the `returnPartialSuccess`
+// parameter to `true`.
 //
 // - project: Name of the project scoping this request.
 func (r *TargetHttpProxiesService) AggregatedList(project string) *TargetHttpProxiesAggregatedListCall {
@@ -217209,14 +218108,18 @@ func (c *TargetHttpProxiesAggregatedListCall) PageToken(pageToken string) *Targe
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *TargetHttpProxiesAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *TargetHttpProxiesAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *TargetHttpProxiesAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *TargetHttpProxiesAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -217321,7 +218224,7 @@ func (c *TargetHttpProxiesAggregatedListCall) Do(opts ...googleapi.CallOption) (
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves the list of all TargetHttpProxy resources, regional and global, available to the specified project.",
+	//   "description": "Retrieves the list of all TargetHttpProxy resources, regional and global, available to the specified project. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/targetHttpProxies",
 	//   "httpMethod": "GET",
 	//   "id": "compute.targetHttpProxies.aggregatedList",
@@ -217365,11 +218268,12 @@ func (c *TargetHttpProxiesAggregatedListCall) Do(opts ...googleapi.CallOption) (
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -217997,7 +218901,9 @@ func (c *TargetHttpProxiesListCall) PageToken(pageToken string) *TargetHttpProxi
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *TargetHttpProxiesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *TargetHttpProxiesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -218141,7 +219047,7 @@ func (c *TargetHttpProxiesListCall) Do(opts ...googleapi.CallOption) (*TargetHtt
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -218703,7 +219609,9 @@ type TargetHttpsProxiesAggregatedListCall struct {
 }
 
 // AggregatedList: Retrieves the list of all TargetHttpsProxy resources,
-// regional and global, available to the specified project.
+// regional and global, available to the specified project. To prevent
+// failure, Google recommends that you set the `returnPartialSuccess`
+// parameter to `true`.
 //
 // - project: Name of the project scoping this request.
 func (r *TargetHttpsProxiesService) AggregatedList(project string) *TargetHttpsProxiesAggregatedListCall {
@@ -218801,14 +219709,18 @@ func (c *TargetHttpsProxiesAggregatedListCall) PageToken(pageToken string) *Targ
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *TargetHttpsProxiesAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *TargetHttpsProxiesAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *TargetHttpsProxiesAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *TargetHttpsProxiesAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -218913,7 +219825,7 @@ func (c *TargetHttpsProxiesAggregatedListCall) Do(opts ...googleapi.CallOption) 
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves the list of all TargetHttpsProxy resources, regional and global, available to the specified project.",
+	//   "description": "Retrieves the list of all TargetHttpsProxy resources, regional and global, available to the specified project. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/targetHttpsProxies",
 	//   "httpMethod": "GET",
 	//   "id": "compute.targetHttpsProxies.aggregatedList",
@@ -218957,11 +219869,12 @@ func (c *TargetHttpsProxiesAggregatedListCall) Do(opts ...googleapi.CallOption) 
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -219589,7 +220502,9 @@ func (c *TargetHttpsProxiesListCall) PageToken(pageToken string) *TargetHttpsPro
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *TargetHttpsProxiesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *TargetHttpsProxiesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -219733,7 +220648,7 @@ func (c *TargetHttpsProxiesListCall) Do(opts ...googleapi.CallOption) (*TargetHt
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -221006,7 +221921,9 @@ type TargetInstancesAggregatedListCall struct {
 	header_      http.Header
 }
 
-// AggregatedList: Retrieves an aggregated list of target instances.
+// AggregatedList: Retrieves an aggregated list of target instances. To
+// prevent failure, Google recommends that you set the
+// `returnPartialSuccess` parameter to `true`.
 //
 // - project: Project ID for this request.
 func (r *TargetInstancesService) AggregatedList(project string) *TargetInstancesAggregatedListCall {
@@ -221104,14 +222021,18 @@ func (c *TargetInstancesAggregatedListCall) PageToken(pageToken string) *TargetI
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *TargetInstancesAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *TargetInstancesAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *TargetInstancesAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *TargetInstancesAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -221216,7 +222137,7 @@ func (c *TargetInstancesAggregatedListCall) Do(opts ...googleapi.CallOption) (*T
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves an aggregated list of target instances.",
+	//   "description": "Retrieves an aggregated list of target instances. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/targetInstances",
 	//   "httpMethod": "GET",
 	//   "id": "compute.targetInstances.aggregatedList",
@@ -221260,11 +222181,12 @@ func (c *TargetInstancesAggregatedListCall) Do(opts ...googleapi.CallOption) (*T
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -221931,7 +222853,9 @@ func (c *TargetInstancesListCall) PageToken(pageToken string) *TargetInstancesLi
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *TargetInstancesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *TargetInstancesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -222077,7 +223001,7 @@ func (c *TargetInstancesListCall) Do(opts ...googleapi.CallOption) (*TargetInsta
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
@@ -222869,7 +223793,9 @@ type TargetPoolsAggregatedListCall struct {
 	header_      http.Header
 }
 
-// AggregatedList: Retrieves an aggregated list of target pools.
+// AggregatedList: Retrieves an aggregated list of target pools. To
+// prevent failure, Google recommends that you set the
+// `returnPartialSuccess` parameter to `true`.
 //
 // - project: Project ID for this request.
 func (r *TargetPoolsService) AggregatedList(project string) *TargetPoolsAggregatedListCall {
@@ -222967,14 +223893,18 @@ func (c *TargetPoolsAggregatedListCall) PageToken(pageToken string) *TargetPools
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *TargetPoolsAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *TargetPoolsAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *TargetPoolsAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *TargetPoolsAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -223079,7 +224009,7 @@ func (c *TargetPoolsAggregatedListCall) Do(opts ...googleapi.CallOption) (*Targe
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves an aggregated list of target pools.",
+	//   "description": "Retrieves an aggregated list of target pools. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/targetPools",
 	//   "httpMethod": "GET",
 	//   "id": "compute.targetPools.aggregatedList",
@@ -223123,11 +224053,12 @@ func (c *TargetPoolsAggregatedListCall) Do(opts ...googleapi.CallOption) (*Targe
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -223964,7 +224895,9 @@ func (c *TargetPoolsListCall) PageToken(pageToken string) *TargetPoolsListCall {
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *TargetPoolsListCall) ReturnPartialSuccess(returnPartialSuccess bool) *TargetPoolsListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -224117,7 +225050,7 @@ func (c *TargetPoolsListCall) Do(opts ...googleapi.CallOption) (*TargetPoolList,
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -225682,7 +226615,9 @@ func (c *TargetSslProxiesListCall) PageToken(pageToken string) *TargetSslProxies
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *TargetSslProxiesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *TargetSslProxiesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -225826,7 +226761,7 @@ func (c *TargetSslProxiesListCall) Do(opts ...googleapi.CallOption) (*TargetSslP
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -226922,7 +227857,9 @@ type TargetTcpProxiesAggregatedListCall struct {
 }
 
 // AggregatedList: Retrieves the list of all TargetTcpProxy resources,
-// regional and global, available to the specified project.
+// regional and global, available to the specified project. To prevent
+// failure, Google recommends that you set the `returnPartialSuccess`
+// parameter to `true`.
 //
 // - project: Name of the project scoping this request.
 func (r *TargetTcpProxiesService) AggregatedList(project string) *TargetTcpProxiesAggregatedListCall {
@@ -227020,14 +227957,18 @@ func (c *TargetTcpProxiesAggregatedListCall) PageToken(pageToken string) *Target
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *TargetTcpProxiesAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *TargetTcpProxiesAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *TargetTcpProxiesAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *TargetTcpProxiesAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -227132,7 +228073,7 @@ func (c *TargetTcpProxiesAggregatedListCall) Do(opts ...googleapi.CallOption) (*
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves the list of all TargetTcpProxy resources, regional and global, available to the specified project.",
+	//   "description": "Retrieves the list of all TargetTcpProxy resources, regional and global, available to the specified project. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/targetTcpProxies",
 	//   "httpMethod": "GET",
 	//   "id": "compute.targetTcpProxies.aggregatedList",
@@ -227176,11 +228117,12 @@ func (c *TargetTcpProxiesAggregatedListCall) Do(opts ...googleapi.CallOption) (*
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -227808,7 +228750,9 @@ func (c *TargetTcpProxiesListCall) PageToken(pageToken string) *TargetTcpProxies
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *TargetTcpProxiesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *TargetTcpProxiesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -227952,7 +228896,7 @@ func (c *TargetTcpProxiesListCall) Do(opts ...googleapi.CallOption) (*TargetTcpP
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -228514,6 +229458,8 @@ type TargetVpnGatewaysAggregatedListCall struct {
 }
 
 // AggregatedList: Retrieves an aggregated list of target VPN gateways.
+// To prevent failure, Google recommends that you set the
+// `returnPartialSuccess` parameter to `true`.
 //
 // - project: Project ID for this request.
 func (r *TargetVpnGatewaysService) AggregatedList(project string) *TargetVpnGatewaysAggregatedListCall {
@@ -228611,14 +229557,18 @@ func (c *TargetVpnGatewaysAggregatedListCall) PageToken(pageToken string) *Targe
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *TargetVpnGatewaysAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *TargetVpnGatewaysAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *TargetVpnGatewaysAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *TargetVpnGatewaysAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -228723,7 +229673,7 @@ func (c *TargetVpnGatewaysAggregatedListCall) Do(opts ...googleapi.CallOption) (
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves an aggregated list of target VPN gateways.",
+	//   "description": "Retrieves an aggregated list of target VPN gateways. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/targetVpnGateways",
 	//   "httpMethod": "GET",
 	//   "id": "compute.targetVpnGateways.aggregatedList",
@@ -228767,11 +229717,12 @@ func (c *TargetVpnGatewaysAggregatedListCall) Do(opts ...googleapi.CallOption) (
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -229438,7 +230389,9 @@ func (c *TargetVpnGatewaysListCall) PageToken(pageToken string) *TargetVpnGatewa
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *TargetVpnGatewaysListCall) ReturnPartialSuccess(returnPartialSuccess bool) *TargetVpnGatewaysListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -229591,7 +230544,7 @@ func (c *TargetVpnGatewaysListCall) Do(opts ...googleapi.CallOption) (*TargetVpn
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -230000,7 +230953,9 @@ type UrlMapsAggregatedListCall struct {
 }
 
 // AggregatedList: Retrieves the list of all UrlMap resources, regional
-// and global, available to the specified project.
+// and global, available to the specified project. To prevent failure,
+// Google recommends that you set the `returnPartialSuccess` parameter
+// to `true`.
 //
 // - project: Name of the project scoping this request.
 func (r *UrlMapsService) AggregatedList(project string) *UrlMapsAggregatedListCall {
@@ -230098,14 +231053,18 @@ func (c *UrlMapsAggregatedListCall) PageToken(pageToken string) *UrlMapsAggregat
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *UrlMapsAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *UrlMapsAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *UrlMapsAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *UrlMapsAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -230210,7 +231169,7 @@ func (c *UrlMapsAggregatedListCall) Do(opts ...googleapi.CallOption) (*UrlMapsAg
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves the list of all UrlMap resources, regional and global, available to the specified project.",
+	//   "description": "Retrieves the list of all UrlMap resources, regional and global, available to the specified project. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/urlMaps",
 	//   "httpMethod": "GET",
 	//   "id": "compute.urlMaps.aggregatedList",
@@ -230254,11 +231213,12 @@ func (c *UrlMapsAggregatedListCall) Do(opts ...googleapi.CallOption) (*UrlMapsAg
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -231065,7 +232025,9 @@ func (c *UrlMapsListCall) PageToken(pageToken string) *UrlMapsListCall {
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *UrlMapsListCall) ReturnPartialSuccess(returnPartialSuccess bool) *UrlMapsListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -231209,7 +232171,7 @@ func (c *UrlMapsListCall) Do(opts ...googleapi.CallOption) (*UrlMapList, error) 
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -231928,7 +232890,9 @@ type VpnGatewaysAggregatedListCall struct {
 	header_      http.Header
 }
 
-// AggregatedList: Retrieves an aggregated list of VPN gateways.
+// AggregatedList: Retrieves an aggregated list of VPN gateways. To
+// prevent failure, Google recommends that you set the
+// `returnPartialSuccess` parameter to `true`.
 //
 // - project: Project ID for this request.
 func (r *VpnGatewaysService) AggregatedList(project string) *VpnGatewaysAggregatedListCall {
@@ -232026,14 +232990,18 @@ func (c *VpnGatewaysAggregatedListCall) PageToken(pageToken string) *VpnGateways
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *VpnGatewaysAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *VpnGatewaysAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *VpnGatewaysAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *VpnGatewaysAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -232138,7 +233106,7 @@ func (c *VpnGatewaysAggregatedListCall) Do(opts ...googleapi.CallOption) (*VpnGa
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves an aggregated list of VPN gateways.",
+	//   "description": "Retrieves an aggregated list of VPN gateways. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/vpnGateways",
 	//   "httpMethod": "GET",
 	//   "id": "compute.vpnGateways.aggregatedList",
@@ -232182,11 +233150,12 @@ func (c *VpnGatewaysAggregatedListCall) Do(opts ...googleapi.CallOption) (*VpnGa
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -233025,7 +233994,9 @@ func (c *VpnGatewaysListCall) PageToken(pageToken string) *VpnGatewaysListCall {
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *VpnGatewaysListCall) ReturnPartialSuccess(returnPartialSuccess bool) *VpnGatewaysListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -233178,7 +234149,7 @@ func (c *VpnGatewaysListCall) Do(opts ...googleapi.CallOption) (*VpnGatewayList,
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -233586,7 +234557,9 @@ type VpnTunnelsAggregatedListCall struct {
 	header_      http.Header
 }
 
-// AggregatedList: Retrieves an aggregated list of VPN tunnels.
+// AggregatedList: Retrieves an aggregated list of VPN tunnels. To
+// prevent failure, Google recommends that you set the
+// `returnPartialSuccess` parameter to `true`.
 //
 // - project: Project ID for this request.
 func (r *VpnTunnelsService) AggregatedList(project string) *VpnTunnelsAggregatedListCall {
@@ -233684,14 +234657,18 @@ func (c *VpnTunnelsAggregatedListCall) PageToken(pageToken string) *VpnTunnelsAg
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *VpnTunnelsAggregatedListCall) ReturnPartialSuccess(returnPartialSuccess bool) *VpnTunnelsAggregatedListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
 }
 
 // ServiceProjectNumber sets the optional parameter
-// "serviceProjectNumber":
+// "serviceProjectNumber": The Shared VPC service project id or service
+// project number for which aggregated list request is invoked for
+// subnetworks list-usable api.
 func (c *VpnTunnelsAggregatedListCall) ServiceProjectNumber(serviceProjectNumber int64) *VpnTunnelsAggregatedListCall {
 	c.urlParams_.Set("serviceProjectNumber", fmt.Sprint(serviceProjectNumber))
 	return c
@@ -233796,7 +234773,7 @@ func (c *VpnTunnelsAggregatedListCall) Do(opts ...googleapi.CallOption) (*VpnTun
 	}
 	return ret, nil
 	// {
-	//   "description": "Retrieves an aggregated list of VPN tunnels.",
+	//   "description": "Retrieves an aggregated list of VPN tunnels. To prevent failure, Google recommends that you set the `returnPartialSuccess` parameter to `true`.",
 	//   "flatPath": "projects/{project}/aggregated/vpnTunnels",
 	//   "httpMethod": "GET",
 	//   "id": "compute.vpnTunnels.aggregatedList",
@@ -233840,11 +234817,12 @@ func (c *VpnTunnelsAggregatedListCall) Do(opts ...googleapi.CallOption) (*VpnTun
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
 	//     "serviceProjectNumber": {
+	//       "description": "The Shared VPC service project id or service project number for which aggregated list request is invoked for subnetworks list-usable api.",
 	//       "format": "int64",
 	//       "location": "query",
 	//       "type": "string"
@@ -234511,7 +235489,9 @@ func (c *VpnTunnelsListCall) PageToken(pageToken string) *VpnTunnelsListCall {
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *VpnTunnelsListCall) ReturnPartialSuccess(returnPartialSuccess bool) *VpnTunnelsListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -234664,7 +235644,7 @@ func (c *VpnTunnelsListCall) Do(opts ...googleapi.CallOption) (*VpnTunnelList, e
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
@@ -235462,7 +236442,9 @@ func (c *ZoneOperationsListCall) PageToken(pageToken string) *ZoneOperationsList
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *ZoneOperationsListCall) ReturnPartialSuccess(returnPartialSuccess bool) *ZoneOperationsListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -235608,7 +236590,7 @@ func (c *ZoneOperationsListCall) Do(opts ...googleapi.CallOption) (*OperationLis
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
@@ -236079,7 +237061,9 @@ func (c *ZonesListCall) PageToken(pageToken string) *ZonesListCall {
 // ReturnPartialSuccess sets the optional parameter
 // "returnPartialSuccess": Opt-in for partial success behavior which
 // provides partial results in case of failure. The default value is
-// false.
+// false. For example, when partial success behavior is enabled,
+// aggregatedList for a single zone scope either returns all resources
+// in the zone or no resources, with an error code.
 func (c *ZonesListCall) ReturnPartialSuccess(returnPartialSuccess bool) *ZonesListCall {
 	c.urlParams_.Set("returnPartialSuccess", fmt.Sprint(returnPartialSuccess))
 	return c
@@ -236223,7 +237207,7 @@ func (c *ZonesListCall) Do(opts ...googleapi.CallOption) (*ZoneList, error) {
 	//       "type": "string"
 	//     },
 	//     "returnPartialSuccess": {
-	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false.",
+	//       "description": "Opt-in for partial success behavior which provides partial results in case of failure. The default value is false. For example, when partial success behavior is enabled, aggregatedList for a single zone scope either returns all resources in the zone or no resources, with an error code.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     }
