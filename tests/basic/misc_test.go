@@ -6569,3 +6569,174 @@ var _ = Describe("{AddDriveOnStorageLessNodeAndReboot}", Label("staging", "p0", 
 	})
 
 })
+
+var _ = Describe("{VerifyFstrimWithPoolExpandAndScheduledFstrim}", Label("staging", "p1", "negative", "px_vol_ops", "error_injection"), func() {
+	/*
+	   https://purestorage.atlassian.net/browse/HAZEL-264
+
+	   1. Reboot the node where volume is attached and fstrim inprogress. verify volumes are attached to another node and fstrim continue to happen and space is released.
+	   2. Pool expand  on a node where fstrim is running, expand the pool and verify fstrim will continue to happen.
+	   3. Add replica, fstrim continue to happen
+	   4. FSTrim on fastpath volumes.
+	   5. Enable schedule based fstrim and verify fstrim happens only during schedule and stops when schedule time finished.
+
+	   step 1 - HAZEL-1070,
+	   step 3 - HAZEL-1075,
+	   step 4 - HAZEL-1074
+	   Keeping this ticket only for step-2 and 5
+	*/
+
+	var (
+		contexts            []*scheduler.Context
+		appList             = Inst().AppList
+		storageNodes        []node.Node
+		selectedNode        node.Node
+		fsTrimStatuses      map[string]opsapi.FilesystemTrim_FilesystemTrimStatus
+		fsTrimTimeout       = 60 * time.Minute
+		fsTrimRetryInterval = 2 * time.Minute
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("VerifyFstrimWithPoolExpandAndScheduledFstrim", "validate autofstrim with some failure injections on node and verify AutoFSTrim running", nil, 0)
+	})
+
+	stepLog := "Verify autoFS trim continues after failure injections on node"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+
+		cleanup := func() {
+			log.Info("Executing cleanup tasks")
+			DestroyApps(contexts, nil)
+			Inst().AppList = appList
+			_ = Inst().V.SetClusterOpts(selectedNode, map[string]string{
+				"--fstrim-schedule-start": ""})
+		}
+		defer cleanup()
+
+		stepLog = "Enable FStrim and schedule the application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			storageNodes = node.GetStorageNodes()
+			if len(storageNodes) == 0 {
+				log.FailOnError(fmt.Errorf("Storage nodes list empty"), "failed to get storage nodes")
+			}
+			selectedNode = storageNodes[0]
+			clusterOpts, err := Inst().V.GetClusterOpts(selectedNode, []string{"AutoFstrim"})
+			log.FailOnError(err, fmt.Sprintf("error getting AutoFstrim status using node [%s]", selectedNode.Name))
+			// enable auto fstrim if it is disabled
+			if clusterOpts["AutoFstrim"] == "false" {
+				EnableAutoFSTrim()
+				time.Sleep(1 * time.Minute)
+			}
+			log.Infof("Auto FSTrim enabled using the node %v", selectedNode.Name)
+
+			contexts = make([]*scheduler.Context, 0)
+			Inst().AppList = []string{"fio-fstrim"}
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("afrepladd-%d", i))...)
+			}
+			ValidateApplications(contexts)
+		})
+
+		stepLog = "Select the node where fs trim running"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				appVolumes, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "Failed to get volumes for app %s", ctx.App.Key)
+
+				for _, appvolume := range appVolumes {
+					apivol, err := Inst().V.InspectVolume(appvolume.ID)
+					log.FailOnError(err, "Failed to get the volume details for the ID: %v", appvolume.ID)
+
+					attachedNode := apivol.AttachedOn
+					selectedNode, err = node.GetNodeByIP(attachedNode)
+					log.FailOnError(err, "Failed to get the details for the node ID: %v", attachedNode)
+					log.Infof("Volume [%v] is attached on the node: %v", appvolume.ID, selectedNode.Name)
+
+					fsTrimStatuses, err = CheckFSTrimRunningOnNode(selectedNode, apivol, fsTrimTimeout, fsTrimRetryInterval)
+					log.FailOnError(err, "Failed to get the fstrim status for the node: %v", selectedNode.DataIp)
+					break
+				}
+			}
+
+		})
+
+		stepLog = "Pool expand on a node where fstrim is running and verify AutoFSTrim running"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			poolUUIDs, err := GetAllPoolsOnNode(selectedNode.Id)
+			log.FailOnError(err, "Failed to get pool uuid from node [%v]", selectedNode.Id)
+			poolUUID := poolUUIDs[0]
+			log.InfoD("selected pool [%v]", poolUUID)
+
+			poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
+			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolUUID))
+			drvSize, err := getPoolDiskSize(poolToBeResized)
+			log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
+			expectedSize := (poolToBeResized.TotalSize / units.GiB) + drvSize
+
+			isjournal, err := IsJournalEnabled()
+			log.FailOnError(err, "Failed to check if Journal enabled")
+
+			log.InfoD("Current Size of the pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
+			err = Inst().V.ExpandPool(poolUUID, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
+			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+
+			err = WaitForExpansionToStart(poolToBeResized.Uuid)
+			log.FailOnError(err, "pool expansion not started")
+
+			resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
+			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s expansion using resize-disk", poolUUID))
+
+			newFsTrimStatuses, err := Inst().V.GetAutoFsTrimStatus(selectedNode.DataIp)
+			log.FailOnError(err, "error getting autofs status")
+			for k := range fsTrimStatuses {
+				val, ok := newFsTrimStatuses[k]
+				dash.VerifySafely(ok, true, fmt.Sprintf("verify autofstrim started for volume %s", k))
+				dash.VerifySafely(val != opsapi.FilesystemTrim_FS_TRIM_FAILED, true, fmt.Sprintf("verify autofstrim for volume %s, current status %v", k, val))
+				dash.VerifySafely(val != opsapi.FilesystemTrim_FS_TRIM_STOPPED, true, fmt.Sprintf("verify autofstrim for volume %s, current status %v", k, val))
+			}
+
+		})
+
+		stepLog = fmt.Sprintf("Enable scheduled FSTrim and verify its running only during schedule time")
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			// Daily: daily=HH:MM, Weekly: weekly=day@hh:mm
+			log.Infof("Enable scheduled fs trim on the cluster")
+			formattedTime := time.Now().UTC().Add(10 * time.Minute).Format("15:04")
+			scheduleStartTime := fmt.Sprintf("daily=%s", formattedTime)
+
+			err := EnableScheduledFSTrim(storageNodes, 1, scheduleStartTime)
+			log.FailOnError(err, "failed to enable scheduled fs trim")
+
+			time.Sleep(10 * time.Minute)
+			fsTrimStatuses, err := Inst().V.GetAutoFsTrimStatus(selectedNode.DataIp)
+			log.FailOnError(err, "error getting scheduled fstrim status")
+
+			for volume, status := range fsTrimStatuses {
+				dash.VerifyFatal(status == opsapi.FilesystemTrim_FS_TRIM_INPROGRESS, true, fmt.Sprintf("verify fstrim for volume %v, current status %v", volume, status))
+			}
+
+			log.InfoD("Waiting for scheduled fs trim get completed after the given duration")
+			time.Sleep(60 * time.Minute)
+
+			fsTrimNewStatuses, err := Inst().V.GetAutoFsTrimStatus(selectedNode.DataIp)
+			log.FailOnError(err, "error getting scheduled fstrim status")
+
+			for volume, status := range fsTrimNewStatuses {
+				dash.VerifySafely(status == opsapi.FilesystemTrim_FS_TRIM_STOPPED, true, fmt.Sprintf("verify fstrim status after scheduled time for volume %s, current status %v", volume, status))
+			}
+		})
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
