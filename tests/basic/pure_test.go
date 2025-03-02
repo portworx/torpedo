@@ -13220,3 +13220,121 @@ var _ = Describe("{FastpathEncryptVolumeDetachAfterPoolOfflineWithNodeRestart}",
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{ValidateAddDriveFailsForSizeBelowMinimum}", Label("staging", "p1", "pure_ops", "negative", "AddDrive"), func() {
+	/*
+		https://purestorage.atlassian.net/browse/HAZEL-1547
+		1. Deploy application
+		2. Make a note of initial drives
+		3. Try adding drives of size lesser than 8GB ( say 5GB)
+		4. Drive add should fail
+		5. Verify the drives count remains same
+	*/
+
+	var (
+		selectedStorageNode node.Node
+		storageNodes        []node.Node
+		driveSize           = 5
+		applist             = Inst().AppList
+		clouddrivesBfr      []string
+		clouddrivesAftr     []string
+		contexts            []*scheduler.Context
+	)
+	JustBeforeEach(func() {
+		StartTorpedoTest("ValidateAddDriveFailsForSizeBelowMinimum", "DMTHIN Cloud drive add should fail for size lesser than the Minimum device", nil, 0)
+		isDMthin, err := IsDMthin()
+		log.FailOnError(err, "Failed to check if DMthin is enabled or not")
+		if !isDMthin {
+			Skip("DMThin/PX-Storev2 is not enabled on underlaying PX cluster. Skipping `ValidateAddDriveFailsForSizeBelowMinimum` test.")
+		}
+	})
+
+	stepLog := "Cloud drive add should fail for size lesser than the Minimum device"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+
+		cleanup := func() {
+			log.InfoD("Performing cleanup")
+			DestroyApps(contexts, nil)
+			Inst().AppList = applist
+		}
+		defer cleanup()
+
+		stepLog = "Add label on the selected storage node and Schedule application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			// Select storage node
+			storageNodes = node.GetStorageNodes()
+			selectedStorageNode = GetRandomNode(storageNodes)
+			log.Infof("The Selected node for Fast path label is %v : ", selectedStorageNode.Name)
+
+			// Add label on the selected node
+			err = Inst().S.AddLabelOnNode(selectedStorageNode, k8s.NodeType, k8s.FastpathNodeType)
+			log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedStorageNode.Name))
+
+			// Deploy application on the selected node
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				taskName := fmt.Sprintf("fastpath-%d", i)
+				appSpec := "fio-fastpath-repl1"
+				provisioner := Inst().Provisioner
+				contexts = append(contexts, ScheduleApplicationsWithScheduleOptions(taskName, appSpec, provisioner)...)
+			}
+			ValidateApplications(contexts)
+		})
+
+		stepLog = "Get the cloud drives count before adding a new drive"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			clouddrivesBfr = make([]string, 0)
+			cloudDriveMap, err := GetCloudDrivesOnSpecificNode(&selectedStorageNode)
+			log.FailOnError(err, "Failed to get cloud drives attached to node [%v]", selectedStorageNode.Name)
+			for _, v := range cloudDriveMap.Configs {
+				clouddrivesBfr = append(clouddrivesBfr, v.ID)
+			}
+			log.InfoD("Cloud drives count before add drive is: %v", len(clouddrivesBfr))
+		})
+
+		stepLog = "Verify add drive should fail for less than minimum size 8GB"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			driveSpecs, err := GetCloudDriveDeviceSpecs()
+			log.FailOnError(err, "Error getting cloud drive specs")
+
+			deviceSpec := driveSpecs[0]
+			deviceSpecParams := strings.Split(deviceSpec, ",")
+			paramsArr := make([]string, 0)
+			for _, param := range deviceSpecParams {
+				if strings.Contains(param, "size") {
+					paramsArr = append(paramsArr, fmt.Sprintf("size=%d,", driveSize))
+				} else {
+					paramsArr = append(paramsArr, param)
+				}
+			}
+			newSpec := strings.Join(paramsArr, ",")
+
+			err = Inst().V.AddCloudDrive(&selectedStorageNode, newSpec, -1)
+			log.Infof("err is: %v", err)
+			failMessage := "failed with Minumum device size: 8589934592"
+			dash.VerifyFatal(strings.Contains(err.Error(), failMessage), true, "Verify add drive failed for less than min size")
+		})
+
+		stepLog = "Validate drives count remains the same after the add drive operation failed"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			time.Sleep(30 * time.Second)
+			clouddrivesAftr = make([]string, 0)
+			cloudDriveMap, err := GetCloudDrivesOnSpecificNode(&selectedStorageNode)
+			log.FailOnError(err, "Failed to get cloud drives attached to node [%v]", selectedStorageNode.Name)
+			for _, v := range cloudDriveMap.Configs {
+				clouddrivesAftr = append(clouddrivesAftr, v.ID)
+			}
+			dash.VerifyFatal(len(clouddrivesBfr) == len(clouddrivesAftr), true, fmt.Sprintf("Is Drive count changed after add drive failure?: Expected %v, Actual %v", len(clouddrivesBfr), len(clouddrivesAftr)))
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
