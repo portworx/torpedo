@@ -301,6 +301,7 @@ var (
 	WaitTimeForNodeConnection    = 10 * time.Minute
 	PromAppsWithCRDs             = []string{"prometheus", "prometheus-1-cr", "prometheus-3-cr"}
 	AppNamespaceMap              = map[string]string{"prometheus": "monitoring", "prometheus-1-cr": "monitoring-1-cr", "prometheus-3-cr": "monitoring-3-cr"}
+	InvalidKubeconfig            = "\"\""
 )
 
 type UserRoleAccess struct {

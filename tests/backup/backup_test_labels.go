@@ -209,6 +209,7 @@ const (
 	UninstallPxBackupAndRestoreFromTheBackup                                           TestCaseName = "UninstallPxBackupAndRestoreFromTheBackup"
 	ChangeSchedulePolicyAndVerifyBackups                                               TestCaseName = "ChangeSchedulePolicyAndVerifyBackups"
 	BackupAppDeployedUsingVPS                                                          TestCaseName = "BackupAppDeployedUsingVPS"
+	AddClusterWithInvalidKubeConfigAndVerifyFailure                                    TestCaseName = "AddClusterWithInvalidKubeConfigAndVerifyFailureLabel"
 )
 
 // Test case labels
@@ -414,6 +415,7 @@ const (
 	BackupFailsOnUnreachableObjectStoreEndpoint                                             TestCaseLabel = "VerifyBackupFailureWhenObjectStoreEndpointIsUnreachable"
 	ClusterTestLabel                                                                        TestCaseLabel = "ClusterAdditionwithDifferentUserRoles"
 	BackupAppDeployedUsingVPSLabel                                                          TestCaseLabel = "BackupAppDeployedUsingVPS"
+	AddClusterWithInvalidKubeConfigAndVerifyFailureLabel                                    TestCaseLabel = "AddClusterWithInvalidKubeConfigAndVerifyFailure"
 )
 
 // Common Labels

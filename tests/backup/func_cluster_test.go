@@ -2,11 +2,14 @@ package tests
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/pure-px/torpedo/drivers/backup"
+	"github.com/pure-px/torpedo/drivers/scheduler"
 	"github.com/pure-px/torpedo/pkg/log"
 	. "github.com/pure-px/torpedo/tests"
 )
@@ -103,4 +106,57 @@ var _ = Describe("{ClusterAdditionwithDifferentUserRoles}", Label(TestCaseLabels
 		log.FailOnError(err, "Error deleting user %v", infraAdminUserName)
 		CleanupCloudSettingsAndClusters(nil, "", "", adminCtx)
 	})
+})
+
+// Check correct failure status is captured in cluster object when it's failed to be added.
+var _ = Describe("{AddClusterWithInvalidKubeConfigAndVerifyFailure}", Label(TestCaseLabelsMap[AddClusterWithInvalidKubeConfigAndVerifyFailure]...), func() {
+
+	var (
+		scheduledAppContexts []*scheduler.Context
+		ctx                  context.Context
+		clusterName          string
+		clusterUid           string
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("AddClusterWithInvalidKubeConfigAndVerifyFailure", "Check correct failure status is captured in cluster object when it's failed to be added.", nil, 300378, Pingle, Q3FY25)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		var err error
+		ctx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+	})
+
+	// Check correct failure status is captured in cluster object when it's failed to be added.
+	It("Check correct failure status is captured in cluster object when it's failed to be added.", func() {
+		// 1. Create cluster with invalid kube-config and verify failure
+		Step("Register cluster with invalid kubeconfig", func() {
+			backupDriver := Inst().Backup
+			clusterName = fmt.Sprintf("%s-%v", "cluster-", RandomString(6))
+			clusterCreateReq := &api.ClusterCreateRequest{
+				CreateMetadata: &api.CreateMetadata{
+					Name:  clusterName,
+					OrgId: BackupOrgID,
+				},
+				Kubeconfig: base64.StdEncoding.EncodeToString([]byte(InvalidKubeconfig)),
+			}
+			_, err := backupDriver.CreateCluster(ctx, clusterCreateReq)
+			dash.VerifyFatal(strings.Contains(err.Error(), "failed to validate access to the cluster"), true, "Verify the cluster creation")
+			clusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, clusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", clusterName))
+			clusterReq := &api.ClusterInspectRequest{OrgId: BackupOrgID, Name: clusterName, IncludeSecrets: true, Uid: clusterUid}
+			clusterResp, err := backupDriver.InspectCluster(ctx, clusterReq)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", clusterName))
+			log.Infof("cluster failed with status %v and with reason %s", clusterResp.Cluster.GetStatus().Status, clusterResp.Cluster.GetStatus().Reason)
+			dash.VerifyFatal(clusterResp.Cluster.GetStatus().Status, api.ClusterInfo_StatusInfo_Failed, "Verifying  cluster status")
+			dash.VerifyFatal(strings.Contains(clusterResp.Cluster.GetStatus().Reason, "failed to validate access to the cluster"), true, "Verify the cluster reason")
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		err := DeleteCluster(clusterName, BackupOrgID, ctx, false)
+		dash.VerifySafely(err, nil, "Delete created cluster")
+		CleanupCloudSettingsAndClusters(nil, "", "", ctx)
+	})
+
 })
