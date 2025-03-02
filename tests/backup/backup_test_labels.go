@@ -210,6 +210,7 @@ const (
 	ChangeSchedulePolicyAndVerifyBackups                                               TestCaseName = "ChangeSchedulePolicyAndVerifyBackups"
 	BackupAppDeployedUsingVPS                                                          TestCaseName = "BackupAppDeployedUsingVPS"
 	AddClusterWithInvalidKubeConfigAndVerifyFailure                                    TestCaseName = "AddClusterWithInvalidKubeConfigAndVerifyFailureLabel"
+	AddClusterWithInvalidAndValidKubeConfigAndVerify                                   TestCaseName = "AddClusterWithInvalidAndValidKubeConfigAndVerify"
 )
 
 // Test case labels
@@ -416,6 +417,7 @@ const (
 	ClusterTestLabel                                                                        TestCaseLabel = "ClusterAdditionwithDifferentUserRoles"
 	BackupAppDeployedUsingVPSLabel                                                          TestCaseLabel = "BackupAppDeployedUsingVPS"
 	AddClusterWithInvalidKubeConfigAndVerifyFailureLabel                                    TestCaseLabel = "AddClusterWithInvalidKubeConfigAndVerifyFailure"
+	AddClusterWithInvalidAndValidKubeConfigAndVerifyLabel                                   TestCaseLabel = "AddClusterWithInvalidAndValidKubeConfigAndVerify"
 )
 
 // Common Labels
