@@ -911,6 +911,14 @@ spec:
       value: "${VAULT_ADDR}"
     - name: VAULT_TOKEN
       value: "${VAULT_TOKEN}"
+    - name: PX_BACKUP_AUTOMATION_USER_ACCESS_KEY
+      value: "${PX_BACKUP_AUTOMATION_USER_ACCESS_KEY}"
+    - name: PX_BACKUP_AUTOMATION_USER_SECRET_KEY
+      value: "${PX_BACKUP_AUTOMATION_USER_SECRET_KEY}"
+    - name: REGION_FOR_CLUSTER_DISCOVERY
+      value: "${REGION_FOR_CLUSTER_DISCOVERY}"
+    - name: CLUSTER_NAME_FOR_CLOUD_DISCOVERY
+      value: "${CLUSTER_NAME_FOR_CLOUD_DISCOVERY}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
