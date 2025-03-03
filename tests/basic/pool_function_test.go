@@ -1610,6 +1610,13 @@ var _ = Describe("{CheckPoolLabelsAfterResizeDisk}", Label("p0", "positive", "po
 		poolLabelToUpdate := make(map[string]string)
 		poolLabelToUpdate["cust-type"] = "test-label"
 		// Update the pool label
+		var bufferSizeInGB uint64
+		isJournalEnabled, err := IsJournalEnabled()
+		log.FailOnError(err, "Failed to check if Journal enabled")
+		if isJournalEnabled {
+			bufferSizeInGB = JournalDeviceSizeInGB
+		}
+
 		err = Inst().V.UpdatePoolLabels(*storageNode, poolIDToResize, poolLabelToUpdate)
 		dash.VerifyFatal(err, nil, "Check if able to update the label on the pool")
 		poolToResize = getStoragePool(poolIDToResize)
@@ -1622,7 +1629,7 @@ var _ = Describe("{CheckPoolLabelsAfterResizeDisk}", Label("p0", "positive", "po
 
 		log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type resize-disk",
 			poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
-		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
+		triggerPoolExpansion(poolIDToResize, targetSizeGiB+bufferSizeInGB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
 
 		err = waitForOngoingPoolExpansionToComplete(poolIDToResize)
 		dash.VerifyFatal(err, nil, "Pool expansion does not result in error")
