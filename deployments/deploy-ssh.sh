@@ -22,7 +22,7 @@ fi
 
 SECURITY_CONTEXT=false
 
-# System checks https://github.com/portworx/torpedo/blob/86232cb195400d05a9f83d57856f8f29bdc9789d/tests/common.go#L2173
+# System checks https://github.com/pure-px/torpedo/blob/86232cb195400d05a9f83d57856f8f29bdc9789d/tests/common.go#L2173
 # should be skipped from AfterSuite() if this flag is set to true. This is to avoid distracting test failures due to
 # unstable testing environments.
 TORPEDO_SKIP_SYSTEM_CHECKS=false
@@ -100,6 +100,10 @@ if [ -z "${UPGRADE_STORAGE_DRIVER_ENDPOINT_LIST}" ]; then
     UPGRADE_STORAGE_DRIVER_ENDPOINT_LIST=""
 fi
 
+if [ -z "${UPGRADE_STORK_VERSION_LIST}" ]; then
+    UPGRADE_STORK_VERSION_LIST=""
+fi
+
 if [ -z "${SKIP_PX_OPERATOR_UPGRADE}" ]; then
     SKIP_PX_OPERATOR_UPGRADE=false
 fi
@@ -150,6 +154,10 @@ fi
 
 if [ -z "${PX_POD_RESTART_CHECK}" ]; then
     PX_POD_RESTART_CHECK=false
+fi
+
+if [ -z "${SKIP_PX_UPGRADE_VALIDATION}" ]; then
+    SKIP_PX_UPGRADE_VALIDATION=false
 fi
 
 CONFIGMAP=""
@@ -246,6 +254,10 @@ if [ -n "$ANTHOS_HOST_PATH" ]; then
     ANTHOS_HOST_PATH="${ANTHOS_HOST_PATH}"
 fi
 
+if [ -z "${IS_AUTO_FS_TRIM_ENABLED}" ]; then
+    IS_AUTO_FS_TRIM_ENABLED=false
+fi
+
 for i in $@
 do
 case $i in
@@ -261,7 +273,7 @@ echo "Checking if we need to override test suite: ${TEST_SUITE}"
 
 # TODO: Remove this after all longevity jobs switch to 'bin/longevity.test' for TEST_SUITE.
 case $FOCUS_TESTS in
-  Longevity|UpgradeLongevity|BackupLongevity)
+  Longevity|UpgradeLongevity|BackupLongevity|RunSSIE|DeletionOfMultipleScheduleBackupsWithoutSuspendingScheduleLongevity)
     TEST_SUITE="bin/longevity.test"
     echo "Warning: Based on the FOCUS_TESTS ('$FOCUS_TESTS'), the TEST_SUITE ('$TEST_SUITE') is set to 'bin/longevity.test'"
     ;;
@@ -269,7 +281,7 @@ case $FOCUS_TESTS in
     ;;
 esac
 
-if [[ "$TEST_SUITE" != *"pds.test"* ]] && [[ "$TEST_SUITE" != *"backup.test"* ]] && [[ "$TEST_SUITE" != *"longevity.test"* ]]; then
+if [[ "$TEST_SUITE" != *"pds.test"* ]] && [[ "$TEST_SUITE" != *"backup.test"* ]] && [[ "$TEST_SUITE" != *"longevity.test"* ]] && [[ "$TEST_SUITE" != *"platform.test"* ]] && [[ "$TEST_SUITE" != *"pds2.test"* ]]; then
     TEST_SUITE='"bin/basic.test"'
 fi
 
@@ -320,6 +332,12 @@ if [ -n "${ORACLE_API_KEY}" ]; then
 fi
 
 TESTRESULTS_VOLUME="{ \"name\": \"testresults\", \"hostPath\": { \"path\": \"/mnt/testresults/\", \"type\": \"DirectoryOrCreate\" } }"
+
+# Change mnt path if using SLEMicro / SL Micro triggered with  IS_SLMICRO
+if [ -n "$IS_SLMICRO" ]; then
+  TESTRESULTS_VOLUME="{ \"name\": \"testresults\", \"hostPath\": { \"path\": \"/var/testresults/\", \"type\": \"DirectoryOrCreate\" } }"
+fi
+
 TESTRESULTS_MOUNT="{ \"name\": \"testresults\", \"mountPath\": \"/testresults/\" }"
 
 AWS_VOLUME="{ \"name\": \"aws-volume\", \"configMap\": { \"name\": \"aws-cm\", \"items\": [{\"key\": \"credentials\", \"path\": \"credentials\"}, {\"key\": \"config\", \"path\": \"config\"}]} }"
@@ -419,6 +437,11 @@ if [ -n "${K8S_VENDOR}" ]; then
 fi
 
 echo '' > torpedo.yaml
+
+#Check if variable  $IS_STORK_NFS_LOCATION is set
+if [ -z "${IS_STORK_NFS_LOCATION}" ]; then
+    IS_STORK_NFS_LOCATION="false"
+fi
 
 
 cat >> torpedo.yaml <<EOF
@@ -545,6 +568,7 @@ spec:
             "--storage-upgrade-endpoint-url=$UPGRADE_ENDPOINT_URL",
             "--storage-upgrade-endpoint-version=$UPGRADE_ENDPOINT_VERSION",
             "--upgrade-storage-driver-endpoint-list=$UPGRADE_STORAGE_DRIVER_ENDPOINT_LIST",
+            "--upgrade-stork-version-list=$UPGRADE_STORK_VERSION_LIST",
             "--enable-stork-upgrade=$ENABLE_STORK_UPGRADE",
             "--secret-type=$SECRET_TYPE",
             "--pure-volumes=$IS_PURE_VOLUMES",
@@ -586,6 +610,7 @@ spec:
             "--torpedo-job-type=$TORPEDO_JOB_TYPE",
             "--torpedo-skip-system-checks=$TORPEDO_SKIP_SYSTEM_CHECKS",
             "--fa-secret=${FA_SECRET}",
+            "--auto-fs-trim-enable=$IS_AUTO_FS_TRIM_ENABLED",
             "$APP_DESTROY_TIMEOUT_ARG",
             "$SCALE_APP_TIMEOUT_ARG",
     ]
@@ -600,6 +625,10 @@ spec:
       value: "${K8S_VENDOR}"
     - name: TORPEDO_SSH_USER
       value: "${TORPEDO_SSH_USER}"
+    - name: LB_SUBNET_KEY
+      value: "${LB_SUBNET_KEY}"
+    - name: TEST_CLUSTER_DOMAIN
+      value: "${TEST_CLUSTER_DOMAIN}"
     - name: TORPEDO_SSH_PASSWORD
       value: "${TORPEDO_SSH_PASSWORD}"
     - name: TORPEDO_SSH_KEY
@@ -716,6 +745,10 @@ spec:
       value: "${DEPLOY_ALL_DATASERVICE}"
     - name: GCP_PROJECT_ID
       value: "${GCP_PROJECT_ID}"
+    - name: PDS_QA_GCP_JSON_PATH
+      value: "${PDS_QA_GCP_JSON_PATH}"
+    - name: INSECURE_FLAG
+      value: "${INSECURE_FLAG}"
     - name: PDS_USERNAME
       value: "${PDS_USERNAME}"
     - name: PDS_PASSWORD
@@ -728,6 +761,14 @@ spec:
       value: "${PDS_PARAM_CM}"
     - name: PDS_ISSUER_URL
       value: "${PDS_ISSUER_URL}"
+    - name: PX_CENTRAL_USERNAME
+      value: "${PX_CENTRAL_USERNAME}"
+    - name: PX_CENTRAL_PASSWORD
+      value: "${PX_CENTRAL_PASSWORD}"
+    - name: PX_CENTRAL_API
+      value: "${PX_CENTRAL_API}"
+    - name: BACKEND_TYPE
+      value: "${BACKEND_TYPE}"
     - name: CLUSTER_TYPE
       value: "${CLUSTER_TYPE}"
     - name: TARGET_KUBECONFIG
@@ -750,6 +791,8 @@ spec:
       value: "${ORACLE_API_KEY}"
     - name: INSTANCE_GROUP
       value: "${INSTANCE_GROUP}"
+    - name: NODE_POOL_LIST
+      value: "${NODE_POOL_LIST}"
     - name: LOGGLY_API_TOKEN
       value: "${LOGGLY_API_TOKEN}"
     - name: PODMETRIC_METERING_INTERVAL_MINUTES
@@ -790,6 +833,10 @@ spec:
       value: "${NUM_ML_WORKLOADS}"
     - name: ML_WORKLOAD_RUNTIME
       value: "${ML_WORKLOAD_RUNTIME}"
+    - name: KUBEVIRT_VM_PWD
+      value: "${KUBEVIRT_VM_PWD}"
+    - name: KUBEVIRT_VOL_TYPE
+      value: "${KUBEVIRT_VOL_TYPE}"
     - name: KUBEVIRT_UPGRADE_VERSION
       value: "${KUBEVIRT_UPGRADE_VERSION}"
     - name: PX_BACKUP_MONGODB_USERNAME
@@ -830,6 +877,50 @@ spec:
       value: "${GOOGLE_APPLICATION_CREDENTIALS}"
     - name: TOGGLE_PURE_MGMT_IP
       value: "${TOGGLE_PURE_MGMT_IP}"
+    - name: CRON_JOB_PARALLELISM
+      value: "${CRON_JOB_PARALLELISM}"
+    - name: BACKUP_DELETE_RETRY_TIME
+      value: "${BACKUP_DELETE_RETRY_TIME}"
+    - name: BACKUP_DELETE_WAIT_TIME
+      value: "${BACKUP_DELETE_WAIT_TIME}"
+    - name: IS_STORK_NFS_LOCATION
+      value: "${IS_STORK_NFS_LOCATION}"
+    - name: VOLUME_COUNT_FOR_PARALLEL_DELETE
+      value: "${VOLUME_COUNT_FOR_PARALLEL_DELETE}"
+    - name: SIMULATE_FB_FQDN
+      value: "${SIMULATE_FB_FQDN}"
+    - name: SKIP_PX_UPGRADE_VALIDATION
+      value: "${SKIP_PX_UPGRADE_VALIDATION}"
+    - name: NON_DEFAULT_ADMIN_USERNAME
+      value: "${NON_DEFAULT_ADMIN_USERNAME}"
+    - name: NON_DEFAULT_ADMIN_PASSWORD
+      value: "${NON_DEFAULT_ADMIN_PASSWORD}"
+    - name: CLUSTER_ID
+      value: "${CLUSTER_ID}"
+    - name: IS_HCP
+      value: "${IS_HCP}"
+    - name: ROSA_TOKEN
+      value: "${ROSA_TOKEN}"
+    - name: NODEPOOL_MAX_UNAVAILABLE
+      value: "${NODEPOOL_MAX_UNAVAILABLE}"
+    - name: NODEPOOL_MAX_SURGE
+      value: "${NODEPOOL_MAX_SURGE}"
+    - name: NODEPOOL_NODE_DRAIN_GRACE_PERIOD
+      value: "${NODEPOOL_NODE_DRAIN_GRACE_PERIOD}"
+    - name: VAULT_ADDR
+      value: "${VAULT_ADDR}"
+    - name: VAULT_TOKEN
+      value: "${VAULT_TOKEN}"
+    - name: PX_BACKUP_AUTOMATION_USER_ACCESS_KEY
+      value: "${PX_BACKUP_AUTOMATION_USER_ACCESS_KEY}"
+    - name: PX_BACKUP_AUTOMATION_USER_SECRET_KEY
+      value: "${PX_BACKUP_AUTOMATION_USER_SECRET_KEY}"
+    - name: REGION_FOR_CLUSTER_DISCOVERY
+      value: "${REGION_FOR_CLUSTER_DISCOVERY}"
+    - name: CLUSTER_NAME_FOR_CLOUD_DISCOVERY
+      value: "${CLUSTER_NAME_FOR_CLOUD_DISCOVERY}"
+    - name: PX_PURE_SECRET_WITH_FA
+      value: "${PX_PURE_SECRET_WITH_FA}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
@@ -892,7 +983,7 @@ fi
 
 if [ -z "${ANTHOS_HOST_PATH}" ]; then
   sed -i  '/GOOGLE_APPLICATION_CREDENTIALS/, +1d' torpedo.yaml
-fi 
+fi
 
 # If these are passed, we will create a docker config secret to use to pull images
 if [ ! -z $IMAGE_PULL_SERVER ] && [ ! -z $IMAGE_PULL_USERNAME ] && [ ! -z $IMAGE_PULL_PASSWORD ]; then
@@ -917,6 +1008,25 @@ cat torpedo.yaml
 
 echo "Deploying torpedo pod..."
 kubectl -n default apply -f torpedo.yaml
+
+# MKE requires delta between secret creation & pod deployment, adding retries to handle this
+max_retries=3
+retry_delay=10
+retry_count=0
+
+while [ $retry_count -lt $max_retries ]; do
+    echo "Attempting to apply torpedo.yaml (Attempt #$((retry_count + 1)))..."
+
+    if kubectl -n default get pod torpedo; then
+        echo "Successfully applied torpedo.yaml"
+        break
+    else
+        echo "Failed to apply torpedo.yaml. Retrying in $retry_delay seconds..."
+        retry_count=$((retry_count + 1))
+        kubectl -n default apply -f torpedo.yaml
+        sleep $retry_delay
+    fi
+done
 
 echo "Waiting for torpedo to start running"
 
