@@ -268,3 +268,50 @@ var _ = Describe("{ClusterAdditionFailWithInvalidThenSucceedWithValidConfig}", L
 	})
 
 })
+
+// Check failed cluster object should not toggle between Online/Offline status.
+var _ = Describe("{TestClusterStatusPersistentFailureOnInvalidKubeconfig}", Label(TestCaseLabelsMap[ClusterTestLabel]...), func() {
+
+	var (
+		ctx context.Context
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("TestClusterStatusPersistentFailureOnInvalidKubeconfig", "Check failed cluster object should not toggle between Online/Offline status.", nil, 300377, Pingle, Q3FY25)
+		var err error
+		ctx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+	})
+
+	// Check failed cluster object should not toggle between Online/Offline status.
+	It("Check failed cluster object should not toggle between Online/Offline status.", func() {
+		// 1.Create cluster with invalid kube-config and verify failure
+		Step("Register cluster with invalid kubeconfig", func() {
+			backupDriver := Inst().Backup
+			invalidKubeconfig := "\"\""
+			clusterCreateReq := &api.ClusterCreateRequest{
+				CreateMetadata: &api.CreateMetadata{
+					Name:  SourceClusterName,
+					OrgId: BackupOrgID,
+				},
+				Kubeconfig: base64.StdEncoding.EncodeToString([]byte(invalidKubeconfig)),
+			}
+			_, err := backupDriver.CreateCluster(ctx, clusterCreateReq)
+			dash.VerifyFatal(strings.Contains(err.Error(), "failed to validate access to the cluster"), true, "Verify the cluster creation")
+		})
+
+		// 2.Verifying  cluster status remain same failed after some time
+		Step("Verifying  cluster status remain same failed after some time", func() {
+			waitTimeForClusterStatus := 5 * time.Second
+			time.Sleep(waitTimeForClusterStatus)
+			clusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Failed, "Verifying  cluster status")
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(nil)
+		CleanupCloudSettingsAndClusters(nil, "", "", ctx)
+	})
+})
