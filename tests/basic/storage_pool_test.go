@@ -11711,6 +11711,7 @@ var _ = Describe("{PoolResizeInTrashCanNode}", Label("p0", "positive", "px_vol_o
 // PX pool went offline even when 30% of storage still available [PWX-26872]
 
 var _ = Describe("{CheckPoolOffline}", Label("p0", "positive", "pool_ops"), func() {
+
 	/*
 		    1. Deploy fio apps
 		    2. when capacity 70 percent is reached, check if pool is offline (Pool shouldn't be offline)
@@ -11718,74 +11719,391 @@ var _ = Describe("{CheckPoolOffline}", Label("p0", "positive", "pool_ops"), func
 
 			https://portworx.atlassian.net/browse/PTX-15695
 	*/
+
+	var (
+		contexts []*scheduler.Context
+	)
+
 	itLog := "CheckPoolOffline"
 	JustBeforeEach(func() {
 		StartTorpedoTest(itLog, "Check if pool is offline when capacity is reached", nil, 0)
 	})
-	var (
-		contexts = make([]*scheduler.Context, 0)
-	)
-	var selectedNode *node.Node
 
-	It(itLog, func() {
-		log.InfoD(itLog)
-		stepLog := "Label nodes and Deploy fio apps"
+	stepLog := "CheckPoolOffline"
+	It(stepLog, func() {
+		testName := "CheckPoolOffline"
+		log.InfoD(fmt.Sprintf("Create vols and make pool full"))
+
+		selectedPool, err := GetPoolWithLeastSize()
+		log.FailOnError(err, "error getting pool with least size")
+		selectedNode, err := GetNodeWithGivenPoolID(selectedPool.Uuid)
+		log.FailOnError(err, "error getting node with pool id %s", selectedPool.Uuid)
+
+		stNodes := node.GetStorageNodes()
+		var secondReplNode node.Node
+		for _, stNode := range stNodes {
+			if stNode.Name != selectedNode.Name {
+				secondReplNode = stNode
+			}
+		}
+
+		isjournal, err := IsJournalEnabled()
+		log.FailOnError(err, "is journal enabled check failed")
+
+		err = adjustReplPools(*selectedNode, secondReplNode, isjournal)
+		log.FailOnError(err, "Error setting pools for clean volumes")
+
+		currMax := secondReplNode.Pools[0].TotalSize / units.GiB
+		secondReplPoolUUID := secondReplNode.Pools[0].Uuid
+		//Selecting pool with max size in second node
+		for _, p := range secondReplNode.StoragePools {
+			currSize := p.TotalSize / units.GiB
+			if currSize > currMax {
+				currMax = currSize
+				secondReplPoolUUID = p.Uuid
+			}
+		}
+		err = addPooLabel(selectedPool.Uuid, map[string]string{"full": "yes"})
+		log.FailOnError(err, "error adding label on pool [%s]", selectedPool.Uuid)
+		err = addPooLabel(secondReplPoolUUID, map[string]string{"full": "yes"})
+		log.FailOnError(err, "error adding label on pool [%s]", secondReplPoolUUID)
+
+		defer func() {
+			err = addPooLabel(selectedPool.Uuid, map[string]string{"full": ""})
+			log.FailOnError(err, "error removing label on pool [%s]", selectedPool.Uuid)
+			err = addPooLabel(secondReplPoolUUID, map[string]string{"full": ""})
+			log.FailOnError(err, "error removing label on pool [%s]", secondReplPoolUUID)
+		}()
+
+		testName = strings.ToLower(testName)
+		vpsName := fmt.Sprintf("storagefull-vps-%s", testName)
+		nsName := fmt.Sprintf("storagefull-ns-%s", testName)
+		scName := fmt.Sprintf("storagefull-sc-%s", testName)
+		pvcName := fmt.Sprintf("storagefull-pvc-%s", testName)
+
+		//Createing VPS
+		matchExpression := []*v1beta1.LabelSelectorRequirement{
+			{
+				Key:      "full",
+				Operator: v1beta1.LabelSelectorOpIn,
+				Values:   []string{"yes"},
+			},
+		}
+
+		vpsSpec := talisman_v1beta2.VolumePlacementStrategy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: vpsName,
+			},
+			Spec: talisman_v1beta2.VolumePlacementSpec{
+				ReplicaAffinity: []*talisman_v1beta2.ReplicaPlacementSpec{
+					{
+						AffectedReplicas: 2,
+						CommonPlacementSpec: talisman_v1beta2.CommonPlacementSpec{
+							Enforcement:      v1beta1.EnforcementRequired,
+							MatchExpressions: matchExpression,
+						},
+					},
+				},
+			},
+		}
+
+		_, err = talisman.Instance().CreateVolumePlacementStrategy(&vpsSpec)
+		if err != nil {
+			if apierrors.IsAlreadyExists(err) {
+				log.Infof("VPS %s already exists. Skipping creation.", vpsName)
+			} else {
+				log.FailOnError(err, "error creating volume placement strategy")
+			}
+		}
+
+		//Creating Storage class
+		createSC := func(scName string) {
+			log.Infof("SC %s already exists. Skipping creation.", scName)
+			params := make(map[string]string)
+			params["repl"] = "2"
+			params["priority_io"] = "high"
+
+			params["placement_strategy"] = vpsName
+
+			v1obj := metav1.ObjectMeta{
+				Name: scName,
+			}
+			reclaimPolicyDelete := corev1.PersistentVolumeReclaimDelete
+			bindMode := storageApi.VolumeBindingImmediate
+			scObj := storageApi.StorageClass{
+				ObjectMeta:        v1obj,
+				Provisioner:       k8s.CsiProvisioner,
+				Parameters:        params,
+				ReclaimPolicy:     &reclaimPolicyDelete,
+				VolumeBindingMode: &bindMode,
+			}
+
+			k8sStorage := storage.Instance()
+			_, err = k8sStorage.CreateStorageClass(&scObj)
+			if err != nil {
+				if apierrors.IsAlreadyExists(err) {
+					log.Infof("SC %s already exists. Skipping creation.", scName)
+				} else {
+					log.FailOnError(err, fmt.Sprintf("error creating sc [%s]", scName))
+				}
+			}
+		}
+
+		//Create Namespace
+		createNs := func(nsName string) {
+			ns := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: nsName,
+				},
+			}
+			log.InfoD("Creating namespace %v", nsName)
+			_, err = core.Instance().CreateNamespace(ns)
+
+			if err != nil {
+				if apierrors.IsAlreadyExists(err) {
+					log.Infof("Namespace %s already exists. Skipping creation.", ns.Name)
+				} else {
+					log.FailOnError(err, fmt.Sprintf("error creating namespace [%s]", nsName))
+				}
+			}
+		}
+
+		//Create PVC
+		createPVC := func(pvcName, scName, appNs string) {
+
+			log.InfoD("creating PVC [%s] in namespace [%s]", pvcName, appNs)
+
+			pvcObj := &corev1.PersistentVolumeClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      pvcName,
+					Namespace: appNs,
+				},
+				Spec: corev1.PersistentVolumeClaimSpec{
+					AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteMany},
+					StorageClassName: &scName,
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							corev1.ResourceStorage: resource.MustParse("2000Gi"),
+						},
+					},
+				},
+			}
+			_, err = core.Instance().CreatePersistentVolumeClaim(pvcObj)
+			log.FailOnError(err, fmt.Sprintf("error creating PVC [%s] in namespace [%s]", pvcName, appNs))
+
+		}
+
+		createSC(scName)
+		createNs(nsName)
+		createPVC(pvcName, scName, nsName)
+
+		sizeForFio := (selectedPool.TotalSize / units.GiB)
+
+		var depRepl int32
+		depRepl = 1
+		stepLog := "create deployment and feed pool upto 70%, check pool is offline or not"
 		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			selectedNode = GetNodeWithLeastSize()
+			log.InfoD(fmt.Sprintf(stepLog))
+			deployment := prepareDeployment(nsName, pvcName, depRepl, (sizeForFio * 71 / 100))
+			dep, err := apps.Instance().CreateDeployment(deployment, metav1.CreateOptions{})
+			log.FailOnError(err, "error creating fio deployment")
+			log.InfoD(fmt.Sprintf("fio deployment created with name [%s]", dep.Name))
 
-			AppList := Inst().AppList
-			Inst().AppList = []string{"fio-fastpath-repl1"}
+			selectedPool, err := GetStoragePoolByUUID(selectedPool.GetUuid())
+			log.FailOnError(err, "Failed to get uuid of offline pool")
+			log.Infof("Pool %s is offline", selectedPool.Uuid)
+			// Used storage should be greater than 70 percentage
+			for {
+				log.Infof("Used size [%d] total size [%d]", selectedPool.Used, selectedPool.TotalSize)
+				if selectedPool.Used >= ((selectedPool.TotalSize) * (70) / 100) {
+					break
+				}
+				time.Sleep(time.Second * 10)
+				selectedPool, err = GetStoragePoolByUUID(selectedPool.GetUuid())
+				log.FailOnError(err, "Failed to get uuid of offline pool")
+			}
+			poolsStatus, err := Inst().V.GetNodePoolsStatus(*selectedNode)
+			log.FailOnError(err, "error getting pool status on node %s", selectedNode.Name)
 
-			var err error
-			defer func() {
-				Inst().AppList = AppList
-				err = Inst().S.RemoveLabelOnNode(*selectedNode, k8s.NodeType)
-				log.FailOnError(err, "error removing label on node [%s]", selectedNode.Name)
-			}()
-			err = Inst().S.AddLabelOnNode(*selectedNode, k8s.NodeType, k8s.FastpathNodeType)
-			log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedNode.Name))
+			for uuid, s := range poolsStatus {
+				dash.VerifyFatal(s != "Offline", true, fmt.Sprintf("verify pool [%s] is not offline", uuid))
+			}
 
-			for i := 0; i < Inst().GlobalScaleFactor; i++ {
-				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("storagefull-check-%d", i))...)
+			log.Infof("Pool %s is not offline and used storage is greater than 70 percentage", selectedPool.Uuid)
+
+			err = core.Instance().DeleteNamespace(nsName)
+			if err != nil {
+				log.Errorf("error deleting namespace [%s], Err: %v", nsName, err)
 			}
 		})
-		ValidateApplications(contexts)
-
-		// Pool should go offline after using 80% of the storage capacity
-		stepLog = "Keep checking when the pool goes offline"
+		// Define the deployment spec
+		stepLog = "create deployment and feed pool upto 80%, check pool is offline or not"
 		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			t := func() (interface{}, bool, error) {
-				poolsStatus, err := Inst().V.GetNodePoolsStatus(*selectedNode)
-				if err != nil {
-					return nil, true, err
-				}
+			nsName := fmt.Sprintf("storagefull80-ns-%s", testName)
+			scName := fmt.Sprintf("storagefull80-sc-%s", testName)
+			pvcName := fmt.Sprintf("storagefull80-pvc-%s", testName)
+			vpsName := fmt.Sprintf("storagefull80-vps-%s", testName)
 
-				for poolUUID, v := range poolsStatus {
-					if v == "Offline" {
-						offlinePool, err := GetStoragePoolByUUID(poolUUID)
-						log.FailOnError(err, "Failed to get uuid of offline pool")
-						log.Infof("Pool %s is offline", offlinePool.Uuid)
-						// Used storage should be greater than 80 percentage
-						if (offlinePool.Used) >= (offlinePool.TotalSize*80)/100 {
-							log.Infof("Pool %s is offline and used storage is greater than 80 percentage", offlinePool.Uuid)
-							return nil, false, nil
-						}
-						return nil, true, fmt.Errorf("Pool %s is offline but used storage is less than 80 percentage", offlinePool.Uuid)
-					}
-				}
-				return nil, true, fmt.Errorf("no pool is offline is node %s", selectedNode.Name)
+			matchExpression := []*v1beta1.LabelSelectorRequirement{
+				{
+					Key:      "full",
+					Operator: v1beta1.LabelSelectorOpIn,
+					Values:   []string{"yes"},
+				},
 			}
-			_, err := task.DoRetryWithTimeout(t, time.Minute*360, time.Minute*2)
-			log.FailOnError(err, "Failed to wait for pool offline")
+
+			vpsSpec := talisman_v1beta2.VolumePlacementStrategy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: vpsName,
+				},
+				Spec: talisman_v1beta2.VolumePlacementSpec{
+					ReplicaAffinity: []*talisman_v1beta2.ReplicaPlacementSpec{
+						{
+							AffectedReplicas: 2,
+							CommonPlacementSpec: talisman_v1beta2.CommonPlacementSpec{
+								Enforcement:      v1beta1.EnforcementRequired,
+								MatchExpressions: matchExpression,
+							},
+						},
+					},
+				},
+			}
+
+			_, err = talisman.Instance().CreateVolumePlacementStrategy(&vpsSpec)
+			if err != nil {
+				if apierrors.IsAlreadyExists(err) {
+					log.Infof("VPS %s already exists. Skipping creation.", vpsName)
+				} else {
+					log.FailOnError(err, "error creating volume placement strategy")
+				}
+			}
+
+			createSC(scName)
+			createNs(nsName)
+			createPVC(pvcName, scName, nsName)
+
+			log.InfoD(stepLog)
+			log.InfoD(fmt.Sprintf("sizeForFio %d", sizeForFio))
+
+			deployment := prepareDeployment(nsName, pvcName, depRepl, uint64(math.Ceil(float64(sizeForFio)*float64(0.85))))
+			dep, err := apps.Instance().CreateDeployment(deployment, metav1.CreateOptions{})
+			log.FailOnError(err, "error creating fio deployment")
+			log.InfoD(fmt.Sprintf("fio deployment created with name [%s]", dep.Name))
+
+			err = WaitForPoolOffline(*selectedNode)
+			log.FailOnError(err, fmt.Sprintf("Failed to make node %s storage down", selectedNode.Name))
+
+			poolsStatus, err := Inst().V.GetNodePoolsStatus(*selectedNode)
+			log.FailOnError(err, "error getting pool status on node %s", selectedNode.Name)
+
+			var offlinePoolUUID string
+			for i, s := range poolsStatus {
+				if s == "Offline" {
+					offlinePoolUUID = i
+					break
+				}
+			}
+
+			time.Sleep(time.Minute * 1)
+			offlinePool, err := GetStoragePoolByUUID(offlinePoolUUID)
+			log.FailOnError(err, "Failed to get uuid of offline pool")
+			log.Infof("Pool %s is offline", offlinePool.Uuid)
+			// Used storage should be greater than 80 percentage
+			if (offlinePool.Used) >= (offlinePool.TotalSize*80)/100 {
+				log.Infof("Pool %s is offline and used storage is greater than 80 percentage", offlinePool.Uuid)
+			} else {
+				fmt.Errorf("no pool is offline on node %s", selectedNode.Name)
+			}
+
+			err = core.Instance().DeleteNamespace(nsName)
+			if err != nil {
+				log.Errorf("error deleting namespace [%s], Err: %v", nsName, err)
+			}
 
 		})
-		DestroyApps(contexts, nil)
 
 	})
 
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
 })
+
+func prepareDeployment(nsName, pvcName string, depRepl int32, sizeForFio uint64) *appsv1.Deployment {
+	return &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "fio-test-deployment",
+			Namespace: nsName,
+			Labels: map[string]string{
+				"app": "fio-test",
+			},
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: &depRepl,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app": "fio-test",
+				},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"app": "fio-test",
+					},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:    "fio",
+							Image:   "xridge/fio:latest",
+							Command: []string{"fio"},
+							Args: []string{
+								"--name=fio-test",
+								"--rw=write",
+								fmt.Sprintf("--size=%dG", sizeForFio),
+								"--bs=1M",
+								"--iodepth=4",
+								"--numjobs=4",
+								"--runtime=99999999",
+								"--time_based=1",
+								"--directory=/data",
+								"--direct=1",
+								"--ioengine=libaio",
+							},
+							Resources: corev1.ResourceRequirements{
+								Limits: corev1.ResourceList{
+									"memory": resource.MustParse("4Gi"),
+									"cpu":    resource.MustParse("2"),
+								},
+								Requests: corev1.ResourceList{
+									"memory": resource.MustParse("4Gi"),
+									"cpu":    resource.MustParse("2"),
+								},
+							},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "fio-data",
+									MountPath: "/data",
+								},
+							},
+						},
+					},
+					Volumes: []corev1.Volume{
+						{
+							Name: "fio-data",
+							VolumeSource: corev1.VolumeSource{
+								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+									ClaimName: pvcName,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
 
 var _ = Describe("{FACDPoolIOPriorityCheck}", Label("p0", "positive", "pool_ops"), func() {
 
