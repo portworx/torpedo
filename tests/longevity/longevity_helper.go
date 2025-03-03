@@ -63,12 +63,25 @@ var (
 	skipEvents                        []string
 	recentDestructivePicks            []string
 	longevityConfigMapResourceVersion string
+	destructiveIterationsCount        = make(map[string]int)
 )
 
 var (
 	// StopLongevityChan is a channel to stop longevity tests
 	StopLongevityChan = make(chan struct{})
 	StopSSIEChan      = make(chan struct{})
+	// Define the tests to check against in a map for efficient lookups.
+	targetTests = map[string]bool{
+		HAIncrease:              true,
+		HADecrease:              true,
+		HAIncreaseWithPVCResize: true,
+	}
+
+	targetDestructiveTests = map[string]bool{
+		HAIncreaseAndReboot:    true,
+		HAIncreaseAndCrashPX:   true,
+		HAIncreaseAndRestartPX: true,
+	}
 )
 
 // TriggerFunction represents function signature of a testTrigger
@@ -492,6 +505,7 @@ func populateDataFromConfigMap(configData *map[string]string) error {
 	setHyperConvergedType(configData)
 	setMigrationInterval(configData)
 	setMigrationsCount(configData)
+	setMaxDestructiveEventIterations(configData)
 	setCreatedBeforeTimeForNsDeletion(configData)
 	setUpgradeStorageDriverEndpointList(configData)
 	setVclusterFioRunOptions(configData)
@@ -550,6 +564,18 @@ func setEmailSubject(configData *map[string]string) {
 		delete(*configData, EmailSubjectField)
 	} else {
 		EmailSubject = "Torpedo Longevity Report"
+	}
+}
+
+func setMaxDestructiveEventIterations(configData *map[string]string) {
+	var err error
+	if migInt, ok := (*configData)[MaxDestructiveEventIterations]; ok {
+		MaxDestructiveEventIterationsCount, err = strconv.Atoi(migInt)
+		if err != nil {
+			log.Errorf("Cannot set max iterations value, getting error: %v", err)
+		}
+	} else {
+		MaxDestructiveEventIterationsCount = -1
 	}
 }
 

@@ -113,6 +113,8 @@ const (
 	VclusterFioTotalIterationField = "vclusterFioTotalIteration"
 	// VclusterFioParallelAppsField is a field in the configmap that represents number of parallel fio apps to be run in vcluster
 	VclusterFioParallelAppsField = "vclusterFioParallelApps"
+	// MaxDestructiveEventIterations to use for number of iterations each destructive event should run
+	MaxDestructiveEventIterations = "maxDestructiveIterations"
 )
 
 const (
@@ -230,6 +232,9 @@ var MigrationInterval int
 
 // MigrationsCount to use for number of migrations to be run
 var MigrationsCount int
+
+// MaxDestructiveEventIterationsCount to use for number of iterations each destructive event should run
+var MaxDestructiveEventIterationsCount int
 
 // RunningTriggers map of events and corresponding interval
 var RunningTriggers map[string]time.Duration
@@ -1827,16 +1832,17 @@ func TriggerHAIncreasWithPVCResize(contexts *[]*scheduler.Context, recordChan *c
 					ctx.App.Key, v)
 				Step(stepLog,
 					func() {
-						log.InfoD(stepLog)
-						err = ValidateReplFactorUpdate(v, expReplMap[v])
-						if err != nil {
-							err = fmt.Errorf("error in ha-increase after  source node reboot. Error: %v", err)
-							log.Error(err)
-							UpdateOutcome(event, err)
-						} else {
-							dash.VerifySafely(true, true, fmt.Sprintf("repl successfully increased to %d", expReplMap[v]))
+						if replVal, ok := expReplMap[v]; ok {
+							log.InfoD(stepLog)
+							err = ValidateReplFactorUpdate(v, replVal)
+							if err != nil {
+								err = fmt.Errorf("error in ha-increase after  source node reboot. Error: %v", err)
+								log.Error(err)
+								UpdateOutcome(event, err)
+							} else {
+								dash.VerifySafely(true, true, fmt.Sprintf("repl successfully increased to %d", expReplMap[v]))
+							}
 						}
-
 					})
 			}
 			if !isSSIERun() {
@@ -4952,8 +4958,10 @@ func ValidateSSIEStatus(contexts *[]*scheduler.Context) error {
 // TriggerEmailReporter sends email with all reported errors
 func TriggerEmailReporter() {
 	// emailRecords stores events to be notified
-	defer endLongevityTest()
-	startLongevityTest(EmailReporter)
+	log.Infof("Starting Email Reporting")
+	defer func() {
+		log.Infof("Finished Email Reporting")
+	}()
 
 	emailData := emailData{}
 	timeString := time.Now().Format(time.RFC1123)
@@ -16374,7 +16382,7 @@ func TriggerGenericHotPluggableDiskToKubevirtVM(contexts *[]*scheduler.Context, 
 
 				isHotPlugged, err := GenericHotPlugDataVolumesToKubevirtVM(selectedVM, numberOfVolumes, "50Gi", string(volumeMode), false)
 				vmHotAddDiskCount[selectedVM.Name]++
-				
+
 				log.Infof("For selected VM [%v], the number of Hot pluggable disks count is [%v]", selectedVM.Name, vmHotAddDiskCount[selectedVM.Name])
 				log.FailOnError(err, "Failed to add Hot pluggable disk to KubeVirt VM")
 				dash.VerifyFatal(isHotPlugged, true, "Successfully added Hot pluggable disk to KubeVirt VM ?")

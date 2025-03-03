@@ -112,6 +112,7 @@ func triggerSSIECombo(contexts *[]*scheduler.Context, triggerEventsChan *chan *E
 	waitTime := 2 * time.Minute
 
 	var wg sync.WaitGroup
+	var nextCombinationToRun []string
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -130,7 +131,7 @@ func triggerSSIECombo(contexts *[]*scheduler.Context, triggerEventsChan *chan *E
 				waitTime = time.Duration(baseInterval) * time.Minute
 			}
 
-			nextCombinationToRun := getNextCombination()
+			nextCombinationToRun = getNextCombination()
 
 			if nextCombinationToRun == nil {
 				log.Infof("No more SSIE combinations to trigger")
@@ -169,7 +170,10 @@ func triggerSSIECombo(contexts *[]*scheduler.Context, triggerEventsChan *chan *E
 			default:
 				// Continuing the loop as no stop signal is received
 			}
-			destructiveEvent := getDestructiveEvent()
+
+			destructiveEvent := getDestructiveEvent(nextCombinationToRun)
+
+			destructiveIterationsCount[destructiveEvent]++
 			log.InfoD("Running destructive event [%s]", destructiveEvent)
 
 			triggerFunc := triggerFunctions[destructiveEvent]
@@ -180,6 +184,12 @@ func triggerSSIECombo(contexts *[]*scheduler.Context, triggerEventsChan *chan *E
 				dash.VerifySafely(ssieErr, nil, fmt.Sprintf("verify SSIE status after running [%s]", destructiveEvent))
 				close(StopSSIEChan)
 			}
+			if MaxDestructiveEventIterationsCount > 0 {
+				if allIterationsExceed(destructiveIterationsCount) {
+					log.InfoD("Max destructive event iterations reached. Exiting destructive test triggers")
+					close(StopSSIEChan)
+				}
+			}
 		}
 	}()
 
@@ -187,19 +197,47 @@ func triggerSSIECombo(contexts *[]*scheduler.Context, triggerEventsChan *chan *E
 
 }
 
+// allIterationsExceed returns true if every value in counts is greater than maxCount.
+func allIterationsExceed(destructiveIterationsCount map[string]int) bool {
+	for _, count := range destructiveIterationsCount {
+		if count <= MaxDestructiveEventIterationsCount {
+			return false
+		}
+	}
+	return true
+}
+
 func getNextCombination() []string {
 	GenerateAndStoreEventCombinations()
+
 	if len(eventCombinations) > 0 {
+		var filteredCombinations [][]string
+
+		// Iterate over each combination.
+		for _, combo := range eventCombinations {
+			// Count how many target tests are present in the current combination.
+			count := 0
+			for _, test := range combo {
+				if targetTests[test] {
+					count++
+				}
+			}
+
+			// Exclude this combination if two or more target tests are present.
+			if count < 2 {
+				filteredCombinations = append(filteredCombinations, combo)
+			}
+		}
 		rand.Seed(time.Now().UnixNano())
 
 		// Generate a random index within the range of the list
-		randomIndex := rand.Intn(len(eventCombinations))
-		return eventCombinations[randomIndex]
+		randomIndex := rand.Intn(len(filteredCombinations))
+		return filteredCombinations[randomIndex]
 	}
 	return nil
 }
 
-func getDestructiveEvent() string {
+func getDestructiveEvent(nonDestructiveCombo []string) string {
 	var enabledDestructiveEvents []string
 	for event := range triggerFunctions {
 		_, enableEvent := isTriggerEnabled(event)
@@ -216,7 +254,7 @@ func getDestructiveEvent() string {
 	// Keep picking a random value until it's not in the recentPicks slice
 	for {
 		selectedValue = enabledDestructiveEvents[rand.Intn(len(enabledDestructiveEvents))]
-		if !slices.Contains(recentDestructivePicks, selectedValue) {
+		if !slices.Contains(recentDestructivePicks, selectedValue) && isDestructiveEventValid(selectedValue, nonDestructiveCombo) {
 			break
 		}
 	}
@@ -227,4 +265,18 @@ func getDestructiveEvent() string {
 		recentDestructivePicks = recentDestructivePicks[1:] // Remove the oldest entry to maintain only the last half picks
 	}
 	return selectedValue
+}
+
+func isDestructiveEventValid(destructiveEvent string, nonDestructiveCombo []string) bool {
+
+	// If the given destructiveEvent is one of the target destructive tests,
+	// check if the nonDestructiveCombo contains any of the target tests.
+	if targetDestructiveTests[destructiveEvent] {
+		for _, test := range nonDestructiveCombo {
+			if targetTests[test] {
+				return false
+			}
+		}
+	}
+	return true
 }
