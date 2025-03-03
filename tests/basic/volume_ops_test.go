@@ -7523,7 +7523,7 @@ var _ = Describe("{BulkFastpathVolumeAttachAndDetach}", Label("p1", "negative", 
 
 		for i := 0; i < remainingVolCount; i++ {
 			volName := fmt.Sprintf("fastpathvol-%d", i)
-			volumeId, err := CreateAndAttachFPVolume(pxNode, volName, pxNode.Id, volSize, repl, false)
+			volumeId, err := CreateAndAttachFPVolume(pxNode, volName, pxNode.Id, volSize, repl, false, false)
 			log.FailOnError(err, fmt.Sprintf("Failed to create or attach volume [%v]", volName))
 			volumes = append(volumes, vol{volName: volName, volID: volumeId})
 

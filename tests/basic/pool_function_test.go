@@ -4291,7 +4291,7 @@ var _ = Describe("{ValidateVolumeCreationWhenPoolOffline}", Label("staging", "p0
 		stepLog = "Create volume while pool is in offline"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			_, err := CreateAndAttachFPVolume(*selectedNode, volumeName, offlinePoolUuid, volSize, haLevel, false)
+			_, err := CreateAndAttachFPVolume(*selectedNode, volumeName, offlinePoolUuid, volSize, haLevel, false, false)
 			dash.VerifyFatal(strings.Contains(err.Error(), "Failed to create volume"), true, "Verify volume creation should fail while pool is offline")
 		})
 	})

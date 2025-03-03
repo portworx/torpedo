@@ -17170,11 +17170,14 @@ func CreateAndValidateMigrationSched(migSchedName, cpName, migNs string, extraAr
 	return migrations, nil
 }
 
-func CreateAndAttachFPVolume(n node.Node, volumeName, nodeID string, volSize, haLevel int, secure bool) (string, error) {
+func CreateAndAttachFPVolume(n node.Node, volumeName, nodeID string, volSize, haLevel int, secure bool, sharedv4 bool) (string, error) {
 	log.Infof("Creating fast path secure volume")
 	pxctlCreateVolumeCmd := fmt.Sprintf("volume create %s --fastpath --size %v --repl %v --nodes %v", volumeName, volSize, haLevel, nodeID)
 	if secure {
 		pxctlCreateVolumeCmd += " --secure"
+	}
+	if sharedv4 {
+		pxctlCreateVolumeCmd += " --sharedv4"
 	}
 	out, err := Inst().V.GetPxctlCmdOutputConnectionOpts(n, pxctlCreateVolumeCmd, node.ConnectionOpts{
 		Timeout:         1 * time.Minute,
