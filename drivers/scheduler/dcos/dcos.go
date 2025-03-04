@@ -1153,11 +1153,35 @@ func (d *dcos) AddNamespaceLabel(namespace string, labelMap map[string]string) e
 	}
 }
 
+func (d *dcos) GetNamespaceAnnotations(namespace string) (map[string]string, error) {
+	// GetNamespaceAnnotations is not supported
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetNamespaceAnnotations()",
+	}
+}
+
+func (d *dcos) AddNamespaceAnnotations(namespace string, annotations map[string]string) error {
+	// AddNamespaceAnnotations is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "AddNamespaceAnnotations()",
+	}
+}
+
 func (d *dcos) RemoveNamespaceLabel(namespace string, labelMap map[string]string) error {
 	// RemoveNamespaceLabel is not supported
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "RemoveNamespaceLabel()",
+	}
+}
+
+func (d *dcos) RemoveNamespaceAnnotations(namespace string, Annotations map[string]string) error {
+	// RemoveNamespaceAnnotations is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "RemoveNamespaceAnnotations()",
 	}
 }
 

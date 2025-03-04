@@ -9311,6 +9311,25 @@ func (k *K8s) AddNamespaceLabel(namespace string, labelMap map[string]string) er
 	return err
 }
 
+// AddNamespaceAnnotations adds annotations on the given namespace
+func (k *K8s) AddNamespaceAnnotations(namespace string, annotations map[string]string) error {
+	ns, err := k8sCore.GetNamespace(namespace)
+	if err != nil {
+		return err
+	}
+	if ns.Annotations != nil {
+		nsAnnotations := MergeMaps(ns.Annotations, annotations)
+		ns.SetAnnotations(nsAnnotations)
+	} else {
+		ns.SetAnnotations(annotations)
+	}
+
+	if _, err = k8sCore.UpdateNamespace(ns); err == nil {
+		return nil
+	}
+	return err
+}
+
 // RemoveNamespaceLabel removes the label with key on given namespace
 func (k *K8s) RemoveNamespaceLabel(namespace string, labelMap map[string]string) error {
 	ns, err := k8sCore.GetNamespace(namespace)
@@ -9326,6 +9345,21 @@ func (k *K8s) RemoveNamespaceLabel(namespace string, labelMap map[string]string)
 	return err
 }
 
+// RemoveNamespaceAnnotations removes the annotations on a given namespace
+func (k *K8s) RemoveNamespaceAnnotations(namespace string, Annotations map[string]string) error {
+	ns, err := k8sCore.GetNamespace(namespace)
+	if err != nil {
+		return err
+	}
+	for key := range Annotations {
+		delete(ns.Annotations, key)
+	}
+	if _, err = k8sCore.UpdateNamespace(ns); err == nil {
+		return nil
+	}
+	return err
+}
+
 // GetNamespaceLabel gets the labels on given namespace
 func (k *K8s) GetNamespaceLabel(namespace string) (map[string]string, error) {
 	ns, err := k8sCore.GetNamespace(namespace)
@@ -9333,6 +9367,15 @@ func (k *K8s) GetNamespaceLabel(namespace string) (map[string]string, error) {
 		return nil, err
 	}
 	return ns.Labels, nil
+}
+
+// GetNamespaceAnnotation gets the labels on given namespace
+func (k *K8s) GetNamespaceAnnotations(namespace string) (map[string]string, error) {
+	ns, err := k8sCore.GetNamespace(namespace)
+	if err != nil {
+		return nil, err
+	}
+	return ns.Annotations, nil
 }
 
 // RotateTopologyArray Rotates topology arrays by one

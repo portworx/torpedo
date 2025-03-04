@@ -4,7 +4,6 @@ import (
 	"bytes"
 	context1 "context"
 	"fmt"
-
 	"gopkg.in/yaml.v3"
 	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/release"
@@ -5862,6 +5861,17 @@ func AddLabelsToMultipleNamespaces(labels map[string]string, namespaces []string
 	return nil
 }
 
+// AddAnnotationsToMultipleNamespaces add annotations to multiple namespace
+func AddAnnotationsToMultipleNamespaces(Annotations map[string]string, namespaces []string) error {
+	for _, namespace := range namespaces {
+		err := Inst().S.AddNamespaceAnnotations(namespace, Annotations)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // VerifyLabelsFromMultpleNamespaces verifies labels from multiple namespaces
 func VerifyLabelsFromMultpleNamespaces(labels map[string]string, namespaces []string) error {
 	log.Infof("Verifying labels %v in namespaces %v", labels, namespaces)
@@ -5886,6 +5896,39 @@ func VerifyNamespaceLabel(namespace string, labels map[string]string) error {
 		err := fmt.Errorf("label %s:%s is not present in namespace %s", key, label, namespace)
 		if _, ok := labelsInTheNamespace[key]; ok {
 			if labelsInTheNamespace[key] != label {
+				return err
+			}
+		} else {
+			return err
+		}
+	}
+	return nil
+}
+
+// VerifyAnnotationsFromMultipleNamespaces verifies annotations from multiple namespaces
+func VerifyAnnotationsFromMultipleNamespaces(annotations map[string]string, namespaces []string) error {
+	log.InfoD("Verifying annotations %v in namespaces %v", annotations, namespaces)
+	for _, namespace := range namespaces {
+		err := VerifyNamespaceAnnotations(namespace, annotations)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// VerifyNamespaceAnnotations verifies annotations in a namespace
+func VerifyNamespaceAnnotations(namespace string, annotations map[string]string) error {
+	labelsInTheAnnotations, err := Inst().S.GetNamespaceAnnotations(namespace)
+	if err != nil {
+		return err
+	}
+	log.Infof("Annotations in namespace %v are %v", namespace, labelsInTheAnnotations)
+
+	for key, label := range annotations {
+		err := fmt.Errorf("Annotations %s:%s is not present in namespace %s", key, label, namespace)
+		if _, ok := labelsInTheAnnotations[key]; ok {
+			if labelsInTheAnnotations[key] != label {
 				return err
 			}
 		} else {
@@ -15140,5 +15183,45 @@ func VerifyStatefulSetCount(statefulSetName, namespace string, readyPodCount int
 	if err != nil {
 		return fmt.Errorf("failed to reach the desired number of ready replicas for statefulset %s: %v", statefulSetName, err)
 	}
+	return nil
+}
+
+// ConfigureIstioOnNamespaces Configure Istio on Namespace by labeling the namespace
+func ConfigureIstioOnNamespaces(namespaces []string) error {
+	// Define the label for enabling Istio sidecar injection
+	istioLabel := map[string]string{"istio-injection": "enabled"}
+
+	// Add the label to the specified namespaces
+	if err := AddLabelsToMultipleNamespaces(istioLabel, namespaces); err != nil {
+		return fmt.Errorf("failed to add labels to namespaces: %v", err)
+	}
+
+	// Verify that the label has been added successfully
+	if err := VerifyLabelsFromMultpleNamespaces(istioLabel, namespaces); err != nil {
+		return fmt.Errorf("failed to verify labels on namespaces: %v", err)
+	}
+
+	return nil
+}
+
+// ConfigureLinkerdInjection adds the Linkerd injection annotation to the specified namespaces and verifies it.
+func ConfigureLinkerdInjection(namespaces []string) error {
+	// Define the annotation to enable sidecar injection
+	annotations := map[string]string{
+		"linkerd.io/inject": "enabled",
+	}
+
+	// Add the annotation to the specified namespaces
+	err := AddAnnotationsToMultipleNamespaces(annotations, namespaces)
+	if err != nil {
+		return fmt.Errorf("failed to add annotations to namespaces: %v", err)
+	}
+
+	// Verify that the annotations have been added
+	err = VerifyAnnotationsFromMultipleNamespaces(annotations, namespaces)
+	if err != nil {
+		return fmt.Errorf("annotation verification failed: %v", err)
+	}
+
 	return nil
 }

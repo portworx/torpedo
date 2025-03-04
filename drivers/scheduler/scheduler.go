@@ -519,6 +519,15 @@ type Driver interface {
 
 	// CreateResourceQuota creates a resource quota
 	CreateResourceQuota(rq *corev1.ResourceQuota) error
+
+	// AddNamespaceAnnotations Add Annotations to namespace
+	AddNamespaceAnnotations(namespace string, annotations map[string]string) error
+
+	// GetNamespaceAnnotations gets the Annotation on given namespace
+	GetNamespaceAnnotations(namespace string) (map[string]string, error)
+
+	// RemoveNamespaceAnnotations removes the Annotation on a given namespace
+	RemoveNamespaceAnnotations(namespace string, annotations map[string]string) error
 }
 
 var (
