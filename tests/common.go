@@ -679,6 +679,7 @@ var (
 	ClusterSuffix                                      = "default"
 	BackupCompletionWaitTime                           = 60 * time.Minute
 	defaultWaitInterval                  time.Duration = 20 * time.Second
+	FailedBackupTest                     bool
 )
 
 var (
@@ -5160,7 +5161,7 @@ func DeleteCluster(name string, orgID string, ctx context1.Context, cleanupBacku
 	if err != nil {
 		return err
 	}
-	if cleanupBackupsRestores {
+	if cleanupBackupsRestores && !KeepDataForDebug() {
 		err = DeleteAllBackupsWithClusterUid(ctx, BackupOrgID, clusterUid)
 		if err != nil {
 			return err
@@ -5186,7 +5187,7 @@ func DeleteClusterWithUID(name string, uid string, orgID string, ctx context1.Co
 	if err != nil {
 		return err
 	}
-	if cleanupBackupsRestores {
+	if cleanupBackupsRestores && !KeepDataForDebug() {
 		err := DeleteAllBackupsWithClusterUid(ctx, BackupOrgID, uid)
 		if err != nil {
 			return err
@@ -5233,7 +5234,7 @@ func DeleteBackupLocation(name string, backupLocationUID string, orgID string, D
 		return err
 	}
 
-	if DeleteExistingBackups {
+	if DeleteExistingBackups && !KeepDataForDebug() {
 		err = DeleteAllBackupsForBackupLocation(ctx, BackupOrgID, name, backupLocationUID)
 		if err != nil {
 			return err
@@ -5256,7 +5257,7 @@ func DeleteBackupLocation(name string, backupLocationUID string, orgID string, D
 // DeleteBackupLocationWithContext deletes backup location with the given context
 func DeleteBackupLocationWithContext(name string, backupLocationUID string, orgID string, DeleteExistingBackups bool, ctx context1.Context) error {
 	backupDriver := Inst().Backup
-	if DeleteExistingBackups {
+	if DeleteExistingBackups && !KeepDataForDebug() {
 		err := DeleteAllBackupsForBackupLocation(ctx, BackupOrgID, name, backupLocationUID)
 		if err != nil {
 			return err
@@ -5286,7 +5287,7 @@ func DeleteBackupLocationWithContext(name string, backupLocationUID string, orgI
 // DeleteSchedule deletes backup schedule
 func DeleteSchedule(backupScheduleName string, clusterName string, orgID string, ctx context1.Context, deleteBackups bool) error {
 	backupDriver := Inst().Backup
-	if deleteBackups {
+	if deleteBackups && !KeepDataForDebug() {
 		err := DeleteAllScheduleBackups(ctx, BackupOrgID, backupScheduleName)
 		if err != nil {
 			return err
@@ -5335,9 +5336,11 @@ func DeleteSchedule(backupScheduleName string, clusterName string, orgID string,
 // DeleteScheduleWithUID deletes backup schedule with the given backup schedule name and uid
 func DeleteScheduleWithUID(backupScheduleName string, backupScheduleUid string, orgID string, ctx context1.Context) error {
 	backupDriver := Inst().Backup
-	err := DeleteAllScheduleBackups(ctx, BackupOrgID, backupScheduleName)
-	if err != nil {
-		return err
+	if !KeepDataForDebug() {
+		err := DeleteAllScheduleBackups(ctx, BackupOrgID, backupScheduleName)
+		if err != nil {
+			return err
+		}
 	}
 	bkpScheduleDeleteRequest := &api.BackupScheduleDeleteRequest{
 		OrgId: orgID,
@@ -5346,7 +5349,7 @@ func DeleteScheduleWithUID(backupScheduleName string, backupScheduleUid string, 
 		// be deleted or retained.
 		Uid: backupScheduleUid,
 	}
-	_, err = backupDriver.DeleteBackupSchedule(ctx, bkpScheduleDeleteRequest)
+	_, err := backupDriver.DeleteBackupSchedule(ctx, bkpScheduleDeleteRequest)
 	if err != nil {
 		return err
 	}
@@ -5356,16 +5359,18 @@ func DeleteScheduleWithUID(backupScheduleName string, backupScheduleUid string, 
 // DeleteScheduleWithUIDAndWait deletes backup schedule with the given backup schedule name and uid and waits for its deletion
 func DeleteScheduleWithUIDAndWait(backupScheduleName string, backupScheduleUid string, clusterName string, clusterUid string, orgID string, ctx context1.Context) error {
 	backupDriver := Inst().Backup
-	err := DeleteAllScheduleBackups(ctx, BackupOrgID, backupScheduleName)
-	if err != nil {
-		return err
+	if !KeepDataForDebug() {
+		err := DeleteAllScheduleBackups(ctx, BackupOrgID, backupScheduleName)
+		if err != nil {
+			return err
+		}
 	}
 	bkpScheduleDeleteRequest := &api.BackupScheduleDeleteRequest{
 		OrgId: orgID,
 		Name:  backupScheduleName,
 		Uid:   backupScheduleUid,
 	}
-	_, err = backupDriver.DeleteBackupSchedule(ctx, bkpScheduleDeleteRequest)
+	_, err := backupDriver.DeleteBackupSchedule(ctx, bkpScheduleDeleteRequest)
 	if err != nil {
 		return err
 	}
@@ -9540,7 +9545,7 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 	// Cleanup all the namespaces created by the testcase
 	cleanup := TriggerCleanup()
 	log.InfoD(fmt.Sprintf("Cleanup state is set to %t", cleanup))
-	if cleanup {
+	if cleanup && !KeepDataForDebug() {
 		err := DeleteAllNamespacesCreatedByTestCase()
 		if err != nil {
 			log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
@@ -9581,6 +9586,25 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 		collectPxBackupLogs(testCaseName)
 		compressSubDirectories(pxbLogDirPath)
 	}
+}
+
+// IsFailedTest checks if the current spec has failed and returns a boolean
+func IsFailedTest() bool {
+	currentSpecReport := ginkgo.CurrentSpecReport()
+	if currentSpecReport.Failed() {
+		log.Infof(">>>> FAILED TEST: %s", currentSpecReport.FullText())
+		FailedBackupTest = true
+		return true
+	}
+	return false
+}
+
+// KeepDataForDebug checks if the current test has failed and KeepDataForDebug is enabled and returns a boolean
+func KeepDataForDebug() bool {
+	if os.Getenv("KEEP_DATA_FOR_DEBUG") == "true" && (IsFailedTest() || FailedBackupTest) {
+		return true
+	}
+	return false
 }
 
 func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string) (map[string]string, error) {
@@ -17615,7 +17639,6 @@ func WaitForSnapshotClassGotDeleted(snapShotClassName string) error {
 		return err
 	}
 	return nil
-
 }
 
 func WriteIOUntilVolumeFull(volName, mountPath string, selectedNode node.Node, size int64) (string, error) {

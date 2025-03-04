@@ -388,22 +388,24 @@ var _ = AfterSuite(func() {
 			err = RemoveS3BucketPolicy(GlobalAWSBucketName)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verify removal of S3 bucket policy"))
 		}
+		if !KeepDataForDebug() {
+			// Cleanup all backups
+			// Added the below code so that the thread to get the time taken to delete backup should still be running in background
+			// If we do not have this code, control will immediately go to DeleteDoneChannel <- true and time taken to delete these backups will not be calculated
+			allBackups, err := GetAllBackupsAdmin()
+			dash.VerifySafely(err, nil, "Verifying fetching of all backups")
+			for _, backupName := range allBackups {
+				backupUid, err := Inst().Backup.GetBackupUID(ctx, backupName, BackupOrgID)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the backup %s uid", backupName))
+				_, err = DeleteBackup(backupName, backupUid, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the backup %s deletion", backupName))
+			}
+			for _, backup := range allBackups {
+				err := DeleteBackupAndWait(backup, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Waiting for the backup %s to be deleted", backup))
+			}
+		}
 
-		// Cleanup all backups
-		// Added the below code so that the thread to get the time taken to delete backup should still be running in background
-		// If we do not have this code, control will immediately go to DeleteDoneChannel <- true and time taken to delete these backups will not be calculated
-		allBackups, err := GetAllBackupsAdmin()
-		dash.VerifySafely(err, nil, "Verifying fetching of all backups")
-		for _, backupName := range allBackups {
-			backupUid, err := Inst().Backup.GetBackupUID(ctx, backupName, BackupOrgID)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the backup %s uid", backupName))
-			_, err = DeleteBackup(backupName, backupUid, BackupOrgID, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the backup %s deletion", backupName))
-		}
-		for _, backup := range allBackups {
-			err := DeleteBackupAndWait(backup, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Waiting for the backup %s to be deleted", backup))
-		}
 		if IsBackupDeleteCheckAlive {
 			DeleteDoneChannel <- struct{}{}
 		}
@@ -541,7 +543,7 @@ var _ = AfterSuite(func() {
 		allBackupLocations, err := GetAllBackupLocations(ctx)
 		dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
 		for backupLocationUid, backupLocationName := range allBackupLocations {
-			err = DeleteBackupLocation(backupLocationName, backupLocationUid, BackupOrgID, true)
+			err = DeleteBackupLocation(backupLocationName, backupLocationUid, BackupOrgID, !KeepDataForDebug())
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion - %s", backupLocationName))
 		}
 
@@ -575,23 +577,24 @@ var _ = AfterSuite(func() {
 		}
 		_, err = DoRetryWithTimeoutWithGinkgoRecover(cloudCredentialDeletionSuccess, 5*time.Minute, 30*time.Second)
 		dash.VerifySafely(err, nil, "Verifying cloud credential deletion success")
-
-		// Cleanup all buckets after suite
-		providers := GetBackupProviders()
-		for _, provider := range providers {
-			switch provider {
-			case drivers.ProviderAws:
-				DeleteBucket(provider, GlobalAWSBucketName)
-				log.Infof("Bucket deleted - %s", GlobalAWSBucketName)
-			case drivers.ProviderAzure:
-				DeleteBucket(provider, GlobalAzureBucketName)
-				log.Infof("Bucket deleted - %s", GlobalAzureBucketName)
-			case drivers.ProviderGke:
-				DeleteBucket(provider, GlobalGCPBucketName)
-				log.Infof("Bucket deleted - %s", GlobalGCPBucketName)
-			case drivers.ProviderNfs:
-				DeleteBucket(provider, GlobalNFSBucketName)
-				log.Infof("NFS subpath deleted - %s", GlobalNFSBucketName)
+		if !KeepDataForDebug() {
+			// Cleanup all buckets after suite
+			providers := GetBackupProviders()
+			for _, provider := range providers {
+				switch provider {
+				case drivers.ProviderAws:
+					DeleteBucket(provider, GlobalAWSBucketName)
+					log.Infof("Bucket deleted - %s", GlobalAWSBucketName)
+				case drivers.ProviderAzure:
+					DeleteBucket(provider, GlobalAzureBucketName)
+					log.Infof("Bucket deleted - %s", GlobalAzureBucketName)
+				case drivers.ProviderGke:
+					DeleteBucket(provider, GlobalGCPBucketName)
+					log.Infof("Bucket deleted - %s", GlobalGCPBucketName)
+				case drivers.ProviderNfs:
+					DeleteBucket(provider, GlobalNFSBucketName)
+					log.Infof("NFS subpath deleted - %s", GlobalNFSBucketName)
+				}
 			}
 		}
 

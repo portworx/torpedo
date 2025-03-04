@@ -732,6 +732,8 @@ spec:
       value: "${DOCKER_USERNAME}"
     - name: DOCKER_PASSWORD
       value: "${DOCKER_PASSWORD}"
+    - name: KEEP_DATA_FOR_DEBUG
+      value: "${KEEP_DATA_FOR_DEBUG}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account

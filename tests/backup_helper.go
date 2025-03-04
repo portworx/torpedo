@@ -2674,7 +2674,7 @@ func CreateUsers(numberOfUsers int) []string {
 // CleanupCloudSettingsAndClusters removes the backup location(s), cloud accounts and source/destination clusters for the given context
 func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credName string, cloudCredUID string, ctx context1.Context) {
 	log.InfoD("Cleaning backup locations in map [%v], cloud credential [%s], source [%s] and destination [%s] cluster", backupLocationMap, credName, SourceClusterName, DestinationClusterName)
-	if len(backupLocationMap) != 0 {
+	if len(backupLocationMap) != 0 && !KeepDataForDebug() {
 		err := DeleteAllBackupLocations(backupLocationMap, ctx)
 		Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion status %s", backupLocationMap))
 		status, err := IsCloudCredPresent(credName, ctx, BackupOrgID)

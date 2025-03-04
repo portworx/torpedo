@@ -919,6 +919,8 @@ spec:
       value: "${REGION_FOR_CLUSTER_DISCOVERY}"
     - name: CLUSTER_NAME_FOR_CLOUD_DISCOVERY
       value: "${CLUSTER_NAME_FOR_CLOUD_DISCOVERY}"
+    - name: KEEP_DATA_FOR_DEBUG
+      value: "${KEEP_DATA_FOR_DEBUG}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
