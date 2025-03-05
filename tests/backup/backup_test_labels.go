@@ -211,6 +211,7 @@ const (
 	BackupAppDeployedUsingVPS                                                          TestCaseName = "BackupAppDeployedUsingVPS"
 	AddClusterWithInvalidKubeConfigAndVerifyFailure                                    TestCaseName = "AddClusterWithInvalidKubeConfigAndVerifyFailureLabel"
 	AddClusterWithInvalidAndValidKubeConfigAndVerify                                   TestCaseName = "AddClusterWithInvalidAndValidKubeConfigAndVerify"
+	DifferentTypesOfBackupAndRestore                                                   TestCaseName = "DifferentTypesOfBackupAndRestore"
 )
 
 // Test case labels
@@ -418,6 +419,7 @@ const (
 	BackupAppDeployedUsingVPSLabel                                                          TestCaseLabel = "BackupAppDeployedUsingVPS"
 	AddClusterWithInvalidKubeConfigAndVerifyFailureLabel                                    TestCaseLabel = "AddClusterWithInvalidKubeConfigAndVerifyFailure"
 	AddClusterWithInvalidAndValidKubeConfigAndVerifyLabel                                   TestCaseLabel = "AddClusterWithInvalidAndValidKubeConfigAndVerify"
+	DifferentTypesOfBackupAndRestoreLabel                                                   TestCaseLabel = "DifferentTypesOfBackupAndRestore"
 )
 
 // Common Labels
@@ -478,6 +480,7 @@ const (
 	CsiLabel        TestCaseLabel = "csi"
 	CsiOffloadLabel TestCaseLabel = "csi-offload"
 	AnyBackup       TestCaseLabel = "any-backup"
+	DistroLabel     TestCaseLabel = "distro-qualification"
 )
 
 // StorkQualificationLabel Stork qualification labels
@@ -766,4 +769,5 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	UpgradePxBackupKubernetesVersionCheck:                                  {UpgradePxBackupKubernetesVersionCheckLabel, FunctionalTest, PxBackupLabel, P2, S3BackupLocationLabel, NfsBackupLocationLabel, HealthCheckLabel},
 	BackupAndRestoreJobWithNodeAffinity:                                    {BackupAndRestoreJobWithNodeAffinityLabel, SystemTest, PxBackupLabel, P2, PxLabel, S3BackupLocationLabel, NfsBackupLocationLabel, FBDALabel, SkipTestLabel}, // SkipTestLabel will be removed once PB-9779 is fixed
 	BackupAndRestoreWithParallelBackupScheduleAndLargeVol:                  {BackupAndRestoreWithParallelBackupScheduleAndLargeVolLabel, SystemTest, PxBackupLabel, ScaleTest, PxLabel},
+	DifferentTypesOfBackupAndRestore:                                       {DifferentTypesOfBackupAndRestoreLabel, SystemTest, PxBackupLabel, DistroLabel},
 }

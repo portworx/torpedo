@@ -3592,6 +3592,8 @@ func ValidateBackup(ctx context1.Context, backupName string, orgID string, sched
 							expectedVolumeDriver = "azure"
 						case string(DirectKDMP):
 							expectedVolumeDriver = "kdmp"
+						case string(Portworx):
+							expectedVolumeDriver = "pxd"
 						default:
 							expectedVolumeDriver = Inst().V.String()
 						}
@@ -4452,6 +4454,8 @@ func ValidateRestore(ctx context1.Context, restoreName string, orgID string, exp
 					expectedVolumeDriver = "kdmp"
 				case string(NativeAzure):
 					expectedVolumeDriver = "azure"
+				case string(Portworx):
+					expectedVolumeDriver = "pxd"
 				default:
 					expectedVolumeDriver = Inst().V.String()
 				}
@@ -6733,6 +6737,7 @@ const (
 	NativeCSI                BackupTypeForCSI = "native_csi"
 	DirectKDMP               BackupTypeForCSI = "direct_kdmp"
 	NativeAzure              BackupTypeForCSI = "azure"
+	Portworx                 BackupTypeForCSI = "pxd"
 )
 
 // AdditionalBackupRequestParams decorates the backupRequest with additional parameters required
