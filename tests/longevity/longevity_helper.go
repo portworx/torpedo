@@ -493,6 +493,9 @@ func populateDisruptiveTriggers() {
 		VolumeDriverDownVCluster,
 		PowerOffStoragelessNodes,
 		PowerOffStorageNodes,
+		KVDBNodePXStopAndStart,
+		PowerOffAllKvdbVMs,
+		InjectNetworkDelay,
 	}
 }
 

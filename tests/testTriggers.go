@@ -1396,39 +1396,38 @@ func haIncreaseWithErrorInjection(event *EventRecord, contexts *[]*scheduler.Con
 				}
 				initialRepls[v] = currRep
 
-				if currRep != 0 {
-					for {
-						//Changing replication factor to 1
-						if currRep > 1 {
-							log.Infof("Current replication is > 1, reducing it before proceeding")
+				//Changing replication factor to 1
+				if currRep == 3 {
+					log.Infof("Current replication is 3, reducing it before proceeding")
 
-							dashStats := make(map[string]string)
-							dashStats["volume-name"] = v.Name
-							dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
-							dashStats["new-repl-factor"] = strconv.FormatInt(currRep-1, 10)
-							updateLongevityStats(event.Event.Type, stats.HADecreaseEventName, dashStats)
-							err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true, opts)
-							if err != nil {
-								log.Errorf("There is an error decreasing repl [%v]", err.Error())
-								UpdateOutcome(event, err)
-								return
-							}
+					dashStats := make(map[string]string)
+					dashStats["volume-name"] = v.Name
+					dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
+					dashStats["new-repl-factor"] = strconv.FormatInt(currRep-1, 10)
+					updateLongevityStats(event.Event.Type, stats.HADecreaseEventName, dashStats)
+					err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true, opts)
+					if err != nil {
+						log.Errorf("There is an error decreasing repl [%v]", err.Error())
+						UpdateOutcome(event, err)
+						return
+					}
 
-							log.Infof("waiting for 5 mins for data to deleted completely")
-							time.Sleep(5 * time.Minute)
-							currRep, err = Inst().V.GetReplicationFactor(v)
-							if err != nil {
-								log.Errorf("There is an error getting  repl  factor for vol [%s],err:[%v]", v.Name, err.Error())
-								UpdateOutcome(event, err)
-								return
-							}
-						} else {
-							break
-						}
+					log.Infof("waiting for 5 mins for data to deleted completely")
+					time.Sleep(5 * time.Minute)
+					currRep, err = Inst().V.GetReplicationFactor(v)
+					if err != nil {
+						log.Errorf("There is an error getting  repl  factor for vol [%s],err:[%v]", v.Name, err.Error())
+						UpdateOutcome(event, err)
+						return
 					}
 				}
-				if err == nil {
-					err := HaIncreaseErrorInjectionTargetNode(event, selctx, v, storageNodeMap, errorInj)
+
+				rand.Seed(time.Now().UnixNano())
+				nodeTypeOptions := []string{"target", "source"}
+
+				nodeType := nodeTypeOptions[rand.Intn(len(nodeTypeOptions))]
+				if nodeType == nodeTypeOptions[0] {
+					err = HaIncreaseErrorInjectionTargetNode(event, selctx, v, storageNodeMap, errorInj)
 					if err != nil {
 						log.Error(err)
 						log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after HaIncreaseErrorInjectionTargetNode ", v.Name, v.ID, v.Namespace)
@@ -1436,7 +1435,7 @@ func haIncreaseWithErrorInjection(event *EventRecord, contexts *[]*scheduler.Con
 						UpdateOutcome(event, err)
 						return
 					}
-
+				} else {
 					err = HaIncreaseErrorInjectSourceNode(event, selctx, v, storageNodeMap, errorInj)
 					if err != nil {
 						log.Error(err)
@@ -1445,6 +1444,7 @@ func haIncreaseWithErrorInjection(event *EventRecord, contexts *[]*scheduler.Con
 						UpdateOutcome(event, err)
 					}
 				}
+
 			}
 
 			//Reverting back the initial replication factor
@@ -2229,7 +2229,7 @@ func TriggerKubeletRestart(contexts *[]*scheduler.Context, recordChan *chan *Eve
 	stepLog := "restart kubelet in nodes selected"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		driverNodesToRestart := getNodesByChaosLevel(RestartManyVolDriver, node.GetStorageDriverNodes())
+		driverNodesToRestart := getNodesByChaosLevel(RestartKubeletService, node.GetStorageDriverNodes())
 		var wg sync.WaitGroup
 		validateNodeContexts := make(map[string]*scheduler.Context)
 		for _, appNode := range driverNodesToRestart {
@@ -2269,6 +2269,7 @@ func TriggerKubeletRestart(contexts *[]*scheduler.Context, recordChan *chan *Eve
 					})
 			}(appNode)
 		}
+		wg.Wait()
 		var nodeContexts []*scheduler.Context
 		for _, nc := range validateNodeContexts {
 			nodeContexts = append(nodeContexts, nc)
@@ -2385,9 +2386,10 @@ func TriggerNodeMaintenanceCycle(contexts *[]*scheduler.Context, recordChan *cha
 	stepLog := "get nodes and perform maintenance cycle"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		driverNodesToRestart := getNodesByChaosLevel(RestartManyVolDriver, node.GetStorageNodes())
+		driverNodesToRestart := getNodesByChaosLevel(NodeMaintenanceCycle, node.GetStorageNodes())
 		var wg sync.WaitGroup
 		validateNodeContexts := make(map[string]*scheduler.Context)
+		log.Infof("Perfroming node maintenance on %d nodes", len(driverNodesToRestart))
 		for _, appNode := range driverNodesToRestart {
 			err := isNodeHealthy(appNode, event.Event.Type)
 			if err != nil {
@@ -2445,6 +2447,7 @@ func TriggerNodeMaintenanceCycle(contexts *[]*scheduler.Context, recordChan *cha
 					})
 			}(&mNode)
 		}
+		wg.Wait()
 		Step("Giving few seconds for volume driver to stabilize", func() {
 			time.Sleep(20 * time.Second)
 		})
@@ -2482,9 +2485,8 @@ func TriggerPoolMaintenanceCycle(contexts *[]*scheduler.Context, recordChan *cha
 	stepLog := "get nodes and perform pool maintenance cycle"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		driverNodesToRestart := getNodesByChaosLevel(RestartManyVolDriver, node.GetStorageNodes())
+		driverNodesToRestart := getNodesByChaosLevel(PoolMaintenanceCycle, node.GetStorageNodes())
 		var wg sync.WaitGroup
-
 		validateNodeContexts := make(map[string]*scheduler.Context)
 		for _, appNode := range driverNodesToRestart {
 			err := isNodeHealthy(appNode, event.Event.Type)
@@ -2546,6 +2548,7 @@ func TriggerPoolMaintenanceCycle(contexts *[]*scheduler.Context, recordChan *cha
 					})
 			}(appNode)
 		}
+		wg.Wait()
 		Step("Giving few seconds for volume driver to stabilize", func() {
 			time.Sleep(20 * time.Second)
 		})
@@ -3741,8 +3744,6 @@ func TriggerDeleteLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan
 
 								}
 							}
-							err = storkops.Instance().DeleteSnapshotSchedule(snapshotScheduleName, appNamespace)
-							UpdateOutcome(event, err)
 
 						} else {
 							log.InfoD("Got error while getting volume snapshot status :%v", err.Error())
@@ -3750,17 +3751,13 @@ func TriggerDeleteLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan
 					}
 
 					snapshotList, err := Inst().S.GetSnapshotsInNameSpace(ctx, appNamespace)
+
 					UpdateOutcome(event, err)
-					if len(snapshotList.Items) != 0 {
-						log.InfoD("Failed to delete snapshots in namespace %v", appNamespace)
-						err = &scheduler.ErrFailedToDeleteTasks{
-							App:   ctx.App,
-							Cause: fmt.Sprintf("Failed to delete snapshots in namespace %v", appNamespace),
+					if err == nil && len(snapshotList.Items) != 0 {
+						for _, s := range snapshotList.Items {
+							log.Infof("Volumesnapshot %s is created", s.Name)
 						}
-						UpdateOutcome(event, err)
-
 					}
-
 				})
 			}
 		}

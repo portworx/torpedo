@@ -9465,6 +9465,9 @@ func CreateClonedStorageClassIfRequired(originalStorageClass *storageapi.Storage
 func (k *K8s) GetPodMetrics(podName, namespace string) (*v1beta1.PodMetrics, error) {
 
 	cfg, err := rest.InClusterConfig()
+	if err != nil {
+		return nil, fmt.Errorf("error getting in cluster config, Err: %s", err.Error())
+	}
 
 	metricsClient, err := versioned.NewForConfig(cfg)
 	if err != nil {
