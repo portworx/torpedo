@@ -392,3 +392,37 @@ var _ = Describe("{AddClusterFromDiscoveredList}", Label(TestCaseLabelsMap[AddCl
 		CleanupCloudSettingsAndClusters(nil, cloudCredName, cloudCredUID, ctx)
 	})
 })
+
+// Try listing clusters with invalid cloud cred and region
+var _ = Describe("{ClusterDiscoveryFailureWithInvalidCloudCredsAndRegion}", Label(TestCaseLabelsMap[ClusterDiscoveryFailureWithInvalidCloudCredsAndRegion]...), func() {
+	var (
+		cloudCredName string
+		cloudCredUID  string
+		region        string
+		ctx           context.Context
+		err           error
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("ClusterDiscoveryFailureWithInvalidCloudCredsAndRegion", "Try listing clusters with invalid cloud cred and region", nil, 300371, Pingle, Q1FY25)
+		ctx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		region = os.Getenv("REGION_FOR_CLUSTER_DISCOVERY")
+	})
+
+	// List clusters with invalid cloud cred and region and verify app error
+	It("Try listing clusters with invalid cloud cred and region", func() {
+		Step("list Managed Clusters with invalid cloud cred and region", func() {
+			cloudCredName = "wrong-credName"
+			cloudCredUID = "wrong-credUid"
+			enumerateRequest := PopulateMangeClusterEnumerateRequest(cloudCredName, cloudCredUID, region)
+			enumerateResponse, err := Inst().Backup.EnumerateManagedCluster(ctx, enumerateRequest)
+			dash.VerifyFatal(strings.Contains(err.Error(), "failed to retrieve cloud credential"), true, "Enumerate cluster with invalid cloud creds")
+			log.Infof("Response is:%s", enumerateResponse.String())
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(nil)
+	})
+})

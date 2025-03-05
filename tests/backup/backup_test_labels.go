@@ -213,6 +213,7 @@ const (
 	AddClusterWithInvalidAndValidKubeConfigAndVerify                                   TestCaseName = "AddClusterWithInvalidAndValidKubeConfigAndVerify"
 	DifferentTypesOfBackupAndRestore                                                   TestCaseName = "DifferentTypesOfBackupAndRestore"
 	AddClusterFromDiscoveredList                                                       TestCaseName = "AddClusterFromDiscoveredList"
+	ClusterDiscoveryFailureWithInvalidCloudCredsAndRegion                              TestCaseName = "ClusterDiscoveryFailureWithInvalidCloudCredsAndRegion"
 )
 
 // Test case labels
@@ -422,6 +423,7 @@ const (
 	AddClusterWithInvalidAndValidKubeConfigAndVerifyLabel                                   TestCaseLabel = "AddClusterWithInvalidAndValidKubeConfigAndVerify"
 	DifferentTypesOfBackupAndRestoreLabel                                                   TestCaseLabel = "DifferentTypesOfBackupAndRestore"
 	AddClusterFromDiscoveredListLabel                                                       TestCaseLabel = "AddClusterFromDiscoveredList"
+	ClusterDiscoveryFailureWithInvalidCloudCredsAndRegionLabel                              TestCaseLabel = "ClusterDiscoveryFailureWithInvalidCloudCredsAndRegion"
 )
 
 // Common Labels
