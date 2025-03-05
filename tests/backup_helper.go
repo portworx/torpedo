@@ -4,6 +4,7 @@ import (
 	"bytes"
 	context1 "context"
 	"fmt"
+
 	"gopkg.in/yaml.v3"
 	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/release"
@@ -15229,4 +15230,20 @@ func ConfigureLinkerdInjection(namespaces []string) error {
 	}
 
 	return nil
+}
+
+// PopulateMangeClusterEnumerateRequest populates the enumerate request for discovery cluster
+func PopulateMangeClusterEnumerateRequest(cloudCredName, cloudCredUID, region string) *api.ManagedClusterEnumerateRequest {
+	cloudCred := &api.ObjectRef{Name: cloudCredName, Uid: cloudCredUID}
+	awsConfig := &api.ManagedClusterEnumerateRequest_AWSConfig{Region: region}
+	enumerateReq := &api.ManagedClusterEnumerateRequest{OrgId: BackupOrgID, Provider: api.ManagedClusterEnumerateRequest_AWS, CloudCredential: cloudCred, Config: &api.ManagedClusterEnumerateRequest_AwsConfig{AwsConfig: awsConfig}}
+	return enumerateReq
+}
+
+// PopulateMangeClusterBuldAddRequest populates the buld add request for discovery cluster
+func PopulateMangeClusterBuldAddRequest(cloudCredName, cloudCredUID, region string, clusterNames []string) *api.ManagedClusterBulkAddRequest {
+	cloudCred := &api.ObjectRef{Name: cloudCredName, Uid: cloudCredUID}
+	bulkAddRequestconfig := &api.ManagedClusterBulkAddRequest_AWSConfig{Region: region}
+	req := &api.ManagedClusterBulkAddRequest{OrgId: BackupOrgID, CloudCredential: cloudCred, ClusterName: clusterNames, Provider: api.ManagedClusterBulkAddRequest_AWS, Config: &api.ManagedClusterBulkAddRequest_AwsConfig{AwsConfig: bulkAddRequestconfig}}
+	return req
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"strings"
 	"time"
 
@@ -313,5 +314,81 @@ var _ = Describe("{TestClusterStatusPersistentFailureOnInvalidKubeconfig}", Labe
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(nil)
 		CleanupCloudSettingsAndClusters(nil, "", "", ctx)
+	})
+})
+
+// List the available clusters and add one cluster as part of discovery
+var _ = Describe("{AddClusterFromDiscoveredList}", Label(TestCaseLabelsMap[AddClusterFromDiscoveredList]...), func() {
+
+	var (
+		cloudCredName string
+		cloudCredUID  string
+		providers     []string
+		ctx           context.Context
+		err           error
+		region        string
+		clusterName   string
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("VerifyAddClusterFromDiscoveredList", "Add one cluster as part of discovery", nil, 300362, Pingle, Q1FY25)
+		providers = GetBackupProviders()
+		ctx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		region = os.Getenv("REGION_FOR_CLUSTER_DISCOVERY")
+		clusterName = os.Getenv("CLUSTER_NAME_FOR_CLOUD_DISCOVERY")
+	})
+	// List the available clusters and add one cluster as part of discovery
+	It("Add one cluster as part of discovery", func() {
+
+		// 1.Creating cloud credential
+		Step("Creating cloud credentials", func() {
+			log.InfoD("Creating cloud credentials")
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
+				cloudCredUID = uuid.New()
+				err := CreateDiscoveryCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+			}
+		})
+
+		// 3.List the discovery cluster
+		Step("List the discovery clusters and verify name passed from Env to add", func() {
+			log.InfoD("List discovery Cluster")
+			enumerateRequest := PopulateMangeClusterEnumerateRequest(cloudCredName, cloudCredUID, region)
+			enumerateResponse, err := Inst().Backup.EnumerateManagedCluster(ctx, enumerateRequest)
+			dash.VerifyFatal(err, nil, "enumerate discovery cluster")
+			log.Infof("length of clusters %d", len(enumerateResponse.Cluster))
+			isFound := false
+			for _, clusterObj := range enumerateResponse.Cluster {
+				if clusterObj.Name == clusterName {
+					log.Infof("cluster name is%s", clusterObj.Name)
+					isFound = true
+				}
+			}
+			dash.VerifyFatal(isFound, true, "Verify cluster name same as passed from ENV")
+			log.Infof("cluster name is%s", clusterName)
+		})
+
+		// 3.Add one cluster as part of discovery
+		Step("Create discovery Cluster", func() {
+			bulkAddRequest := PopulateMangeClusterBuldAddRequest(cloudCredName, cloudCredUID, region, []string{clusterName})
+			bulkAddResponse, err := Inst().Backup.BulkAddManagedCluster(ctx, bulkAddRequest)
+			dash.VerifyFatal(err, nil, "Verify creating discovery cluster")
+			log.InfoD("Addded discovery cluster%v", bulkAddResponse)
+			clusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, clusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", clusterName))
+			log.Infof("cluster status is %s", clusterStatus.String())
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", clusterName))
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(nil)
+		err := DeleteCluster(clusterName, BackupOrgID, ctx, false)
+		dash.VerifyFatal(err, nil, "Delete created cluster")
+		err = Inst().Backup.WaitForClusterDeletion(ctx, clusterName, BackupOrgID, ClusterDeleteTimeout, ClusterDeleteRetryTime)
+		dash.VerifyFatal(err, nil, fmt.Sprintf("waiting for cluster [%s] deletion", clusterName))
+		CleanupCloudSettingsAndClusters(nil, cloudCredName, cloudCredUID, ctx)
 	})
 })

@@ -17746,3 +17746,64 @@ func CreateClusterSecret(n node.Node, name, secretKey string) error {
 	log.Infof("Cluster wide secret %v already exists", name)
 	return nil
 }
+
+// CreateDiscoveryCloudCredential creates cloud credentials
+func CreateDiscoveryCloudCredential(provider, credName, uid, orgID string, ctx context1.Context) error {
+
+	log.Infof("Create cloud credential with name [%s] for org [%s] with [%s] as provider", credName, orgID, provider)
+	var credCreateRequest *api.CloudCredentialCreateRequest
+	switch provider {
+	case drivers.ProviderAws:
+		log.Infof("Create creds for Aws")
+		id := os.Getenv("PX_BACKUP_AUTOMATION_USER_ACCESS_KEY")
+		if id == "" {
+			return fmt.Errorf("environment variable ACCESS_KEY_FOR_CLUSTER_DISCOVERY should not be empty")
+		}
+		secret := os.Getenv("PX_BACKUP_AUTOMATION_USER_SECRET_KEY")
+		if secret == "" {
+			return fmt.Errorf("environment variable SECRET_KEY_FOR_CLUSTER_DISCOVERY should not be empty")
+		}
+		credCreateRequest = &api.CloudCredentialCreateRequest{
+			CreateMetadata: &api.CreateMetadata{
+				Name:  credName,
+				Uid:   uid,
+				OrgId: orgID,
+			},
+			CloudCredential: &api.CloudCredentialInfo{
+				Type: api.CloudCredentialInfo_AWS,
+				Config: &api.CloudCredentialInfo_AwsConfig{
+					AwsConfig: &api.AWSConfig{
+						AccessKey: id,
+						SecretKey: secret,
+					},
+				},
+			},
+		}
+	default:
+		return fmt.Errorf("provider [%s] not supported for creating cloud credential", provider)
+	}
+	_, err := Inst().Backup.CreateCloudCredential(ctx, credCreateRequest)
+	if err != nil {
+		if strings.Contains(err.Error(), "already exists") {
+			return nil
+		}
+		log.Warnf("failed to create cloud credential with name [%s] in org [%s] with [%s] as provider with error [%v]", credName, orgID, provider, err)
+		return err
+	}
+	// check for cloud cred status
+	cloudCredStatus := func() (interface{}, bool, error) {
+		status, err := IsCloudCredPresent(credName, ctx, orgID)
+		if err != nil {
+			return "", true, fmt.Errorf("cloud cred %s present with error %v", credName, err)
+		}
+		if status {
+			return "", true, nil
+		}
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(cloudCredStatus, defaultTimeout, defaultRetryInterval)
+	if err != nil {
+		return err
+	}
+	return nil
+}
