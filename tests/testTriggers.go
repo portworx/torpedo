@@ -14327,7 +14327,7 @@ func TriggerInjectNetworkDelay(contexts *[]*scheduler.Context, recordChan *chan 
 		}()
 
 		//fetching interface name
-		cmd := fmt.Sprintf("ip -o addr show | grep \"%s\" | awk '\\''{print $2}'\\''", ipAddr)
+		cmd := fmt.Sprintf("ip -o addr show | grep \"%s\" | awk \"{print \\$2}\"", ipAddr)
 		log.Infof("cmd :[%v] to fetch interface name on node :[%v]", cmd, nodeToInduceNetworkDelay.Name)
 		cmdConnectionOpts := node.ConnectionOpts{
 			Timeout:         15 * time.Second,
@@ -14345,10 +14345,36 @@ func TriggerInjectNetworkDelay(contexts *[]*scheduler.Context, recordChan *chan 
 		baseDelay = "50ms"
 		jitter = "5ms"
 
+		// Check if a qdisc rule already exists
+		checkCmd := fmt.Sprintf("tc qdisc show dev %s", interfaceName)
+		log.Infof("Checking for existing qdisc: [%v]", checkCmd)
+		out, err = Inst().N.RunCommand(nodeToInduceNetworkDelay, checkCmd, cmdConnectionOpts)
+		if err == nil && strings.Contains(out, "netem") {
+			log.Infof("qdisc rule already exists, Command output : [%v]", out)
+			// Delete existing qdisc rule if found
+			delCmd := fmt.Sprintf("sudo tc qdisc del dev %s root", interfaceName)
+			log.Infof("Command to delete existing qdisc: [%v]", delCmd)
+			_, err = Inst().N.RunCommand(nodeToInduceNetworkDelay, delCmd, cmdConnectionOpts)
+			if err != nil {
+				log.Infof("Failed to delete existing qdisc on node [%v]: %v", nodeToInduceNetworkDelay, err)
+				UpdateOutcome(event, err)
+			}
+			out, err = Inst().N.RunCommand(nodeToInduceNetworkDelay, checkCmd, cmdConnectionOpts)
+			if !strings.Contains(out, "netem") {
+				log.Infof("Successfully deleted existing qdisc rule")
+			} else if err != nil {
+				log.Infof("Failed to check if qdisc rule already exists after deletion of qdisc rule, Error : [%v]", err)
+				UpdateOutcome(event, err)
+			}
+		} else if err != nil {
+			log.Infof("Failed to check if qdisc rule already exists, Error : [%v]", err)
+			UpdateOutcome(event, err)
+		}
+
 		//add network delay
 		log.InfoD("inducing network delay of base value : [%v] and jitter value : [%v]", baseDelay, jitter)
 		cmd = fmt.Sprintf("sudo tc qdisc add dev %s root netem delay %s %s distribution normal", interfaceName, baseDelay, jitter)
-		log.Infof("command to add network delay : [%v] of [%v]", cmd)
+		log.Infof("command to add network delay : [%v]", cmd)
 		_, err = Inst().N.RunCommand(nodeToInduceNetworkDelay, cmd, cmdConnectionOpts)
 		if err != nil {
 			log.InfoD("failed to run command to induce network delay on node [%v]", nodeToInduceNetworkDelay)
