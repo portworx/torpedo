@@ -477,6 +477,14 @@ func (anth *anthos) VerifyUpgradeVersion(upgradeVersion string) error {
 // updateGkeadmUtil update gkeadm version to given version
 func (anth *anthos) updateGkeadmUtil(version string) error {
 	log.Infof("Updating gkeadm to version: [%s]", version)
+	out, err := exec.Command("pip", "install", "--upgrade", "pip").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("upgrading pip install is failing: [%s]. Err: %v", out, err)
+	}
+	out, err = exec.Command("pip", "install", "pyopenssl == 24.2.1").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("installing pyopenssl == 24.2.1 is failing: [%s]. Err: %v", out, err)
+	}
 	src := fmt.Sprintf("gs://gke-on-prem-release/gkeadm/%s/linux/gkeadm", version)
 	if out, err := exec.Command(gsUtilCmd, "cp", src, anth.confPath).CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to download gkeadm : [%s], Err:(%v)", out, err)
@@ -997,6 +1005,10 @@ func downloadAndInstallGsutils() error {
 	out, err = exec.Command("apk", "add", "--update", "--no-cache", "openssh").CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("installing openssh is failing: [%s]. Err: %v", out, err)
+	}
+	out, err = exec.Command("apk", "add", "--no-cache", "python3", "py3-pip").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("adding py3-pip package is failing: [%s]. Err: %v", out, err)
 	}
 	return nil
 }
