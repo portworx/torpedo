@@ -111,6 +111,11 @@ func (o *ocp) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error {
 	return nil
 }
 
+func (o *ocp) WaitDriverToBeInState(n node.Node, timeout time.Duration, state api.Status) error {
+	log.Warnf("WaitDriverToBeInState function has not been implemented for volume driver - %s", o.String())
+	return nil
+}
+
 // UpdateFBDANFSEndpoint updates the NFS endpoint for a given FBDA volume
 func (o *ocp) UpdateFBDANFSEndpoint(volumeName string, newEndpoint string) error {
 	log.Warnf("UpdateFBDANFSEndpoint function has not been implemented for volume driver - %s", o.String())

@@ -2938,6 +2938,43 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 	return nil
 }
 
+func (d *portworx) WaitDriverToBeInState(n node.Node, timeout time.Duration, state api.Status) error {
+	log.Debugf("Waiting for volume driver [%s/%s] to be of state %v", n.Name, n.VolDriverNodeID, state)
+	t := func() (interface{}, bool, error) {
+		log.Debugf("Getting node info for node [%s/%s]", n.Name, n.VolDriverNodeID)
+		nodeInspectResponse, err := d.getNodeManager().Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
+
+		if err != nil {
+			return "", true, &ErrFailedToWaitForPx{
+				Node:  n,
+				Cause: fmt.Sprintf("failed to get node info [%s/%s], Err: %v", n.Name, n.VolDriverNodeID, err),
+			}
+		}
+
+		pxNode := nodeInspectResponse.Node
+		if pxNode.Status != state {
+			return "", true, &ErrFailedToWaitForPx{
+				Node:  n,
+				Cause: fmt.Sprintf("got px status on node [%s/%s] as %v , expected %v", n.Name, n.VolDriverNodeID, pxNode.Status, state),
+			}
+		}
+
+		log.Infof("PX status on node [%s/%s] is %v", n.Name, n.VolDriverNodeID, pxNode.Status)
+		return "", false, nil
+	}
+	gctx := context.Background()
+	gctx = context.WithValue(gctx, torpedotask.TimeBeforeRetryKey, defaultRetryInterval)
+	gctx = context.WithValue(gctx, torpedotask.TimeoutKey, timeout)
+	gctx = context.WithValue(gctx, torpedotask.TestNameKey, log.GetTestName())
+	if _, err := torpedotask.DoRetryWithTimeoutWithCtx(t, gctx); err != nil {
+		log.InfoD(fmt.Sprintf("------Printing the px logs on the node:%s ----------", n.Name))
+		d.PrintCommandOutput("journalctl -lu portworx* -n 100 --no-pager ", n)
+		log.InfoD(fmt.Sprintf("------Finished Printing the px logs on the node:%s ----------", n.Name))
+		return fmt.Errorf("PX failed to come up on node [%s/%s], Err: %v", n.Name, n.VolDriverNodeID, err)
+	}
+	return nil
+}
+
 func (d *portworx) WaitForKVDBToBeHealthy(n node.Node, retryInterval time.Duration) error {
 	t := func() (interface{}, bool, error) {
 		kvdbMembers, err := d.GetKvdbMembers(n)

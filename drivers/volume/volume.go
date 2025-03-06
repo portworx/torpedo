@@ -216,6 +216,9 @@ type Driver interface {
 	// WaitDriverUpOnNode must wait till the volume driver becomes usable on a given node
 	WaitDriverUpOnNode(n node.Node, timeout time.Duration) error
 
+	// WaitDriverToBeInState must wait until the volume driver comes to an expected state on a given node
+	WaitDriverToBeInState(n node.Node, timeout time.Duration, state api.Status) error
+
 	// WaitDriverDownOnNode must wait till the volume driver becomes unusable on a given node
 	WaitDriverDownOnNode(n node.Node) error
 

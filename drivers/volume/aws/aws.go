@@ -104,6 +104,11 @@ func (d *aws) WaitForKVDBToBeHealthy(n node.Node, retryInterval time.Duration) e
 	return nil
 }
 
+func (d *aws) WaitDriverToBeInState(n node.Node, timeout time.Duration, state api.Status) error {
+	log.Warnf("WaitDriverToBeInState function has not been implemented for volume driver - %s", d.String())
+	return nil
+}
+
 func init() {
 	torpedovolume.Register(DriverName, provisioners, &aws{})
 }

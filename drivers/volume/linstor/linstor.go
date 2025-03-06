@@ -126,6 +126,11 @@ func (d *linstor) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error {
 	return nil
 }
 
+func (d *linstor) WaitDriverToBeInState(n node.Node, timeout time.Duration, state api.Status) error {
+	log.Warnf("WaitDriverToBeInState function has not been implemented for volume driver - %s", d.String())
+	return nil
+}
+
 func (d *linstor) GetProxySpecForAVolume(volume *torpedovolume.Volume) (*api.ProxySpec, error) {
 	log.Warnf("GetProxySpecForAVolume function has not been implemented for volume driver - %s", d.String())
 	return nil, nil

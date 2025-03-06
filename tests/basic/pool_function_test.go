@@ -3646,6 +3646,117 @@ func performDriveScalingTest(testName string) {
 
 }
 
+var _ = Describe("{ExpandPoolWithLongPoolMaintenance}", Label("p1", "negative", "pool_ops", "PoolExpand", "AddDrive", "ResizeDisk", "PoolMaintenance", "functional"), func() {
+	/*
+		1. expand (add-disk)
+		2. long pool maintenance
+		3. node reboot
+		4. exit maintenance
+		5. expand (resize)
+	*/
+	var contexts []*scheduler.Context
+	JustBeforeEach(func() {
+		StartTorpedoTest("ExpandPoolWithLongPoolMaintenance", "Write to expanded size of the pool after resize of the pool", nil, 0)
+
+	})
+
+	itLog := "ExpandPoolWithLongPoolMaintenance"
+	It(itLog, func() {
+		log.InfoD(itLog)
+
+		isDMthin, err := IsDMthin()
+		log.FailOnError(err, "failed to check if dmthin is enabled")
+
+		if isDMthin {
+			log.InfoD("Pool expansion request of type add-disk is not supported with dmthin")
+			Skip("Pool expansion request of type add-disk is not supported with dmthin")
+		}
+
+		isjournal, err := IsJournalEnabled()
+		log.FailOnError(err, "Failed to check is journal enabled")
+
+		contexts = scheduleApps()
+
+		poolIDToResize := pickPoolToResize(contexts, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, 100)
+		poolToResize := getStoragePool(poolIDToResize)
+		nodeSelected, err := GetNodeFromPoolUUID(poolIDToResize)
+		log.FailOnError(err, fmt.Sprintf("failed to get node details from the pool id %s", poolIDToResize))
+		log.Infof("Picked pool %s from node %s for pool resize", poolIDToResize, nodeSelected)
+
+		stepLog := "Expand pool of type add disk"
+		Step(stepLog, func() {
+			originalSizeInBytes = poolToResize.TotalSize
+			targetSizeInBytes = originalSizeInBytes + 100*units.GiB
+			targetSizeGiB = targetSizeInBytes / units.GiB
+
+			log.InfoD("Current Size of pool %s is %d GiB. Expand to %v GiB with type add-disk...",
+				poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
+			triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
+			err = waitForPoolToBeResized(targetSizeGiB, poolIDToResize, isjournal)
+			log.FailOnError(err, fmt.Sprintf("pool resize of type add-disk failed on pool %s", poolToResize))
+		})
+
+		stepLog = "Enter pool maintenance mode"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Info("Node %s entering into pool maintenance mode", nodeSelected.Name)
+			err := EnterPoolMaintenance(*nodeSelected)
+			log.FailOnError(err, fmt.Sprintf("Failed to enter node %s into pool maintenance mode", nodeSelected.Name))
+			log.Infof("Node %s successfully entered into pool maintenance mode", nodeSelected.Name)
+			log.Infof("Wait for 10 mins to maintain long pool maintenance")
+			time.Sleep(10 * time.Minute)
+		})
+
+		stepLog = "Reboot Node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Info("Rebooting node %s", nodeSelected.Name)
+			err = Inst().N.RebootNodeAndWait(*nodeSelected)
+			log.FailOnError(err, fmt.Sprintf("Failed to reboot node %s and wait till it is up", nodeSelected.Name))
+			log.Infof("Node %s successfully rebooted", nodeSelected.Name)
+		})
+
+		expectedStatus := "In Maintenance"
+		err = WaitForPoolStatusToUpdate(*nodeSelected, expectedStatus)
+		log.FailOnError(err, "failed to verify node %s in state %v ", nodeSelected.Name, expectedStatus)
+
+		stepLog = "Exit pool maintenance mode"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Info("Node %s exiting from pool maintenance mode", nodeSelected.Name)
+			err = ExitPoolMaintenance(*nodeSelected)
+			log.FailOnError(err, fmt.Sprintf("Failed to exit node %s from pool maintenance mode", nodeSelected.Name))
+			log.Infof("Node %s successfully exited pool maintenance mode", nodeSelected.Name)
+		})
+
+		stepLog = "Expand pool with resize disk"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			poolToResize := getStoragePool(poolIDToResize)
+			originalSizeInBytes = poolToResize.TotalSize
+			targetSizeInBytes = originalSizeInBytes + 100*units.GiB
+			targetSizeGiB = targetSizeInBytes / units.GiB
+
+			log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v TiB with type resize-disk",
+				poolIDToResize, originalSizeInBytes/units.GiB, targetSizeGiB)
+			triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
+			err = waitForPoolToBeResized(targetSizeGiB, poolIDToResize, isjournal)
+			log.FailOnError(err, fmt.Sprintf("pool resize of type resize-disk failed on pool %s", poolToResize))
+		})
+
+		stepLog = "validate and destroy apps"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			appsValidateAndDestroy(contexts)
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
 var _ = Describe("{AddDataDriveWithMetadrive}", Label("staging", "p0", "postive", "AddDrive"), func() {
 	/*
 		ticket id : https://purestorage.atlassian.net/browse/HAZEL-1549
