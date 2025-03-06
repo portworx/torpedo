@@ -13448,89 +13448,131 @@ func DeleteCloudSnapBucket(bucketName string) error {
 	return nil
 }
 
+// deleteAndValidateBucketDeletion deletes all objects in an S3 bucket, then deletes the bucket itself.
 func deleteAndValidateBucketDeletion(client *s3.S3, bucketName string) error {
-	// Delete all objects and versions in the bucket
-	log.Debugf("Deleting bucket [%s]", bucketName)
-	time.Sleep(5 * time.Minute)
+	log.Infof("Starting deletion process for bucket [%s]", bucketName)
+
+	// Introduce delay if necessary
+	time.Sleep(1 * time.Minute)
+
+	// Step 1: Delete all objects in the bucket
+	if err := deleteAllObjects(client, bucketName); err != nil {
+		return fmt.Errorf("failed to delete objects: %w", err)
+	}
+
+	// Step 2: Validate that the bucket is empty
+	if err := validateBucketEmpty(client, bucketName); err != nil {
+		return fmt.Errorf("bucket validation failed: %w", err)
+	}
+
+	// Step 3: Delete the bucket
+	if err := deleteBucket(client, bucketName); err != nil {
+		return fmt.Errorf("bucket deletion failed: %w", err)
+	}
+
+	log.Infof("Successfully deleted the bucket: %v", bucketName)
+	return nil
+}
+
+// deleteAllObjects removes all objects from the specified S3 bucket.
+func deleteAllObjects(client *s3.S3, bucketName string) error {
+	log.Infof("Deleting objects in bucket [%s]...", bucketName)
+
 	err := client.ListObjectsV2Pages(&s3.ListObjectsV2Input{
 		Bucket: aws.String(bucketName),
 	}, func(page *s3.ListObjectsV2Output, lastPage bool) bool {
-		// Iterate through the objects in the bucket and delete them
-		var objects []*s3.ObjectIdentifier
-
-		for _, obj := range page.Contents {
-			objects = append(objects, &s3.ObjectIdentifier{
-				Key: obj.Key,
-			})
+		if len(page.Contents) == 0 {
+			log.Infof("No objects found in bucket [%s]", bucketName)
+			return false
 		}
 
-		_, err := client.DeleteObjects(&s3.DeleteObjectsInput{
-			Bucket: aws.String(bucketName),
-			Delete: &s3.Delete{
-				Objects: objects,
-				Quiet:   aws.Bool(true),
-			},
-		})
-		if err != nil {
-			log.Warnf("failed to delete objects in bucket: %v", err)
-			return false
+		// Convert object list to S3 ObjectIdentifiers
+		var objects []*s3.ObjectIdentifier
+		for _, obj := range page.Contents {
+			if obj.Key != nil {
+				objects = append(objects, &s3.ObjectIdentifier{Key: obj.Key})
+			}
+		}
+
+		// Ensure we are not passing an empty objects list
+		if len(objects) == 0 {
+			log.Infof("Warning: No valid objects to delete, skipping DeleteObjects call")
+			return true
+		}
+
+		// Retry deletion in case of transient errors
+		const maxRetries = 3
+		for attempt := 1; attempt <= maxRetries; attempt++ {
+			_, err := client.DeleteObjects(&s3.DeleteObjectsInput{
+				Bucket: aws.String(bucketName),
+				Delete: &s3.Delete{Objects: objects, Quiet: aws.Bool(true)},
+			})
+			if err == nil {
+				log.Debugf("Successfully deleted %d objects from bucket [%s]", len(objects), bucketName)
+				break // Success, exit retry loop
+			}
+
+			if attempt == maxRetries {
+				log.Infof("Error deleting objects from bucket [%s]: %v", bucketName, err)
+				return false
+			}
+
+			log.Infof("Retrying object deletion (attempt %d/%d)...", attempt, maxRetries)
+			time.Sleep(2 * time.Second) // Backoff before retrying
 		}
 
 		return true
 	})
-	if err != nil {
-		return fmt.Errorf("failed to delete objects in bucket: %v", err)
-	}
 
-	// List the objects in the bucket
-	listObjectsInput := s3.ListObjectsV2Input{
-		Bucket: aws.String(bucketName),
-	}
-
-	listObjectsOutput, err := client.ListObjectsV2(&listObjectsInput)
 	if err != nil {
+		log.Infof("Failed to list objects in bucket [%s]: %v", bucketName, err)
 		return err
 	}
-	if len(listObjectsOutput.Contents) == 0 {
-		log.Debugf("Bucket [%s] is empty", bucketName)
-	} else {
-		// Delete the objects
-		deleteObjectsInput := &s3.DeleteObjectsInput{
-			Bucket: aws.String(bucketName),
-			Delete: &s3.Delete{
-				Objects: make([]*s3.ObjectIdentifier, len(listObjectsOutput.Contents)),
-				Quiet:   aws.Bool(true),
-			},
-		}
 
-		for i, object := range listObjectsOutput.Contents {
-			deleteObjectsInput.Delete.Objects[i] = &s3.ObjectIdentifier{
-				Key: aws.String(*object.Key),
-			}
-		}
+	log.Infof("Completed object deletion for bucket [%s]", bucketName)
+	return nil
+}
 
-		_, err = client.DeleteObjects(deleteObjectsInput)
-		if err != nil {
-			return err
-		}
+// validateBucketEmpty checks if the bucket is empty after attempting to delete objects.
+func validateBucketEmpty(client *s3.S3, bucketName string) error {
+	log.Infof("Validating that bucket [%s] is empty...", bucketName)
+
+	listObjectsOutput, err := client.ListObjectsV2(&s3.ListObjectsV2Input{
+		Bucket: aws.String(bucketName),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to list objects: %w", err)
 	}
 
-	// Delete the bucket
-	_, err = client.DeleteBucket(&s3.DeleteBucketInput{
+	if len(listObjectsOutput.Contents) > 0 {
+		log.Infof("Bucket [%s] still contains objects, retrying deletion...", bucketName)
+		return deleteAllObjects(client, bucketName)
+	}
+
+	log.Infof("Bucket [%s] is confirmed empty", bucketName)
+	return nil
+}
+
+// deleteBucket removes the S3 bucket.
+func deleteBucket(client *s3.S3, bucketName string) error {
+	log.Infof("Attempting to delete bucket [%s]...", bucketName)
+
+	_, err := client.DeleteBucket(&s3.DeleteBucketInput{
 		Bucket: aws.String(bucketName),
 	})
 	if err != nil {
 		var aerr awserr.Error
 		if errors.As(err, &aerr) {
 			if aerr.Code() == s3.ErrCodeNoSuchBucket {
-				log.Infof("Bucket: %v doesn't exist.!!", bucketName)
+				log.Infof("Bucket [%s] does not exist.", bucketName)
 				return nil
 			}
-			return fmt.Errorf("couldn't delete bucket: %v", err)
+			return fmt.Errorf("could not delete bucket: %v", err)
 		}
+		return fmt.Errorf("failed to delete bucket: %w", err)
 	}
 
-	log.Infof("Successfully deleted the bucket: %v", bucketName)
+	log.Infof("Bucket [%s] successfully deleted", bucketName)
 	return nil
 }
 

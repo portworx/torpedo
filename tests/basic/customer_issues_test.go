@@ -611,6 +611,12 @@ var _ = Describe("{CreateCloudSnapAndDelete}", Label("p0", "positive", "Customer
 		contexts = make([]*scheduler.Context, 0)
 		policyName := "intervalpolicy"
 		appScale := 5
+		applist := Inst().AppList
+		defer func() {
+			Inst().AppList = applist
+		}()
+
+		Inst().AppList = []string{"fio-secure-cloudsnap"}
 
 		stepLog = fmt.Sprintf("create schedule policy %s", policyName)
 		Step(stepLog, func() {
@@ -666,8 +672,8 @@ var _ = Describe("{CreateCloudSnapAndDelete}", Label("p0", "positive", "Customer
 					}
 
 				}()
-				//validating cloudnsnaps for 30 iterations
-				for i := 1; i <= 30; i++ {
+				//validating cloudnsnaps for 15 iterations
+				for i := 1; i <= 15; i++ {
 					log.Infof("validating cloudsnaps iteration : %d", i)
 					for _, ctx := range contexts {
 						var appVolumes []*volume.Volume

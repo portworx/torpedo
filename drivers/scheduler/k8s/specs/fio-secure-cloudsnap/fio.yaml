@@ -61,7 +61,7 @@ spec:
         px/secret-key: test-secret
         px/secure: "true"
     spec:
-      storageClassName: fio-cloudsnap-sc
+      storageClassName: fio-secure-cloudsnap-sc
       accessModes:
       - ReadWriteOnce
       resources:
@@ -75,7 +75,7 @@ spec:
         px/secret-key: test-secret
         px/secure: "true"
     spec:
-      storageClassName: fio-cloudsnap-sc
+      storageClassName: fio-secure-cloudsnap-sc
       accessModes:
       - ReadWriteOnce
       resources:
