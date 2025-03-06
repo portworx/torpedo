@@ -225,6 +225,8 @@ import (
 	// import ocp driver to invoke it's init
 	_ "github.com/pure-px/torpedo/drivers/volume/ocp"
 
+	vault "github.com/hashicorp/vault/api"
+
 	newflasharray "github.com/pure-px/torpedo/drivers/pure/flasharray"
 )
 
@@ -6055,7 +6057,7 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 			return "", true, fmt.Errorf("cloud cred %s present with error %v", credName, err)
 		}
 		if status {
-			return "", true, nil
+			return "", false, nil
 		}
 		return "", false, nil
 	}
@@ -17848,4 +17850,125 @@ func CreateDiscoveryCloudCredential(provider, credName, uid, orgID string, ctx c
 		return err
 	}
 	return nil
+}
+
+// AddCloudCredentialsInVaultPath adds cloud credential details in the given vault path
+// Px-backup will pick up cloud credential details from this path from vault
+func AddCloudCredentialsInVaultPath(provider string, KMSObjectType string, authMethod string, path string, kubeconfig ...string) error {
+	log.Infof("Adding cloud credential details in Vault path")
+	client, err := GetVaultLogicalClient(KMSObjectType, authMethod)
+	if err != nil {
+		return err
+	}
+	switch provider {
+	case drivers.ProviderAws:
+		log.Infof("Adding AWS cloud credential details in vault path")
+		awsAccessKey, awsSecretKey, _, _, _ := s3utils.GetAWSDetailsFromEnv()
+
+		data1 := map[string]interface{}{
+			"AWS_ACCESS_KEY": awsAccessKey,
+			"AWS_SECRET_KEY": awsSecretKey,
+		}
+		wrappedData := map[string]interface{}{
+			"data": data1,
+		}
+		_, err = client.Write(path, wrappedData)
+		if err != nil {
+			return err
+		}
+
+	case drivers.ProviderAzure:
+		log.Infof("Adding Azure cloud credential details in vault path")
+		tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey := GetAzureCredsFromEnv()
+		data1 := map[string]interface{}{
+			"AZURE_TENANT_ID":       tenantID,
+			"AZURE_CLIENT_ID":       clientID,
+			"AZURE_CLIENT_SECRET":   clientSecret,
+			"AZURE_SUBSCRIPTION_ID": subscriptionID,
+			"AZURE_ACCOUNT_NAME":    accountName,
+			"AZURE_ACCOUNT_KEY":     accountKey,
+		}
+		wrappedData := map[string]interface{}{
+			"data": data1,
+		}
+		_, err = client.Write(path, wrappedData)
+		if err != nil {
+			return err
+		}
+
+	case drivers.ProviderNfs:
+		log.Warnf("provider [%s] does not require creating cloud credential", provider)
+		return nil
+
+	case drivers.ProviderRke:
+		log.Infof("Adding Rancher cloud credential details in vault path")
+		if len(kubeconfig) == 0 {
+			return fmt.Errorf("kubeconfig parameter is required for provider RKE")
+		}
+		data1 := map[string]interface{}{
+			"RANCHER_ENDPOINT":     rke.RancherMap[kubeconfig[0]].Endpoint,
+			"RANCHER_BEARER_TOKEN": rke.RancherMap[kubeconfig[0]].Token,
+		}
+		wrappedData := map[string]interface{}{
+			"data": data1,
+		}
+		_, err = client.Write(path, wrappedData)
+		if err != nil {
+			return err
+		}
+
+	case drivers.ProviderIbm:
+		log.Infof("Adding IBM cloud credential details in vault path")
+		apiKey, err := GetIBMApiKey("default")
+		if err != nil {
+			return err
+		}
+		data1 := map[string]interface{}{
+			"IBM_API_KEY": apiKey,
+		}
+		wrappedData := map[string]interface{}{
+			"data": data1,
+		}
+		_, err = client.Write(path, wrappedData)
+		if err != nil {
+			return err
+		}
+
+	case drivers.ProviderGke:
+		log.Infof("Adding GKE cloud credential details in vault path")
+		data1 := map[string]interface{}{
+			"GKE_JSON_KEY": GlobalGkeSecretString,
+		}
+		wrappedData := map[string]interface{}{
+			"data": data1,
+		}
+		_, err = client.Write(path, wrappedData)
+		if err != nil {
+			return err
+		}
+
+	default:
+		return fmt.Errorf("provider [%s] not supported for cloud credential", provider)
+	}
+	return nil
+}
+
+// GetVaultLogicalClient return the vault's logical client
+func GetVaultLogicalClient(KMSObjectType string, authMethod string) (*vault.Logical, error) {
+	data, err := getEnvVarsForKMSAuthentication(KMSObjectType, authMethod)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get environment variables for KMS authentication: %v", err)
+	}
+	vaultAddr, vaultToken := data["VAULT_ADDR"], data["VAULT_TOKEN"]
+	// Creating new vault client
+	client, err := vault.NewClient(nil)
+	if err != nil {
+		return nil, err
+	}
+	if err = client.SetAddress(vaultAddr); err != nil {
+		return nil, err
+	}
+	client.SetToken(vaultToken)
+	c := client.Logical()
+	return c, nil
 }
