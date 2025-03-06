@@ -493,11 +493,71 @@ func (d *portworx) init(sched, nodeDriver, token, storageProvisioner, csiGeneric
 			return fmt.Errorf("updating the restart count fails for a node: [%s]. Error: [%v]", n.Name, err)
 		}
 	}
+
+	// This go routine collects the stack logs from all the nodes every 15 minutes
+	go func() {
+		ticker := time.NewTicker(15 * time.Minute)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				for _, n := range node.GetNodesByName() {
+					go d.CollectStackLogs(n)
+				}
+			}
+		}
+	}()
+
 	return nil
 }
 
 func (d *portworx) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
 	return d.init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap, DriverName)
+}
+
+func (d *portworx) CollectStackLogs(n node.Node) {
+
+	log.Infof("Collecting stack logs for node [%s]", n.Name)
+
+	var processPid string
+	command := "ps -ef | grep \"px -daemon\""
+	out, err := d.nodeDriver.RunCommand(n, command, node.ConnectionOpts{
+		Timeout:         20 * time.Second,
+		TimeBeforeRetry: 5 * time.Second,
+		Sudo:            true,
+	})
+	if err != nil {
+		log.Errorf("Failed to get the PID of px daemon process, Err: ", err)
+		return
+	}
+
+	lines := strings.Split(string(out), "\n")
+	for _, line := range lines {
+		if strings.Contains(line, "/usr/local/bin/px -daemon") && !strings.Contains(line, "grep") {
+			fields := strings.Fields(line)
+			processPid = fields[1]
+			break
+		}
+	}
+
+	if processPid == "" {
+		log.Errorf("unable to find PID for px daemon in output [%s]", out)
+		return
+	}
+
+	cmd := fmt.Sprintf("kill -SIGUSR1 %s", processPid)
+	_, err = d.nodeDriver.RunCommand(n, cmd, node.ConnectionOpts{
+		Timeout:         crashDriverTimeout,
+		TimeBeforeRetry: defaultRetryInterval,
+	})
+	if err != nil {
+		log.Errorf("failed to run cmd [%s] on node [%s], Err: %v", cmd, n.Name, err)
+		return
+	}
+
+	log.Infof("Stack logs collected for node [%s]", n.Name)
+	return
 }
 
 func (d *portworx) RefreshDriverEndpoints() error {
