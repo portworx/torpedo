@@ -635,6 +635,12 @@ var _ = AfterSuite(func() {
 		//	log.FailOnError(err, "PVC cleanup validation failed")
 		//}
 		//fmt.Println("PVC cleanup validation passed.")
+
+		if os.Getenv("COPY_PX_BACKUP_LOGS") == "true" {
+			CopyLogsToDiagServer(PxbTorpedoLogDirPath)
+		} else {
+			log.Infof("COPY_PX_BACKUP_LOGS not set to true, skipping copying logs to diag server")
+		}
 	}
 })
 

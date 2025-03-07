@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"runtime"
@@ -710,11 +711,12 @@ var (
 )
 
 const (
-	rootLogDir            = "/root/logs"
-	diagsDirPath          = "diags.pwx.dev.purestorage.com:/var/lib/osd/pxns/688230076034934618"
-	pxbLogDirPath         = "/tmp/px-backup-test-logs"
-	KubevirtNamespace     = "kubevirt"
-	LatestKubevirtVersion = "v1.0.0"
+	rootLogDir              = "/root/logs"
+	diagsDirPath            = "diags.pwx.dev.purestorage.com:/var/lib/osd/pxns/688230076034934618"
+	PxbTorpedoLogDirPath    = "/testresults/px-backup-test-logs"
+	PxbMasterNodeLogDirPath = "/tmp/px-backup-test-logs"
+	KubevirtNamespace       = "kubevirt"
+	LatestKubevirtVersion   = "v1.0.0"
 )
 
 type Weekday string
@@ -8662,56 +8664,107 @@ func collectAndCopyDiagsOnWorkerNodes(issueKey string) {
 
 // CollectLogsFromPods collects logs from specified pods and stores them in a directory named after the test case
 func CollectLogsFromPods(testCaseName string, podLabel map[string]string, namespace string, logLabel string) {
-
-	// Check to handle cloud based deployment with 0 master nodes
-	if len(node.GetMasterNodes()) == 0 {
-		log.Warnf("Skipping pod log collection for pods with [%s] label in test case [%s] as it's cloud cluster", logLabel, testCaseName)
-		return
-	}
-
-	// In case of ocp skip log collection
-	if Inst().S.String() == openshift.SchedName {
-		log.Warnf("Skipping pod log collection for pods with [%s] label in test case [%s] as it's ocp cluster", logLabel, testCaseName)
-		return
-	}
-
 	testCaseName = strings.ReplaceAll(testCaseName, " ", "")
 	podList, err := core.Instance().GetPods(namespace, podLabel)
 	if err != nil {
 		log.Errorf("Error in getting pods for the [%s] logs of test case [%s], Err: %v", logLabel, testCaseName, err.Error())
 		return
 	}
-	masterNode := node.GetMasterNodes()[0]
-	err = runCmd("pwd", masterNode)
+	testCaseLogDirPath := fmt.Sprintf("%s/%s-logs", PxbTorpedoLogDirPath, testCaseName)
+	log.Infof("Creating a directory [%s] to store [%s] logs for the test case [%s]", testCaseLogDirPath, logLabel, testCaseName)
+	err = os.MkdirAll(testCaseLogDirPath, 0755)
 	if err != nil {
-		log.Errorf("Error in running [pwd] command in node [%s] for the [%s] logs of test case [%s]", masterNode.Name, logLabel, testCaseName)
-		return
-	}
-	testCaseLogDirPath := fmt.Sprintf("%s/%s-logs", pxbLogDirPath, testCaseName)
-	log.Infof("Creating a directory [%s] in node [%s] to store [%s] logs for the test case [%s]", testCaseLogDirPath, masterNode.Name, logLabel, testCaseName)
-	err = runCmd(fmt.Sprintf("mkdir -p %v", testCaseLogDirPath), masterNode)
-	if err != nil {
-		log.Errorf("Error in creating a directory [%s] in node [%s] to store [%s] logs for the test case [%s]. Err: %v", testCaseLogDirPath, masterNode.Name, logLabel, testCaseName, err.Error())
-		return
+		log.FailOnError(err, fmt.Sprintf("failed to create a directory [%s] to store [%s] logs for the test case [%s]: %w", testCaseLogDirPath, logLabel, testCaseName, err))
 	}
 	for _, pod := range podList.Items {
-		log.Infof("Writing [%s] pod into a %v/%v.log file", pod.Name, testCaseLogDirPath, pod.Name)
-		err = runCmd(fmt.Sprintf("kubectl logs %s -n %s > %s/%s.log", pod.Name, namespace, testCaseLogDirPath, pod.Name), masterNode)
-		if err != nil {
-			log.Errorf("Error in writing [%s] pod into a %v/%v.log file. Err: %v", pod.Name, testCaseLogDirPath, pod.Name, err.Error())
-		}
+		for _, container := range pod.Spec.Containers {
+			containerLogFilePath := filepath.Join(testCaseLogDirPath, fmt.Sprintf("%s-%s.log", pod.Name, container.Name))
 
-		// The below code check if the pod's container got restarted and if the restart count is more than 0, it collects the previous logs of the pod as well.
-		for _, container := range pod.Status.ContainerStatuses {
-			if container.RestartCount > 0 {
-				log.Infof("Writing [%s] container's log into %v/%v-previous.log file", container.Name, testCaseLogDirPath, container.Name)
-				err = runCmd(fmt.Sprintf("kubectl logs %s -c %s -n %s --previous > %v/%v-previous.log", pod.Name, container.Name, namespace, testCaseLogDirPath, container.Name), masterNode)
-				if err != nil {
-					log.Errorf("Error in writing [%s] container's log into %v/%v-previous.log file. Err: %v", container.Name, testCaseLogDirPath, container.Name, err.Error())
+			log.Infof("Writing logs of container [%s] in pod [%s] to file [%s]", container.Name, pod.Name, containerLogFilePath)
+
+			// Fetch logs for the current container
+			logData, err := k8sCore.GetPodLog(pod.Name, namespace, &corev1.PodLogOptions{Container: container.Name})
+			if err != nil {
+				log.FailOnError(err, fmt.Sprintf("Failed to get logs for container %s in pod %s/%s: %w", container.Name, namespace, pod.Name, err))
+			}
+
+			// Write logs to file
+			err = os.WriteFile(containerLogFilePath, []byte(logData), 0644)
+			if err != nil {
+				log.FailOnError(err, fmt.Sprintf("Failed to write logs for container %s in pod %s/%s to file %s: %w", container.Name, namespace, pod.Name, containerLogFilePath, err))
+			}
+
+			// Check if the container has restarted, fetch previous logs
+			for _, containerStatus := range pod.Status.ContainerStatuses {
+				if containerStatus.Name == container.Name && containerStatus.RestartCount > 0 {
+					previousLogFilePath := filepath.Join(testCaseLogDirPath, fmt.Sprintf("%s-%s-previous.log", pod.Name, container.Name))
+
+					log.Infof("Fetching previous logs for restarted container [%s] in pod [%s]", container.Name, pod.Name)
+
+					previousLogData, err := k8sCore.GetPodLog(pod.Name, namespace, &corev1.PodLogOptions{
+						Container: container.Name,
+						Previous:  true,
+					})
+					if err != nil {
+						log.FailOnError(err, fmt.Sprintf("Failed to get previous logs for container %s in pod %s/%s: %w", container.Name, namespace, pod.Name, err))
+					}
+
+					err = os.WriteFile(previousLogFilePath, []byte(previousLogData), 0644)
+					if err != nil {
+						log.FailOnError(err, fmt.Sprintf("Failed to write previous logs for container %s in pod %s/%s to file %s: %w", container.Name, namespace, pod.Name, previousLogFilePath, err))
+					}
 				}
 			}
 		}
 	}
+
+	log.Infof("Logs for the test case [%s] have been collected and stored in the directory [%s]", testCaseName, testCaseLogDirPath)
+
+	// Check to handle cloud based deployment with 0 master nodes or ocp skip copying the logs to master node
+	if len(node.GetMasterNodes()) == 0 || Inst().S.String() == openshift.SchedName {
+		log.Warnf("Skipping log copying for pods with [%s] label in test case [%s] as it's cloud cluster", logLabel, testCaseName)
+		return
+	}
+
+	// Copy logs to the master node
+	masterNode := node.GetMasterNodes()[0]
+	log.Infof("Copying [%s] logs for the test case [%s] to the master node [%s]", logLabel, testCaseName, masterNode.Name)
+	masterNodeLogDirPath := fmt.Sprintf("%s/%s-logs", PxbMasterNodeLogDirPath, testCaseName)
+	err = runCmd(fmt.Sprintf("mkdir -p %s", masterNodeLogDirPath), masterNode)
+	if err != nil {
+		log.Errorf("Error in creating a directory [%s] on the master node [%s]: %v", testCaseLogDirPath, masterNode.Name, err)
+	}
+	err = runCmd(fmt.Sprintf("cp -r /mnt/%s/* %s", testCaseLogDirPath, masterNodeLogDirPath), masterNode)
+	if err != nil {
+		log.Errorf("Error in copying [%s] logs for the test case [%s] to the master node [%s]: %v", logLabel, testCaseName, masterNode.Name, err)
+	}
+}
+
+// CompressAndCleanupLogs compresses logs inside the torpedo pod and removes the original logs
+func CompressAndCleanupLogs(testCaseName string) error {
+	namespace := "default"
+	podName := "torpedo"
+	testCaseLogDirPath := fmt.Sprintf("%s/%s-logs", PxbTorpedoLogDirPath, testCaseName)
+	compressedFilePath := fmt.Sprintf("%s.tar.gz", testCaseLogDirPath)
+
+	// Step 1: Compress logs inside the pod
+	_, err := kubectlExec([]string{"exec", "-it", podName, "-n", namespace, "--",
+		"tar", "-czf", compressedFilePath, "-C", PxbTorpedoLogDirPath, fmt.Sprintf("%s-logs", testCaseName)})
+	if err != nil {
+		return fmt.Errorf("failed to compress logs directory [%s] for test case [%s]: %w", testCaseLogDirPath, testCaseName, err)
+	}
+
+	log.Infof("Successfully compressed logs for test case [%s]: %s", testCaseName, compressedFilePath)
+
+	// Step 2: Delete the original log directory inside the pod
+	_, err = kubectlExec([]string{"exec", "-n", namespace, podName, "--",
+		"rm", "-rf", testCaseLogDirPath})
+	if err != nil {
+		return fmt.Errorf("failed to delete logs directory [%s] for test case [%s]: %w", testCaseLogDirPath, testCaseName, err)
+	}
+
+	log.Infof("Successfully deleted logs directory for test case [%s]", testCaseName)
+	return nil
 }
 
 // collectStorkLogs collects Stork logs and stores them using the CollectLogsFromPods function
@@ -8747,7 +8800,8 @@ func collectPxBackupLogs(testCaseName string) {
 		log.Errorf("Error in getting px-backup namespace. Err: %v", err.Error())
 		return
 	}
-	CollectLogsFromPods(testCaseName, pxbLabel, pxbNamespace, "px-backup")
+	// keeping pxbLabel as nil to collect the logs from all px-backup pods
+	CollectLogsFromPods(testCaseName, nil, pxbNamespace, "px-backup")
 }
 
 // compressSubDirectories compresses all subdirectories within the specified directory on the master node
@@ -9567,27 +9621,20 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 
 	err := SetSourceKubeConfig()
 	log.FailOnError(err, "failed to switch context to source cluster")
-
-	masterNodes := node.GetMasterNodes()
-	// TODO: enable the log collection for charmed k8s once we get the way to ssh into worker node from juju
-	if len(masterNodes) > 0 && GetClusterProvider() != "charmed" {
-		log.Infof(">>>> Collecting logs for testcase : %s", currentSpecReport.FullText())
-		testCaseName := currentSpecReport.FullText()
-		matches := regexp.MustCompile(`\{([^}]+)\}`).FindStringSubmatch(currentSpecReport.FullText())
-		if len(matches) > 1 {
-			testCaseName = matches[1]
-		}
-		masterNode := masterNodes[0]
-		log.Infof("Creating a directory [%s] to store logs", pxbLogDirPath)
-		err := runCmd(fmt.Sprintf("mkdir -p %v", pxbLogDirPath), masterNode)
-		if err != nil {
-			log.Errorf("Error in creating a directory [%s] to store logs. Err: %v", pxbLogDirPath, err.Error())
-			return
-		}
-		collectStorkLogs(testCaseName)
-		collectPxBackupLogs(testCaseName)
-		compressSubDirectories(pxbLogDirPath)
+	log.Infof(">>>> Collecting logs for testcase : %s", currentSpecReport.FullText())
+	testCaseName := currentSpecReport.FullText()
+	matches := regexp.MustCompile(`\{([^}]+)\}`).FindStringSubmatch(currentSpecReport.FullText())
+	if len(matches) > 1 {
+		testCaseName = matches[1]
 	}
+	log.Infof("Creating a directory [%s] to store logs", PxbTorpedoLogDirPath)
+	err = os.MkdirAll(PxbTorpedoLogDirPath, 0755)
+	if err != nil {
+		log.FailOnError(err, fmt.Sprintf("failed to create directory [%s] to store logs: %w", PxbTorpedoLogDirPath, err))
+	}
+	collectStorkLogs(testCaseName)
+	collectPxBackupLogs(testCaseName)
+	CompressAndCleanupLogs(testCaseName)
 }
 
 // IsFailedTest checks if the current spec has failed and returns a boolean
@@ -17971,4 +18018,212 @@ func GetVaultLogicalClient(KMSObjectType string, authMethod string) (*vault.Logi
 	client.SetToken(vaultToken)
 	c := client.Logical()
 	return c, nil
+}
+
+// LogStorageConfig holds configurations for log storage
+type LogStorageConfig struct {
+	StorageType      string // "nfs" or "s3"
+	NFSPath          string
+	S3EndPoint       string
+	S3AccessKey      string
+	S3SecretKey      string
+	S3Region         string
+	S3DisableSSLBool bool
+}
+
+// GetLogStorageConfigEnv gets log storage configuration from environment variables
+func GetLogStorageConfigEnv() (*LogStorageConfig, error) {
+	config := &LogStorageConfig{}
+
+	logStorageType := os.Getenv("LOGS_STORAGE_TYPE")
+	if logStorageType == "" {
+		return config, fmt.Errorf("LOGS_STORAGE_TYPE environment variable should not be empty")
+	}
+	config.StorageType = logStorageType
+
+	if logStorageType == "NFS" {
+		config.NFSPath = os.Getenv("NFS_DIAG_SERVER")
+		if config.NFSPath == "" {
+			return config, fmt.Errorf("NFS_DIAG_SERVER environment variable should not be empty")
+		}
+	} else if logStorageType == "s3" {
+		config.S3EndPoint = os.Getenv("LOGS_S3_ENDPOINT")
+		if config.S3EndPoint == "" {
+			return config, fmt.Errorf("LOGS_S3_ENDPOINT environment variable should not be empty")
+		}
+
+		config.S3AccessKey = os.Getenv("LOGS_S3_ACCESS_KEY_ID")
+		if config.S3AccessKey == "" {
+			return config, fmt.Errorf("LOGS_S3_ACCESS_KEY_ID environment variable should not be empty")
+		}
+
+		config.S3SecretKey = os.Getenv("LOGS_S3_SECRET_KEY")
+		if config.S3SecretKey == "" {
+			return config, fmt.Errorf("LOGS_S3_SECRET_KEY environment variable should not be empty")
+		}
+
+		config.S3Region = os.Getenv("LOGS_S3_REGION")
+		if config.S3Region == "" {
+			return config, fmt.Errorf("LOGS_S3_REGION environment variable should not be empty")
+		}
+
+		S3DisableSSL := os.Getenv("LOGS_S3_DISABLE_SSL")
+		if S3DisableSSL == "" {
+			return config, fmt.Errorf("LOGS_S3_DISABLE_SSL environment variable should not be empty")
+		}
+		config.S3DisableSSLBool, _ = strconv.ParseBool(S3DisableSSL)
+	}
+
+	return config, nil
+}
+
+// CopyLogsToDiagServer collects logs from the cluster and copies them to the external NFS server or s3 endpoint.
+func CopyLogsToDiagServer(logDir string) error {
+	cfg, err := GetLogStorageConfigEnv()
+	if err != nil {
+		return fmt.Errorf("failed to get log storage configuration: %w", err)
+	}
+	if cfg.StorageType == "s3" {
+		log.Infof("Uploading logs to S3 bucket")
+		err := UploadDirectoryToS3(logDir, *cfg)
+		if err != nil {
+			return fmt.Errorf("failed to upload logs to S3: %w", err)
+		}
+	} else if cfg.StorageType == "NFS" {
+		log.Infof("Copying logs to NFS server")
+		err := CopyDirectoryToNFSServer(logDir, *cfg)
+		if err != nil {
+			return fmt.Errorf("failed to copy logs to NFS server: %w", err)
+		}
+	}
+	log.Infof("Log collection to external storage completed successfully!")
+	return nil
+}
+
+// UploadDirectoryToS3 uploads all files inside a directory to S3.
+func UploadDirectoryToS3(logDir string, cfg LogStorageConfig) error {
+	// Create timestamped directory for logs
+	platformProvider := os.Getenv("CLUSTER_PROVIDER")
+	backupLocation := os.Getenv("PROVIDERS")
+	now := time.Now()
+	s3Prefix := fmt.Sprintf("%s-%s-%s", platformProvider, backupLocation, now.Format("2006-01-02_15-04-05"))
+
+	s3Bucket := "px-backup-test-logs"
+
+	// Create AWS session with timeout
+	sess, err := session.NewSession(&aws.Config{
+		Endpoint:         aws.String(cfg.S3EndPoint),
+		Credentials:      credentials.NewStaticCredentials(cfg.S3AccessKey, cfg.S3SecretKey, ""),
+		Region:           aws.String(cfg.S3Region),
+		DisableSSL:       aws.Bool(cfg.S3DisableSSLBool),
+		HTTPClient:       &http.Client{Timeout: 30 * time.Second},
+		S3ForcePathStyle: aws.Bool(true), // Prevents hanging API calls
+	})
+	if err != nil {
+		return fmt.Errorf("failed to get S3 session: %v", err)
+	}
+
+	// Initialize S3 client
+	s3Client := s3.New(sess)
+
+	// Check if the bucket exists, create if missing
+	_, err = s3Client.HeadBucket(&s3.HeadBucketInput{
+		Bucket: aws.String(s3Bucket),
+	})
+	if err != nil {
+		log.Infof("Bucket '%s' does not exist, creating it...", s3Bucket)
+		_, err = s3Client.CreateBucket(&s3.CreateBucketInput{
+			Bucket: aws.String(s3Bucket),
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create bucket %s: %v", s3Bucket, err)
+		}
+		log.Infof("Bucket '%s' created successfully!", s3Bucket)
+	} else {
+		log.Infof("Bucket '%s' already exists, no action needed.", s3Bucket)
+	}
+
+	log.Infof("Uploading files from %s to S3 bucket %s/%s", logDir, s3Bucket, s3Prefix)
+
+	// Walk through the directory
+	err = filepath.Walk(logDir, func(filePath string, info os.FileInfo, err error) error {
+		if err != nil {
+			return fmt.Errorf("error accessing path %s: %w", filePath, err)
+		}
+		if info.IsDir() {
+			return nil // Skip directories
+		}
+
+		log.Infof("Processing file: %s", filePath)
+
+		// Create S3 key preserving structure
+		relativePath, _ := filepath.Rel(logDir, filePath)
+		s3Key := filepath.Join(s3Prefix, relativePath)
+
+		file, err := os.Open(filePath)
+		if err != nil {
+			return fmt.Errorf("failed to open file %s: %w", filePath, err)
+		}
+		defer file.Close()
+
+		log.Infof("Uploading %s to s3://%s/%s", filePath, s3Bucket, s3Key)
+
+		_, err = s3Client.PutObject(&s3.PutObjectInput{
+			Bucket: aws.String(s3Bucket),
+			Key:    aws.String(s3Key),
+			Body:   file,
+		})
+		if err != nil {
+			log.Infof("Upload failed for %s: %v", filePath, err)
+			return fmt.Errorf("failed to upload %s to S3: %w", filePath, err)
+		}
+		log.Infof("Successfully uploaded: %s", filePath)
+		return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to upload directory: %w", err)
+	}
+
+	log.Infof("All files from %s successfully uploaded to s3://%s/%s", logDir, s3Bucket, s3Prefix)
+	return nil
+}
+
+// CopyDirectoryToNFSServer copies logs from the given directory to the NFS server
+func CopyDirectoryToNFSServer(logsDir string, cfg LogStorageConfig) error {
+	if cfg.NFSPath == "" {
+		return fmt.Errorf("NFS_DIAG_SERVER environment variable is not set")
+	}
+	masterNodes := node.GetMasterNodes()
+	if len(masterNodes) == 0 {
+		return fmt.Errorf("no master nodes found, NFS log collection supported only on on-prem clusters")
+	}
+	masterNode := masterNodes[0]
+
+	platformProvider := os.Getenv("CLUSTER_PROVIDER")
+	backupLocation := os.Getenv("PROVIDERS")
+	now := time.Now()
+	diagLogDirPath := fmt.Sprintf("%s/%s-%v-%v", "px-backup-test-logs", platformProvider, backupLocation, now.Format("2006-01-02_15-04-05"))
+	rootLogDir := "/mnt/diag_logs"
+
+	log.Infof("Setting up logs directory on node %s", masterNode.Name)
+	commands := []string{
+		fmt.Sprintf("mkdir -p %s", rootLogDir),
+		fmt.Sprintf("mount -t nfs %v %s", cfg.NFSPath, rootLogDir),
+		fmt.Sprintf("mkdir -p %s/%s", rootLogDir, diagLogDirPath),
+	}
+
+	for _, cmd := range commands {
+		if err := runCmd(cmd, masterNode); err != nil {
+			return fmt.Errorf("command failed: %s, error: %v", cmd, err)
+		}
+	}
+	log.Infof("Copying logs from %s to %s/%s", logsDir, rootLogDir, diagLogDirPath)
+	cmd := fmt.Sprintf("cp -r /mnt%s/* %s/%s", logsDir, rootLogDir, diagLogDirPath)
+	if err := runCmd(cmd, masterNode); err != nil {
+		return fmt.Errorf("command failed: %s, error: %v", cmd, err)
+	}
+
+	log.Infof("Logs successfully copied to %s/%s", rootLogDir, diagLogDirPath)
+	return nil
 }

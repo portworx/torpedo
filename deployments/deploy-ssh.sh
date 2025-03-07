@@ -921,6 +921,22 @@ spec:
       value: "${CLUSTER_NAME_FOR_CLOUD_DISCOVERY}"
     - name: KEEP_DATA_FOR_DEBUG
       value: "${KEEP_DATA_FOR_DEBUG}"
+    - name: COPY_PX_BACKUP_LOGS
+      value: "${COPY_PX_BACKUP_LOGS}"
+    - name: LOGS_STORAGE_TYPE
+      value: "${LOGS_STORAGE_TYPE}"
+    - name: NFS_DIAG_SERVER
+      value: "${NFS_DIAG_SERVER}"
+    - name: LOGS_S3_ENDPOINT
+      value: "${LOGS_S3_ENDPOINT}"
+    - name: LOGS_S3_ACCESS_KEY_ID
+      value: "${LOGS_S3_ACCESS_KEY_ID}"
+    - name: LOGS_S3_SECRET_KEY
+      value: "${LOGS_S3_SECRET_KEY}"
+    - name: LOGS_S3_REGION
+      value: "${LOGS_S3_REGION}"
+    - name: LOGS_S3_DISABLE_SSL
+      value: "${LOGS_S3_DISABLE_SSL}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
