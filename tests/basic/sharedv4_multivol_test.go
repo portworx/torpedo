@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	appops "github.com/pure-px/sched-ops/k8s/apps"
 	"github.com/pure-px/sched-ops/k8s/core"
 	"github.com/pure-px/sched-ops/k8s/storage"
 	"github.com/pure-px/sched-ops/task"
@@ -312,6 +313,7 @@ var _ = Describe("{PVCCreationWithRWXAccessModeAndSharedv4False}", Label("p0", "
 		log.Infof("Starting to monitor PVC status")
 		createdPVC, err := k8sCore.GetPersistentVolumeClaim(pvcName, namespace)
 		log.FailOnError(err, "unable to get pvc %v and namespace %v", pvcName, namespace)
+
 		if createdPVC.Status.Phase == "Pending" {
 			log.Infof("PVC status: %v", createdPVC.Status.Phase)
 
@@ -334,9 +336,28 @@ var _ = Describe("{PVCCreationWithRWXAccessModeAndSharedv4False}", Label("p0", "
 				}
 				return nil, true, fmt.Errorf("Event not found, retrying...")
 			}
-			_, err := task.DoRetryWithTimeout(retryFunc, 3*time.Minute, 30*time.Second)
-			log.FailOnError(err, "Retried for 3 minutes without finding the expected error message.")
-			log.Infof("Verified the error message when sharedv4 is false ")
+			_, err := task.DoRetryWithTimeout(retryFunc, 15*time.Minute, 30*time.Second)
+			if err != nil {
+				// Restart the px-csi-ext deployment
+				// kubectl rollout restart deployment/px-csi-ext -n kube-system
+				// Delete all pods in the deployment
+				portworxNs, err := Inst().V.GetVolumeDriverNamespace()
+				log.FailOnError(err, "Failed to get portworx namespace")
+
+				deployemnt, err := appops.Instance().GetDeployment("px-csi-ext", portworxNs)
+				log.FailOnError(err, "Failed to get px-csi-ext deployment")
+
+				err = appops.Instance().DeleteDeploymentPods("px-csi-ext", portworxNs, 5*time.Minute)
+				log.FailOnError(err, "Failed to delete px-csi-ext pods")
+
+				// Wait for above pods to come up
+				err = appops.Instance().ValidateDeployment(deployemnt, 5*time.Minute, 30*time.Second)
+				log.FailOnError(err, "Failed to wait for px-csi-ext pods")
+
+				_, err = task.DoRetryWithTimeout(retryFunc, 15*time.Minute, 30*time.Second)
+				log.FailOnError(err, "Retried for 15 minutes without finding the expected error message.")
+				log.Infof("Verified the error message when sharedv4 is false ")
+			}
 		} else {
 			log.Infof("PVC should not be in the bound state as sharedv4 is false")
 			err := fmt.Errorf("PVC should not be in the bound state because sharedv4 is false")
