@@ -5944,12 +5944,12 @@ func (d *portworx) GetTrashCanVolumeIds(n node.Node) ([]string, error) {
 	trashcanVols := make([]string, 50)
 
 	for _, v := range res {
-		var tp map[string]interface{} = v.(map[string]interface{})
+		var tp = v.(map[string]interface{})
 		str := fmt.Sprintf("%v", tp["id"])
-		trashcanVols = append(trashcanVols, strings.Trim(str, " "))
-
+		if str != "" {
+			trashcanVols = append(trashcanVols, strings.Trim(str, " "))
+		}
 	}
-
 	log.Infof("trash vols: %v", trashcanVols)
 
 	return trashcanVols, nil
