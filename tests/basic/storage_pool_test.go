@@ -1752,24 +1752,6 @@ func getPoolAndVolsWithMaxVols() ([]string, string, error) {
 	return vols, selectedPool, nil
 }
 
-func getPoolWithLeastSize() *api.StoragePool {
-
-	pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
-	log.FailOnError(err, "error getting pools list")
-	var currentSize uint64
-	currentSize = 54975581388800 / units.GiB
-	var selectedPool *api.StoragePool
-	for _, pool := range pools {
-		poolSize := pool.TotalSize / units.GiB
-		if poolSize < currentSize {
-			currentSize = poolSize
-			selectedPool = pool
-		}
-	}
-	log.Infof(fmt.Sprintf("Pool %s has least size %d", selectedPool.Uuid, currentSize))
-	return selectedPool
-}
-
 func GetNodeWithLeastSize() *node.Node {
 	stNodes := node.GetStorageNodes()
 	var selectedNode node.Node
@@ -1946,73 +1928,76 @@ var _ = Describe("{PoolResizeDiskDiff}", Label("p1", "positive", "pool_ops", "po
 		if len(stNodes) == 0 {
 			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
 		}
-		var selectedNode node.Node
-		var err error
-		var selectedPool *api.StoragePool
-		for _, stNode := range stNodes {
-			selectedPool, err = GetPoolWithIOsInGivenNode(stNode, contexts, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, 0)
-			if selectedPool != nil {
-				selectedNode = stNode
-				break
-			}
-		}
-		log.FailOnError(err, "error identifying node to run test")
-		isjournal, err := IsJournalEnabled()
+
+		selectedPool, err := GetPoolWithLeastSize()
+		log.FailOnError(err, "failed to get pool with least size")
+		selectedNode, err := GetNodeWithGivenPoolID(selectedPool.Uuid)
+		log.FailOnError(err, "failed to get node with given pool id [%s]", selectedPool.Uuid)
+
+		isJournalEnabled, err := IsJournalEnabled()
 		log.FailOnError(err, "Failed to check if Journal enabled")
 
+		drvSize, err := getPoolDiskSize(selectedPool)
+		log.FailOnError(err, "error getting drive size for pool [%s]", selectedPool.Uuid)
+
 		stepLog = fmt.Sprintf("Expanding pool on node %s and pool UUID: %s using resize-disk", selectedNode.Name, selectedPool.Uuid)
-		var drvSize uint64
 		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			poolToBeResized, err := GetStoragePoolByUUID(selectedPool.Uuid)
 			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", selectedPool.Uuid))
-			drvSize, err = getPoolDiskSize(poolToBeResized)
-			log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
-			expectedSize := (poolToBeResized.TotalSize / units.GiB) + drvSize
-
-			log.InfoD("Current Size of the pool %s is %d", selectedPool.Uuid, poolToBeResized.TotalSize/units.GiB)
+			currentSize := poolToBeResized.TotalSize / units.GiB
+			expectedSize := currentSize + drvSize
+			log.InfoD("Iteration [1]: Pool [%s/%s] Current Size [%d] Expected Size [%d]", selectedNode.Name, selectedPool.Uuid, currentSize, expectedSize)
 			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
-			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
+			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isJournalEnabled)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using resize-disk", selectedPool.Uuid, selectedNode.Name))
 			//Wait for the driver to come up for handling bug https://purestorage.atlassian.net/browse/PWX-42284
-			err = Inst().V.WaitDriverUpOnNode(selectedNode, defaultTimeout)
+			err = Inst().V.WaitDriverUpOnNode(*selectedNode, defaultTimeout)
 		})
 
-		stepLog = fmt.Sprintf("Expanding pool  2nd time on node %s and pool UUID: %s using resize-disk", selectedNode.Name, selectedPool.Uuid)
+		stepLog = fmt.Sprintf("Expanding pool 2nd time on node %s and pool UUID: %s using resize-disk", selectedNode.Name, selectedPool.Uuid)
 		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			poolToBeResized, err := GetStoragePoolByUUID(selectedPool.Uuid)
 			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", selectedPool.Uuid))
-			expectedSize := (poolToBeResized.TotalSize / units.GiB) + 50 + drvSize
-
-			log.InfoD("Current Size of the pool %s is %d", selectedPool.Uuid, poolToBeResized.TotalSize/units.GiB)
+			currentSize := poolToBeResized.TotalSize / units.GiB
+			expectedSize := currentSize + 50 + drvSize
+			log.InfoD("Iteration [2]: Pool [%s/%s] Current Size [%d] Expected Size [%d]", selectedNode.Name, selectedPool.Uuid, currentSize, expectedSize)
 			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
-			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
+			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isJournalEnabled)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using resize-disk", selectedPool.Uuid, selectedNode.Name))
 			//Wait for the driver to come up for handling bug https://purestorage.atlassian.net/browse/PWX-42284
-			err = Inst().V.WaitDriverUpOnNode(selectedNode, defaultTimeout)
+			err = Inst().V.WaitDriverUpOnNode(*selectedNode, defaultTimeout)
 		})
 
 		stepLog = fmt.Sprintf("Expanding pool 3rd time on node %s and pool UUID: %s using resize-disk", selectedNode.Name, selectedPool.Uuid)
 		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			poolToBeResized, err := GetStoragePoolByUUID(selectedPool.Uuid)
 			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", selectedPool.Uuid))
-			expectedSize := (poolToBeResized.TotalSize / units.GiB) + 150 + drvSize
-
-			log.InfoD("Current Size of the pool %s is %d", selectedPool.Uuid, poolToBeResized.TotalSize/units.GiB)
+			currentSize := poolToBeResized.TotalSize / units.GiB
+			expectedSize := currentSize + 150 + drvSize
+			log.InfoD("Iteration [3]: Pool [%s/%s] Current Size [%d] Expected Size [%d]", selectedNode.Name, selectedPool.Uuid, currentSize, expectedSize)
 			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
-			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
+			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isJournalEnabled)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using resize-disk", selectedPool.Uuid, selectedNode.Name))
 			//Wait for the driver to come up for handling bug https://purestorage.atlassian.net/browse/PWX-42284
-			err = Inst().V.WaitDriverUpOnNode(selectedNode, defaultTimeout)
+			err = Inst().V.WaitDriverUpOnNode(*selectedNode, defaultTimeout)
 		})
-		appsValidateAndDestroy(contexts)
 
+		stepLog = "Destroying applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			appsValidateAndDestroy(contexts)
+		})
 	})
+
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
