@@ -426,3 +426,74 @@ var _ = Describe("{ClusterDiscoveryFailureWithInvalidCloudCredsAndRegion}", Labe
 		defer EndPxBackupTorpedoTest(nil)
 	})
 })
+
+// This Test Case Verifies if we can add cluster object with valid kubeconfig and change it to invalid kubeconfig later with suitable error response.
+var _ = Describe("{ModifyTheClusterObjectToPointToInvalidKubeConfigAndVerifyFailure}", Label(TestCaseLabelsMap[AddClusterAndPointToInvalidKubeConfigAndVerifyFailure]...), func() {
+
+	var (
+		scheduledAppContexts []*scheduler.Context
+		clusterStatus        api.ClusterInfo_StatusInfo_Status
+		ctx                  context.Context
+		clusterUid           string
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("ModifyTheClusterObjectToPointToInvalidKubeConfigAndVerifyFailure", "Making the cluster object addition to fail and try to add the same", nil, 300372, ABadgujar, Q3FY25)
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		var err error
+		ctx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+	})
+
+	// Add cluster object with valid kubeconfig and change it to invalid kubeconfig later with suitable error response
+	It("Add cluster object with valid kubeconfig and change it to invalid kubeconfig later with suitable error response", func() {
+
+		// 2. Create Valid Source Cluster with Valid KubeConfig
+		Step("Create Valid Source Cluster with Valid KubeConfig", func() {
+			log.InfoD("Create Valid Source Cluster with Valid KubeConfig")
+			err := RegisterCluster(SourceClusterName, "", BackupOrgID, ctx)
+			dash.VerifyFatal(err, nil, "Verifying if source-cluster cluster is registered")
+			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			clusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+		})
+
+		// 3. Update Cluster to point to the invalid Kubeconfig
+		Step("Update Cluster to point to the invalid Kubeconfig", func() {
+			log.InfoD("Update Cluster to point to the invalid Kubeconfig")
+			backupDriver := Inst().Backup
+			invalidKubeConfig := "\"\""
+			clusterInspectResp, err := Inst().Backup.InspectCluster(ctx, &api.ClusterInspectRequest{
+				OrgId: BackupOrgID,
+				Name:  SourceClusterName,
+				Uid:   clusterUid,
+			})
+			log.FailOnError(err, "failed to inspect cluster %s with uid %s", SourceClusterName, clusterUid)
+
+			clusterUpdateRequest := &api.ClusterUpdateRequest{
+				CreateMetadata: &api.CreateMetadata{Name: SourceClusterName,
+					Uid:   clusterUid,
+					OrgId: BackupOrgID,
+				},
+				Kubeconfig:            invalidKubeConfig,
+				CloudCredential:       clusterInspectResp.GetCluster().GetCloudCredential(),
+				CloudCredentialRef:    clusterInspectResp.GetCluster().GetCloudCredentialRef(),
+				PlatformCredentialRef: clusterInspectResp.GetCluster().GetPlatformCredentialRef(),
+			}
+			log.Infof("Updating kubeconfig for cluster %s from user [admin]", SourceClusterName)
+			_, err = backupDriver.UpdateCluster(ctx, clusterUpdateRequest)
+			dash.VerifyFatal(strings.Contains(err.Error(), "failed to validate access to the cluster"), true, fmt.Sprintf("Updated [%s] Cluster kubeconfig to invalid kubeconfig", SourceClusterName))
+
+			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Failed, fmt.Sprintf("Verifying if [%s] cluster is invalid", SourceClusterName))
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		CleanupCloudSettingsAndClusters(nil, "", "", ctx)
+	})
+})
