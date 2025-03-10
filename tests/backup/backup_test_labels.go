@@ -217,6 +217,7 @@ const (
 	AddClusterAndPointToInvalidKubeConfigAndVerifyFailure                              TestCaseName = "AddClusterAndPointToInvalidKubeConfigAndVerifyFailure"
 	ClusterAdditionWithInvalidAndValidKubeconfigHandling                               TestCaseName = "ClusterAdditionWithInvalidAndValidKubeconfigHandling"
 	ValidateErrorOnBackupLocationDeletionWithPendingBackup                             TestCaseName = "ValidateErrorOnBackupLocationDeletionWithPendingBackup"
+	ClusterDiscoveryAndStatusValidation                                                TestCaseName = "ClusterDiscoveryAndStatusValidation"
 )
 
 // Test case labels
@@ -430,6 +431,7 @@ const (
 	AddClusterAndPointToInvalidKubeConfigAndVerifyFailureLabel                              TestCaseLabel = "AddClusterAndPointToInvalidKubeConfigAndVerifyFailure"
 	ClusterAdditionWithInvalidAndValidKubeconfigHandlingLabel                               TestCaseLabel = "ClusterAdditionWithInvalidAndValidKubeconfigHandling"
 	ValidateErrorOnBackupLocationDeletionWithPendingBackupLabel                             TestCaseLabel = "ValidateErrorOnBackupLocationDeletionWithPendingBackup"
+	ClusterDiscoveryAndStatusValidationLabel                                                TestCaseLabel = "ClusterDiscoveryAndStatusValidationLabel"
 )
 
 // Common Labels

@@ -572,3 +572,74 @@ var _ = Describe("{ClusterAdditionWithInvalidAndValidKubeconfigHandling}", Label
 		CleanupCloudSettingsAndClusters(nil, "", "", adminCtx)
 	})
 })
+
+// This test case validates the addition of clusters from the discovery list and verifies that their status is 'Added' after bulk addition
+var _ = Describe("{ClusterDiscoveryAndStatusValidation}", Label(TestCaseLabelsMap[ClusterDiscoveryAndStatusValidation]...), func() {
+	var (
+		providers     []string
+		clusterNames  []string
+		cloudCredName string
+		cloudCredUID  string
+		region        string
+		ctx           context.Context
+		err           error
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("ClusterDiscoveryAndStatusValidation", "Validating the addition of clusters from the discovered list and confirming their status as Added", nil, 300358, Nvettaiyan, Q1FY25)
+		providers = GetBackupProviders()
+		ctx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		region = os.Getenv("REGION_FOR_CLUSTER_DISCOVERY")
+	})
+
+	It("Ensuring that clusters added from the discovery list are successfully updated with an Added status", func() {
+		// 1.Creating cloud credentials
+		Step("Creating cloud credentials", func() {
+			log.InfoD("Creating cloud credentials")
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, RandomString(10))
+				cloudCredUID = uuid.New()
+				err = CreateDiscoveryCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+			}
+		})
+
+		// 2. Discover the clusters and add them
+		Step("Enumerating and Bulk Adding Managed Clusters", func() {
+			log.InfoD("Enumerating and Bulk Adding Managed Clusters")
+			enumerateRequest := PopulateMangeClusterEnumerateRequest(cloudCredName, cloudCredUID, region)
+			enumerateResponse, err := Inst().Backup.EnumerateManagedCluster(ctx, enumerateRequest)
+			dash.VerifyFatal(err, nil, "Enumerating discovery clusters")
+			log.Infof("Number of discovered clusters: %d", len(enumerateResponse.Cluster))
+			for _, cluster := range enumerateResponse.Cluster {
+				clusterNames = append(clusterNames, cluster.Name)
+			}
+			bulkAddRequest := PopulateMangeClusterBuldAddRequest(cloudCredName, cloudCredUID, region, clusterNames)
+			_, err = Inst().Backup.BulkAddManagedCluster(ctx, bulkAddRequest)
+			dash.VerifyFatal(err, nil, "Successfully added managed clusters")
+		})
+
+		// 3. After adding, re-enumerate the clusters and check their status to ensure they are updated to 'Added'
+		Step("Re-enumerating the discovery clusters and verifying their status after addition", func() {
+			log.InfoD("Re-enumerating the discovery clusters and verifying their status after addition")
+			enumerateResponseAfterAddition, err := Inst().Backup.EnumerateManagedCluster(ctx, PopulateMangeClusterEnumerateRequest(cloudCredName, cloudCredUID, region))
+			dash.VerifyFatal(err, nil, "Re-enumerating discovery clusters after addition")
+			for _, cluster := range enumerateResponseAfterAddition.Cluster {
+				dash.VerifyFatal(cluster.Status, api.ManagedClusterObject_Added, fmt.Sprintf("Verifying cluster [%s] status is 'Added'", cluster.Name))
+			}
+			log.InfoD("All clusters have been successfully added and verified")
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(nil)
+		for _, clusterName := range clusterNames {
+			err = DeleteCluster(clusterName, BackupOrgID, ctx, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Delete created cluster [%s]", clusterName))
+			err = Inst().Backup.WaitForClusterDeletion(ctx, clusterName, BackupOrgID, ClusterDeleteTimeout, ClusterDeleteRetryTime)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("waiting for cluster [%s] deletion", clusterName))
+		}
+		CleanupCloudSettingsAndClusters(nil, cloudCredName, cloudCredUID, ctx)
+	})
+})
