@@ -5002,7 +5002,7 @@ func storageFullPoolExpansion(testName string) {
 	if testName == "StorageFullPoolResize" || testName == "StorageFullPoolResizeWithPxRestart" {
 		operation = api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK
 	}
-	if testName == "StorageFullPoolAddDisk" {
+	if testName == "StorageFullPoolAddDisk" || testName == "StorageFullPoolAddDriveWithPxRestart" {
 		operation = api.SdkStoragePool_RESIZE_TYPE_ADD_DISK
 	}
 
@@ -5270,8 +5270,30 @@ func storageFullPoolExpansion(testName string) {
 
 	var expandedExpectedPoolSize uint64
 	//Handle the case where the px will restart due to https://purestorage.atlassian.net/browse/PWX-34819
-	err = Inst().V.WaitDriverUpOnNode(*selectedNode, defaultTimeout)
-	log.FailOnError(err, "error waiting for vol driver to be up on node [%s]", selectedNode.Name)
+	//Check PX status
+	stepLog = "Check PX status"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		var status string
+		t := func() (interface{}, bool, error) {
+			status, err := Inst().V.GetPxctlStatus(*selectedNode)
+			if err != nil {
+				return nil, true, err
+			}
+
+			if status == api.Status_STATUS_OK.String() || status == api.Status_STATUS_STORAGE_DOWN.String() {
+				return nil, false, nil
+			}
+
+			return nil, true, fmt.Errorf("px status %v", status)
+		}
+		_, err := task.DoRetryWithTimeout(t, time.Minute*10, time.Minute)
+		log.FailOnError(err, "Failed to check status")
+
+		log.Infof("px status %v", status)
+
+	})
+
 	stepLog = fmt.Sprintf("Perform pool expansion on [%s]", selectedPool.Uuid)
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
@@ -5284,7 +5306,7 @@ func storageFullPoolExpansion(testName string) {
 		dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 	})
 
-	if testName == strings.ToLower("StorageFullPoolResizeWithPxRestart") {
+	if testName == strings.ToLower("StorageFullPoolResizeWithPxRestart") || testName == strings.ToLower("StorageFullPoolAddDriveWithPxRestart") {
 		sleepTime := rand.Intn(100) + 1
 		time.Sleep(time.Second * (time.Duration(sleepTime)))
 		stepLog = fmt.Sprintf("Restart Portworx after [%d] seconds", sleepTime)
@@ -15879,6 +15901,36 @@ var _ = Describe("{StorageFullPoolResizeWithPxRestart}", Label("p0", "staging", 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 		storageFullPoolExpansion("StorageFullPoolResizeWithPxRestart")
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+var _ = Describe("{StorageFullPoolAddDriveWithPxRestart}", Label("p0", "staging", "positive", "px_ops", "pool_ops", "PoolExpand", "AddDrive", "Throttling"), func() {
+
+	/*
+			step1: Deploy apps to do IOs
+			step2: feed p1 size GB I/O on the volume
+			step3: Wait for the pool to become full
+			step4: Expand pool with add drive option
+		    step5: With some random delay force restart the portworx
+			step6: Check if pool is successfully expanded and apps are running.
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("StorageFullPoolAddDriveWithPxRestart", "Feed a pool full, then expand the pool using add drive with restart px ", nil, testrailID)
+	})
+	var contexts = make([]*scheduler.Context, 0)
+	stepLog := "Create vols and make pool full and expand pool with add drive  and px restart"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		isPoolAddDiskSupported := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			Skip("Add disk operation is not supported for DMThin Setup")
+		}
+		storageFullPoolExpansion("StorageFullPoolAddDriveWithPxRestart")
 	})
 
 	JustAfterEach(func() {
