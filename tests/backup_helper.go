@@ -15349,11 +15349,11 @@ func GetNthPxBackupVersion(latestVersion string, difference int, latestFlag bool
 		}
 	}
 	if difference == 0 && !found {
-        log.Warnf("n-0 version not found in Helm repo, returning latest version %s", latestVersion)
-        return latest, nil
-    }
+		log.Warnf("n-0 version not found in Helm repo, returning latest version %s", latestVersion)
+		return latest, nil
+	}
 	if !found {
 		return semver.Version{}, fmt.Errorf("no valid version found for n-%d (latest: %s)", difference, latestVersion)
-	}	
+	}
 	return candidate, nil
 }

@@ -497,3 +497,78 @@ var _ = Describe("{ModifyTheClusterObjectToPointToInvalidKubeConfigAndVerifyFail
 		CleanupCloudSettingsAndClusters(nil, "", "", ctx)
 	})
 })
+
+// This test case verifies that a cluster addition fails with an invalid kubeconfig and is resolved by re-adding the cluster with a valid kubeconfig, transitioning it to Online status.
+var _ = Describe("{ClusterAdditionWithInvalidAndValidKubeconfigHandling}", Label(TestCaseLabelsMap[ClusterAdditionWithInvalidAndValidKubeconfigHandling]...), func() {
+	var (
+		adminCtx             context.Context
+		sourceKubeConfigPath string
+		clusterStatus        api.ClusterInfo_StatusInfo_Status
+		backupDriver         backup.Driver
+		clusterName          string
+		clusterUid           string
+		err                  error
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("ClusterAdditionWithInvalidAndValidKubeconfigHandling",
+			"Verifies that a cluster addition failure due to an invalid kubeconfig is resolved by deleting and re-adding the cluster with a valid kubeconfig, transitioning it to Online status", nil, 300379, Nvettaiyan, Q1FY25)
+		backupDriver = Inst().Backup
+		adminCtx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		sourceKubeConfigPath, err = GetSourceClusterConfigPath()
+		log.FailOnError(err, "Fetching source cluster kubeconfig path")
+	})
+
+	It("Ensures that a cluster addition fails with an invalid kubeconfig, but succeeds and transitions to Online status once the cluster is deleted and re-added with a valid kubeconfig", func() {
+
+		// 1. Add a cluster object with an invalid kubeconfig
+		Step("Attempt to create cluster using invalid kube-config", func() {
+			log.InfoD("Attempt to create cluster using invalid kube-config")
+			clusterName = fmt.Sprintf("%s-%v", "cluster-", RandomString(6))
+			clusterCreateReq := &api.ClusterCreateRequest{
+				CreateMetadata: &api.CreateMetadata{
+					Name:  clusterName,
+					OrgId: BackupOrgID,
+				},
+				Kubeconfig: base64.StdEncoding.EncodeToString([]byte(InvalidKubeconfig)),
+			}
+			_, err = backupDriver.CreateCluster(adminCtx, clusterCreateReq)
+			dash.VerifyFatal(strings.Contains(err.Error(), "failed to validate access to the cluster"), true, "Verify the cluster creation")
+			clusterUid, err = Inst().Backup.GetClusterUID(adminCtx, BackupOrgID, clusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", clusterName))
+			clusterReq := &api.ClusterInspectRequest{OrgId: BackupOrgID, Name: clusterName, IncludeSecrets: true, Uid: clusterUid}
+			clusterResp, err := backupDriver.InspectCluster(adminCtx, clusterReq)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", clusterName))
+			log.Infof("cluster failed with status %v and with reason %s", clusterResp.Cluster.GetStatus().Status, clusterResp.Cluster.GetStatus().Reason)
+			dash.VerifyFatal(clusterResp.Cluster.GetStatus().Status, api.ClusterInfo_StatusInfo_Failed, "Verifying  cluster status")
+			dash.VerifyFatal(strings.Contains(clusterResp.Cluster.GetStatus().Reason, "failed to validate access to the cluster"), true, "Verify the cluster reason")
+		})
+
+		// 2. Delete the failed cluster object
+		Step("Delete the failed cluster", func() {
+			log.InfoD("Delete the failed cluster")
+			err = DeleteCluster(clusterName, BackupOrgID, adminCtx, true)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Successfully initiated the cleanup for the failed cluster: %s", clusterName))
+			err = backupDriver.WaitForClusterDeletion(adminCtx, clusterName, BackupOrgID, ClusterDeleteTimeout, ClusterDeleteRetryTime)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Successfully verified that the cluster [%s] is deleted", clusterName))
+		})
+
+		// 3. Add the cluster back with a valid kubeconfig
+		Step("Create cluster using valid kubeconfig", func() {
+			log.InfoD("Creating cluster using valid kubeconfig")
+			err = CreateCluster(clusterName, sourceKubeConfigPath, BackupOrgID, "", "", adminCtx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding %s cluster with valid kubeconfig", clusterName))
+			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, clusterName, adminCtx)
+			log.FailOnError(err, fmt.Sprintf("Fetching status of [%s] cluster", clusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", clusterName))
+			clusterUid, err = Inst().Backup.GetClusterUID(adminCtx, BackupOrgID, clusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching UID for [%s] cluster", clusterUid))
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(nil)
+		CleanupCloudSettingsAndClusters(nil, "", "", adminCtx)
+	})
+})
