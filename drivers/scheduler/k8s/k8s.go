@@ -7083,40 +7083,74 @@ func (k *K8s) VerifyPoolResizeARO(ruleName apapi.AutopilotRule) (bool, error) {
 }
 
 // WaitForRebalanceAROToComplete Wait for Rebalance to complete.
-func (k *K8s) WaitForRebalanceAROToComplete() error {
+// WaitForRebalanceAROToComplete Wait for Rebalance to complete.
+func (k *K8s) WaitForRebalanceAROToComplete(apRuleName string) error {
 	var eventCheckInterval = 60 * time.Second
-	var eventCheckTimeout = 120 * time.Minute
+	var eventCheckTimeout = 240 * time.Minute
+
 	t := func() (interface{}, bool, error) {
 		namespace, err := k.GetAutopilotNamespace()
 		if err != nil {
 			return nil, false, err
 		}
+
 		listAutopilotRuleObjects, err := k8sAutopilot.ListAutopilotRuleObjects(namespace)
 		if err != nil {
 			return nil, true, err
 		}
+
 		if len(listAutopilotRuleObjects.Items) == 0 {
 			return nil, true, fmt.Errorf("The list of autopilot rule objects is empty, please make sure that you have an appropriate autopilot rule")
 		}
+
+		allArosSatisfied := true
+		atLeastOneHadActiveActionsTaken := false
+
 		for _, aro := range listAutopilotRuleObjects.Items {
-			isActiveActionTaken := false
-			log.InfoD("Rule Name %v", aro.GetObjectMeta().GetName())
+			if !strings.Contains(aro.GetObjectMeta().GetName(), apRuleName) {
+				continue
+			}
+
+			log.InfoD("ARO Name %v", aro.GetObjectMeta().GetName())
+
+			stateList := []apapi.RuleState{}
+
+			var lastState apapi.RuleState
+
 			for _, aroStatusItem := range aro.Status.Items {
 				if aroStatusItem.State == "" {
 					continue
 				}
+
+				stateList = append(stateList, aroStatusItem.State)
+
 				if aroStatusItem.State == apapi.RuleStateActiveActionsTaken {
-					isActiveActionTaken = true
-					continue
+					atLeastOneHadActiveActionsTaken = true
 				}
-				if isActiveActionTaken && aroStatusItem.State == apapi.RuleStateNormal {
-					log.InfoD("Rebalance Action has been taken on ARO %s ", aro.GetObjectMeta().GetName())
+
+				if strings.Contains(aroStatusItem.Message, "will not lead any volume movement") {
+					log.InfoD("Cluster entered into a state where it cannot be rebalanced further and will not lead to volume movement: %v", aroStatusItem.Message)
+					log.InfoD("ARO %v has following states so far: %v", aro.GetObjectMeta().GetName(), stateList)
 					return nil, false, nil
 				}
+
+				lastState = aroStatusItem.State
 			}
 
+			log.InfoD("ARO %v has following states so far: %v", aro.GetObjectMeta().GetName(), stateList)
+
+			// Ensure last state is Normal for all AROs
+			if lastState != apapi.RuleStateNormal {
+				allArosSatisfied = false
+			}
 		}
-		return nil, true, fmt.Errorf("Rebalance ARO not completed or did not start yet")
+
+		if allArosSatisfied && atLeastOneHadActiveActionsTaken {
+			log.InfoD("All AROs met the required conditions: At least one had ActiveActionsTaken, and all ended in Normal state.")
+			return nil, false, nil
+		}
+
+		return nil, true, fmt.Errorf("Rebalance ARO not completed or conditions not met yet")
 	}
 
 	if _, err := task.DoRetryWithTimeout(t, eventCheckTimeout, eventCheckInterval); err != nil {

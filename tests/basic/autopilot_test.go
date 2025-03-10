@@ -1989,7 +1989,7 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceProvMeanAndPoolResize}", testSuiteName
 		})
 
 		Step("validate rebalance jobs", func() {
-			err = Inst().S.WaitForRebalanceAROToComplete()
+			err = Inst().S.WaitForRebalanceAROToComplete(apRules[0].Name)
 			Expect(err).NotTo(HaveOccurred())
 			log.InfoD("=====Rebalance Completed ========")
 			err = Inst().V.ValidateRebalanceJobs()
@@ -2239,18 +2239,19 @@ var _ = Describe(fmt.Sprintf("{%sFunctionalTests}", testSuiteName), Label("p0", 
 		StartTorpedoTest(fmt.Sprintf("{%sFunctionalTests}", testSuiteName), "Perform several autopilot functional tests", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
-	itLog := "has to run rebalance and resize pools, validate rebalance, validate pools and teardown apps"
-	It(itLog, func() {
-		log.InfoD(itLog)
+	itLog1 := "has to run rebalance and resize pools, validate rebalance, validate pools and teardown apps"
+	It(itLog1, func() {
+		log.InfoD(itLog1)
 		var contexts []*scheduler.Context
 		var wg sync.WaitGroup
 		poolLabel := map[string]string{"autopilot": "resizedisk"}
 		storageNodes := node.GetStorageNodes()
+
 		// check if we have enough storage nodes to run the test
 		Expect(len(storageNodes)).Should(BeNumerically(">=", 4))
 
 		apRules := []apapi.AutopilotRule{
-			aututils.PoolRuleRebalanceByProvisionedMean([]string{"-10", "10"}, false),
+			aututils.PoolRuleRebalanceByProvisionedMean([]string{"-20", "20"}, false),
 			aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNodes[0])*120/100)/units.GiB, 50, aututils.RuleScaleTypeResizeDisk, poolLabel),
 		}
 
@@ -2290,7 +2291,7 @@ var _ = Describe(fmt.Sprintf("{%sFunctionalTests}", testSuiteName), Label("p0", 
 			stepLog = "validate rebalance jobs"
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
-				err = Inst().S.WaitForRebalanceAROToComplete()
+				err = Inst().S.WaitForRebalanceAROToComplete(apRules[0].Name)
 				Expect(err).NotTo(HaveOccurred())
 				log.InfoD("=====Rebalance Completed ========")
 				err = Inst().V.ValidateRebalanceJobs()
@@ -2317,9 +2318,9 @@ var _ = Describe(fmt.Sprintf("{%sFunctionalTests}", testSuiteName), Label("p0", 
 			}
 		})
 	})
-	itLog = fmt.Sprintf("has to fill up %v volumes completely, resize the volumes, validate and teardown apps", Inst().GlobalScaleFactor)
-	It(itLog, func() {
-		log.InfoD(itLog)
+	itLog2 := fmt.Sprintf("has to fill up %v volumes completely, resize the volumes, validate and teardown apps", Inst().GlobalScaleFactor)
+	It(itLog2, func() {
+		log.InfoD(itLog2)
 		var contexts []*scheduler.Context
 		var scaleFactor = Inst().GlobalScaleFactor
 		var appName = "aut-vol-only"
@@ -2402,6 +2403,7 @@ func scheduleAppsWithAutopilot(testName string, testScaleFactor int, apRules []a
 
 	Step("wait until all volumes are created", func() {
 		log.InfoD("Starting validation of volumes")
+		log.InfoD("Total volumes created are:= %d", len(contexts))
 		for _, ctx := range contexts {
 			ValidateVolumes(ctx)
 		}
@@ -2800,8 +2802,15 @@ func updateAutopilot(image string, opts *scheduler.UpgradeAutopilotOptions) erro
 }
 
 func getVolumeSizeByProvisionedPercentage(n node.Node, numOfVolumes int, provPercentage float64) int64 {
+	log.InfoD("Calculating volume size based on provisioned percentage for node %s", n.Name)
 	workerNodePoolTotalSize := getTotalPoolSize(n)
-	return int64(float64(int(workerNodePoolTotalSize)/Inst().GlobalScaleFactor) * provPercentage / float64(numOfVolumes))
+	log.Infof("Total size of worker node pool %s is %d", n.Name, workerNodePoolTotalSize)
+	log.Infof("Provisioned percentage is %f", provPercentage)
+	log.Infof("Number of volumes is %d", numOfVolumes)
+	log.Infof("Global Scale Factor is %d", Inst().GlobalScaleFactor)
+	volumeSize := int64(float64(int(workerNodePoolTotalSize)/Inst().GlobalScaleFactor) * provPercentage / float64(numOfVolumes))
+	log.Infof("Volume size is %d", volumeSize)
+	return volumeSize
 }
 
 func IsVersionGreaterThanOrEqualTo(image, minVersion string) (bool, error) {

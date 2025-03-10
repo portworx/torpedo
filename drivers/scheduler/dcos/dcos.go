@@ -113,10 +113,10 @@ func (d *dcos) ValidateAutopilotRuleObjects() error {
 }
 
 // WaitForRebalanceToComplete validates autopilot rule objects for Rebalance
-func (d *dcos) WaitForRebalanceAROToComplete() error {
+func (d *dcos) WaitForRebalanceAROToComplete(apRuleName string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
-		Operation: "WaitForRebalanceAROToComplete()",
+		Operation: "WaitForRebalanceAROToComplete(apRuleName)",
 	}
 }
 

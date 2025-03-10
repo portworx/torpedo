@@ -396,7 +396,7 @@ type Driver interface {
 	ValidateAutopilotRuleObjects() error
 
 	//WaitForRebalanceAROToComplete waits for rebalance to start
-	WaitForRebalanceAROToComplete() error
+	WaitForRebalanceAROToComplete(apRuleName string) error
 
 	//VerifyPoolResizeARO() error
 	VerifyPoolResizeARO(apRule apapi.AutopilotRule) (bool, error)
