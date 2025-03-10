@@ -3157,3 +3157,149 @@ var _ = Describe("{BackupAppDeployedUsingVolumePlacementStrategyRules}", Label(T
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, adminCtx)
 	})
 })
+
+// This test case validates the error when a user attempts to delete a backup location with a pending backup across different user contexts
+var _ = Describe("{ValidateErrorOnBackupLocationDeletionWithPendingBackup}", Label(TestCaseLabelsMap[ValidateErrorOnBackupLocationDeletionWithPendingBackup]...), func() {
+	var (
+		scheduledAppContexts         []*scheduler.Context
+		bkpNamespaces                []string
+		backupLocationUID            string
+		backupName                   string
+		clusterUid                   string
+		providers                    []string
+		clusterStatus                api.ClusterInfo_StatusInfo_Status
+		adminCtx, user1ctx, user2ctx context.Context
+		cloudCredName                string
+		cloudCredUID                 string
+		backupLocation               string
+		allSuperAdminUsers           []string
+		firstUserName                string
+		secondUserName               string
+		backupLocationMap            map[string]string
+		role                         backup.PxBackupRole = backup.SuperAdmin
+		err                          error
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("ValidateErrorOnBackupLocationDeletionWithPendingBackup", "Ensure that attempting to delete a backup location across different user contexts, while a backup job is pending results in a dependency error", nil, 300499, Nvettaiyan, Q1FY25)
+		bkpNamespaces = make([]string, 0)
+		providers = GetBackupProviders()
+		backupLocationMap = make(map[string]string)
+		appContexts := ScheduleApplications(TaskNamePrefix)
+		for _, ctx := range appContexts {
+			ctx.ReadinessTimeout = AppReadinessTimeout
+			namespace := GetAppNamespace(ctx, TaskNamePrefix)
+			bkpNamespaces = append(bkpNamespaces, namespace)
+			scheduledAppContexts = append(scheduledAppContexts, ctx)
+		}
+		adminCtx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+	})
+
+	It("Ensure Backup Location Deletion fails due to Pending Backup Across Different User Contexts", func() {
+		// 1. Validate applications
+		Step("Validate applications", func() {
+			log.InfoD("Validating applications")
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		// 2. Create two superadmin users, user1 and user2
+		Step("Create 2 Users with Super Admin Role", func() {
+			log.InfoD("Create 2 Users with Super Admin Role")
+			allSuperAdminUsers = CreateUsers(2)
+			firstUserName = allSuperAdminUsers[0]
+			secondUserName = allSuperAdminUsers[1]
+			for _, userName := range allSuperAdminUsers {
+				err = backup.AddRoleToUser(userName, role, fmt.Sprintf("Adding %v role to %s", role, userName))
+				log.FailOnError(err, "Failed to add role for user - %s", userName)
+			}
+		})
+
+		// 3. Create a backup location using user1's context
+		Step("Create Backup Location using User1's Context", func() {
+			log.InfoD("Create Backup Location using User1's Context")
+			user1ctx, err = backup.GetNonAdminCtx(firstUserName, CommonPassword)
+			log.FailOnError(err, "Fetching User1 Context")
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, RandomString(10))
+				backupLocation = fmt.Sprintf("%s-%s-%v-bl", provider, getGlobalBucketName(provider), RandomString(10))
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = backupLocation
+				err = CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, user1ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				err = CreateBackupLocationWithContext(provider, backupLocation, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", user1ctx, true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocation))
+				isOwner, err := IsOwnerOfBackupLocation(backupLocation, backupLocationUID, user1ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Error while fetching ownership status for backup location [%s]", backupLocation))
+				dash.VerifyFatal(isOwner, true, fmt.Sprintf("User1 is the owner of backup location [%s]", backupLocation))
+			}
+		})
+
+		// 4. Register a cluster for backup using user1's context
+		Step("Register Cluster for Backup using User1 Context", func() {
+			log.InfoD("Registering Cluster for Backup using User1 Context")
+			user1ctx, err = backup.GetNonAdminCtx(firstUserName, CommonPassword)
+			log.FailOnError(err, "Fetching User1 Context")
+			err = CreateApplicationClusters(BackupOrgID, "", "", user1ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, user1ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			clusterUid, err = Inst().Backup.GetClusterUID(user1ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster UID", SourceClusterName))
+			log.InfoD("Uid of [%s] cluster is %s", SourceClusterName, clusterUid)
+		})
+
+		// 5. Start a backup job using user2's context with the backup location created by user1
+		Step("Taking Backup using User2's Context with Backup Location Configured by User1", func() {
+			log.InfoD("Taking Backup using User2's Context with Backup Location Configured by User1")
+			user2ctx, err = backup.GetNonAdminCtx(secondUserName, CommonPassword)
+			log.FailOnError(err, "Fetching User2 Context")
+			backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, RandomString(10))
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+			_, err = CreateBackupWithoutCheck(user2ctx, backupName, SourceClusterName, backupLocation, backupLocationUID, appContextsToBackup, nil, BackupOrgID, clusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", backupName))
+		})
+
+		// 6. Trigger the deletion of the backup location using user1's context
+		Step("Trigger Backup Location Deletion using User1's Context", func() {
+			log.InfoD("Trigger Backup Location Deletion using User1's Context")
+			user1ctx, err = backup.GetNonAdminCtx(firstUserName, CommonPassword)
+			log.FailOnError(err, "Fetching User1 Context")
+			err = DeleteBackupLocationWithContext(backupLocation, backupLocationUID, BackupOrgID, false, user1ctx)
+			if err != nil {
+				dash.VerifyFatal(
+					strings.Contains(err.Error(), "has reference to backuplocation"),
+					true,
+					fmt.Sprintf("Error: Backup object [%s] has reference to backuplocation [%s]:[%s]. Deletion failed. Actual error: %v", backupName, backupLocation, backupLocationUID, err.Error()),
+				)
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		log.InfoD("Deleting the deployed apps after the testcase")
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		DestroyApps(scheduledAppContexts, opts)
+		var wg sync.WaitGroup
+		log.Infof("Cleaning up users")
+		for _, userName := range allSuperAdminUsers {
+			wg.Add(1)
+			go func(userName string) {
+				defer GinkgoRecover()
+				defer wg.Done()
+				err := backup.DeleteUser(userName)
+				log.FailOnError(err, "Error deleting user %v", userName)
+			}(userName)
+		}
+		wg.Wait()
+		err = DeleteAllBackups(adminCtx, BackupOrgID)
+		dash.VerifyFatal(err, nil, "Verifying backup deletion")
+		err = DeleteNamespaces(bkpNamespaces)
+		dash.VerifyFatal(err, nil, "Deleting app namespace")
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, adminCtx)
+	})
+})
