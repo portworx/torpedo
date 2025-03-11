@@ -8706,7 +8706,7 @@ func CollectLogsFromPods(testCaseName string, podLabel map[string]string, namesp
 						Previous:  true,
 					})
 					if err != nil {
-						log.FailOnError(err, fmt.Sprintf("Failed to get previous logs for container %s in pod %s/%s: %w", container.Name, namespace, pod.Name, err))
+						log.Warnf(fmt.Sprintf("Failed to get previous logs for container %s in pod %s/%s: %w", container.Name, namespace, pod.Name, err))
 					}
 
 					err = os.WriteFile(previousLogFilePath, []byte(previousLogData), 0644)
@@ -18108,7 +18108,11 @@ func UploadDirectoryToS3(logDir string, cfg LogStorageConfig) error {
 	now := time.Now()
 	s3Prefix := fmt.Sprintf("%s-%s-%s", platformProvider, backupLocation, now.Format("2006-01-02_15-04-05"))
 
-	s3Bucket := "px-backup-test-logs"
+	pxBackupVersion, err := GetPxBackupVersionSemVer()
+	if err != nil {
+		return err
+	}
+	s3Bucket := fmt.Sprintf("%s-%s", "px-backup-test-logs", pxBackupVersion)
 
 	// Create AWS session with timeout
 	sess, err := session.NewSession(&aws.Config{
@@ -18203,7 +18207,11 @@ func CopyDirectoryToNFSServer(logsDir string, cfg LogStorageConfig) error {
 	platformProvider := os.Getenv("CLUSTER_PROVIDER")
 	backupLocation := os.Getenv("PROVIDERS")
 	now := time.Now()
-	diagLogDirPath := fmt.Sprintf("%s/%s-%v-%v", "px-backup-test-logs", platformProvider, backupLocation, now.Format("2006-01-02_15-04-05"))
+	pxBackupVersion, err := GetPxBackupVersionSemVer()
+	if err != nil {
+		return err
+	}
+	diagLogDirPath := fmt.Sprintf("%s-%s/%s-%v-%v", "px-backup-test-logs", pxBackupVersion, platformProvider, backupLocation, now.Format("2006-01-02_15-04-05"))
 	rootLogDir := "/mnt/diag_logs"
 
 	log.Infof("Setting up logs directory on node %s", masterNode.Name)
