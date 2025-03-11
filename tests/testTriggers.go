@@ -16546,7 +16546,7 @@ func TriggerKVDBNodePXStopAndStart(contexts *[]*scheduler.Context, recordChan *c
 
 		//Check for metadata on selected node, if true then skip the test
 		isMetadata, err := IsMetadataEnabled()
-		log.Infof("Tets purpose checking if Metadata enabled ? : [%v]", isMetadata)
+		log.Infof("Checking if Metadata enabled ? : [%v]", isMetadata)
 		if isMetadata {
 			log.Warnf("This test is not applicable when there is metadata is enabled ")
 			UpdateOutcome(event, err)

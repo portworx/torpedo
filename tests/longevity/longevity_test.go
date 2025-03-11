@@ -73,10 +73,16 @@ var _ = Describe("{Longevity}", func() {
 
 		var wg sync.WaitGroup
 		Step("Register test triggers", func() {
+			vmPresent, err := isVMEnabled(contexts)
+			if err != nil {
+				log.Warnf("Failed to check if VMs enabled or not, Error : [%v]", err)
+			}
+			if vmPresent {
+				go MonitorVMStatus()
+			}
 			for triggerType, triggerFunc := range triggerFunctions {
 				log.InfoD("Registering trigger: [%v]", triggerType)
 				go testTrigger(&wg, &contexts, triggerType, triggerFunc, &triggerLock, &triggerEventsChan)
-				go MonitorVMStatus()
 				wg.Add(1)
 			}
 		})
@@ -468,6 +474,38 @@ func testTrigger(wg *sync.WaitGroup,
 		time.Sleep(controlLoopSleepTime)
 	}
 	os.Exit(0)
+}
+
+func isVMEnabled(contexts []*scheduler.Context) (bool, error) {
+	var vmPresent bool = false
+	var vmApp bool = false
+
+	vms, err := GetAllVMsFromAllNamespaces()
+	if err != nil {
+		if strings.Contains(err.Error(), "Kubevirt CRD not configured on the cluster") {
+			log.Warnf("Kubevirt CRD not configured on the cluster, hence skipping VM monitoring")
+			return false, nil
+		}
+		return false, err
+	}
+
+	if len(vms) > 0 {
+		log.Infof("Total number of VMs: [%v]", len(vms))
+		vmPresent = true
+	}
+	
+	for _, v := range contexts {
+		if strings.HasPrefix(v.App.Key, "kubevirt") {
+			log.Infof("Kubevirt App: [%v]", v.App.Key)
+			vmApp = true
+			break
+		}
+	}
+	
+	if vmPresent || vmApp {
+		return true, nil
+	}
+	return false, nil
 }
 
 func MonitorVMStatus() {
