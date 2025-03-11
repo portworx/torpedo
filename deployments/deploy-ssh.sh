@@ -911,6 +911,22 @@ spec:
       value: "${VAULT_ADDR}"
     - name: VAULT_TOKEN
       value: "${VAULT_TOKEN}"
+    - name: VAULT_DEFAULT_PATH
+      value: "${VAULT_DEFAULT_PATH}"
+    - name: VAULT_APPROLE_ROLE_ID
+      value: "${VAULT_APPROLE_ROLE_ID}"
+    - name: VAULT_ADDR
+      value: "${VAULT_ADDR}"
+    - name: VAULT_APPROLE_SECRET_ID
+      value: "${VAULT_APPROLE_SECRET_ID}"
+    - name: VAULT_BACKEND_PATH
+      value: "${VAULT_BACKEND_PATH}"
+    - name: VAULT_AUTH_METHOD
+      value: "${VAULT_AUTH_METHOD}"
+    - name: ENABLE_KMS
+      value: "${ENABLE_KMS}"
+    - name: KMS_OBJECT_TYPE
+      value: "${KMS_OBJECT_TYPE}"
     - name: PX_BACKUP_AUTOMATION_USER_ACCESS_KEY
       value: "${PX_BACKUP_AUTOMATION_USER_ACCESS_KEY}"
     - name: PX_BACKUP_AUTOMATION_USER_SECRET_KEY

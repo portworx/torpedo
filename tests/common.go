@@ -387,6 +387,21 @@ const (
 	TokenAuth                             = "token_authentication"
 	KubernetesAuth                        = "kubernetes_authentication"
 	AppRoleAuth                           = "appRole_authentication"
+	EnableKMS                             = "ENABLE_KMS"
+	KUBECONFIG                            = "/kubeconfig"
+	CLOUDCREDENTIAL                       = "/cloudcredential"
+	AwsAccessKey                          = "AWS_ACCESS_KEY"
+	AwsSecretKey                          = "AWS_SECRET_KEY"
+	AzureTenantId                         = "AZURE_TENANT_ID"
+	AzureClientId                         = "AZURE_CLIENT_ID"
+	AzureClientSecret                     = "AZURE_CLIENT_SECRET"
+	AzureSubscriptionId                   = "AZURE_SUBSCRIPTION_ID"
+	AzureAccountName                      = "AZURE_ACCOUNT_NAME"
+	AzureAccountKey                       = "AZURE_ACCOUNT_KEY"
+	RancherEndpoint                       = "RANCHER_ENDPOINT"
+	RancherBearerToken                    = "RANCHER_BEARER_TOKEN"
+	IbmApiKey                             = "IBM_API_KEY"
+	GkeJsonKey                            = "GKE_JSON_KEY"
 )
 
 // Dashboard params
@@ -697,6 +712,15 @@ var (
 var (
 	// ClusterConfigPathMap maps cluster name registered in px-backup to the path to the kubeconfig
 	ClusterConfigPathMap = make(map[string]string, 2)
+	// ClusterKeyNameForVault will be used when we need to fetch the kubeconfig value from the vault in CreateApplicationClusters
+	ClusterKeyNameForVault = make(map[string]string, 2)
+	// WrappedDataForKubeconfig is defined globally so that we can use the same parameter to delete the secret data  for kubeconfig added  in vault path
+	WrappedDataForKubeconfig = make(map[string][]string, 2)
+	// WrappedDataForCloudCredential is defined globally so that we can use the same parameter to delete the cloud credentials added in vault path
+	WrappedDataForCloudCredential = make(map[string][]string)
+	VaultLogicalClient            *vault.Logical
+	KubeconfigVaultPath           string
+	CloudCredentialVaultPath      string
 )
 
 var (
@@ -798,7 +822,7 @@ var envVarConfigForKMS = map[string]map[string]KMSConfig{
 	HashicorpVault: {
 		TokenAuth:      {RequiredEnvVars: []string{"VAULT_ADDR", "VAULT_TOKEN"}},
 		KubernetesAuth: {RequiredEnvVars: []string{"VAULT_ADDR", "VAULT_AUTH_METHOD", "VAULT_AUTH_KUBERNETES_ROLE"}},
-		AppRoleAuth:    {RequiredEnvVars: []string{"VAULT_ADDR", "VAULT_AUTH_METHOD", "VAULT_APPROLE_ROLE_ID", "VAULT_APPROLE_SECRET_ID"}},
+		AppRoleAuth:    {RequiredEnvVars: []string{"VAULT_ADDR", "VAULT_AUTH_METHOD", "VAULT_APPROLE_ROLE_ID", "VAULT_APPROLE_SECRET_ID", "VAULT_BACKEND_PATH"}},
 	},
 	Azure: {
 		"default": {RequiredEnvVars: []string{"AZURE_VAULT_URL", "AZURE_TENANT_ID", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET"}},
@@ -5434,7 +5458,13 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 
 	ClusterConfigPathMap[SourceClusterName] = srcClusterConfigPath
 	ClusterConfigPathMap[destinationClusterName] = dstClusterConfigPath
-
+	// The below if loop will be moved under BeforeSuite once all the above code ( line 5420 to 5448 ) will also be moved under BeforeSuite
+	if IsKMSEnabled() {
+		log.InfoD("Adding kubeconfig in vault path")
+		KubeconfigVaultPath = os.Getenv("VAULT_DEFAULT_PATH") + RandomString(5) + KUBECONFIG
+		err = AddKubeConfigsInVaultPath(KubeconfigVaultPath)
+		log.FailOnError(err, "error in adding kubeconfig in vault path %s", KubeconfigVaultPath)
+	}
 	clusterCreation := func(clusterCredName string, clusterCredUid string, clusterName string) error {
 		clusterStatus := func() (interface{}, bool, error) {
 			err = CreateCluster(clusterName, ClusterConfigPathMap[clusterName], orgID, clusterCredName, clusterCredUid, ctx)
@@ -17901,25 +17931,23 @@ func CreateDiscoveryCloudCredential(provider, credName, uid, orgID string, ctx c
 
 // AddCloudCredentialsInVaultPath adds cloud credential details in the given vault path
 // Px-backup will pick up cloud credential details from this path from vault
-func AddCloudCredentialsInVaultPath(provider string, KMSObjectType string, authMethod string, path string, kubeconfig ...string) error {
+func AddCloudCredentialsInVaultPath(provider string, path string, kubeconfig ...string) error {
 	log.Infof("Adding cloud credential details in Vault path")
-	client, err := GetVaultLogicalClient(KMSObjectType, authMethod)
-	if err != nil {
-		return err
-	}
+
 	switch provider {
 	case drivers.ProviderAws:
 		log.Infof("Adding AWS cloud credential details in vault path")
 		awsAccessKey, awsSecretKey, _, _, _ := s3utils.GetAWSDetailsFromEnv()
 
-		data1 := map[string]interface{}{
-			"AWS_ACCESS_KEY": awsAccessKey,
-			"AWS_SECRET_KEY": awsSecretKey,
+		WrappedDataForCloudCredential = map[string][]string{
+			AwsAccessKey: {awsAccessKey},
+			AwsSecretKey: {awsSecretKey},
 		}
+
 		wrappedData := map[string]interface{}{
-			"data": data1,
+			"data": WrappedDataForCloudCredential,
 		}
-		_, err = client.Write(path, wrappedData)
+		_, err := VaultLogicalClient.Write(path, wrappedData)
 		if err != nil {
 			return err
 		}
@@ -17927,18 +17955,19 @@ func AddCloudCredentialsInVaultPath(provider string, KMSObjectType string, authM
 	case drivers.ProviderAzure:
 		log.Infof("Adding Azure cloud credential details in vault path")
 		tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey := GetAzureCredsFromEnv()
-		data1 := map[string]interface{}{
-			"AZURE_TENANT_ID":       tenantID,
-			"AZURE_CLIENT_ID":       clientID,
-			"AZURE_CLIENT_SECRET":   clientSecret,
-			"AZURE_SUBSCRIPTION_ID": subscriptionID,
-			"AZURE_ACCOUNT_NAME":    accountName,
-			"AZURE_ACCOUNT_KEY":     accountKey,
+
+		WrappedDataForCloudCredential = map[string][]string{
+			AzureTenantId:       {tenantID},
+			AzureClientId:       {clientID},
+			AzureClientSecret:   {clientSecret},
+			AzureSubscriptionId: {subscriptionID},
+			AzureAccountName:    {accountName},
+			AzureAccountKey:     {accountKey},
 		}
 		wrappedData := map[string]interface{}{
-			"data": data1,
+			"data": WrappedDataForCloudCredential,
 		}
-		_, err = client.Write(path, wrappedData)
+		_, err := VaultLogicalClient.Write(path, wrappedData)
 		if err != nil {
 			return err
 		}
@@ -17952,14 +17981,14 @@ func AddCloudCredentialsInVaultPath(provider string, KMSObjectType string, authM
 		if len(kubeconfig) == 0 {
 			return fmt.Errorf("kubeconfig parameter is required for provider RKE")
 		}
-		data1 := map[string]interface{}{
-			"RANCHER_ENDPOINT":     rke.RancherMap[kubeconfig[0]].Endpoint,
-			"RANCHER_BEARER_TOKEN": rke.RancherMap[kubeconfig[0]].Token,
+		WrappedDataForCloudCredential = map[string][]string{
+			RancherEndpoint:    {rke.RancherMap[kubeconfig[0]].Endpoint},
+			RancherBearerToken: {rke.RancherMap[kubeconfig[0]].Token},
 		}
 		wrappedData := map[string]interface{}{
-			"data": data1,
+			"data": WrappedDataForCloudCredential,
 		}
-		_, err = client.Write(path, wrappedData)
+		_, err := VaultLogicalClient.Write(path, wrappedData)
 		if err != nil {
 			return err
 		}
@@ -17970,26 +17999,26 @@ func AddCloudCredentialsInVaultPath(provider string, KMSObjectType string, authM
 		if err != nil {
 			return err
 		}
-		data1 := map[string]interface{}{
-			"IBM_API_KEY": apiKey,
+		WrappedDataForCloudCredential = map[string][]string{
+			IbmApiKey: {apiKey},
 		}
 		wrappedData := map[string]interface{}{
-			"data": data1,
+			"data": WrappedDataForCloudCredential,
 		}
-		_, err = client.Write(path, wrappedData)
+		_, err = VaultLogicalClient.Write(path, wrappedData)
 		if err != nil {
 			return err
 		}
 
 	case drivers.ProviderGke:
 		log.Infof("Adding GKE cloud credential details in vault path")
-		data1 := map[string]interface{}{
-			"GKE_JSON_KEY": GlobalGkeSecretString,
+		WrappedDataForCloudCredential = map[string][]string{
+			GkeJsonKey: {GlobalGkeSecretString},
 		}
 		wrappedData := map[string]interface{}{
-			"data": data1,
+			"data": WrappedDataForCloudCredential,
 		}
-		_, err = client.Write(path, wrappedData)
+		_, err := VaultLogicalClient.Write(path, wrappedData)
 		if err != nil {
 			return err
 		}
@@ -18001,8 +18030,9 @@ func AddCloudCredentialsInVaultPath(provider string, KMSObjectType string, authM
 }
 
 // GetVaultLogicalClient return the vault's logical client
-func GetVaultLogicalClient(KMSObjectType string, authMethod string) (*vault.Logical, error) {
-	data, err := getEnvVarsForKMSAuthentication(KMSObjectType, authMethod)
+// Since this client is just used to save data in Vault without using any px-backup operation, used Token Auth method to create Vault client method
+func GetVaultLogicalClient() (*vault.Logical, error) {
+	data, err := getEnvVarsForKMSAuthentication(HashicorpVault, TokenAuth)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get environment variables for KMS authentication: %v", err)
 	}
@@ -18234,4 +18264,53 @@ func CopyDirectoryToNFSServer(logsDir string, cfg LogStorageConfig) error {
 
 	log.Infof("Logs successfully copied to %s/%s", rootLogDir, diagLogDirPath)
 	return nil
+}
+
+// AddKubeConfigsInVaultPath adds application clusters kubeconfig in the given vault path
+// Px-backup will pick up kubeconfig from this path from vault if KMS is enabled
+func AddKubeConfigsInVaultPath(path string) error {
+	log.Infof("Adding kubeconfig of application clusters in Vault path using ClusterConfigPathMap : %v", ClusterConfigPathMap)
+	//data1 := make(map[string][]string)
+	for clusterName, kubeConfigPath := range ClusterConfigPathMap {
+		kubeconfigRaw, err := os.ReadFile(kubeConfigPath)
+		if err != nil {
+			return fmt.Errorf("failed to read kubeconfig for cluster %s: %w", clusterName, err)
+		}
+		key := strings.ToUpper(clusterName) + "-KUBECONFIG"
+		ClusterKeyNameForVault[clusterName] = key
+		WrappedDataForKubeconfig[key] = []string{base64.StdEncoding.EncodeToString(kubeconfigRaw)}
+	}
+	wrappedData := map[string]interface{}{
+		"data": WrappedDataForKubeconfig,
+	}
+
+	if _, err := VaultLogicalClient.Write(path, wrappedData); err != nil {
+		return fmt.Errorf("failed to write to vault path %s: %w", path, err)
+	}
+	return nil
+}
+
+// DeleteDataFromVaultPath deletes all data from the given vault path
+func DeleteDataFromVaultPath(ctx context1.Context, path string, data map[string][]string) error {
+	var err error
+	log.Infof("Deleting data from Vault path %v", path)
+	if _, err = VaultLogicalClient.DeleteWithDataWithContext(ctx, path, data); err != nil {
+		return fmt.Errorf("failed to delete data from vault path %s: %w", path, err)
+	}
+	return nil
+}
+
+// IsKMSEnabled returns true is KMS is enabled, else returns false
+func IsKMSEnabled() bool {
+	isKmsEnabled := os.Getenv(EnableKMS)
+	if isKmsEnabled == "" {
+		log.Errorf("environment variable ENABLE_KMS is not set")
+		return false
+	}
+	boolVal, err := strconv.ParseBool(isKmsEnabled)
+	if err != nil {
+		log.Errorf("error parsing env variable %s. err: %+v", EnableKMS, err)
+		return false
+	}
+	return boolVal
 }

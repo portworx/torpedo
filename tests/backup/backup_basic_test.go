@@ -366,6 +366,31 @@ var _ = BeforeSuite(func() {
 			}
 		}
 	}()
+
+	if IsKMSEnabled() {
+		log.InfoD(" The KMS_OBJECT_TYPE value is %v ", os.Getenv("KMS_OBJECT_TYPE"))
+		switch os.Getenv("KMS_OBJECT_TYPE") {
+		case HashicorpVault:
+			log.InfoD("Fetching vault client since KMS is enabled")
+			// Getting Vault Logical client
+			VaultLogicalClient, err = GetVaultLogicalClient()
+			log.FailOnError(err, "error in getting vault client for KMS: %v", err)
+			CloudCredentialVaultPath = os.Getenv("VAULT_DEFAULT_PATH") + RandomString(5) + CLOUDCREDENTIAL
+			log.InfoD("Adding cloud credential in vault path %v", CloudCredentialVaultPath)
+			providers := GetBackupProviders()
+			for _, provider := range providers {
+				err = AddCloudCredentialsInVaultPath(provider, CloudCredentialVaultPath)
+				log.FailOnError(err, "error in adding cloud credential in vault path %s", CloudCredentialVaultPath)
+			}
+		case Aws:
+			log.InfoD("KMS Object Aws is enabled")
+		case Azure:
+			log.InfoD("KMS Object Azure is enabled")
+		default:
+			Fail(fmt.Sprintf("Valid values for 'KMS_OBJECT_TYPE' environment variables are: %s, %s, %s",
+				HashicorpVault, Aws, Azure))
+		}
+	}
 })
 
 var _ = AfterSuite(func() {
@@ -621,7 +646,24 @@ var _ = AfterSuite(func() {
 				log.Infof("Group %s was not deleted", group.Name)
 			}
 		}
+		if IsKMSEnabled() {
+			switch os.Getenv("KMS_OBJECT_TYPE") {
+			case HashicorpVault:
+				log.InfoD("Deleting all the secrets added in Vault path")
+				err = DeleteDataFromVaultPath(ctx, CloudCredentialVaultPath, WrappedDataForCloudCredential)
+				dash.VerifyFatal(err, nil, "Deleting cloud credential from vault path")
+				err = DeleteDataFromVaultPath(ctx, KubeconfigVaultPath, WrappedDataForKubeconfig)
+				dash.VerifyFatal(err, nil, "Deleting kubeconfig from vault path")
+			case Aws:
+				log.InfoD("KMS Object Aws is enabled")
+			case Azure:
+				log.InfoD("KMS Object Azure is enabled")
+			default:
+				Fail(fmt.Sprintf("Valid values for 'KMS_OBJECT_TYPE' environment variables are: %s, %s, %s",
+					HashicorpVault, Aws, Azure))
+			}
 
+		}
 		// Fetch PVC list for Px-Backup namespace
 		pxBackupNamespace, err := backup.GetPxBackupNamespace()
 		log.FailOnError(err, "failed to get Px-Backup namespace")
