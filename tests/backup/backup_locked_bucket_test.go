@@ -2704,15 +2704,26 @@ var _ = Describe("{DeleteSoftDeleteAndRecoverBackupOnContainerAndBlobLevel}", La
 			}
 			_, err := DoRetryWithTimeoutWithGinkgoRecover(checkBackupSync, 100*time.Minute, 30*time.Second)
 			log.FailOnError(err, "Wait for BackupSync to complete")
-			fetchedBackupNames, err := GetAllBackupsAdmin()
-			log.FailOnError(err, "Getting a list of all backups")
 
-			// Iterating through all backup and check if they are present in the fetched backup list or not
-			listOfFetchedBackups := strings.Join(fetchedBackupNames, "")
-			for _, backup := range backups {
-				re := regexp.MustCompile(fmt.Sprintf("%s-*", backup))
-				dash.VerifyFatal(re.MatchString(listOfFetchedBackups), true, fmt.Sprintf("Checking if backup [%s] was synced or not", backup))
+			checkBackupSyncIsPresent := func() (interface{}, bool, error) {
+				fetchedBackupNames, err := GetAllBackupsAdmin()
+				if err != nil {
+					return nil, true, fmt.Errorf("unable to fetch backups: %v", err)
+				}
+				log.InfoD(fmt.Sprintf("The list of backups fetched %s", fetchedBackupNames))
+
+				listOfFetchedBackups := strings.Join(fetchedBackupNames, "")
+				for _, backup := range backups {
+					re := regexp.MustCompile(fmt.Sprintf("%s-*", backup))
+					if !re.MatchString(listOfFetchedBackups) {
+						return nil, true, fmt.Errorf("backup [%s] not found in fetched backups", backup)
+					}
+				}
+				return nil, false, nil
 			}
+
+			_, err = DoRetryWithTimeoutWithGinkgoRecover(checkBackupSyncIsPresent, 100*time.Minute, 30*time.Second)
+			log.FailOnError(err, "Wait for BackupSync to complete for mentioned backups")
 
 			var bkp *api.BackupObject
 			backupDriver := Inst().Backup
