@@ -1902,3 +1902,215 @@ var _ = Describe("{ValidateAntiAffinityTopologyVPS}", Label("p0", "positive", "V
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
+
+// Updated VolumePlacementStrategy should be applied to volumes created after updation
+var _ = Describe("{ValidateUpdatedVPS}", Label("p1", "positive", "VPS", "staging"), func() {
+	/*
+		1.	Label half of the nodes (zone=B)
+		2.	Apply the volume placement strategy, storage class, and pvc (vps: zone=A)
+		3.	Verify volume provision fails, according to vps.
+		4.  Update the volume placement strategy (vps: zone=B)
+		5.  Verify volume is provisioned according to vps.
+		6.  Remove all labels and delete the pvc, vps
+	*/
+	var (
+		testrailID = 0
+		runID      int
+		contexts   = make([]*scheduler.Context, 0)
+	)
+	JustBeforeEach(func() {
+		StartTorpedoTest("ValidateUpdatedVPS", "Validate Updated VolumePlacementStrategy to volumes created after updation.", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+		// Remove if zone label is set before the test
+		err = RemoveLabelsAllNodes("zone", true, false)
+		log.FailOnError(err, "error removing label on node ")
+	})
+
+	stepLog := "Test applying affinity on the Zone A node"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		var (
+			vpsName    = fmt.Sprintf("mongo-vps-%v", time.Now().Unix())
+			namespace  = "default"
+			params     = make(map[string]string)
+			k8sStorage = storage.Instance()
+			nodes      []node.Node
+			vpsSpec    v1beta2.VolumePlacementStrategy
+		)
+		stepLog = "Get all nodes and add label"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			nodes = node.GetWorkerNodes()
+			if len(nodes) < 4 {
+				log.InfoD("Need atleast 4 node cluster set-up!!")
+				Skip("Need atleast 4 node cluster set-up!!")
+			}
+			log.Infof("node list: %v", nodes)
+			for index, node := range nodes {
+				if index%2 == 0 {
+					log.Infof("Adding label for the node: %v", node.Name)
+					err := k8sCore.AddLabelOnNode(node.Name, "zone", "B")
+					log.FailOnError(err, "Failed to add label for the node: %v", node)
+				}
+			}
+		})
+
+		stepLog = "Apply volume placement strategy"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			matchExpression := []*v1beta1.LabelSelectorRequirement{
+				{
+					Key:      "zone",
+					Operator: v1beta1.LabelSelectorOpIn,
+					Values:   []string{"A"},
+				},
+			}
+
+			vpsSpec = vpsutil.ReplicaAffinityByMatchExpression(vpsName, matchExpression)
+			_, err = talisman.Instance().CreateVolumePlacementStrategy(&vpsSpec)
+			dash.VerifyFatal(err, nil, "Check if able to apply volume placement strategy")
+		})
+
+		createSTCPVCforVPS := func() string {
+
+			var (
+				scName  = fmt.Sprintf("mongo-sc-%v", time.Now().Unix())
+				pvcName = fmt.Sprintf("mongo-pvc-%v", time.Now().Unix())
+			)
+			stepLog = "Apply storage class"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				params["repl"] = "2"
+				params["placement_strategy"] = vpsName
+				v1obj := metav1.ObjectMeta{
+					Name: scName,
+				}
+				bindMode := storageApi.VolumeBindingImmediate
+				scObj := storageApi.StorageClass{
+					ObjectMeta:        v1obj,
+					Provisioner:       k8s.CsiProvisioner,
+					Parameters:        params,
+					VolumeBindingMode: &bindMode,
+				}
+				_, err := k8sStorage.CreateStorageClass(&scObj)
+				dash.VerifyFatal(err, nil, "Verifying creation of new storage class")
+			})
+
+			stepLog = "Apply persistent volume claim"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				_, err := core.Instance().CreatePersistentVolumeClaim(&corev1.PersistentVolumeClaim{
+					TypeMeta: metav1.TypeMeta{
+						Kind: "PersistentVolumeClaim",
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Name: pvcName,
+					},
+					Spec: corev1.PersistentVolumeClaimSpec{
+						AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteMany},
+						StorageClassName: &scName,
+						Resources: corev1.ResourceRequirements{
+							Requests: corev1.ResourceList{
+								corev1.ResourceStorage: resource.MustParse("10Gi"),
+							},
+						},
+					},
+				})
+				dash.VerifyFatal(err, nil, "Verifying creation of new storage class")
+			})
+			return pvcName
+		}
+		//Expected volume creation should fail
+		stepLog = "Apply the storage class & Persistent volume claim for the volume placement strategy and validate volume creation"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pvcName := createSTCPVCforVPS()
+			log.Infof("Waiting for a minute to get pvc status")
+			time.Sleep(1 * time.Minute)
+
+			createdPVC, err := k8sCore.GetPersistentVolumeClaim(pvcName, namespace)
+			log.FailOnError(err, "Failed to get pvc")
+			log.Infof("Created PVC details %v", createdPVC.Status)
+
+			if createdPVC.Status.Phase == "Pending" {
+				log.Infof("PVC status: %v", createdPVC.Status.Phase)
+				for _, event := range Inst().S.GetEvents()["PersistentVolumeClaim"] {
+					log.Infof("PVC Event: %v", event)
+					if strings.Contains(event.Message, "Waiting for a volume to be created") {
+						log.InfoD("Volume creation error is: %v", event)
+					}
+					if strings.Contains(event.Message, "failed to provision volume with StorageClass") {
+						log.Infof("Volume creation error is: %v", event)
+						dash.VerifyFatal(createdPVC.Status.Phase == "Pending", true, "Check if volume creation status is pending")
+
+						errorMsg := fmt.Sprintf("pools could not be selected because they did not satisfy the following requirement: placement rule: enforcement: required expressions: label key=zone In values [A];")
+						if strings.Contains(event.Message, errorMsg) {
+							log.InfoD("Error in creating the Volume, event Msg %s", event.Message)
+						}
+					}
+				}
+			} else {
+				errMsg := fmt.Errorf("expected status: Pending. Actual status: [%s]", createdPVC.Status.Phase)
+				log.FailOnError(errMsg, "Failed to validate PVC: [%v] in the namespace [%v]", pvcName, namespace)
+			}
+		})
+
+		stepLog = "Update the volume placement strategy"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			// Retrieve current VPS to get the ResourceVersion
+			existingVPS, err := talisman.Instance().GetVolumePlacementStrategy(vpsName)
+			matchExpression := []*v1beta1.LabelSelectorRequirement{
+				{
+					Key:      "zone",
+					Operator: v1beta1.LabelSelectorOpIn,
+					Values:   []string{"B"},
+				},
+			}
+			vpsSpec = vpsutil.ReplicaAffinityByMatchExpression(vpsName, matchExpression)
+			vpsSpec.ObjectMeta.ResourceVersion = existingVPS.ObjectMeta.ResourceVersion
+			_, err = talisman.Instance().UpdateVolumePlacementStrategy(&vpsSpec)
+			log.Infof("Error msg err : %s", err)
+			dash.VerifyFatal(err, nil, "Check if able to apply volume placement strategy")
+			log.Infof("Volume placement strategy got updated from ZoneA to ZoneB")
+		})
+
+		stepLog = "Apply the storage class & Persistent volume claim for the Updated volume placement strategy"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pvcName := createSTCPVCforVPS()
+			log.Infof("Waiting for a minutes to get pvc status")
+			time.Sleep(1 * time.Minute)
+			//Waiting for PVC to Bound
+			err = Inst().S.WaitForSinglePVCToBound(pvcName, namespace, 5)
+			log.FailOnError(err, "Failed to wait for pvc to bound")
+
+			createdPVC, err := k8sCore.GetPersistentVolumeClaim(pvcName, namespace)
+			log.FailOnError(err, "Failed to get pvc")
+			log.Infof("Created PVC details %v", createdPVC.Status)
+
+			// Check PVC status - Ensure PVC is bound
+			dash.VerifyFatal(createdPVC.Status.Phase == "Bound", true,
+				fmt.Sprintf("PVC should be in 'Bound' status'%v'", createdPVC.Status.Phase))
+		})
+
+		stepLog = "Remove all labels on the nodes and newly created specs"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			log.Infof("Deleting the newly created VPS")
+			err = talisman.Instance().DeleteVolumePlacementStrategy(vpsName)
+			log.FailOnError(err, "Failed to remove VPS: %v", vpsName)
+
+			log.Infof("Deleting the newly created labels from node")
+			for _, node := range nodes {
+				err = Inst().S.RemoveLabelOnNode(node, "zone")
+				log.FailOnError(err, "Failed to remove label from node.")
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
