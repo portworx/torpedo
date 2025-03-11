@@ -2,7 +2,9 @@ package tests
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -507,5 +509,82 @@ var _ = Describe("{VerifyGetLicensePerOrganization}", Label(TestCaseLabelsMap[Ve
 				Inst().Dash.VerifyFatal(licenseStatus, expectedLicenseStatus, fmt.Sprintf("Actual and Expected Values for License Status are matching - %v", licenseStatus))
 			}
 		})
+	})
+})
+
+// This test case verifies the license count when adding a cluster with an invalid kubeconfig
+var _ = Describe("{AddFailedClusterAgainWithInvalidKubeConfig}", Label(TestCaseLabelsMap[AddFailedClusterAgainWithInvalidKubeConfig]...), func() {
+	var (
+		clusterUid                   string
+		clusterStatus                api.ClusterInfo_StatusInfo_Status
+		err                          error
+		ctx                          context.Context
+		expectedLicenseConsumedCount int64 = 0
+	)
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("AddFailedClusterAgainWithInvalidKubeConfig", "Add cluster with invalid kubeconfig and verify license usage count", nil, 300375, Ajisingh, Q1FY25)
+		ctx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+	})
+	It("Add cluster with invalid kubeconfig and verify license usage count", func() {
+		// Step 1. Create a Cluster with invlaid kubeconfig
+		Step("Add cluster with invalid kubeconfig", func() {
+			// Create a Cluster with invlaid kubeconfig
+			log.InfoD("Creating a Cluster with Invalid Kubeconfig")
+			clusterCreateReq := &api.ClusterCreateRequest{
+				CreateMetadata: &api.CreateMetadata{
+					Name:  SourceClusterName,
+					OrgId: BackupOrgID,
+				},
+				Kubeconfig: base64.StdEncoding.EncodeToString([]byte(InvalidKubeconfig)),
+			}
+			_, err := Inst().Backup.CreateCluster(ctx, clusterCreateReq)
+			dash.VerifyFatal(strings.Contains(err.Error(), "failed to validate access to the cluster"), true, "Verify the cluster creation")
+			clusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Failed, "Verifying  cluster status")
+		})
+
+		// Step 2. Check the license consumption count
+		Step("Check the license consumption count", func() {
+			log.InfoD("Verifying that license count after adding the invalid kubeconfig")
+			err = VerifyLicenseConsumedCount(ctx, BackupOrgID, expectedLicenseConsumedCount)
+			dash.VerifyFatal(err, nil, "Verifying that license count after adding the invalid kubeconfig should be 0")
+		})
+
+		// Step 3. Add back to the same cluster with invalid kubeconfig and verify license count
+		Step("Add back to the same cluster with invalid kubeconfig and verify license count", func() {
+			log.InfoD("Update Cluster to point to the invalid Kubeconfig")
+			clusterInspectResp, err := Inst().Backup.InspectCluster(ctx, &api.ClusterInspectRequest{
+				OrgId: BackupOrgID,
+				Name:  SourceClusterName,
+				Uid:   clusterUid,
+			})
+			log.FailOnError(err, "Failed to inspect cluster %s with uid %s", SourceClusterName, clusterUid)
+			// Concat the invalidKubeconfig to ensure it appears different from the one above.
+			InvalidKubeconfig = InvalidKubeconfig + InvalidKubeconfig
+			clusterUpdateRequest := &api.ClusterUpdateRequest{
+				CreateMetadata: &api.CreateMetadata{
+					Name:  SourceClusterName,
+					Uid:   clusterUid,
+					OrgId: BackupOrgID,
+				},
+				Kubeconfig:            base64.StdEncoding.EncodeToString([]byte(InvalidKubeconfig)),
+				CloudCredential:       clusterInspectResp.GetCluster().GetCloudCredential(),
+				CloudCredentialRef:    clusterInspectResp.GetCluster().GetCloudCredentialRef(),
+				PlatformCredentialRef: clusterInspectResp.GetCluster().GetPlatformCredentialRef(),
+			}
+			log.Infof("Updating kubeconfig for cluster %s from user [%s]", SourceClusterName, ctx)
+			_, err = Inst().Backup.UpdateCluster(ctx, clusterUpdateRequest)
+			log.Infof("Updating cluster with invalid kubeconfig %v", err)
+			// Verify the License count after adding the invalid kubeconfig
+			err = VerifyLicenseConsumedCount(ctx, BackupOrgID, expectedLicenseConsumedCount)
+			dash.VerifyFatal(err, nil, "Verify update invalid kubeconfig and verify license count.")
+		})
+	})
+	JustAfterEach(func() {
+		CleanupCloudSettingsAndClusters(nil, "", "", ctx)
 	})
 })

@@ -118,6 +118,7 @@ const (
 	Kgarg          TestcaseAuthor = "kgarg-px"
 	Avasanthareddy TestcaseAuthor = "avasanthareddy-px"
 	Bht            TestcaseAuthor = "bht-px"
+	Ajisingh       TestcaseAuthor = "ajisingh-px"
 )
 
 // TestcaseQuarter List
