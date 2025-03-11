@@ -588,3 +588,72 @@ var _ = Describe("{AddFailedClusterAgainWithInvalidKubeConfig}", Label(TestCaseL
 		CleanupCloudSettingsAndClusters(nil, "", "", ctx)
 	})
 })
+
+// This test case Validates License usage count should be same after adding a failed cluster .
+var _ = Describe("{CheckLicenseUsageCountsAfterClusterAdditionIsFailed}", Label(TestCaseLabelsMap[CheckLicenseUsageCountsAfterClusterAdditionIsFailed]...), func() {
+	var (
+		clusterUid           string
+		clusterStatus        api.ClusterInfo_StatusInfo_Status
+		cloudCredName        string
+		cloudCredUID         string
+		err                  error
+		ctx                  context.Context
+		initialLicenseCount  int64
+		sourceKubeConfigPath string
+		invalidClusterName   string = "invalid-cluster"
+	)
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("CheckLicenseUsageCountsAfterClusterAdditionIsFailed", "Add cluster with valid kubeconfig , note license count , add invalid kubeconfig and verify license usage count should be same", nil, 300373, Ashrai, Q1FY25)
+		ctx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		sourceKubeConfigPath, err = GetSourceClusterConfigPath()
+		log.FailOnError(err, "Fetching source cluster kubeconfig path")
+	})
+	It("Add cluster with invalid kubeconfig and verify license usage count", func() {
+		// STEP 1 : Creating a valid cluster
+		Step("Create cluster using valid kubeconfig", func() {
+			log.InfoD("Creating cluster using valid kubeconfig")
+			err = CreateCluster(SourceClusterName, sourceKubeConfigPath, BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding %s cluster with valid kubeconfig", SourceClusterName))
+			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching status of [%s] cluster", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			clusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching UID for [%s] cluster", clusterUid))
+		})
+		// STEP 2 : Make a note of the license usage count of initial valid cluster
+		Step("Make a note of the license usage count", func() {
+			initialLicenseCount = int64(len(node.GetWorkerNodes()))
+			err = VerifyLicenseConsumedCount(ctx, BackupOrgID, initialLicenseCount)
+			dash.VerifyFatal(err, nil, "Verifying that license count after adding valid kubeconfig")
+		})
+		// STEP 3 :  Creating invalid cluster
+		Step("Register cluster with invalid kubeconfig", func() {
+			backupDriver := Inst().Backup
+			clusterCreateReq := &api.ClusterCreateRequest{
+				CreateMetadata: &api.CreateMetadata{
+					Name:  invalidClusterName,
+					OrgId: BackupOrgID,
+				},
+				Kubeconfig: base64.StdEncoding.EncodeToString([]byte(InvalidKubeconfig)),
+			}
+			_, err := backupDriver.CreateCluster(ctx, clusterCreateReq)
+			dash.VerifyFatal(strings.Contains(err.Error(), "failed to validate access to the cluster"), true, "Verify the cluster creation")
+			clusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, invalidClusterName)
+			log.InfoD("Cluster %v", clusterUid)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", invalidClusterName))
+			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, invalidClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", invalidClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Failed, "Verifying cluster status")
+		})
+		// STEP 4 : Validating license count is same after adding invalid cluster
+		Step("Verify license usage count after failed cluster addition", func() {
+			log.InfoD("Verifying that license count after adding the invalid kubeconfig")
+			err = VerifyLicenseConsumedCount(ctx, BackupOrgID, initialLicenseCount)
+			dash.VerifyFatal(err, nil, "Verifying that license count after adding the invalid kubeconfig ")
+		})
+	})
+	JustAfterEach(func() {
+		CleanupCloudSettingsAndClusters(nil, cloudCredName, cloudCredUID, ctx)
+	})
+})
