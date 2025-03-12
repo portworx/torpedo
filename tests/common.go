@@ -11,6 +11,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets"
 	"io/ioutil"
 	"maps"
 	"math"
@@ -35,6 +36,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/intstr"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
 
 	"github.com/pure-px/torpedo/drivers/applications/databases"
@@ -825,7 +827,7 @@ var envVarConfigForKMS = map[string]map[string]KMSConfig{
 		AppRoleAuth:    {RequiredEnvVars: []string{"VAULT_ADDR", "VAULT_AUTH_METHOD", "VAULT_APPROLE_ROLE_ID", "VAULT_APPROLE_SECRET_ID", "VAULT_BACKEND_PATH"}},
 	},
 	Azure: {
-		"default": {RequiredEnvVars: []string{"AZURE_VAULT_URL", "AZURE_TENANT_ID", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET"}},
+		"default": {RequiredEnvVars: []string{"AZURE_KEY_VAULT_NAME", "AZURE_TENANT_ID", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET"}},
 	},
 	Aws: {
 		"default": {RequiredEnvVars: []string{"AWS_REGION", "AWS_ACCESS_KEY", "AWS_SECRET_KEY"}},
@@ -18313,4 +18315,76 @@ func IsKMSEnabled() bool {
 		return false
 	}
 	return boolVal
+}
+
+// GetAzureKeyVaultClient initializes and returns an Azure Key Vault client
+func GetAzureKeyVaultClient() (*azsecrets.Client, error) {
+
+	data, err := getEnvVarsForKMSAuthentication(Azure, "default")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get environment variables for KMS authentication: %v", err)
+	}
+
+	tenantID, clientID, clientSecret, keyVaultName := data["AZURE_TENANT_ID"], data["AZURE_CLIENT_ID"], data["AZURE_CLIENT_SECRET"], data["AZURE_KEY_VAULT_NAME"]
+	if tenantID == "" || clientID == "" || clientSecret == "" || keyVaultName == "" {
+		return nil, fmt.Errorf("missing required environment variables: AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, or AZURE_KEY_VAULT_NAME")
+	}
+
+	vaultURI := fmt.Sprintf("https://%s.vault.azure.net/", keyVaultName)
+
+	cred, err := azidentity.NewClientSecretCredential(tenantID, clientID, clientSecret, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Azure credential: %v", err)
+	}
+
+	client, err := azsecrets.NewClient(vaultURI, cred, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Key Vault client: %v", err)
+	}
+	return client, nil
+}
+
+func AddCloudCredentialsInAzurePath(provider string) error {
+
+	client, err := GetAzureKeyVaultClient()
+	if err != nil {
+		return fmt.Errorf("error initializing Azure Key Vault client: %v", err)
+	}
+
+	fmt.Println("Azure Key Vault client initialized successfully:")
+
+	switch provider {
+	case drivers.ProviderAzure:
+		log.Infof("Adding Azure cloud credential details in vault path")
+		tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey := GetAzureCredsFromEnv()
+		AzureSecretName := "AzSecret"
+		data := map[string]string{
+			"AZURE_TENANT_ID":       tenantID,
+			"AZURE_CLIENT_ID":       clientID,
+			"AZURE_CLIENT_SECRET":   clientSecret,
+			"AZURE_SUBSCRIPTION_ID": subscriptionID,
+			"AZURE_ACCOUNT_NAME":    accountName,
+			"AZURE_ACCOUNT_KEY":     accountKey,
+		}
+		jsonBytes, err := json.Marshal(data)
+		if err != nil {
+			return fmt.Errorf("failed to marshal JSON: %v", err)
+		}
+		jsonString := string(jsonBytes)
+
+		params := azsecrets.SetSecretParameters{Value: &jsonString}
+		_, err = client.SetSecret(context1.TODO(), AzureSecretName, params, nil)
+		if err != nil {
+			return fmt.Errorf("failed to create a secret: %v", err)
+		}
+
+		fmt.Println("Azsecret stored successfully in Azure Key Vault!")
+
+	case drivers.ProviderNfs:
+		log.Warnf("provider [%s] does not require creating cloud credential", provider)
+
+	default:
+		return fmt.Errorf("provider [%s] not supported for cloud credential", provider)
+	}
+	return nil
 }

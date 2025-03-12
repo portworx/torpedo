@@ -385,7 +385,13 @@ var _ = BeforeSuite(func() {
 		case Aws:
 			log.InfoD("KMS Object Aws is enabled")
 		case Azure:
-			log.InfoD("KMS Object Azure is enabled")
+			log.InfoD("Azure KMS Object is enabled")
+			providers := GetBackupProviders()
+			for _, provider := range providers {
+				err = AddCloudCredentialsInAzurePath(provider)
+				log.FailOnError(err, "error in adding cloud credential in azure vault path")
+			}
+
 		default:
 			Fail(fmt.Sprintf("Valid values for 'KMS_OBJECT_TYPE' environment variables are: %s, %s, %s",
 				HashicorpVault, Aws, Azure))
