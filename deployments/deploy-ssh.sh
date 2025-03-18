@@ -270,7 +270,7 @@ case $FOCUS_TESTS in
 esac
 
 if [[ "$TEST_SUITE" != *"pds.test"* ]] && [[ "$TEST_SUITE" != *"backup.test"* ]] && [[ "$TEST_SUITE" != *"longevity.test"* ]]; then
-    TEST_SUITE='"bin/basic.test"'
+    TEST_SUITE='"/go/src/github.com/pure-px/torpedo/bin/basic.test"'
 fi
 
 echo "Using test suite: ${TEST_SUITE}"
