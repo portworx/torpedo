@@ -830,6 +830,8 @@ spec:
       value: "${GOOGLE_APPLICATION_CREDENTIALS}"
     - name: TOGGLE_PURE_MGMT_IP
       value: "${TOGGLE_PURE_MGMT_IP}"
+    - name: GENERATE_UNIQUE_SC
+      value: ${GENERATE_UNIQUE_SC}
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
