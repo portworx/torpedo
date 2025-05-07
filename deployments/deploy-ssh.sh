@@ -834,6 +834,8 @@ spec:
       value: "${PERSIST_APP_CONTEXT}"
     - name: LOAD_PERSISTED_APP_CONTEXTS
       value: "${LOAD_PERSISTED_APP_CONTEXTS}"
+    - name: GENERATE_UNIQUE_SC
+      value: "${GENERATE_UNIQUE_SC}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
