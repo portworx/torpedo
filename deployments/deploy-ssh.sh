@@ -830,6 +830,10 @@ spec:
       value: "${GOOGLE_APPLICATION_CREDENTIALS}"
     - name: TOGGLE_PURE_MGMT_IP
       value: "${TOGGLE_PURE_MGMT_IP}"
+    - name: PERSIST_APP_CONTEXT
+      value: "${PERSIST_APP_CONTEXT}"
+    - name: LOAD_PERSISTED_APP_CONTEXTS
+      value: "${LOAD_PERSISTED_APP_CONTEXTS}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
