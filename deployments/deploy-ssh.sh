@@ -832,6 +832,8 @@ spec:
       value: "${TOGGLE_PURE_MGMT_IP}"
     - name: KUBEVIRT_VM_PWD
       value: "${KUBEVIRT_VM_PWD}"
+    - name: KUBEVIRT_VOL_TYPE
+      value: "${KUBEVIRT_VOL_TYPE}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
