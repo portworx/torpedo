@@ -1,5 +1,7 @@
 #!/bin/bash -x
 
+BUILD_NAME="kv-cloudsnap-"
+
 if [ -z "${ENABLE_DASH}" ]; then
     ENABLE_DASH=true
 fi
@@ -22,7 +24,7 @@ fi
 
 SECURITY_CONTEXT=false
 
-# System checks https://github.com/portworx/torpedo/blob/86232cb195400d05a9f83d57856f8f29bdc9789d/tests/common.go#L2173
+# System checks https://github.com/pure-px/torpedo/blob/86232cb195400d05a9f83d57856f8f29bdc9789d/tests/common.go#L2173
 # should be skipped from AfterSuite() if this flag is set to true. This is to avoid distracting test failures due to
 # unstable testing environments.
 TORPEDO_SKIP_SYSTEM_CHECKS=false
@@ -100,6 +102,10 @@ if [ -z "${UPGRADE_STORAGE_DRIVER_ENDPOINT_LIST}" ]; then
     UPGRADE_STORAGE_DRIVER_ENDPOINT_LIST=""
 fi
 
+if [ -z "${UPGRADE_STORK_VERSION_LIST}" ]; then
+    UPGRADE_STORK_VERSION_LIST=""
+fi
+
 if [ -z "${SKIP_PX_OPERATOR_UPGRADE}" ]; then
     SKIP_PX_OPERATOR_UPGRADE=false
 fi
@@ -140,6 +146,10 @@ if [ -z "${MAX_STORAGE_NODES_PER_AZ}" ]; then
     MAX_STORAGE_NODES_PER_AZ="2"
 fi
 
+if [ -z "${NUM_NODES_TO_CORDON}" ]; then
+    NUM_NODES_TO_CORDON="0"
+fi
+
 if [ -z "${PROVISIONER}" ]; then
     PROVISIONER="portworx"
 fi
@@ -148,8 +158,16 @@ if [ -z "${IS_HYPER_CONVERGED}" ]; then
     IS_HYPER_CONVERGED=true
 fi
 
+if [ -z "${IS_PX_SCALE_TEST}" ]; then
+    IS_PX_SCALE_TEST=false
+fi
+
 if [ -z "${PX_POD_RESTART_CHECK}" ]; then
     PX_POD_RESTART_CHECK=false
+fi
+
+if [ -z "${SKIP_PX_UPGRADE_VALIDATION}" ]; then
+    SKIP_PX_UPGRADE_VALIDATION=false
 fi
 
 CONFIGMAP=""
@@ -246,6 +264,10 @@ if [ -n "$ANTHOS_HOST_PATH" ]; then
     ANTHOS_HOST_PATH="${ANTHOS_HOST_PATH}"
 fi
 
+if [ -z "${IS_AUTO_FS_TRIM_ENABLED}" ]; then
+    IS_AUTO_FS_TRIM_ENABLED=false
+fi
+
 for i in $@
 do
 case $i in
@@ -261,7 +283,7 @@ echo "Checking if we need to override test suite: ${TEST_SUITE}"
 
 # TODO: Remove this after all longevity jobs switch to 'bin/longevity.test' for TEST_SUITE.
 case $FOCUS_TESTS in
-  Longevity|UpgradeLongevity|BackupLongevity)
+  Longevity|UpgradeLongevity|BackupLongevity|RunSSIE|DeletionOfMultipleScheduleBackupsWithoutSuspendingScheduleLongevity)
     TEST_SUITE="bin/longevity.test"
     echo "Warning: Based on the FOCUS_TESTS ('$FOCUS_TESTS'), the TEST_SUITE ('$TEST_SUITE') is set to 'bin/longevity.test'"
     ;;
@@ -269,7 +291,7 @@ case $FOCUS_TESTS in
     ;;
 esac
 
-if [[ "$TEST_SUITE" != *"pds.test"* ]] && [[ "$TEST_SUITE" != *"backup.test"* ]] && [[ "$TEST_SUITE" != *"longevity.test"* ]]; then
+if [[ "$TEST_SUITE" != *"pds.test"* ]] && [[ "$TEST_SUITE" != *"backup.test"* ]] && [[ "$TEST_SUITE" != *"longevity.test"* ]] && [[ "$TEST_SUITE" != *"platform.test"* ]] && [[ "$TEST_SUITE" != *"pds2.test"* ]] && [[ "$TEST_SUITE" != *"functional_test.test"* ]] && [[ "$TEST_SUITE" != *"px-installer.test"* ]]; then
     TEST_SUITE='"bin/basic.test"'
 fi
 
@@ -279,14 +301,14 @@ if [ -z "${AUTOPILOT_UPGRADE_VERSION}" ]; then
     AUTOPILOT_UPGRADE_VERSION=""
 fi
 
-kubectl -n default delete secret torpedo
-kubectl -n default delete pod torpedo
-state=`kubectl -n default get pod torpedo | grep -v NAME | awk '{print $3}'`
+kubectl -n default delete secret ${BUILD_NAME}-torpedo
+kubectl -n default delete pod ${BUILD_NAME}-torpedo
+state=`kubectl -n default get pod ${BUILD_NAME}-torpedo | grep -v NAME | awk '{print $3}'`
 timeout=0
 while [ "$state" == "Terminating" -a $timeout -le 600 ]; do
   echo "Terminating torpedo..."
   sleep 1
-  state=`kubectl -n default get pod torpedo | grep -v NAME | awk '{print $3}'`
+  state=`kubectl -n default get pod ${BUILD_NAME}-torpedo | grep -v NAME | awk '{print $3}'`
   timeout=$[$timeout+1]
 done
 
@@ -320,6 +342,12 @@ if [ -n "${ORACLE_API_KEY}" ]; then
 fi
 
 TESTRESULTS_VOLUME="{ \"name\": \"testresults\", \"hostPath\": { \"path\": \"/mnt/testresults/\", \"type\": \"DirectoryOrCreate\" } }"
+
+# Change mnt path if using SLEMicro / SL Micro triggered with  IS_SLMICRO
+if [ -n "$IS_SLMICRO" ]; then
+  TESTRESULTS_VOLUME="{ \"name\": \"testresults\", \"hostPath\": { \"path\": \"/var/testresults/\", \"type\": \"DirectoryOrCreate\" } }"
+fi
+
 TESTRESULTS_MOUNT="{ \"name\": \"testresults\", \"mountPath\": \"/testresults/\" }"
 
 AWS_VOLUME="{ \"name\": \"aws-volume\", \"configMap\": { \"name\": \"aws-cm\", \"items\": [{\"key\": \"credentials\", \"path\": \"credentials\"}, {\"key\": \"config\", \"path\": \"config\"}]} }"
@@ -420,6 +448,14 @@ fi
 
 echo '' > torpedo.yaml
 
+#Check if variable  $IS_STORK_NFS_LOCATION is set
+if [ -z "${IS_STORK_NFS_LOCATION}" ]; then
+    IS_STORK_NFS_LOCATION="false"
+fi
+
+if [ -z "${USER_MANAGED_CERT_MANAGER}" ]; then
+    USER_MANAGED_CERT_MANAGER=false
+fi
 
 cat >> torpedo.yaml <<EOF
 ---
@@ -458,7 +494,7 @@ roleRef:
 apiVersion: v1
 kind: Pod
 metadata:
-  name: torpedo
+  name: ${BUILD_NAME}-torpedo
   labels:
     app: torpedo
 spec:
@@ -496,6 +532,13 @@ spec:
           - key: px/enabled
             operator: "In"
             values: ["false"]
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+          - key: "px/enabled"
+            operator: "In"
+            values: ["false"]
   initContainers:
   - name: init-sysctl
     image: ${BUSYBOX_IMG}
@@ -528,11 +571,13 @@ spec:
             "--csi-app-list", "$CSI_APP_LIST",
             "--scheduler", "$SCHEDULER",
             "--max-storage-nodes-per-az", "$MAX_STORAGE_NODES_PER_AZ",
+            "--num-nodes-to-cordon", "$NUM_NODES_TO_CORDON",
             "--backup-driver", "$BACKUP_DRIVER",
             "--log-level", "$LOGLEVEL",
             "--node-driver", "$NODE_DRIVER",
             "--scale-factor", "$SCALE_FACTOR",
             "--hyper-converged=$IS_HYPER_CONVERGED",
+            "--px-scale-test=$IS_PX_SCALE_TEST",
             "--fail-on-px-pod-restartcount=$PX_POD_RESTART_CHECK",
             "--minimun-runtime-mins", "$MIN_RUN_TIME",
             "--driver-start-timeout", "$DRIVER_START_TIMEOUT",
@@ -545,6 +590,7 @@ spec:
             "--storage-upgrade-endpoint-url=$UPGRADE_ENDPOINT_URL",
             "--storage-upgrade-endpoint-version=$UPGRADE_ENDPOINT_VERSION",
             "--upgrade-storage-driver-endpoint-list=$UPGRADE_STORAGE_DRIVER_ENDPOINT_LIST",
+            "--upgrade-stork-version-list=$UPGRADE_STORK_VERSION_LIST",
             "--enable-stork-upgrade=$ENABLE_STORK_UPGRADE",
             "--secret-type=$SECRET_TYPE",
             "--pure-volumes=$IS_PURE_VOLUMES",
@@ -586,6 +632,8 @@ spec:
             "--torpedo-job-type=$TORPEDO_JOB_TYPE",
             "--torpedo-skip-system-checks=$TORPEDO_SKIP_SYSTEM_CHECKS",
             "--fa-secret=${FA_SECRET}",
+            "--user-managed-cert-manager=${USER_MANAGED_CERT_MANAGER}",
+            "--auto-fs-trim-enable=$IS_AUTO_FS_TRIM_ENABLED",
             "$APP_DESTROY_TIMEOUT_ARG",
             "$SCALE_APP_TIMEOUT_ARG",
     ]
@@ -600,6 +648,10 @@ spec:
       value: "${K8S_VENDOR}"
     - name: TORPEDO_SSH_USER
       value: "${TORPEDO_SSH_USER}"
+    - name: LB_SUBNET_KEY
+      value: "${LB_SUBNET_KEY}"
+    - name: TEST_CLUSTER_DOMAIN
+      value: "${TEST_CLUSTER_DOMAIN}"
     - name: TORPEDO_SSH_PASSWORD
       value: "${TORPEDO_SSH_PASSWORD}"
     - name: TORPEDO_SSH_KEY
@@ -716,6 +768,10 @@ spec:
       value: "${DEPLOY_ALL_DATASERVICE}"
     - name: GCP_PROJECT_ID
       value: "${GCP_PROJECT_ID}"
+    - name: PDS_QA_GCP_JSON_PATH
+      value: "${PDS_QA_GCP_JSON_PATH}"
+    - name: INSECURE_FLAG
+      value: "${INSECURE_FLAG}"
     - name: PDS_USERNAME
       value: "${PDS_USERNAME}"
     - name: PDS_PASSWORD
@@ -728,10 +784,30 @@ spec:
       value: "${PDS_PARAM_CM}"
     - name: PDS_ISSUER_URL
       value: "${PDS_ISSUER_URL}"
+    - name: AZURE_DNS_SECRET
+      value: "${AZURE_DNS_SECRET}"
+    - name: PUBLIC_CA
+      value: "${PUBLIC_CA}"
+    - name: AZURE_CLIENT_ID_PUBLIC_CA
+      value: "${AZURE_CLIENT_ID_PUBLIC_CA}"
+    - name: AZURE_TENANT_ID_PUBLIC_CA
+      value: "${AZURE_TENANT_ID_PUBLIC_CA}"
+    - name: AZURE_SUBSCRIPTION_ID_PUBLIC_CA
+      value: "${AZURE_SUBSCRIPTION_ID_PUBLIC_CA}"
+    - name: PX_CENTRAL_USERNAME
+      value: "${PX_CENTRAL_USERNAME}"
+    - name: PX_CENTRAL_PASSWORD
+      value: "${PX_CENTRAL_PASSWORD}"
+    - name: PX_CENTRAL_API
+      value: "${PX_CENTRAL_API}"
+    - name: BACKEND_TYPE
+      value: "${BACKEND_TYPE}"
     - name: CLUSTER_TYPE
       value: "${CLUSTER_TYPE}"
     - name: TARGET_KUBECONFIG
       value: "${TARGET_KUBECONFIG}"
+    - name: DESTINATION_TARGET_KUBECONFIG
+      value: "${DESTINATION_TARGET_KUBECONFIG}"
     - name: TARGET_CLUSTER_NAME
       value: "${TARGET_CLUSTER_NAME}"
     - name: PX_ORACLE_user_ocid
@@ -750,6 +826,8 @@ spec:
       value: "${ORACLE_API_KEY}"
     - name: INSTANCE_GROUP
       value: "${INSTANCE_GROUP}"
+    - name: NODE_POOL_LIST
+      value: "${NODE_POOL_LIST}"
     - name: LOGGLY_API_TOKEN
       value: "${LOGGLY_API_TOKEN}"
     - name: PODMETRIC_METERING_INTERVAL_MINUTES
@@ -760,6 +838,8 @@ spec:
       value: "${TARGET_STORK_VERSION}"
     - name: PX_BACKUP_HELM_REPO_BRANCH
       value: "${PX_BACKUP_HELM_REPO_BRANCH}"
+    - name: PX_BACKUP_HELM_VERSION
+      value: "${PX_BACKUP_HELM_VERSION}"
     - name: BACKUP_TYPE
       value: "${BACKUP_TYPE}"
     - name: NFS_SERVER_ADDR
@@ -770,6 +850,16 @@ spec:
       value: "${NFS_MOUNT_OPTION}"
     - name: NFS_PATH
       value: "${NFS_PATH}"
+    - name: CUSTOM_NFS_SERVER_ADDR
+      value: "${CUSTOM_NFS_SERVER_ADDR}"
+    - name: CUSTOM_NFS_PATH
+      value: "${CUSTOM_NFS_PATH}"
+    - name: CUSTOM_NFS_PASSWORD
+      value: "${CUSTOM_NFS_PASSWORD}"
+    - name: CUSTOM_NFS_SUB_PATH
+      value: "${CUSTOM_NFS_SUB_PATH}"
+    - name: CUSTOM_NFS_MOUNT_OPTION
+      value: "${CUSTOM_NFS_MOUNT_OPTION}"
     - name: SKIP_PX_OPERATOR_UPGRADE
       value: "${SKIP_PX_OPERATOR_UPGRADE}"
     - name: VOLUME_SNAPSHOT_CLASS
@@ -790,6 +880,10 @@ spec:
       value: "${NUM_ML_WORKLOADS}"
     - name: ML_WORKLOAD_RUNTIME
       value: "${ML_WORKLOAD_RUNTIME}"
+    - name: KUBEVIRT_VM_PWD
+      value: "${KUBEVIRT_VM_PWD}"
+    - name: KUBEVIRT_VOL_TYPE
+      value: "${KUBEVIRT_VOL_TYPE}"
     - name: KUBEVIRT_UPGRADE_VERSION
       value: "${KUBEVIRT_UPGRADE_VERSION}"
     - name: PX_BACKUP_MONGODB_USERNAME
@@ -830,6 +924,133 @@ spec:
       value: "${GOOGLE_APPLICATION_CREDENTIALS}"
     - name: TOGGLE_PURE_MGMT_IP
       value: "${TOGGLE_PURE_MGMT_IP}"
+    - name: CRON_JOB_PARALLELISM
+      value: "${CRON_JOB_PARALLELISM}"
+    - name: BACKUP_DELETE_RETRY_TIME
+      value: "${BACKUP_DELETE_RETRY_TIME}"
+    - name: BACKUP_DELETE_WAIT_TIME
+      value: "${BACKUP_DELETE_WAIT_TIME}"
+    - name: IS_STORK_NFS_LOCATION
+      value: "${IS_STORK_NFS_LOCATION}"
+    - name: VOLUME_COUNT_FOR_PARALLEL_DELETE
+      value: "${VOLUME_COUNT_FOR_PARALLEL_DELETE}"
+    - name: SIMULATE_FB_FQDN
+      value: "${SIMULATE_FB_FQDN}"
+    - name: SKIP_PX_UPGRADE_VALIDATION
+      value: "${SKIP_PX_UPGRADE_VALIDATION}"
+    - name: NON_DEFAULT_ADMIN_USERNAME
+      value: "${NON_DEFAULT_ADMIN_USERNAME}"
+    - name: NON_DEFAULT_ADMIN_PASSWORD
+      value: "${NON_DEFAULT_ADMIN_PASSWORD}"
+    - name: CLUSTER_ID
+      value: "${CLUSTER_ID}"
+    - name: IS_HCP
+      value: "${IS_HCP}"
+    - name: ROSA_TOKEN
+      value: "${ROSA_TOKEN}"
+    - name: NODEPOOL_MAX_UNAVAILABLE
+      value: "${NODEPOOL_MAX_UNAVAILABLE}"
+    - name: NODEPOOL_MAX_SURGE
+      value: "${NODEPOOL_MAX_SURGE}"
+    - name: NODEPOOL_NODE_DRAIN_GRACE_PERIOD
+      value: "${NODEPOOL_NODE_DRAIN_GRACE_PERIOD}"
+    - name: VAULT_ADDR
+      value: "${VAULT_ADDR}"
+    - name: VAULT_TOKEN
+      value: "${VAULT_TOKEN}"
+    - name: VAULT_DEFAULT_PATH
+      value: "${VAULT_DEFAULT_PATH}"
+    - name: VAULT_APPROLE_ROLE_ID
+      value: "${VAULT_APPROLE_ROLE_ID}"
+    - name: VAULT_APPROLE_SECRET_ID
+      value: "${VAULT_APPROLE_SECRET_ID}"
+    - name: VAULT_BACKEND_PATH
+      value: "${VAULT_BACKEND_PATH}"
+    - name: VAULT_AUTH_METHOD
+      value: "${VAULT_AUTH_METHOD}"
+    - name: ENABLE_KMS
+      value: "${ENABLE_KMS}"
+    - name: KMS_OBJECT_TYPE
+      value: "${KMS_OBJECT_TYPE}"
+    - name: PX_BACKUP_AUTOMATION_USER_ACCESS_KEY
+      value: "${PX_BACKUP_AUTOMATION_USER_ACCESS_KEY}"
+    - name: PX_BACKUP_AUTOMATION_USER_SECRET_KEY
+      value: "${PX_BACKUP_AUTOMATION_USER_SECRET_KEY}"
+    - name: REGION_FOR_CLUSTER_DISCOVERY
+      value: "${REGION_FOR_CLUSTER_DISCOVERY}"
+    - name: CLUSTER_NAME_FOR_CLOUD_DISCOVERY
+      value: "${CLUSTER_NAME_FOR_CLOUD_DISCOVERY}"
+    - name: KEEP_DATA_FOR_DEBUG
+      value: "${KEEP_DATA_FOR_DEBUG}"
+    - name: COPY_PX_BACKUP_LOGS
+      value: "${COPY_PX_BACKUP_LOGS}"
+    - name: LOGS_STORAGE_TYPE
+      value: "${LOGS_STORAGE_TYPE}"
+    - name: NFS_DIAG_SERVER
+      value: "${NFS_DIAG_SERVER}"
+    - name: LOGS_S3_ENDPOINT
+      value: "${LOGS_S3_ENDPOINT}"
+    - name: LOGS_S3_ACCESS_KEY_ID
+      value: "${LOGS_S3_ACCESS_KEY_ID}"
+    - name: LOGS_S3_SECRET_KEY
+      value: "${LOGS_S3_SECRET_KEY}"
+    - name: LOGS_S3_REGION
+      value: "${LOGS_S3_REGION}"
+    - name: LOGS_S3_DISABLE_SSL
+      value: "${LOGS_S3_DISABLE_SSL}"
+    - name: PXBACKUP_FIXED_LICENSE_KEY
+      value: "${PXBACKUP_FIXED_LICENSE_KEY}"
+    - name: PXBACKUP_SUBSCRIPTION_LICENSE_KEY
+      value: "${PXBACKUP_SUBSCRIPTION_LICENSE_KEY}"
+    - name: AZURE_KEY_VAULT_NAME
+      value: "${AZURE_KEY_VAULT_NAME}"
+    - name: KMS_AUTH_METHOD
+      value: "${KMS_AUTH_METHOD}"
+    - name: PX_PURE_SECRET_WITH_FA
+      value: "${PX_PURE_SECRET_WITH_FA}"
+    - name: VAULT_KUBERNETES_AUTH_ROLE
+      value: "${VAULT_KUBERNETES_AUTH_ROLE}"
+    - name: VAULT_KUBERNETES_AUTH_MOUNT_PATH
+      value: "${VAULT_KUBERNETES_AUTH_MOUNT_PATH}"
+    - name: GENERATE_UNIQUE_SC
+      value: "${GENERATE_UNIQUE_SC}"
+    - name: PERSIST_APP_CONTEXT
+      value: "${PERSIST_APP_CONTEXT}"
+    - name: LOAD_PERSISTED_APP_CONTEXTS
+      value: "${LOAD_PERSISTED_APP_CONTEXTS}"
+    - name: PX_BACKUP_VERSION
+      value: "${PX_BACKUP_VERSION}"
+    - name: PXB_COMMIT_SHA
+      value: "${PXB_COMMIT_SHA}"
+    - name: PWD_CUSTOMISATION_WITH_KMS
+      value: "${PWD_CUSTOMISATION_WITH_KMS}"
+    - name: ENABLE_MONGODB_ENCRYPTION
+      value: "${ENABLE_MONGODB_ENCRYPTION}"
+    - name: PX_BACKUP_BS_CLIENT_ID
+      value: "${PX_BACKUP_BS_CLIENT_ID}"
+    - name: "PX_BACKUP_BS_CLIENT_SECRET"
+      value: "${PX_BACKUP_BS_CLIENT_SECRET}"
+    - name: PXBACKUP_SUBSCRIPTION_ID
+      value: "${PXBACKUP_SUBSCRIPTION_ID}"
+    - name: USE_ANSIBLE_DRIVER
+      value: "${USE_ANSIBLE_DRIVER}"
+    - name: SELF_MANAGED_PDS_CONTROL_PLANE_RUN
+      value: "${SELF_MANAGED_PDS_CONTROL_PLANE_RUN}"
+    - name: KUBE_VM
+      value: "${KUBE_VM}"
+    - name: DEV_VM_ACCESS_KEY
+      value: "${DEV_VM_ACCESS_KEY}"
+    - name: DNS_RFC2136_TSIG_SECRET_ZONE_1
+      value: "${DNS_RFC2136_TSIG_SECRET_ZONE_1}"
+    - name: DNS_RFC2136_TSIG_SECRET_ZONE_1_SHA512
+      value: "${DNS_RFC2136_TSIG_SECRET_ZONE_1_SHA512}"
+    - name: PDS_SM_LICENSE_QE
+      value: "${PDS_SM_LICENSE_QE}"
+    - name: CUSTOM_REGISTRY_USERNAME
+      value: "${CUSTOM_REGISTRY_USERNAME}"
+    - name: CUSTOM_REGISTRY_PASSWORD
+      value: "${CUSTOM_REGISTRY_PASSWORD}"
+
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
@@ -892,7 +1113,7 @@ fi
 
 if [ -z "${ANTHOS_HOST_PATH}" ]; then
   sed -i  '/GOOGLE_APPLICATION_CREDENTIALS/, +1d' torpedo.yaml
-fi 
+fi
 
 # If these are passed, we will create a docker config secret to use to pull images
 if [ ! -z $IMAGE_PULL_SERVER ] && [ ! -z $IMAGE_PULL_USERNAME ] && [ ! -z $IMAGE_PULL_PASSWORD ]; then
@@ -918,11 +1139,30 @@ cat torpedo.yaml
 echo "Deploying torpedo pod..."
 kubectl -n default apply -f torpedo.yaml
 
+# MKE requires delta between secret creation & pod deployment, adding retries to handle this
+max_retries=3
+retry_delay=10
+retry_count=0
+
+while [ $retry_count -lt $max_retries ]; do
+    echo "Attempting to apply torpedo.yaml (Attempt #$((retry_count + 1)))..."
+
+    if kubectl -n default get pod ${BUILD_NAME}-torpedo; then
+        echo "Successfully applied torpedo.yaml"
+        break
+    else
+        echo "Failed to apply torpedo.yaml. Retrying in $retry_delay seconds..."
+        retry_count=$((retry_count + 1))
+        kubectl -n default apply -f torpedo.yaml
+        sleep $retry_delay
+    fi
+done
+
 echo "Waiting for torpedo to start running"
 
 function describe_pod_then_exit {
   echo "Pod description:"
-  kubectl -n default describe pod torpedo
+  kubectl -n default describe pod ${BUILD_NAME}-torpedo
   exit 1
 }
 
@@ -930,13 +1170,13 @@ function terminate_pod_then_exit {
     echo "Terminating Ginkgo test in Torpedo pod..."
     # Fetch the PID of the Ginkgo test process
     local test_pid
-    test_pid=$(kubectl -n default exec torpedo -- pgrep -f 'torpedo/bin')
+    test_pid=$(kubectl -n default exec ${BUILD_NAME}-torpedo -- pgrep -f 'torpedo/bin')
     if [ "$test_pid" ]; then
         # Using SIGKILL instead of SIGTERM to immediately stop the process.
         # SIGTERM would allow Ginkgo to run AfterSuite and generate reports,
         # but the intention here is to stop the process immediately.
         echo "Sending SIGKILL to terminate Ginkgo test process with PID: $test_pid"
-        kubectl -n default exec torpedo -- kill -SIGKILL "$test_pid"
+        kubectl -n default exec ${BUILD_NAME}-torpedo -- kill -SIGKILL "$test_pid"
     fi
     exit 1
 }
@@ -949,7 +1189,7 @@ trap terminate_pod_then_exit SIGTERM
     first_iteration=true
     for i in $(seq 1 900); do
         echo "Iteration: $i"
-        state=$(kubectl -n default get pod torpedo | grep -v NAME | awk '{print $3}')
+        state=$(kubectl -n default get pod ${BUILD_NAME}-torpedo | grep -v NAME | awk '{print $3}')
 
         if [ "$state" == "Error" ]; then
             echo "Error: Torpedo finished with $state state"
@@ -958,11 +1198,11 @@ trap terminate_pod_then_exit SIGTERM
             # For the first iteration, display all logs. Later, only from 1 minute ago
             if [ "$first_iteration" = true ]; then
                 echo "Logs from first iteration"
-                kubectl -n default logs -f torpedo
+                kubectl -n default logs -f ${BUILD_NAME}-torpedo
                 first_iteration=false
             else
                 echo "Logs from iteration: $i"
-                kubectl -n default logs -f --since=1m torpedo
+                kubectl -n default logs -f --since=1m ${BUILD_NAME}-torpedo
             fi
         elif [ "$state" == "Completed" ]; then
             echo "Success: Torpedo finished with $state state"
