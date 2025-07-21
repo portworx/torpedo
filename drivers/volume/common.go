@@ -723,11 +723,11 @@ func (d *DefaultDriver) CollectDiags(n node.Node, config *DiagRequestConfig, dia
 	}
 }
 
-// ValidateDiagsOnS3 validates the diags or diags file on S3 bucket
-func (d *DefaultDriver) ValidateDiagsOnS3(n node.Node, diagsFile, pxDir string) error {
+// ValidateDiagsPhonedHome validates that the diag files were sent to Pure1
+func (d *DefaultDriver) ValidateDiagsPhonedHome(n node.Node, diagsFile, pxDir string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
-		Operation: "ValidateDiagsOnS3()",
+		Operation: "ValidateDiagsPhonedHome()",
 	}
 }
 

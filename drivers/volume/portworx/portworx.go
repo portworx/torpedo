@@ -145,8 +145,8 @@ const (
 	waitDriverDownOnNodeRetryInterval = 2 * time.Second
 	sdkDiagCollectionTimeout          = 30 * time.Minute
 	sdkDiagCollectionRetryInterval    = 10 * time.Second
-	validateDiagsOnS3RetryTimeout     = 60 * time.Minute
-	validateDiagsOnS3RetryInterval    = 30 * time.Second
+	validateDiagsRetryTimeout         = 60 * time.Minute
+	validateDiagsRetryInterval        = 30 * time.Second
 	validateStorageClusterTimeout     = 40 * time.Minute
 	expandStoragePoolTimeout          = 2 * time.Minute
 	volumeUpdateTimeout               = 2 * time.Minute
@@ -4677,7 +4677,7 @@ func (d *portworx) CollectDiags(n node.Node, config *torpedovolume.DiagRequestCo
 	return collectDiags(n, config, diagOps, d)
 }
 
-func (d *portworx) ValidateDiagsOnS3(n node.Node, diagsFile, pxDir string) error {
+func (d *portworx) ValidateDiagsPhonedHome(n node.Node, diagsFile, pxDir string) error {
 	log.Infof("Validating diags got uploaded to the s3 bucket for node [%s]", n.Name)
 
 	// Diag file to look for
@@ -4703,8 +4703,8 @@ func (d *portworx) ValidateDiagsOnS3(n node.Node, diagsFile, pxDir string) error
 	log.Debugf("Validating diag file [%s] got uploaded to the s3 bucket", d.DiagsFile)
 	start := time.Now()
 	for {
-		if time.Since(start) >= validateDiagsOnS3RetryTimeout {
-			return fmt.Errorf("waiting for diags job timed out after [%v], failed to find diag file [%s] on s3 bucket", validateDiagsOnS3RetryTimeout, d.DiagsFile)
+		if time.Since(start) >= validateDiagsRetryTimeout {
+			return fmt.Errorf("waiting for diags job timed out after [%v], failed to find diag file [%s] on s3 bucket", validateDiagsRetryTimeout, d.DiagsFile)
 		}
 		var objects []s3utils.Object
 		var err error
@@ -4732,8 +4732,8 @@ func (d *portworx) ValidateDiagsOnS3(n node.Node, diagsFile, pxDir string) error
 				return nil
 			}
 		}
-		log.Debugf("File [%s] not found in the s3 bucket yet, re-trying in [%v]", d.DiagsFile, validateDiagsOnS3RetryInterval)
-		time.Sleep(validateDiagsOnS3RetryInterval)
+		log.Debugf("File [%s] not found in the s3 bucket yet, re-trying in [%v]", d.DiagsFile, validateDiagsRetryInterval)
+		time.Sleep(validateDiagsRetryInterval)
 	}
 }
 

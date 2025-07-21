@@ -241,7 +241,7 @@ var _ = Describe("{DiagsCCMOnS3}", func() {
 				if !TelemetryEnabled(currNode) {
 					log.FailOnError(fmt.Errorf("Unable to validate diags on s3"), "Telemetry is not enabled on node [%s]", currNode.Name)
 				}
-				err = Inst().V.ValidateDiagsOnS3(currNode, path.Base(strings.TrimSpace(config.OutputFile)), pxDir)
+				err = Inst().V.ValidateDiagsPhonedHome(currNode, path.Base(strings.TrimSpace(config.OutputFile)), pxDir)
 				Expect(err).NotTo(HaveOccurred(), "Diags validated on S3")
 			})
 		}
@@ -396,7 +396,7 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 				for _, file := range diagsFiles {
 					fileNameToCheck := path.Base(file)
 					log.InfoD("Validating diag file [%s] on s3", fileNameToCheck)
-					err := Inst().V.ValidateDiagsOnS3(currNode, fileNameToCheck, pxDir)
+					err := Inst().V.ValidateDiags(currNode, fileNameToCheck, pxDir)
 					log.FailOnError(err, "failed to validate diags file [%s] on s3", fileNameToCheck)
 					log.InfoD("Succesfully validated diags file [%s] got uploaded to s3 from node [%s]", fileNameToCheck, currNode.Name)
 				}
@@ -461,7 +461,7 @@ var _ = Describe("{DiagsClusterWide}", func() {
 				}
 				fileNameToCheck := path.Base(strings.TrimSuffix(diagFile, "\n"))
 				log.Debugf("Validating file [%s]", fileNameToCheck)
-				err := Inst().V.ValidateDiagsOnS3(currNode, fileNameToCheck, pxDir)
+				err := Inst().V.ValidateDiags(currNode, fileNameToCheck, pxDir)
 				Expect(err).NotTo(HaveOccurred(), "Files validated on s3")
 			})
 			break
@@ -617,7 +617,7 @@ var _ = Describe("{DiagsAutoStorage}", func() {
 						pxProcessNm, currNode.Name)
 				})
 				/// Need to validate new auto diags
-				err = Inst().V.ValidateDiagsOnS3(currNode, path.Base(strings.TrimSpace(newDiags)), pxDir)
+				err = Inst().V.ValidateDiags(currNode, path.Base(strings.TrimSpace(newDiags)), pxDir)
 				Expect(err).NotTo(HaveOccurred())
 			}
 			driverVersion, err := Inst().V.GetDriverVersion()
@@ -696,7 +696,7 @@ var _ = Describe("{DiagsOnStoppedPXnode}", func() {
 				}
 				diagsErr = Inst().V.CollectDiags(currNode, config, torpedovolume.DiagOps{Validate: false, PxStopped: true})
 				if diagsErr == nil {
-					diagsValErr = Inst().V.ValidateDiagsOnS3(currNode, path.Base(strings.TrimSpace(config.OutputFile)), pxDir)
+					diagsValErr = Inst().V.ValidateDiags(currNode, path.Base(strings.TrimSpace(config.OutputFile)), pxDir)
 				}
 			})
 		}
@@ -787,7 +787,7 @@ var _ = Describe("{DiagsSpecificNode}", func() {
 					log.FailOnError(fmt.Errorf("Unable to validate diags on s3"), "Telemetry is not enabled on node [%s]", currNode.Name)
 				}
 				/// Need to validate new diags
-				err = Inst().V.ValidateDiagsOnS3(diagNode, path.Base(strings.TrimSpace(diagFile)), pxDir)
+				err = Inst().V.ValidateDiags(diagNode, path.Base(strings.TrimSpace(diagFile)), pxDir)
 				Expect(err).NotTo(HaveOccurred())
 			} else {
 				err = fmt.Errorf("Failed to find new diags on Node %s", diagNode.Name)
