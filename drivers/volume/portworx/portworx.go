@@ -48,7 +48,6 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/netutil"
 	"github.com/portworx/torpedo/pkg/osutils"
-	"github.com/portworx/torpedo/pkg/s3utils"
 	"github.com/portworx/torpedo/pkg/units"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -4686,55 +4685,46 @@ func (d *portworx) ValidateDiagsPhonedHome(n node.Node, diagsFile, pxDir string)
 	}
 	d.DiagsFile = diagsFile
 
-	opts := node.ConnectionOpts{
-		IgnoreError:     false,
-		TimeBeforeRetry: defaultRetryInterval,
-		Timeout:         defaultTimeout,
-		Sudo:            true,
-	}
-
-	// Get cluster UUID to determine the S3 folder to look for
-	clusterUUID, err := d.GetClusterUUID(n, opts, pxDir)
+	// get px-telemetry-phonehome pod that corresponds to the node in question
+	pods, err := k8sCore.GetPodsByNode(n.Name, d.namespace)
 	if err != nil {
-		return fmt.Errorf("Failed to get cluster UUID, Err: %v", err)
+		return fmt.Errorf("failed to get px-telemetry-phonehome pod for node [%s], Err: %v", n.Name, err)
+	}
+	phonehomePodName := ""
+	for _, pod := range pods.Items {
+		if strings.Contains(pod.Name, "px-telemetry-phonehome") {
+			phonehomePodName = pod.Name
+			break
+		}
+	}
+	if phonehomePodName == "" {
+		return fmt.Errorf("failed to find px-telemetry-phonehome pod for node [%s]", n.Name)
 	}
 
 	// Check S3 bucket for diags
-	log.Debugf("Validating diag file [%s] got uploaded to the s3 bucket", d.DiagsFile)
+	log.Debugf("Validating diag file [%s] got uploaded to Pure1", d.DiagsFile)
 	start := time.Now()
-	for {
-		if time.Since(start) >= validateDiagsRetryTimeout {
-			return fmt.Errorf("waiting for diags job timed out after [%v], failed to find diag file [%s] on s3 bucket", validateDiagsRetryTimeout, d.DiagsFile)
-		}
-		var objects []s3utils.Object
-		var err error
-
-		// Check latest s3 folder for diags
-		latestObjects, err := s3utils.GetS3Objects(clusterUUID, n.Name, false)
+	prevTime := start.AddDate(0, 0, -1)
+	for time.Since(start) < validateDiagsRetryTimeout {
+		// Periodically check pod log for the succesful uploading of the diag bundle in question
+		logTimespan := int64(time.Since(prevTime).Seconds() + 5) // add 5 seconds to ensure we don't miss anything in the logs
+		prevTime = time.Now()                                    // set prevTime to now so that if we have to retry we minimize the gap
+		podLog, err := k8sCore.GetPodLog(phonehomePodName, d.namespace, &corev1.PodLogOptions{SinceSeconds: &logTimespan})
 		if err != nil {
-			return fmt.Errorf("Failed to get g3 objects from latest folder, Err: %v", err)
-		}
-		objects = append(objects, latestObjects...)
-
-		// Check previous s3 folder for diags, if exists, due to some race condition of how/when diags can occasionally be uploaded
-		previousObjects, err := s3utils.GetS3Objects(clusterUUID, n.Name, true)
-		if err != nil {
-			return fmt.Errorf("Failed to get g3 objects from previous folder, Err: %v", err)
-		}
-		objects = append(objects, previousObjects...)
-
-		for _, obj := range objects {
-			if strings.Contains(obj.Key, d.DiagsFile) {
-				log.Debugf("File validated on s3")
-				log.Debugf("Object Name is [%s]", obj.Key)
-				log.Debugf("Object Created on [%s]", obj.LastModified.String())
-				log.Debugf("Object Size [%d]", obj.Size)
-				return nil
+			log.Warnf("got error fetching pod log, will retry. Err: %v", err)
+		} else {
+			strings.Split(podLog, "\n")
+			for _, line := range strings.Split(podLog, "\n") {
+				if strings.Contains(line, d.DiagsFile) && strings.Contains(line, "Add to upload queue") {
+					log.Infof("File [%s] successfully queued to send to Pure1", d.DiagsFile)
+					return nil
+				}
 			}
 		}
-		log.Debugf("File [%s] not found in the s3 bucket yet, re-trying in [%v]", d.DiagsFile, validateDiagsRetryInterval)
+		log.Debugf("File [%s] not phoned home yet, re-trying in [%v]", d.DiagsFile, validateDiagsRetryInterval)
 		time.Sleep(validateDiagsRetryInterval)
 	}
+	return fmt.Errorf("waiting for diags job timed out after [%v], failed to find evidence that diag file [%s] was uploaded to Pure1", validateDiagsRetryTimeout, d.DiagsFile)
 }
 
 // GetClusterUUID Gets Portworx cluster UUID from cluster_uuid file and returns it
