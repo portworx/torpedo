@@ -380,6 +380,8 @@ const (
 	ApplicationUser                  = "px-backup-app.user"
 	InfrastructureOwner              = "px-backup-infra.admin"
 	DefaultRoles                     = "default-roles-master"
+	// PxbackupSuperAdminRole represents the super admin role
+	PxbackupSuperAdminRole = "px-backup-super-admin"
 )
 
 // GetRoleID gets role ID for a given role
@@ -1289,4 +1291,55 @@ func DeleteRole(role PxBackupRole) error {
 		return err
 	}
 	return nil
+}
+
+// getUsersByRole returns all enabled users assigned to the specified role.
+// Note: Before modifying this function, ensure all Px-Backup callers are updated accordingly.
+func getUsersByRole(roleName string) ([]KeycloakUserRepresentation, error) {
+	fn := "getUsersByRole"
+
+	// Get admin endpoint and token using existing functions
+	keycloakEndPoint, err := getKeycloakEndPoint(true)
+	if err != nil {
+		log.Errorf("%s: failed to get keycloak endpoint: %v", fn, err)
+		return nil, err
+	}
+
+	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	if err != nil {
+		log.Errorf("%s: failed to get headers: %v", fn, err)
+		return nil, err
+	}
+
+	// Build URL with encoded role name
+	reqURL := fmt.Sprintf("%s/roles/%s/users", keycloakEndPoint, url.QueryEscape(roleName))
+
+	// Use existing HTTP request helper
+	response, err := processHTTPRequest("GET", reqURL, headers, nil)
+	if err != nil {
+		log.Errorf("%s: failed to get users for role %s: %v", fn, roleName, err)
+		return nil, err
+	}
+
+	var users []KeycloakUserRepresentation
+	if err := json.Unmarshal(response, &users); err != nil {
+		log.Errorf("%s: failed to unmarshal users: %v", fn, err)
+		return nil, err
+	}
+
+	// Filter enabled users in-place for better memory efficiency
+	enabledUsers := users[:0] // reuse underlying array
+	for _, user := range users {
+		if user.Enabled {
+			enabledUsers = append(enabledUsers, user)
+		}
+	}
+
+	return enabledUsers, nil
+}
+
+// GetSuperAdminUsers returns all enabled users assigned the super admin role.
+// Note: Before modifying this function, ensure all Px-Backup callers are updated accordingly.
+func GetSuperAdminUsers(ns string) ([]KeycloakUserRepresentation, error) {
+	return getUsersByRole(PxbackupSuperAdminRole)
 }
